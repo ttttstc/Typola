@@ -32,19 +32,19 @@
 
 | 层 | 选型 | 版本要求 |
 |---|---|---|
-| 桌面壳 | **Tauri 2.x** | ≥2.0 |
+| 桌面壳 | **Electron 33.x** | ≥33.0 |
 | 前端框架 | **React 18** + TypeScript | ≥18.0 |
 | 编辑器内核 | **Milkdown** (ProseMirror) | ≥7.0 |
 | 状态管理 | **Zustand** | ≥4.0 |
 | 代码高亮 | **Shiki** | ≥1.0，按需加载 |
 | 图表 | **Mermaid** | ≥10.0，**懒加载**（首次插入时才下载） |
 | 样式 | 原生 CSS + CSS Variables | 不引入 Tailwind 运行时 |
-| 文件 IO / 监听 | Rust（`notify` crate） | Tauri 插件 |
-| 打包 | `tauri build` | NSIS 安装版 + 便携版 `.exe` |
+| 文件 IO / 监听 | Node.js（Electron IPC） | Electron 主进程 |
+| 打包 | `electron-builder` | NSIS 安装版 + 便携版 `.exe` |
 
 **体积硬门**：安装包 ≤ 30MB。每引入新依赖前必须评估体积影响。
 
-**不能用 Electron**。
+**Electron 替代 Tauri**：Electron 方案提供更成熟的生态系统和更简单的调试体验。
 
 ---
 
@@ -80,14 +80,10 @@ typola/
 │   │   └── editor.css           # 编辑区渲染样式
 │   ├── App.tsx
 │   └── main.tsx
-├── src-tauri/                   # Rust 后端
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── file.rs              # 文件读写、原子保存
-│   │   ├── watcher.rs           # 外部修改监听（notify crate）
-│   │   └── cmd.rs               # Tauri commands 注册
-│   ├── Cargo.toml
-│   └── tauri.conf.json
+├── electron/                    # Electron 主进程
+│   ├── main.ts                  # Electron 主进程入口
+│   ├── preload.ts                # Preload 脚本（上下文隔离）
+│   └── electron.d.ts             # TypeScript 类型声明
 ├── resources/
 │   ├── icons/                   # Trio W 图标各尺寸
 │   └── typola.ico
@@ -107,8 +103,8 @@ typola/
 ### 4.1 工程初始化
 
 ```bash
-# 用 Tauri 官方模板初始化
-npm create tauri-app@latest typola -- --template react-ts
+# 初始化 React + Vite 项目
+npm create vite@latest typola -- --template react-ts
 cd typola
 npm install
 ```
@@ -133,7 +129,9 @@ npm install
     "lucide-react": "^0.400.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "esbuild": "^0.24.0",
     "vite": "^5.0.0",
     "@vitejs/plugin-react": "^4.0.0",
     "typescript": "^5.4.0"
@@ -143,43 +141,26 @@ npm install
 
 > Mermaid **不在**初始依赖里，Phase 2 按需动态 import。
 
-### 4.3 Tauri 配置要点（tauri.conf.json）
+### 4.3 Electron 配置要点
 
-```json
-{
-  "productName": "Typola",
-  "version": "0.1.0",
-  "identifier": "com.typola.app",
-  "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420"
+Electron 主进程 `electron/main.ts` 配置：
+
+```typescript
+const mainWindow = new BrowserWindow({
+  width: 1280,
+  height: 800,
+  minWidth: 800,
+  minHeight: 600,
+  frame: false,  // 自定义标题栏
+  webPreferences: {
+    preload: path.join(__dirname, 'preload.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
   },
-  "app": {
-    "windows": [{
-      "title": "Typola",
-      "width": 1280,
-      "height": 800,
-      "minWidth": 800,
-      "minHeight": 600,
-      "decorations": false,
-      "transparent": false,
-      "resizable": true
-    }]
-  },
-  "bundle": {
-    "active": true,
-    "targets": ["nsis", "app"],
-    "icon": ["resources/icons/32x32.png", "resources/icons/128x128.png", "resources/typola.ico"],
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser"
-      }
-    }
-  }
-}
+});
 ```
 
-`decorations: false` 使用自定义标题栏（TitleBar 组件负责拖拽和窗口控制按钮）。
+Preload 脚本通过 `contextBridge.exposeInMainWorld` 暴露安全 API。
 
 ### 4.4 主布局（Layout.tsx）
 
@@ -229,24 +210,14 @@ npm install
 
 主题切换：在 `<html>` 上切换 `data-theme="dark"`，300ms `ease-in-out` transition。
 
-### 4.6 Rust 侧（src-tauri/src）
+### 4.6 Electron IPC API
 
-Phase 0 只需要：
-
-```rust
-// cmd.rs
-#[tauri::command]
-fn get_app_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
-```
-
-文件 IO 命令在 Phase 1 实现。
+Phase 0 只需要基本的 Electron 窗口创建和渲染即可。
 
 ### 4.7 验收标准
 
-- [ ] `npm run tauri dev` 启动无报错，白色空窗口显示 TitleBar + 三栏骨架
-- [ ] `npm run tauri build` 产出 NSIS 安装包，体积 ≤30MB
+- [ ] `npm run electron:dev` 启动无报错，白色空窗口显示 TitleBar + 三栏骨架
+- [ ] `npm run electron:build` 产出 NSIS 安装包，体积 ≤30MB
 - [ ] 安装版可正常安装/卸载（控制面板可见）
 - [ ] `Ctrl+\` 隐藏/显示文件树；`Ctrl+Shift+\` 隐藏/显示大纲
 - [ ] 拖拽 TitleBar 可移动窗口；窗口控制按钮（最小化/最大化/关闭）功能正常
@@ -257,35 +228,23 @@ fn get_app_version() -> String {
 
 **目标**：能打开 `.md` 文件，WYSIWYG 渲染，编辑后保存，自动保存生效。
 
-### 5.1 Tauri Commands（Rust）
+### 5.1 Electron IPC Handlers
 
-```rust
-// file.rs
-#[tauri::command]
-async fn read_file(path: String) -> Result<String, String>;
-
-#[tauri::command]
-async fn write_file(path: String, content: String) -> Result<(), String>;
-
-#[tauri::command]
-async fn pick_folder() -> Result<Option<String>, String>;
-
-#[tauri::command]
-async fn list_dir(path: String) -> Result<Vec<FileEntry>, String>;
-
-#[tauri::command]
-async fn create_file(path: String) -> Result<(), String>;
-
-#[tauri::command]
-async fn rename_path(old: String, new: String) -> Result<(), String>;
-
-#[tauri::command]
-async fn delete_path(path: String) -> Result<(), String>;
-
-#[tauri::command]
-async fn save_image(workspace_root: String, data: Vec<u8>, ext: String) -> Result<String, String>;
-// 返回相对路径，如 ".resources/1714123456789-abc.png"
-// 自动创建 .resources/ 目录
+```typescript
+// electron/main.ts
+ipcMain.handle('read_file', async (_, path: string) => { ... });
+ipcMain.handle('write_file', async (_, path: string, content: string) => { ... });
+ipcMain.handle('pick_folder', async () => { ... });
+ipcMain.handle('list_dir', async (_, path: string) => { ... });
+ipcMain.handle('create_file', async (_, path: string) => { ... });
+ipcMain.handle('rename_path', async (_, old: string, new: string) => { ... });
+ipcMain.handle('delete_path', async (_, path: string) => { ... });
+ipcMain.handle('save_image', async (_, workspaceRoot: string, data: number[], ext: string) => { ... });
+ipcMain.handle('show_save_dialog', async (_, options) => { ... });
+ipcMain.handle('window_minimize', () => { ... });
+ipcMain.handle('window_maximize', () => { ... });
+ipcMain.handle('window_close', () => { ... });
+ipcMain.handle('window_is_maximized', () => { ... });
 ```
 
 `write_file` 必须原子写（先写临时文件再 rename），防止写入中断导致文件损坏。
@@ -507,14 +466,14 @@ Mermaid 块的状态机：
 
 1. 捕获 `paste` / `drop` 事件
 2. 提取图片 binary data
-3. 调用 Tauri command `save_image(workspaceRoot, data, ext)`
-4. Rust 侧：
+3. 调用 Electron IPC `saveImage(workspaceRoot, data, ext)`
+4. Electron 主进程侧：
    - 确保 `{workspaceRoot}/.resources/` 目录存在
    - 文件名：`{Date.now()}-{randomHex(8)}.{ext}`
    - 写入文件，返回相对路径
 5. 前端将相对路径插入为 `![image](./.resources/xxx.png)`
 
-图片在编辑区内渲染时使用 `convertFileSrc()` 转换为 Tauri asset URL。
+图片在编辑区内渲染时使用 `file://` 协议 URL。
 
 ### 6.5 验收标准
 
@@ -636,33 +595,38 @@ interface FileEntry {
 
 ### 7.5 外部修改检测
 
-Rust 侧 `watcher.rs` 使用 `notify` crate 监听当前打开文件：
-
-```rust
-// 监听当前打开文件的 mtime 变化
-// 通过 Tauri event 推送到前端
-tauri::emit!(app, "file-changed", &path);
-```
-
-前端响应逻辑：
+Electron 主进程使用 `fs.watch` 监听当前打开文件：
 
 ```typescript
-listen('file-changed', async (event) => {
-  const path = event.payload as string
-  if (path !== currentFile) return
+// electron/main.ts
+ipcMain.handle('watch_file', async (_, filePath: string) => {
+  const watcher = fs.watch(filePath, (eventType) => {
+    if (eventType === 'change') {
+      mainWindow.webContents.send('file-changed', { path: filePath });
+    }
+  });
+});
+```
+
+前端通过 `window.electronAPI.onFileChanged()` 监听变化：
+
+```typescript
+const unsubscribe = window.electronAPI.onFileChanged((event) => {
+  const path = event.path;
+  if (path !== currentFile) return;
 
   if (isDirty) {
     // 有未保存修改，弹出对话框
     showConflictDialog({
       onKeepMine: () => { /* 用当前内容覆盖磁盘 */ saveFile() },
       onLoadDisk: () => { /* 从磁盘重新加载 */ reloadFile() },
-    })
+    });
   } else {
     // 无未保存修改，静默重新加载
-    await reloadFile()
-    showStatusHint('文件已从磁盘重新加载')
+    await reloadFile();
+    showStatusHint('文件已从磁盘重新加载');
   }
-})
+});
 ```
 
 ### 7.6 快捷键总表
@@ -703,11 +667,11 @@ listen('file-changed', async (event) => {
 
 ### 8.1 体积检查清单
 
-在 `npm run tauri build` 后执行：
+在 `npm run electron:build` 后执行：
 
 ```bash
 # 检查安装包体积
-ls -lh src-tauri/target/release/bundle/nsis/*.exe
+ls -lh release/win-unpacked/*.exe
 
 # 检查前端 bundle（gzipped）
 du -sh dist/assets/*.js
@@ -813,14 +777,14 @@ v1.0.0 Release Notes
 
 ### 9.1 安全
 
-- Tauri 默认 `CSP` 头，拦截外部脚本注入
+- Electron 默认 `contextIsolation: true`，保护 renderer 进程免受恶意代码侵害
 - Milkdown 渲染的 HTML 不执行用户提供的脚本
-- 图片只允许 `asset://` 协议加载，不允许 `http://` 加载外部图片（防止信息泄露）
-- Rust 侧文件 IO：路径遍历检测，禁止读写工作区之外的路径
+- 图片只允许本地 `file://` 协议加载，不允许 `http://` 加载外部图片（防止信息泄露）
+- Electron 主进程文件 IO：路径遍历检测，禁止读写工作区之外的路径
 
 ### 9.2 错误处理原则
 
-- Rust command 返回 `Result<T, String>`，前端对 `Err` 统一显示 StatusBar 提示，不 alert
+- IPC handler 捕获异常后返回错误信息，前端统一显示 StatusBar 提示，不 alert
 - Mermaid 渲染错误：catch 后显示错误文字，保留上次 SVG，不抛出
 - 文件保存失败：StatusBar 显示"保存失败"，保留内存内容，5 秒后自动重试
 
