@@ -60,7 +60,7 @@
 
 | 版本 | 下载 |
 |------|------|
-| 便携版 | [Typola-portable-0.1.0.zip](https://github.com/ttttstc/Typola/releases/latest) |
+| 便携版 | [下载最新版本](https://github.com/ttttstc/Typola/releases/latest) |
 
 解压后直接运行 `Typola.exe` 即可。
 
