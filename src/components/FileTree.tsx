@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
 import {
   Folder,
   FolderOpen,
@@ -199,7 +197,7 @@ export function FileTree() {
   const loadWorkspace = useCallback(async (root: string) => {
     setLoading(true);
     try {
-      const entries = await invoke<FileEntry[]>('list_dir', { path: root });
+      const entries = await window.electronAPI.listDir(root);
       setFileTree(entries);
     } catch (e) {
       console.error('Failed to load workspace:', e);
@@ -210,14 +208,10 @@ export function FileTree() {
 
   const handleOpenWorkspace = async () => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-      });
+      const selected = await window.electronAPI.pickFolder();
       if (selected) {
-        const selectedPath = selected as string;
-        setWorkspaceRoot(selectedPath);
-        await loadWorkspace(selectedPath);
+        setWorkspaceRoot(selected);
+        await loadWorkspace(selected);
       }
     } catch (e) {
       console.error('Failed to pick folder:', e);
@@ -235,7 +229,7 @@ export function FileTree() {
     while (true) {
       try {
         const testPath = `${dirPath}/${fileName}`;
-        await invoke('read_file', { path: testPath });
+        await window.electronAPI.readFile(testPath);
         counter++;
         fileName = `未命名-${counter}.md`;
       } catch {
@@ -244,8 +238,11 @@ export function FileTree() {
     }
     try {
       const newPath = `${dirPath}/${fileName}`;
-      await invoke('create_file', { path: newPath });
-      await loadWorkspace(dirPath.split(/[\\/]/).slice(0, -1).join('/') || dirPath);
+      await window.electronAPI.createFile(newPath);
+      // Refresh the workspace
+      if (workspaceRoot) {
+        await loadWorkspace(workspaceRoot);
+      }
       handleFileClick(newPath);
     } catch (e) {
       console.error('Failed to create file:', e);
