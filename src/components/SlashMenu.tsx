@@ -43,6 +43,7 @@ export function SlashMenu() {
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!visible) {
+      // Only trigger slash menu with / key
       if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         const selection = window.getSelection();
         if (selection && selection.rangeCount > 0) {
@@ -52,6 +53,7 @@ export function SlashMenu() {
             const text = textNode.textContent || '';
             const cursorPos = range.startOffset;
             const textBefore = text.slice(0, cursorPos);
+            // Only show if at start of line or after newline
             if (textBefore === '' || textBefore.endsWith('\n')) {
               e.preventDefault();
               setVisible(true);
@@ -64,6 +66,7 @@ export function SlashMenu() {
       return;
     }
 
+    // Slash menu is visible - only consume keys for menu navigation
     if (e.key === 'Escape') {
       setVisible(false);
       e.preventDefault();
@@ -79,15 +82,19 @@ export function SlashMenu() {
         insertBlock(filteredItems[selectedIndex].id);
       }
       setVisible(false);
-    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-      setFilter((prev) => prev + e.key);
-      setSelectedIndex(0);
     } else if (e.key === 'Backspace') {
       if (filter.length > 0) {
         setFilter((prev) => prev.slice(0, -1));
+        setSelectedIndex(0);
       } else {
         setVisible(false);
       }
+      e.preventDefault();
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      // Allow typing to filter when menu is open
+      setFilter((prev) => prev + e.key);
+      setSelectedIndex(0);
+      // Let the character pass through to editor for actual input
     }
   }, [visible, filter, filteredItems, selectedIndex]);
 

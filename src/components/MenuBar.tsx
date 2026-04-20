@@ -127,39 +127,76 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
-    // Find the block element containing the selection
-    let node: Node | null = selection.anchorNode;
-    while (node && node !== editor) {
-      if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
-        break;
+    // Check if there's actual selection
+    if (selection.isCollapsed) {
+      // No selection - try to find current block to change
+      const range = selection.getRangeAt(0);
+      let node: Node | null = selection.anchorNode;
+      while (node && node !== editor) {
+        if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
+          break;
+        }
+        node = node.parentNode;
       }
-      node = node.parentNode;
-    }
-
-    if (!node || node === editor) return;
-
-    const block = node as HTMLElement;
-
-    if (level === 'p') {
-      if (/^H[1-6]$/.test(block.tagName)) {
-        const text = block.textContent || '';
-        const p = document.createElement('p');
-        p.textContent = text;
-        block.parentNode?.replaceChild(p, block);
+      if (node && node !== editor) {
+        const block = node as HTMLElement;
+        if (level === 'p') {
+          if (/^H[1-6]$/.test(block.tagName)) {
+            const text = block.textContent || '';
+            const p = document.createElement('p');
+            p.textContent = text;
+            block.parentNode?.replaceChild(p, block);
+          }
+        } else {
+          const tagName = level.toUpperCase();
+          if (block.tagName !== tagName) {
+            const text = block.textContent || '';
+            const heading = document.createElement(tagName);
+            heading.textContent = text;
+            block.parentNode?.replaceChild(heading, block);
+          }
+        }
       }
     } else {
-      const tagName = level.toUpperCase();
-      if (block.tagName !== tagName) {
-        const text = block.textContent || '';
-        const heading = document.createElement(tagName);
-        heading.textContent = text;
+      // Has selection - wrap in heading
+      const range = selection.getRangeAt(0);
+      const selectedText = selection.toString();
+
+      // Find the block containing the selection
+      let blockNode: Node | null = selection.anchorNode;
+      while (blockNode && blockNode !== editor) {
+        if (blockNode instanceof Element && (blockNode.tagName === 'P' || /^H[1-6]$/.test(blockNode.tagName))) {
+          break;
+        }
+        blockNode = blockNode.parentNode;
+      }
+
+      if (!blockNode || blockNode === editor) {
+        // No block found, create a new heading with selected text
+        const heading = document.createElement(level.toUpperCase());
+        heading.textContent = selectedText;
+        range.deleteContents();
+        range.insertNode(heading);
+
+        // Move cursor after heading
+        const newRange = document.createRange();
+        newRange.setStartAfter(heading);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      } else {
+        // Replace the block with heading containing selected text
+        const block = blockNode as HTMLElement;
+        const heading = document.createElement(level.toUpperCase());
+        heading.textContent = selectedText;
         block.parentNode?.replaceChild(heading, block);
+
+        // Trigger input event
+        const event = new Event('input', { bubbles: true });
+        editor.dispatchEvent(event);
       }
     }
 
-    // Trigger content update event
-    const event = new Event('input', { bubbles: true });
-    editor.dispatchEvent(event);
     onClose();
   }, [onClose]);
 
