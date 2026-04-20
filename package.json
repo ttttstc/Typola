@@ -63,7 +63,8 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "resources/typola.ico"
+      "icon": "resources/typola.ico",
+      "sign": false
     },
     "nsis": {
       "oneClick": false,

@@ -13,7 +13,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
-    icon: path.join(__dirname, '../resources/typola.ico'),
+    icon: path.join(__dirname, 'typola.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
