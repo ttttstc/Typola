@@ -1,25 +1,30 @@
 # Typola
 
-A lightweight, AI-friendly Markdown editor for Windows desktop.
+An elegant and efficient Markdown editor for Windows.
 
 [中文](./README_zh.md) | English
 
 ---
 
-## Features
+## Writing Experience
 
-- **Notion-like editing** — WYSIWYG Markdown editing without syntax
-- **Slash commands** — Type `/` to insert blocks (headings, lists, tables, code, mermaid diagrams)
-- **Floating toolbar** — Select text to format (bold, italic, strikethrough, code, link)
-- **Right-click context menu** — Quick heading selection
-- **Auto-save** — 500ms debounce, never lose your work
-- **External change detection** — Detects when files are modified by external editors
-- **Mermaid diagrams** — Insert and edit diagrams with live preview
-- **Shiki syntax highlighting** — Beautiful code blocks with language labels
-- **Light/Dark theme** — Toggle with `Ctrl+Shift+D`
-- **File tree & outline** — Navigate large documents easily
-- **Tab bar** — Switch between multiple files
-- **Right-click delete** — Delete files from file tree
+- **WYSIWYG** — Write Markdown without learning syntax, like Notion
+- **Slash commands** — Type `/` to quickly insert headings, lists, tables, code blocks, diagrams
+- **Selection formatting** — Select text to show formatting toolbar (bold, italic, strikethrough, etc.)
+- **Right-click menu** — Set heading levels quickly via right-click
+- **Auto-save** — Never worry about saving again
+- **External change detection** — Automatically detects external modifications
+
+---
+
+## Highlights
+
+- **Mermaid diagrams** — Insert diagrams, double-click to edit, live preview
+- **Code highlighting** — Automatically recognizes and highlights code with language labels
+- **Light/Dark theme** — One-click toggle for different lighting conditions
+- **File tree** — Clear view of your workspace structure
+- **Outline view** — Navigate large documents with ease
+- **Multiple tabs** — Switch between files seamlessly
 
 ---
 
@@ -28,8 +33,7 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 | Action | Shortcut |
 |--------|----------|
 | New file | `Ctrl+N` |
-| Save | `Ctrl+S` |
-| Save As | `Ctrl+Shift+S` |
+| Save / Save As | `Ctrl+S` / `Ctrl+Shift+S` |
 | Toggle sidebar | `Ctrl+\` |
 | Toggle outline | `Ctrl+Shift+\` |
 | Toggle theme | `Ctrl+Shift+D` |
@@ -40,17 +44,21 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 
 ---
 
-## Download & Installation
+## Download
 
-### System Requirements
+**Windows 10/11**
 
-Windows 10/11
+| Version | Download |
+|---------|----------|
+| Portable (ZIP) | [Typola-portable-0.1.0.zip](release/Typola-portable-0.1.0.zip) |
 
-### Portable Version
+Extract and run `Typola.exe` directly.
 
-Download `Typola-portable.zip`, extract, and run `Typola.exe` directly.
+> For installer version, download from [Releases](https://github.com/ttttstc/Typola/releases) page.
 
-### Build from Source
+---
+
+## Build from Source
 
 ```bash
 npm install
@@ -58,36 +66,6 @@ npm run electron:build
 ```
 
 Built files are in the `release/` directory.
-
----
-
-## Tech Stack
-
-- **Electron 33.x** — Desktop runtime
-- **React 18** + TypeScript — Frontend framework
-- **Milkdown** — ProseMirror-based Markdown editor
-- **Shiki** — Code syntax highlighting
-- **Mermaid** — Diagram rendering (lazy loaded)
-- **Zustand** — State management
-
----
-
-## Project Structure
-
-```
-typola/
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   ├── editor/             # Milkdown editor setup
-│   ├── store/              # Zustand stores
-│   └── styles/             # CSS files
-├── electron/               # Electron main process
-│   ├── main.ts             # Main entry
-│   └── preload.ts          # Preload script
-├── resources/               # Icons
-├── release/                # Built executables
-└── design/                 # Design documents
-```
 
 ---
 
