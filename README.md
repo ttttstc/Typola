@@ -20,9 +20,9 @@ An elegant and efficient Markdown editor for Windows.
 ## Highlights
 
 - **Mermaid diagrams** — Insert diagrams, double-click to edit, live preview
-- **Code highlighting** — Automatically recognizes and highlights code with language labels
+- **Code highlighting** — Automatically recognizes and highlights code with language labels, copy support
 - **Light/Dark theme** — One-click toggle for different lighting conditions
-- **File tree** — Clear view of your workspace structure
+- **File tree** — Clear view of workspace, support create/delete/rename
 - **Outline view** — Navigate large documents with ease
 - **Multiple tabs** — Switch between files seamlessly
 
@@ -50,11 +50,9 @@ An elegant and efficient Markdown editor for Windows.
 
 | Version | Download |
 |---------|----------|
-| Portable (ZIP) | [Typola-portable-0.1.0.zip](release/Typola-portable-0.1.0.zip) |
+| Portable | [Typola-portable-0.1.0.zip](release/Typola-portable-0.1.0.zip) |
 
 Extract and run `Typola.exe` directly.
-
-> For installer version, download from [Releases](https://github.com/ttttstc/Typola/releases) page.
 
 ---
 
