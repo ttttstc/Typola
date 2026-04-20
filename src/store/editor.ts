@@ -19,7 +19,6 @@ interface EditorState {
   addOpenFile: (path: string) => void;
   removeOpenFile: (path: string) => void;
   updateFilePath: (oldPath: string, newPath: string) => void;
-  markCurrentFileDirty: (dirty: boolean) => void;
   reset: () => void;
 }
 
@@ -39,26 +38,40 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setContent: (content) => {
     const state = get();
-    set({ content, isDirty: true });
-    // Mark current file as dirty in openFiles
-    if (state.currentFile) {
-      const newOpenFiles = state.openFiles.map((f) =>
+    // Only update dirty state if content actually changed
+    const contentChanged = content !== state.content;
+    const newIsDirty = contentChanged ? true : state.isDirty;
+
+    // Update openFiles to mark current file as dirty
+    let newOpenFiles = state.openFiles;
+    if (state.currentFile && contentChanged) {
+      newOpenFiles = state.openFiles.map((f) =>
         f.path === state.currentFile ? { ...f, isDirty: true } : f
       );
-      set({ openFiles: newOpenFiles });
     }
+
+    set({
+      content,
+      isDirty: newIsDirty,
+      openFiles: newOpenFiles,
+    });
   },
 
   setIsDirty: (dirty) => {
     const state = get();
-    set({ isDirty: dirty });
-    // Mark current file in openFiles
+    let newOpenFiles = state.openFiles;
+
+    // Only update openFiles if setting to false (saving) or true (editing)
     if (state.currentFile) {
-      const newOpenFiles = state.openFiles.map((f) =>
+      newOpenFiles = state.openFiles.map((f) =>
         f.path === state.currentFile ? { ...f, isDirty: dirty } : f
       );
-      set({ openFiles: newOpenFiles });
     }
+
+    set({
+      isDirty: dirty,
+      openFiles: newOpenFiles,
+    });
   },
 
   setSaveStatus: (status) => set({ saveStatus: status }),
@@ -85,16 +98,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       openFiles: newOpenFiles,
       currentFile: newPath,
     });
-  },
-
-  markCurrentFileDirty: (dirty: boolean) => {
-    const state = get();
-    if (state.currentFile) {
-      const newOpenFiles = state.openFiles.map((f) =>
-        f.path === state.currentFile ? { ...f, isDirty: dirty } : f
-      );
-      set({ openFiles: newOpenFiles, isDirty: dirty });
-    }
   },
 
   removeOpenFile: (path: string) => {
