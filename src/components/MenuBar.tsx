@@ -147,7 +147,7 @@ export function MenuBar() {
   const activeMenuRef = useRef<string | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
-  const { currentFile, content, setIsDirty } = useEditorStore();
+  const { currentFile, content, setIsDirty, updateFilePath, isDraftFile } = useEditorStore();
   const { workspaceRoot } = useWorkspaceStore();
   const {
     toggleSidebar,
@@ -175,9 +175,25 @@ export function MenuBar() {
 
   const [menusOpen, setMenusOpen] = useState<Record<string, boolean>>({});
 
+  const getSaveFileName = (filePath: string) => filePath.split(/[\\/]/).pop() || 'Untitled.md';
+
+  const selectSavePath = async (filePath: string) =>
+    window.electronAPI.showSaveDialog({
+      defaultPath: getSaveFileName(filePath),
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+
+  const persistFile = async (sourcePath: string, targetPath: string) => {
+    await window.electronAPI.writeFile(targetPath, content);
+    setIsDirty(false);
+    if (sourcePath !== targetPath) {
+      updateFilePath(sourcePath, targetPath);
+    }
+  };
+
   const handleNewFile = async () => {
     if (workspaceRoot) {
-      const baseName = t('fileTree.untitled') || 'Untitled.md';
+      const baseName = t('fileTree.untitled') || 'Untitled';
       let fileName = baseName + '.md';
       let counter = 1;
       while (true) {
@@ -193,7 +209,7 @@ export function MenuBar() {
       const newPath = `${workspaceRoot}/${fileName}`;
       try {
         await window.electronAPI.createFile(newPath);
-        useEditorStore.getState().addOpenFile(newPath);
+        useEditorStore.getState().addOpenFile(newPath, { isDraft: true });
       } catch (err) {
         console.error('Failed to create file:', err);
       }
@@ -203,20 +219,13 @@ export function MenuBar() {
   const handleSave = async () => {
     if (!currentFile) return;
     try {
-      if (currentFile.includes(t('fileTree.untitled') || 'Untitled')) {
-        const fileName = currentFile.split(/[\\/]/).pop() || 'Untitled.md';
-        const selected = await window.electronAPI.showSaveDialog({
-          defaultPath: fileName,
-          filters: [{ name: 'Markdown', extensions: ['md'] }],
-        });
+      if (isDraftFile(currentFile)) {
+        const selected = await selectSavePath(currentFile);
         if (selected) {
-          await window.electronAPI.writeFile(selected, content);
-          setIsDirty(false);
-          useEditorStore.getState().updateFilePath(currentFile, selected);
+          await persistFile(currentFile, selected);
         }
       } else {
-        await window.electronAPI.writeFile(currentFile, content);
-        setIsDirty(false);
+        await persistFile(currentFile, currentFile);
       }
     } catch (err) {
       console.error('Failed to save:', err);
@@ -225,15 +234,9 @@ export function MenuBar() {
 
   const handleSaveAs = async () => {
     if (!currentFile) return;
-    const fileName = currentFile.split(/[\\/]/).pop() || 'Untitled.md';
-    const selected = await window.electronAPI.showSaveDialog({
-      defaultPath: fileName,
-      filters: [{ name: 'Markdown', extensions: ['md'] }],
-    });
+    const selected = await selectSavePath(currentFile);
     if (selected) {
-      await window.electronAPI.writeFile(selected, content);
-      setIsDirty(false);
-      useEditorStore.getState().updateFilePath(currentFile, selected);
+      await persistFile(currentFile, selected);
     }
   };
 

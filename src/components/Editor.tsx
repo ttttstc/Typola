@@ -14,21 +14,48 @@ export function MilkdownEditor() {
   const editorRef = useRef<MilkdownEditorType | null>(null);
   const isInternalUpdate = useRef(false);
 
-  const { currentFile, content, isDirty, setContent, setLoadedContent, setIsDirty, setSaveStatus } = useEditorStore();
+  const {
+    currentFile,
+    content,
+    isDirty,
+    setContent,
+    setLoadedContent,
+    setIsDirty,
+    setSaveStatus,
+    updateFilePath,
+    isDraftFile,
+  } = useEditorStore();
   const fontSize = useUIStore((s) => s.fontSize);
+
+  const getSaveFileName = useCallback(
+    (filePath: string) => filePath.split(/[\\/]/).pop() || 'Untitled.md',
+    []
+  );
 
   const saveFile = useCallback(async () => {
     if (!currentFile) return;
-    setSaveStatus('saving');
     try {
-      await window.electronAPI.writeFile(currentFile, content);
+      const targetPath = isDraftFile(currentFile)
+        ? await window.electronAPI.showSaveDialog({
+            defaultPath: getSaveFileName(currentFile),
+            filters: [{ name: 'Markdown', extensions: ['md'] }],
+          })
+        : currentFile;
+
+      if (!targetPath) return;
+
+      setSaveStatus('saving');
+      await window.electronAPI.writeFile(targetPath, content);
       setIsDirty(false);
+      if (targetPath !== currentFile) {
+        updateFilePath(currentFile, targetPath);
+      }
       setSaveStatus('saved');
     } catch (e) {
       console.error('Save failed:', e);
       setSaveStatus('error');
     }
-  }, [currentFile, content, setIsDirty, setSaveStatus]);
+  }, [currentFile, content, getSaveFileName, isDraftFile, setIsDirty, setSaveStatus, updateFilePath]);
 
   const initEditor = useCallback((container: HTMLElement, initialContent: string) => {
     if (editorRef.current) {

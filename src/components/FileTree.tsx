@@ -226,7 +226,7 @@ export function FileTree() {
   };
 
   const handleNewFile = async (dirPath: string) => {
-    const baseName = t('fileTree.untitled');
+    const baseName = t('fileTree.untitled') || 'Untitled';
     let fileName = baseName + '.md';
     let counter = 1;
     while (true) {
@@ -246,7 +246,7 @@ export function FileTree() {
       if (workspaceRoot) {
         await loadWorkspace(workspaceRoot);
       }
-      handleFileClick(newPath);
+      useEditorStore.getState().addOpenFile(newPath, { isDraft: true });
     } catch (e) {
       console.error('Failed to create file:', e);
     }

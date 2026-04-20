@@ -94,13 +94,13 @@
     "openSettings": "打开设置"
   },
   "settings": {
-    "common": "Common",
-    "advanced": "Advanced",
-    "general": "General",
-    "editor": "Editor",
-    "appearance": "Appearance",
-    "terminal": "Terminal",
-    "shortcuts": "Shortcuts",
+    "common": "常用",
+    "advanced": "高级",
+    "general": "通用",
+    "editor": "编辑器",
+    "appearance": "外观",
+    "terminal": "终端",
+    "shortcuts": "快捷键",
     "notImplemented": "暂未实现"
   },
   "contextMenu": {
