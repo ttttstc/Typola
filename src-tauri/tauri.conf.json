@@ -40,7 +40,7 @@
         "installMode": "currentUser"
       },
       "webviewInstallMode": {
-        "type": "embedBootstrapper"
+        "type": "downloadBootstrapper"
       }
     }
   }
