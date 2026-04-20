@@ -1,8 +1,18 @@
+<div align="center">
+
+<img width="256" height="256" alt="icon" src="https://github.com/user-attachments/assets/b8388747-5cde-4fd1-bc42-e016335a112b" />
+
 # Typola
 
-An elegant and efficient Markdown editor for Windows.
+An AI Powered and efficient Markdown editor for Windows.
+
+  <a href="https://github.com/ttttstc/Typola/releases"><img src="https://img.shields.io/github/v/tag/ttttstc/Typola?label=version&style=flat-square" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
 
 [中文](./README_zh.md) | English
+
+</div>
+
 
 ---
 
