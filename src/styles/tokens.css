@@ -84,8 +84,29 @@ input:focus {
 
 .titlebar-drag {
   -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--titlebar-height);
+  background: var(--color-paper);
+  border-bottom: 1px solid var(--color-line-soft);
+  padding: 0 8px;
+  user-select: none;
 }
 
 .titlebar-no-drag {
   -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.titlebar-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titlebar-spacer {
+  flex: 1;
 }

@@ -34,7 +34,7 @@ export function TitleBar() {
 
   return (
     <div className="titlebar-drag">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="titlebar-icon">
         <img
           src={icon32}
           alt="Typola"
@@ -58,18 +58,9 @@ export function TitleBar() {
         </span>
       </div>
 
-      <div
-        className="titlebar-drag"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          flex: 1,
-          justifyContent: 'center',
-        }}
-      />
+      <div className="titlebar-spacer" />
 
-      <div className="titlebar-no-drag" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div className="titlebar-no-drag">
         <button
           onClick={toggleTheme}
           title={`切换到${theme === 'light' ? '暗色' : '亮色'}主题 (Ctrl+Shift+D)`}
