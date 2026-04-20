@@ -1,8 +1,18 @@
+<div align="center">
+
+<img width="256" height="256" alt="icon" src="https://github.com/user-attachments/assets/b8388747-5cde-4fd1-bc42-e016335a112b" />
+
 # Typola
 
-一款优雅高效的 Windows Markdown 编辑器。
+一款优雅高效+AI加成的 Windows Markdown 编辑器。
+
+  <a href="https://github.com/ttttstc/Typola/releases"><img src="https://img.shields.io/github/v/tag/ttttstc/Typola?label=version&style=flat-square" alt="Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
 
 [English](./README.md) | 中文
+
+</div>
+
 
 ---
 
