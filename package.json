@@ -1,0 +1,40 @@
+{
+  "name": "typola",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@milkdown/core": "^7.6.0",
+    "@milkdown/plugin-history": "^7.6.0",
+    "@milkdown/plugin-listener": "^7.6.0",
+    "@milkdown/plugin-slash": "^7.6.0",
+    "@milkdown/plugin-tooltip": "^7.6.0",
+    "@milkdown/preset-commonmark": "^7.6.0",
+    "@milkdown/preset-gfm": "^7.6.0",
+    "@milkdown/react": "^7.6.0",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "lucide-react": "^0.400.0",
+    "mermaid": "^11.14.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "shiki": "^1.6.0",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "sharp": "^0.34.5",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0"
+  }
+}

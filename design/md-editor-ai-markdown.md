@@ -142,7 +142,7 @@ MD Editor 就是为了这个目标做的。
 
 ### 支持什么平台？
 
-目前支持 macOS（Apple Silicon）。
+计划支持windows。
 
 ### 适合谁用？
 
