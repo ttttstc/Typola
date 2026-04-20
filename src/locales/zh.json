@@ -5,6 +5,7 @@
     "close": "关闭",
     "save": "保存",
     "delete": "删除",
+    "rename": "重命名",
     "yes": "是",
     "no": "否"
   },
@@ -44,7 +45,8 @@
     "darkMode": "暗色模式"
   },
   "editor": {
-    "enterLinkUrl": "输入链接地址:"
+    "enterLinkUrl": "输入链接地址:",
+    "externalChangeConfirm": "文件已被外部修改。是否保留当前修改并覆盖磁盘内容？"
   },
   "slashMenu": {
     "filterPlaceholder": "输入以过滤...",
@@ -68,7 +70,14 @@
     "openWorkspace": "打开工作区",
     "loading": "加载中...",
     "confirmDelete": "确定要删除 \"{{name}}\" 吗？此操作不可撤销。",
+    "renamePrompt": "请输入 \"{{name}}\" 的新名称：",
     "untitled": "未命名"
+  },
+  "statusBar": {
+    "saved": "已保存",
+    "saving": "保存中...",
+    "error": "保存失败",
+    "unsaved": "未保存"
   },
   "tabBar": {
     "fileModified": "文件已修改",

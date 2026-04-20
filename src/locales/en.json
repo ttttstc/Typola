@@ -5,6 +5,7 @@
     "close": "Close",
     "save": "Save",
     "delete": "Delete",
+    "rename": "Rename",
     "yes": "Yes",
     "no": "No"
   },
@@ -44,7 +45,8 @@
     "darkMode": "Dark Mode"
   },
   "editor": {
-    "enterLinkUrl": "Enter link URL:"
+    "enterLinkUrl": "Enter link URL:",
+    "externalChangeConfirm": "This file changed outside Typola. Keep your local edits and overwrite the file on disk?"
   },
   "slashMenu": {
     "filterPlaceholder": "Type to filter...",
@@ -68,7 +70,14 @@
     "openWorkspace": "Open Workspace",
     "loading": "Loading...",
     "confirmDelete": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+    "renamePrompt": "Enter a new name for \"{{name}}\":",
     "untitled": "Untitled"
+  },
+  "statusBar": {
+    "saved": "Saved",
+    "saving": "Saving...",
+    "error": "Save failed",
+    "unsaved": "Unsaved"
   },
   "tabBar": {
     "fileModified": "File Modified",

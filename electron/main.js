@@ -24,10 +24,33 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // electron/main.ts
 var import_electron = require("electron");
-var path = __toESM(require("path"));
+var path2 = __toESM(require("path"));
 var fs = __toESM(require("fs"));
+
+// electron/fileWatch.ts
+var path = __toESM(require("path"));
+var SELF_WRITE_GRACE_MS = 1500;
+function rememberRecentWrite(recentWrites2, filePath, now = Date.now()) {
+  recentWrites2.set(filePath, now);
+}
+function shouldIgnoreWatchEvent(recentWrites2, filePath, now = Date.now(), graceMs = SELF_WRITE_GRACE_MS) {
+  const lastWrittenAt = recentWrites2.get(filePath);
+  if (lastWrittenAt === void 0) return false;
+  if (now - lastWrittenAt <= graceMs) {
+    return true;
+  }
+  recentWrites2.delete(filePath);
+  return false;
+}
+function matchesWatchedFile(filePath, filename) {
+  if (!filename) return true;
+  return filename.toString() === path.basename(filePath);
+}
+
+// electron/main.ts
 var mainWindow = null;
 var watchedFiles = /* @__PURE__ */ new Map();
+var recentWrites = /* @__PURE__ */ new Map();
 var imageCounter = 0;
 function createWindow() {
   mainWindow = new import_electron.BrowserWindow({
@@ -36,9 +59,9 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
-    icon: path.join(__dirname, "typola.ico"),
+    icon: path2.join(__dirname, "typola.ico"),
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path2.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -47,7 +70,7 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:1420");
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+    mainWindow.loadFile(path2.join(__dirname, "../dist/index.html"));
   }
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -57,9 +80,10 @@ import_electron.ipcMain.handle("read_file", async (_, filePath) => {
   return fs.readFileSync(filePath, "utf-8");
 });
 import_electron.ipcMain.handle("write_file", async (_, filePath, content) => {
-  const dir = path.dirname(filePath);
-  const tempFile = path.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const dir = path2.dirname(filePath);
+  const tempFile = path2.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   fs.writeFileSync(tempFile, content, "utf-8");
+  rememberRecentWrite(recentWrites, filePath);
   fs.renameSync(tempFile, filePath);
 });
 import_electron.ipcMain.handle("pick_folder", async () => {
@@ -73,7 +97,7 @@ function hasMarkdownFiles(dirPath) {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue;
-      if (entry.isDirectory() && hasMarkdownFiles(path.join(dirPath, entry.name))) return true;
+      if (entry.isDirectory() && hasMarkdownFiles(path2.join(dirPath, entry.name))) return true;
       if (entry.name.endsWith(".md")) return true;
     }
   } catch {
@@ -87,7 +111,7 @@ function listDirRecursive(dirPath) {
       const result = [];
       for (const entry of entries) {
         if (entry.name.startsWith(".")) continue;
-        const fullPath = path.join(dirPath, entry.name);
+        const fullPath = path2.join(dirPath, entry.name);
         const isDir = entry.isDirectory();
         if (isDir) {
           listDirRecursive(fullPath).then((children) => {
@@ -115,7 +139,7 @@ import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
   const result = [];
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
-    const fullPath = path.join(dirPath, entry.name);
+    const fullPath = path2.join(dirPath, entry.name);
     const isDir = entry.isDirectory();
     if (isDir) {
       const children = await listDirRecursive(fullPath);
@@ -153,12 +177,12 @@ import_electron.ipcMain.handle("show_save_dialog", async (_, options) => {
   return result.canceled ? null : result.filePath;
 });
 import_electron.ipcMain.handle("save_image", async (_, workspaceRoot, data, ext) => {
-  const resourcesDir = path.join(workspaceRoot, ".resources");
+  const resourcesDir = path2.join(workspaceRoot, ".resources");
   if (!fs.existsSync(resourcesDir)) {
     fs.mkdirSync(resourcesDir, { recursive: true });
   }
   const filename = `${Date.now()}-${(++imageCounter).toString(36).slice(-8)}.${ext}`;
-  const fullPath = path.join(resourcesDir, filename);
+  const fullPath = path2.join(resourcesDir, filename);
   const buffer = Buffer.from(data);
   fs.writeFileSync(fullPath, buffer);
   return `.resources/${filename}`;
@@ -184,8 +208,10 @@ import_electron.ipcMain.handle("window_is_maximized", () => {
 import_electron.ipcMain.handle("watch_file", async (_, filePath) => {
   if (watchedFiles.has(filePath)) return;
   try {
-    const watcher = fs.watch(filePath, (eventType) => {
-      if (eventType === "change") {
+    const watcher = fs.watch(path2.dirname(filePath), (_eventType, filename) => {
+      if (!matchesWatchedFile(filePath, filename)) return;
+      if (shouldIgnoreWatchEvent(recentWrites, filePath)) return;
+      if (fs.existsSync(filePath)) {
         mainWindow?.webContents.send("file-changed", { path: filePath });
       }
     });

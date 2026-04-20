@@ -1,8 +1,10 @@
+import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../store/editor';
 import { useWorkspaceStore } from '../store/workspace';
 
 export function StatusBar() {
-  const { currentFile, content, saveStatus } = useEditorStore();
+  const { t } = useTranslation();
+  const { currentFile, content, isDirty, saveStatus } = useEditorStore();
   const workspaceRoot = useWorkspaceStore((s) => s.workspaceRoot);
 
   const wordCount = content.length;
@@ -28,9 +30,10 @@ export function StatusBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <span>{wordCount} 字</span>
         <span>
-          {saveStatus === 'saved' && '已保存'}
-          {saveStatus === 'saving' && '保存中...'}
-          {saveStatus === 'error' && '保存失败'}
+          {isDirty && t('statusBar.unsaved')}
+          {!isDirty && saveStatus === 'saved' && t('statusBar.saved')}
+          {!isDirty && saveStatus === 'saving' && t('statusBar.saving')}
+          {saveStatus === 'error' && t('statusBar.error')}
         </span>
       </div>
       {relativePath && (

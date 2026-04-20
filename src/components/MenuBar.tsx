@@ -147,8 +147,8 @@ export function MenuBar() {
   const activeMenuRef = useRef<string | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
-  const { currentFile, content, setIsDirty, updateFilePath, isDraftFile } = useEditorStore();
-  const { workspaceRoot } = useWorkspaceStore();
+  const { currentFile, content, updateFilePath, isDraftFile } = useEditorStore();
+  const { workspaceRoot, setFileTree } = useWorkspaceStore();
   const {
     toggleSidebar,
     toggleOutline,
@@ -184,10 +184,22 @@ export function MenuBar() {
     });
 
   const persistFile = async (sourcePath: string, targetPath: string) => {
+    const wasDraft = isDraftFile(sourcePath);
     await window.electronAPI.writeFile(targetPath, content);
-    setIsDirty(false);
-    if (sourcePath !== targetPath) {
+
+    if (wasDraft || sourcePath !== targetPath) {
       updateFilePath(sourcePath, targetPath);
+    }
+
+    if (wasDraft && sourcePath !== targetPath) {
+      await window.electronAPI.deletePath(sourcePath);
+    }
+
+    useEditorStore.getState().setLoadedContent(content, targetPath);
+
+    if (workspaceRoot) {
+      const entries = await window.electronAPI.listDir(workspaceRoot);
+      setFileTree(entries);
     }
   };
 
@@ -210,6 +222,8 @@ export function MenuBar() {
       try {
         await window.electronAPI.createFile(newPath);
         useEditorStore.getState().addOpenFile(newPath, { isDraft: true });
+        const entries = await window.electronAPI.listDir(workspaceRoot);
+        setFileTree(entries);
       } catch (err) {
         console.error('Failed to create file:', err);
       }

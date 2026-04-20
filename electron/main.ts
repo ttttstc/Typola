@@ -1,9 +1,11 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { matchesWatchedFile, rememberRecentWrite, shouldIgnoreWatchEvent } from './fileWatch';
 
 let mainWindow: BrowserWindow | null = null;
 const watchedFiles = new Map<string, fs.FSWatcher>();
+const recentWrites = new Map<string, number>();
 let imageCounter = 0;
 
 function createWindow() {
@@ -41,6 +43,7 @@ ipcMain.handle('write_file', async (_, filePath: string, content: string) => {
   const dir = path.dirname(filePath);
   const tempFile = path.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   fs.writeFileSync(tempFile, content, 'utf-8');
+  rememberRecentWrite(recentWrites, filePath);
   fs.renameSync(tempFile, filePath);
 });
 
@@ -187,8 +190,11 @@ ipcMain.handle('window_is_maximized', () => {
 ipcMain.handle('watch_file', async (_, filePath: string) => {
   if (watchedFiles.has(filePath)) return;
   try {
-    const watcher = fs.watch(filePath, (eventType) => {
-      if (eventType === 'change') {
+    const watcher = fs.watch(path.dirname(filePath), (_eventType, filename) => {
+      if (!matchesWatchedFile(filePath, filename)) return;
+      if (shouldIgnoreWatchEvent(recentWrites, filePath)) return;
+
+      if (fs.existsSync(filePath)) {
         mainWindow?.webContents.send('file-changed', { path: filePath });
       }
     });
