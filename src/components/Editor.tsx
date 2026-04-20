@@ -5,6 +5,7 @@ import { gfm } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { useEditorStore } from '../store/editor';
+import { useUIStore } from '../store/ui';
 import { SlashMenu } from './SlashMenu';
 import { FloatingToolbar } from './FloatingToolbar';
 
@@ -14,6 +15,7 @@ export function MilkdownEditor() {
   const isInternalUpdate = useRef(false);
 
   const { currentFile, content, isDirty, setContent, setIsDirty, setSaveStatus } = useEditorStore();
+  const fontSize = useUIStore((s) => s.fontSize);
 
   const saveFile = useCallback(async () => {
     if (!currentFile) return;
@@ -167,6 +169,7 @@ export function MilkdownEditor() {
         ref={containerRef}
         style={{
           minHeight: '100%',
+          fontSize: `${fontSize}px`,
         }}
       />
     </div>

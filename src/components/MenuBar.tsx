@@ -256,7 +256,7 @@ export function MenuBar() {
 
   const { currentFile, content, setIsDirty } = useEditorStore();
   const { workspaceRoot } = useWorkspaceStore();
-  const { toggleSidebar, toggleOutline, toggleTheme, theme } = useUIStore();
+  const { toggleSidebar, toggleOutline, toggleTheme, theme, fontSize, setFontSize } = useUIStore();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -401,6 +401,9 @@ export function MenuBar() {
   const handleRedo = () => document.execCommand('redo');
   const handleSelectAll = () => document.execCommand('selectAll');
 
+  const handleIncreaseFontSize = () => setFontSize(fontSize + 1);
+  const handleDecreaseFontSize = () => setFontSize(fontSize - 1);
+
   const menus: Record<string, MenuItemData[]> = {
     '文件': [
       { label: '新建文件', shortcut: 'Ctrl+N', action: handleNewFile },
@@ -438,6 +441,10 @@ export function MenuBar() {
     '视图': [
       { label: '侧边栏', shortcut: 'Ctrl+\\', action: toggleSidebar },
       { label: '大纲', shortcut: 'Ctrl+Shift+\\', action: toggleOutline },
+      { divider: true, label: '' },
+      { label: '放大字体', action: handleIncreaseFontSize },
+      { label: '缩小字体', action: handleDecreaseFontSize },
+      { label: `当前字号: ${fontSize}`, action: () => {} },
       { divider: true, label: '' },
       { label: theme === 'light' ? '暗色模式' : '亮色模式', shortcut: 'Ctrl+Shift+D', action: toggleTheme },
     ],
@@ -542,7 +549,7 @@ export function MenuBar() {
                         padding: '6px 12px',
                         cursor: 'pointer',
                         fontSize: '13px',
-                        color: 'var(--color-ink)',
+                        color: item.label.startsWith('当前') ? 'var(--color-muted)' : 'var(--color-ink)',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
