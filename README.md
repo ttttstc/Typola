@@ -50,7 +50,7 @@ An elegant and efficient Markdown editor for Windows.
 
 | Version | Download |
 |---------|----------|
-| Portable | [Typola-portable-0.1.0.zip](release/Typola-portable-0.1.0.zip) |
+| Portable | [Typola-portable-0.1.0.zip](https://github.com/ttttstc/Typola/releases/latest) |
 
 Extract and run `Typola.exe` directly.
 
