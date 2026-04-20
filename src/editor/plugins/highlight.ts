@@ -58,7 +58,7 @@ function escapeHtml(text: string): string {
 
 export function setupCodeHighlight() {
   const editor = document.querySelector('.ProseMirror');
-  if (!editor) return;
+  if (!editor) return () => {};
 
   const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 
@@ -137,4 +137,6 @@ export function setupCodeHighlight() {
 
   observer.observe(editor, { childList: true, subtree: true });
   processCodeBlocks();
+
+  return () => observer.disconnect();
 }

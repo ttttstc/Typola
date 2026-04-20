@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { OpenFile, useEditorStore } from '../store/editor';
+import { useWorkspaceStore } from '../store/workspace';
 import { X } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -104,28 +105,35 @@ export function TabBar() {
           const editorState = useEditorStore.getState();
           let pathToClose = file.path;
 
-          if (editorState.currentFile === file.path && editorState.isDirty) {
-            const targetPath = editorState.isDraftFile(file.path)
-              ? await selectSavePath(file.path)
-              : file.path;
+          const wasDraft = editorState.isDraftFile(file.path);
+          const targetPath = wasDraft
+            ? await selectSavePath(file.path)
+            : file.path;
 
-            if (!targetPath) {
-              setConfirmDialog(null);
-              return;
+          if (!targetPath) {
+            setConfirmDialog(null);
+            return;
+          }
+
+          try {
+            await window.electronAPI.writeFile(targetPath, file.content);
+            if (wasDraft || targetPath !== file.path) {
+              editorState.updateFilePath(file.path, targetPath);
+              pathToClose = targetPath;
             }
-
-            try {
-              await window.electronAPI.writeFile(targetPath, editorState.content);
-              editorState.setIsDirty(false);
-              if (targetPath !== file.path) {
-                editorState.updateFilePath(file.path, targetPath);
-                pathToClose = targetPath;
+            editorState.setLoadedContent(file.content, targetPath);
+            if (wasDraft && targetPath !== file.path) {
+              await window.electronAPI.deletePath(file.path);
+              const { workspaceRoot, setFileTree } = useWorkspaceStore.getState();
+              if (workspaceRoot) {
+                const entries = await window.electronAPI.listDir(workspaceRoot);
+                setFileTree(entries);
               }
-            } catch (err) {
-              console.error('Failed to save:', err);
-              setConfirmDialog(null);
-              return;
             }
+          } catch (err) {
+            console.error('Failed to save:', err);
+            setConfirmDialog(null);
+            return;
           }
 
           removeOpenFile(pathToClose);

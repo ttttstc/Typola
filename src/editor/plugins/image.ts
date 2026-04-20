@@ -24,9 +24,9 @@ export function getImageUrl(relativePath: string): string {
 
 export function setupImageHandler() {
   const editor = document.querySelector('.ProseMirror');
-  if (!editor) return;
+  if (!editor) return () => {};
 
-  editor.addEventListener('paste', (e: Event) => {
+  const handlePaste = (e: Event) => {
     const clipboardEvent = e as ClipboardEvent;
     const items = clipboardEvent.clipboardData?.items;
     if (!items) return;
@@ -48,9 +48,9 @@ export function setupImageHandler() {
         });
       }
     }
-  });
+  };
 
-  editor.addEventListener('drop', (e: Event) => {
+  const handleDrop = (e: Event) => {
     const dragEvent = e as DragEvent;
     const files = dragEvent.dataTransfer?.files;
     if (!files || files.length === 0) return;
@@ -69,5 +69,13 @@ export function setupImageHandler() {
         });
       }
     }
-  });
+  };
+
+  editor.addEventListener('paste', handlePaste);
+  editor.addEventListener('drop', handleDrop);
+
+  return () => {
+    editor.removeEventListener('paste', handlePaste);
+    editor.removeEventListener('drop', handleDrop);
+  };
 }

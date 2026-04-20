@@ -41,7 +41,7 @@ export async function renderMermaid(code: string): Promise<{ svg: string; error:
 
 export function setupMermaidHandler() {
   const editor = document.querySelector('.ProseMirror');
-  if (!editor) return;
+  if (!editor) return () => {};
 
   const processMermaidBlocks = async () => {
     const codeBlocks = editor.querySelectorAll('pre');
@@ -154,4 +154,6 @@ export function setupMermaidHandler() {
 
   observer.observe(editor, { childList: true, subtree: true });
   processMermaidBlocks();
+
+  return () => observer.disconnect();
 }

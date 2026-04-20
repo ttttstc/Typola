@@ -18,9 +18,10 @@ interface ContextMenuProps {
   entry: FileEntry;
   onClose: () => void;
   onDelete: (path: string) => void;
+  onRename: (entry: FileEntry) => void;
 }
 
-function ContextMenu({ x, y, entry, onClose, onDelete }: ContextMenuProps) {
+function ContextMenu({ x, y, entry, onClose, onDelete, onRename }: ContextMenuProps) {
   const { t } = useTranslation();
   useEffect(() => {
     const handleClick = () => onClose();
@@ -43,6 +44,26 @@ function ContextMenu({ x, y, entry, onClose, onDelete }: ContextMenuProps) {
         zIndex: 3000,
       }}
     >
+      <div
+        onClick={() => {
+          onRename(entry);
+          onClose();
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          fontSize: '13px',
+          cursor: 'pointer',
+          color: 'var(--color-ink)',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+      >
+        <FileText size={14} />
+        {t('common.rename')}
+      </div>
       <div
         onClick={() => {
           onDelete(entry.path);
@@ -73,9 +94,10 @@ interface TreeNodeProps {
   onFileClick: (path: string) => void;
   onNewFile: (dirPath: string) => void;
   onDelete: (path: string) => void;
+  onRename: (entry: FileEntry) => void;
 }
 
-function TreeNode({ entry, level, onFileClick, onNewFile, onDelete }: TreeNodeProps) {
+function TreeNode({ entry, level, onFileClick, onNewFile, onDelete, onRename }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const hasChildren = entry.children && entry.children.length > 0;
@@ -152,6 +174,7 @@ function TreeNode({ entry, level, onFileClick, onNewFile, onDelete }: TreeNodePr
           entry={entry}
           onClose={() => setContextMenu(null)}
           onDelete={onDelete}
+          onRename={onRename}
         />
       )}
       {expanded && hasChildren && (
@@ -164,6 +187,7 @@ function TreeNode({ entry, level, onFileClick, onNewFile, onDelete }: TreeNodePr
               onFileClick={onFileClick}
               onNewFile={onNewFile}
               onDelete={onDelete}
+              onRename={onRename}
             />
           ))}
         </div>
@@ -183,17 +207,37 @@ export function FileTree() {
 
     try {
       await window.electronAPI.deletePath(path);
-      // If it's the current file, remove from open files
-      const currentFile = useEditorStore.getState().currentFile;
-      if (currentFile === path) {
-        useEditorStore.getState().removeOpenFile(path);
-      }
+      const { openFiles, removeOpenFile } = useEditorStore.getState();
+      openFiles
+        .filter((file) => file.path === path || file.path.startsWith(`${path}\\`) || file.path.startsWith(`${path}/`))
+        .forEach((file) => removeOpenFile(file.path));
+
       // Refresh workspace
       if (workspaceRoot) {
         await loadWorkspace(workspaceRoot);
       }
     } catch (e) {
       console.error('Failed to delete:', e);
+    }
+  };
+
+  const handleRename = async (entry: FileEntry) => {
+    const currentName = entry.name;
+    const nextName = window.prompt(t('fileTree.renamePrompt', { name: currentName }), currentName)?.trim();
+
+    if (!nextName || nextName === currentName) return;
+
+    const parentDir = entry.path.split(/[\\/]/).slice(0, -1).join('\\');
+    const nextPath = `${parentDir}\\${nextName}`;
+
+    try {
+      await window.electronAPI.renamePath(entry.path, nextPath);
+      useEditorStore.getState().replacePathPrefix(entry.path, nextPath);
+      if (workspaceRoot) {
+        await loadWorkspace(workspaceRoot);
+      }
+    } catch (error) {
+      console.error('Failed to rename:', error);
     }
   };
 
@@ -335,6 +379,7 @@ export function FileTree() {
                 onFileClick={handleFileClick}
                 onNewFile={handleNewFile}
                 onDelete={handleDelete}
+                onRename={handleRename}
               />
             ))}
           </div>

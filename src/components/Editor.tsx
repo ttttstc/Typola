@@ -1,4 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Editor as MilkdownEditorType, rootCtx, defaultValueCtx } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
 import { gfm } from '@milkdown/preset-gfm';
@@ -6,56 +7,42 @@ import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { useEditorStore } from '../store/editor';
 import { useUIStore } from '../store/ui';
+import { useWorkspaceStore } from '../store/workspace';
+import { setupCodeHighlight } from '../editor/plugins/highlight';
+import { setupImageHandler } from '../editor/plugins/image';
+import { setupMermaidHandler } from '../editor/plugins/mermaid';
 import { SlashMenu } from './SlashMenu';
 import { FloatingToolbar } from './FloatingToolbar';
 
 export function MilkdownEditor() {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<MilkdownEditorType | null>(null);
   const isInternalUpdate = useRef(false);
+  const pluginCleanupRef = useRef<Array<() => void>>([]);
 
   const {
     currentFile,
     content,
-    isDirty,
     setContent,
-    setLoadedContent,
-    setIsDirty,
     setSaveStatus,
     updateFilePath,
     isDraftFile,
   } = useEditorStore();
   const fontSize = useUIStore((s) => s.fontSize);
+  const theme = useUIStore((s) => s.theme);
+  const workspaceRoot = useWorkspaceStore((s) => s.workspaceRoot);
+  const setFileTree = useWorkspaceStore((s) => s.setFileTree);
 
   const getSaveFileName = useCallback(
     (filePath: string) => filePath.split(/[\\/]/).pop() || 'Untitled.md',
     []
   );
 
-  const saveFile = useCallback(async () => {
-    if (!currentFile) return;
-    try {
-      const targetPath = isDraftFile(currentFile)
-        ? await window.electronAPI.showSaveDialog({
-            defaultPath: getSaveFileName(currentFile),
-            filters: [{ name: 'Markdown', extensions: ['md'] }],
-          })
-        : currentFile;
-
-      if (!targetPath) return;
-
-      setSaveStatus('saving');
-      await window.electronAPI.writeFile(targetPath, content);
-      setIsDirty(false);
-      if (targetPath !== currentFile) {
-        updateFilePath(currentFile, targetPath);
-      }
-      setSaveStatus('saved');
-    } catch (e) {
-      console.error('Save failed:', e);
-      setSaveStatus('error');
-    }
-  }, [currentFile, content, getSaveFileName, isDraftFile, setIsDirty, setSaveStatus, updateFilePath]);
+  const setupEditorPlugins = useCallback(() => {
+    pluginCleanupRef.current.forEach((cleanup) => cleanup());
+    pluginCleanupRef.current = [setupImageHandler(), setupCodeHighlight(), setupMermaidHandler()];
+  }, []);
 
   const initEditor = useCallback((container: HTMLElement, initialContent: string) => {
     if (editorRef.current) {
@@ -86,92 +73,157 @@ export function MilkdownEditor() {
     editorRef.current = editor;
   }, [setContent]);
 
-  // Initialize editor on mount
-  useEffect(() => {
-    if (!containerRef.current) return;
-    initEditor(containerRef.current, '');
-  }, [initEditor]);
-
-  // When currentFile changes, load and set content
-  useEffect(() => {
-    if (!currentFile) return;
+  const replaceEditorContent = useCallback((nextContent: string) => {
     const container = containerRef.current;
     if (!container) return;
 
-    const loadAndSetContent = async () => {
-      try {
-        const fileContent = await window.electronAPI.readFile(currentFile);
-        isInternalUpdate.current = true;
+    isInternalUpdate.current = true;
+    initEditor(container, nextContent);
+    isInternalUpdate.current = false;
+    queueMicrotask(setupEditorPlugins);
+  }, [initEditor, setupEditorPlugins]);
 
-        if (editorRef.current) {
-          editorRef.current.destroy();
-        }
-        initEditor(container, fileContent);
+  const loadFileFromDisk = useCallback(async (filePath: string) => {
+    const nextContent = await window.electronAPI.readFile(filePath);
+    replaceEditorContent(nextContent);
+    useEditorStore.getState().setLoadedContent(nextContent, filePath);
+    useEditorStore.getState().setSaveStatus('saved');
+  }, [replaceEditorContent]);
 
-        // Use setLoadedContent so it doesn't mark as dirty
-        setLoadedContent(fileContent);
+  const saveFile = useCallback(async () => {
+    if (!currentFile) return false;
+
+    try {
+      const wasDraft = isDraftFile(currentFile);
+      const targetPath = wasDraft
+        ? await window.electronAPI.showSaveDialog({
+            defaultPath: getSaveFileName(currentFile),
+            filters: [{ name: 'Markdown', extensions: ['md'] }],
+          })
+        : currentFile;
+
+      if (!targetPath) return false;
+
+      setSaveStatus('saving');
+      await window.electronAPI.writeFile(targetPath, content);
+
+      if (wasDraft || targetPath !== currentFile) {
+        updateFilePath(currentFile, targetPath);
+      }
+
+      if (wasDraft && targetPath !== currentFile) {
+        await window.electronAPI.deletePath(currentFile);
+      }
+
+      useEditorStore.getState().setLoadedContent(content, targetPath);
+      useEditorStore.getState().setSaveStatus('saved');
+
+      if (workspaceRoot) {
+        const entries = await window.electronAPI.listDir(workspaceRoot);
+        setFileTree(entries);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Save failed:', error);
+      setSaveStatus('error');
+      return false;
+    }
+  }, [content, currentFile, getSaveFileName, isDraftFile, setFileTree, setSaveStatus, updateFilePath, workspaceRoot]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncCurrentFile = async () => {
+      if (!containerRef.current) return;
+
+      if (!currentFile) {
+        replaceEditorContent('');
         setSaveStatus('saved');
+        return;
+      }
 
-        isInternalUpdate.current = false;
-      } catch (e) {
-        console.error('Failed to load file:', e);
-        isInternalUpdate.current = false;
+      const openFile = useEditorStore.getState().openFiles.find((file) => file.path === currentFile);
+
+      if (openFile?.isDirty) {
+        replaceEditorContent(openFile.content);
+        setSaveStatus('saved');
+        return;
+      }
+
+      try {
+        const nextContent = await window.electronAPI.readFile(currentFile);
+        if (cancelled) return;
+
+        replaceEditorContent(nextContent);
+        useEditorStore.getState().setLoadedContent(nextContent, currentFile);
+        useEditorStore.getState().setSaveStatus('saved');
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load file:', error);
+        }
       }
     };
 
-    loadAndSetContent();
-  }, [currentFile, initEditor, setLoadedContent, setSaveStatus]);
+    void syncCurrentFile();
 
-  // Keyboard shortcuts
+    return () => {
+      cancelled = true;
+    };
+  }, [currentFile, replaceEditorContent, setSaveStatus]);
+
   useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
+    if (!currentFile) return;
+
+    void window.electronAPI.watchFile(currentFile);
+
+    return () => {
+      void window.electronAPI.unwatchFile(currentFile);
+    };
+  }, [currentFile]);
+
+  useEffect(() => {
+    const cleanup = window.electronAPI.onFileChanged((data: { path: string }) => {
+      if (data.path !== useEditorStore.getState().currentFile) return;
+
+      const state = useEditorStore.getState();
+      if (state.isDirty) {
+        const keepLocalChanges = window.confirm(t('editor.externalChangeConfirm'));
+        if (keepLocalChanges) {
+          void saveFile();
+          return;
+        }
+      }
+
+      void loadFileFromDisk(data.path);
+    });
+
+    return () => cleanup();
+  }, [loadFileFromDisk, saveFile, t]);
+
+  useEffect(() => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
         await saveFile();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault();
-        // Handled by MenuBar
+      if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
+        event.preventDefault();
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [saveFile]);
 
-  // File change listener
   useEffect(() => {
-    const cleanup = window.electronAPI.onFileChanged((data: { path: string }) => {
-      const path = data.path;
-      if (path === currentFile) {
-        if (isDirty) {
-          if (confirm('文件已被外部修改。是否保留当前修改？')) {
-            saveFile();
-          } else {
-            const loadFile = async () => {
-              const newContent = await window.electronAPI.readFile(path);
-              setLoadedContent(newContent);
-              if (editorRef.current && containerRef.current) {
-                editorRef.current.destroy();
-                initEditor(containerRef.current, newContent);
-              }
-            };
-            loadFile();
-          }
-        } else {
-          const loadFile = async () => {
-            const newContent = await window.electronAPI.readFile(path);
-            setLoadedContent(newContent);
-            if (editorRef.current && containerRef.current) {
-              editorRef.current.destroy();
-              initEditor(containerRef.current, newContent);
-            }
-          };
-          loadFile();
-        }
-      }
-    });
-    return () => cleanup();
-  }, [currentFile, isDirty, saveFile, setLoadedContent, initEditor]);
+    if (!currentFile) return;
+    queueMicrotask(setupEditorPlugins);
+  }, [currentFile, theme, setupEditorPlugins]);
+
+  useEffect(() => () => {
+    pluginCleanupRef.current.forEach((cleanup) => cleanup());
+  }, []);
 
   return (
     <div
