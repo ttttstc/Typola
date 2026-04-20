@@ -14,7 +14,7 @@ export function MilkdownEditor() {
   const editorRef = useRef<MilkdownEditorType | null>(null);
   const isInternalUpdate = useRef(false);
 
-  const { currentFile, content, isDirty, setContent, setIsDirty, setSaveStatus } = useEditorStore();
+  const { currentFile, content, isDirty, setContent, setLoadedContent, setIsDirty, setSaveStatus } = useEditorStore();
   const fontSize = useUIStore((s) => s.fontSize);
 
   const saveFile = useCallback(async () => {
@@ -81,8 +81,8 @@ export function MilkdownEditor() {
         }
         initEditor(container, fileContent);
 
-        setContent(fileContent);
-        setIsDirty(false);
+        // Use setLoadedContent so it doesn't mark as dirty
+        setLoadedContent(fileContent);
         setSaveStatus('saved');
 
         isInternalUpdate.current = false;
@@ -93,17 +93,7 @@ export function MilkdownEditor() {
     };
 
     loadAndSetContent();
-  }, [currentFile, initEditor, setContent, setIsDirty, setSaveStatus]);
-
-  // Auto-save effect
-  useEffect(() => {
-    if (isDirty && currentFile) {
-      const timer = setTimeout(() => {
-        saveFile();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isDirty, currentFile, saveFile]);
+  }, [currentFile, initEditor, setLoadedContent, setSaveStatus]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -132,8 +122,7 @@ export function MilkdownEditor() {
           } else {
             const loadFile = async () => {
               const newContent = await window.electronAPI.readFile(path);
-              setContent(newContent);
-              setIsDirty(false);
+              setLoadedContent(newContent);
               if (editorRef.current && containerRef.current) {
                 editorRef.current.destroy();
                 initEditor(containerRef.current, newContent);
@@ -144,7 +133,7 @@ export function MilkdownEditor() {
         } else {
           const loadFile = async () => {
             const newContent = await window.electronAPI.readFile(path);
-            setContent(newContent);
+            setLoadedContent(newContent);
             if (editorRef.current && containerRef.current) {
               editorRef.current.destroy();
               initEditor(containerRef.current, newContent);
@@ -155,7 +144,7 @@ export function MilkdownEditor() {
       }
     });
     return () => cleanup();
-  }, [currentFile, isDirty, saveFile, setContent, setIsDirty, initEditor]);
+  }, [currentFile, isDirty, saveFile, setLoadedContent, initEditor]);
 
   return (
     <div

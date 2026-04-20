@@ -14,6 +14,7 @@ interface EditorState {
   openFiles: OpenFile[];
   setCurrentFile: (file: string | null) => void;
   setContent: (content: string) => void;
+  setLoadedContent: (content: string) => void;
   setIsDirty: (dirty: boolean) => void;
   setSaveStatus: (status: 'saved' | 'saving' | 'error') => void;
   addOpenFile: (path: string) => void;
@@ -36,15 +37,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setCurrentFile: (file) => set({ currentFile: file }),
 
+  // For user editing - marks file as dirty
   setContent: (content) => {
     const state = get();
-    // Only update dirty state if content actually changed
-    const contentChanged = content !== state.content;
-    const newIsDirty = contentChanged ? true : state.isDirty;
+    const newIsDirty = true;
 
-    // Update openFiles to mark current file as dirty
     let newOpenFiles = state.openFiles;
-    if (state.currentFile && contentChanged) {
+    if (state.currentFile) {
       newOpenFiles = state.openFiles.map((f) =>
         f.path === state.currentFile ? { ...f, isDirty: true } : f
       );
@@ -57,11 +56,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
+  // For loading content from disk - does NOT mark as dirty
+  setLoadedContent: (content) => {
+    const state = get();
+    let newOpenFiles = state.openFiles;
+    if (state.currentFile) {
+      newOpenFiles = state.openFiles.map((f) =>
+        f.path === state.currentFile ? { ...f, isDirty: false } : f
+      );
+    }
+
+    set({
+      content,
+      isDirty: false,
+      openFiles: newOpenFiles,
+    });
+  },
+
   setIsDirty: (dirty) => {
     const state = get();
     let newOpenFiles = state.openFiles;
 
-    // Only update openFiles if setting to false (saving) or true (editing)
     if (state.currentFile) {
       newOpenFiles = state.openFiles.map((f) =>
         f.path === state.currentFile ? { ...f, isDirty: dirty } : f
