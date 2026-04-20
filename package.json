@@ -53,8 +53,13 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*",
-      "resources/**/*"
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/typola.ico",
+        "to": "typola.ico"
+      }
     ],
     "win": {
       "target": [
