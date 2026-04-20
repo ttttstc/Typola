@@ -59,7 +59,7 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "zip",
           "arch": ["x64"]
         }
       ],
