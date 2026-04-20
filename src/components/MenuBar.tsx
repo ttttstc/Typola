@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../store/editor';
 import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
@@ -10,109 +11,6 @@ interface MenuItemData {
   divider?: boolean;
 }
 
-interface ShortcutSettingsProps {
-  onClose: () => void;
-}
-
-function ShortcutSettings({ onClose }: ShortcutSettingsProps) {
-  const shortcuts = [
-    { label: '保存', key: 'Ctrl+S' },
-    { label: '新建文件', key: 'Ctrl+N' },
-    { label: '切换侧边栏', key: 'Ctrl+\\' },
-    { label: '切换大纲', key: 'Ctrl+Shift+\\' },
-    { label: '切换主题', key: 'Ctrl+Shift+D' },
-    { label: '粗体', key: 'Ctrl+B' },
-    { label: '斜体', key: 'Ctrl+I' },
-    { label: '删除线', key: 'Ctrl+Shift+S' },
-    { label: '行内代码', key: 'Ctrl+`' },
-    { label: '链接', key: 'Ctrl+K' },
-    { label: '正文', key: 'Ctrl+0' },
-    { label: '标题1', key: 'Ctrl+1' },
-    { label: '标题2', key: 'Ctrl+2' },
-    { label: '标题3', key: 'Ctrl+3' },
-  ];
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 3000,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: 'var(--color-paper)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '24px',
-          width: '400px',
-          maxHeight: '80vh',
-          overflow: 'auto',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600 }}>快捷键设置</h2>
-        <div style={{ display: 'grid', gap: '8px' }}>
-          {shortcuts.map((s) => (
-            <div
-              key={s.label}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '8px 12px',
-                background: 'var(--color-surface-sunken)',
-                borderRadius: 'var(--radius-sm)',
-              }}
-            >
-              <span style={{ fontSize: '13px' }}>{s.label}</span>
-              <kbd
-                style={{
-                  padding: '4px 8px',
-                  background: 'var(--color-paper)',
-                  border: '1px solid var(--color-line-soft)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '12px',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                {s.key}
-              </kbd>
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={onClose}
-          style={{
-            marginTop: '20px',
-            width: '100%',
-            padding: '10px',
-            background: 'var(--color-ink)',
-            color: 'var(--color-paper)',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '13px',
-            fontWeight: 500,
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          关闭
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Context Menu for headings
 interface ContextMenuProps {
   x: number;
   y: number;
@@ -120,6 +18,7 @@ interface ContextMenuProps {
 }
 
 function ContextMenu({ x, y, onClose }: ContextMenuProps) {
+  const { t } = useTranslation();
   const setHeading = useCallback((level: string) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -128,7 +27,6 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
     }
 
     if (selection.isCollapsed) {
-      // No selection - try to find current block to change
       const editor = document.querySelector('.ProseMirror');
       if (!editor) {
         onClose();
@@ -163,7 +61,6 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
         }
       }
     } else {
-      // Has selection - wrap selected text in heading
       const range = selection.getRangeAt(0);
       const selectedText = selection.toString().trim();
       if (!selectedText) {
@@ -171,22 +68,18 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
         return;
       }
 
-      // Create heading element with selected text
       const heading = document.createElement(level.toUpperCase());
       heading.textContent = selectedText;
 
-      // Replace the selection with the heading
       range.deleteContents();
       range.insertNode(heading);
 
-      // Move cursor after the heading
       const newRange = document.createRange();
       newRange.setStartAfter(heading);
       newRange.collapse(true);
       selection.removeAllRanges();
       selection.addRange(newRange);
 
-      // Trigger input event for Milkdown to detect the change
       const editor = document.querySelector('.ProseMirror');
       if (editor) {
         const event = new Event('input', { bubbles: true });
@@ -204,13 +97,13 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
   }, [onClose]);
 
   const menuItems = [
-    { label: '正文', action: () => setHeading('p') },
-    { label: '标题 1', action: () => setHeading('h1') },
-    { label: '标题 2', action: () => setHeading('h2') },
-    { label: '标题 3', action: () => setHeading('h3') },
-    { label: '标题 4', action: () => setHeading('h4') },
-    { label: '标题 5', action: () => setHeading('h5') },
-    { label: '标题 6', action: () => setHeading('h6') },
+    { label: t('contextMenu.body'), action: () => setHeading('p') },
+    { label: t('contextMenu.heading1'), action: () => setHeading('h1') },
+    { label: t('contextMenu.heading2'), action: () => setHeading('h2') },
+    { label: t('contextMenu.heading3'), action: () => setHeading('h3') },
+    { label: t('contextMenu.heading4'), action: () => setHeading('h4') },
+    { label: t('contextMenu.heading5'), action: () => setHeading('h5') },
+    { label: t('contextMenu.heading6'), action: () => setHeading('h6') },
   ];
 
   return (
@@ -249,16 +142,26 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
 }
 
 export function MenuBar() {
-  const [showShortcuts, setShowShortcuts] = useState(false);
+  const { t } = useTranslation();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const activeMenuRef = useRef<string | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
   const { currentFile, content, setIsDirty } = useEditorStore();
   const { workspaceRoot } = useWorkspaceStore();
-  const { toggleSidebar, toggleOutline, toggleTheme, theme, fontSize, setFontSize } = useUIStore();
+  const {
+    toggleSidebar,
+    toggleOutline,
+    toggleTheme,
+    toggleLanguage,
+    language,
+    theme,
+    fontSize,
+    setFontSize,
+    setSettingsOpen,
+    setSettingsActiveTab,
+  } = useUIStore();
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
@@ -274,16 +177,15 @@ export function MenuBar() {
 
   const handleNewFile = async () => {
     if (workspaceRoot) {
-      const baseName = '未命名.md';
-      let fileName = baseName;
+      const baseName = t('fileTree.untitled') || 'Untitled.md';
+      let fileName = baseName + '.md';
       let counter = 1;
-      // Find unique filename
       while (true) {
         try {
           const testPath = `${workspaceRoot}/${fileName}`;
           await window.electronAPI.readFile(testPath);
           counter++;
-          fileName = `未命名-${counter}.md`;
+          fileName = `${baseName}-${counter}.md`;
         } catch {
           break;
         }
@@ -301,9 +203,8 @@ export function MenuBar() {
   const handleSave = async () => {
     if (!currentFile) return;
     try {
-      // For new files (containing "未命名"), show save dialog
-      if (currentFile.includes('未命名')) {
-        const fileName = currentFile.split(/[\\/]/).pop() || '未命名.md';
+      if (currentFile.includes(t('fileTree.untitled') || 'Untitled')) {
+        const fileName = currentFile.split(/[\\/]/).pop() || 'Untitled.md';
         const selected = await window.electronAPI.showSaveDialog({
           defaultPath: fileName,
           filters: [{ name: 'Markdown', extensions: ['md'] }],
@@ -311,7 +212,6 @@ export function MenuBar() {
         if (selected) {
           await window.electronAPI.writeFile(selected, content);
           setIsDirty(false);
-          // Update the store with the new path
           useEditorStore.getState().updateFilePath(currentFile, selected);
         }
       } else {
@@ -325,7 +225,7 @@ export function MenuBar() {
 
   const handleSaveAs = async () => {
     if (!currentFile) return;
-    const fileName = currentFile.split(/[\\/]/).pop() || '未命名.md';
+    const fileName = currentFile.split(/[\\/]/).pop() || 'Untitled.md';
     const selected = await window.electronAPI.showSaveDialog({
       defaultPath: fileName,
       filters: [{ name: 'Markdown', extensions: ['md'] }],
@@ -344,7 +244,6 @@ export function MenuBar() {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
 
-    // Find the block element
     let node: Node | null = selection.anchorNode;
     while (node && node !== editor) {
       if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
@@ -394,7 +293,7 @@ export function MenuBar() {
   const handleStrikethrough = () => document.execCommand('strikethrough');
   const handleCode = () => document.execCommand('code');
   const handleLink = () => {
-    const url = prompt('输入链接地址:');
+    const url = prompt(t('editor.enterLinkUrl'));
     if (url) document.execCommand('createLink', false, url);
   };
   const handleUndo = () => document.execCommand('undo');
@@ -405,48 +304,51 @@ export function MenuBar() {
   const handleDecreaseFontSize = () => setFontSize(fontSize - 1);
 
   const menus: Record<string, MenuItemData[]> = {
-    '文件': [
-      { label: '新建文件', shortcut: 'Ctrl+N', action: handleNewFile },
-      { label: '保存', shortcut: 'Ctrl+S', action: handleSave },
-      { label: '另存为', action: handleSaveAs },
+    [t('menu.file')]: [
+      { label: t('menu.newFile'), shortcut: 'Ctrl+N', action: handleNewFile },
+      { label: t('menu.save'), shortcut: 'Ctrl+S', action: handleSave },
+      { label: t('menu.saveAs'), action: handleSaveAs },
       { divider: true, label: '' },
-      { label: '退出', action: () => window.close() },
+      { label: t('menu.exit'), action: () => window.close() },
     ],
-    '编辑': [
-      { label: '撤销', shortcut: 'Ctrl+Z', action: handleUndo },
-      { label: '重做', shortcut: 'Ctrl+Shift+Z', action: handleRedo },
+    [t('menu.edit')]: [
+      { label: t('menu.undo'), shortcut: 'Ctrl+Z', action: handleUndo },
+      { label: t('menu.redo'), shortcut: 'Ctrl+Shift+Z', action: handleRedo },
       { divider: true, label: '' },
-      { label: '全选', shortcut: 'Ctrl+A', action: handleSelectAll },
+      { label: t('menu.selectAll'), shortcut: 'Ctrl+A', action: handleSelectAll },
       { divider: true, label: '' },
-      { label: '快捷键设置', action: () => setShowShortcuts(true) },
+      { label: t('menu.shortcuts'), action: () => { setSettingsActiveTab('shortcuts'); setSettingsOpen(true); } },
     ],
-    '段落': [
-      { label: '标题 1', shortcut: 'Ctrl+1', action: () => handleFormatBlock('h1') },
-      { label: '标题 2', shortcut: 'Ctrl+2', action: () => handleFormatBlock('h2') },
-      { label: '标题 3', shortcut: 'Ctrl+3', action: () => handleFormatBlock('h3') },
-      { label: '正文', shortcut: 'Ctrl+0', action: () => handleFormatBlock('p') },
+    [t('menu.paragraph')]: [
+      { label: t('menu.heading1'), shortcut: 'Ctrl+1', action: () => handleFormatBlock('h1') },
+      { label: t('menu.heading2'), shortcut: 'Ctrl+2', action: () => handleFormatBlock('h2') },
+      { label: t('menu.heading3'), shortcut: 'Ctrl+3', action: () => handleFormatBlock('h3') },
+      { label: t('menu.body'), shortcut: 'Ctrl+0', action: () => handleFormatBlock('p') },
       { divider: true, label: '' },
-      { label: '有序列表', action: () => handleList('ordered') },
-      { label: '无序列表', action: () => handleList('unordered') },
-      { label: '引用', action: handleBlockquote },
+      { label: t('menu.orderedList'), action: () => handleList('ordered') },
+      { label: t('menu.unorderedList'), action: () => handleList('unordered') },
+      { label: t('menu.quote'), action: handleBlockquote },
     ],
-    '格式': [
-      { label: '粗体', shortcut: 'Ctrl+B', action: handleBold },
-      { label: '斜体', shortcut: 'Ctrl+I', action: handleItalic },
-      { label: '删除线', shortcut: 'Ctrl+Shift+S', action: handleStrikethrough },
-      { label: '行内代码', shortcut: 'Ctrl+`', action: handleCode },
+    [t('menu.format')]: [
+      { label: t('menu.bold'), shortcut: 'Ctrl+B', action: handleBold },
+      { label: t('menu.italic'), shortcut: 'Ctrl+I', action: handleItalic },
+      { label: t('menu.strikethrough'), shortcut: 'Ctrl+Shift+S', action: handleStrikethrough },
+      { label: t('menu.inlineCode'), shortcut: 'Ctrl+`', action: handleCode },
       { divider: true, label: '' },
-      { label: '链接', shortcut: 'Ctrl+K', action: handleLink },
+      { label: t('menu.link'), shortcut: 'Ctrl+K', action: handleLink },
     ],
-    '视图': [
-      { label: '侧边栏', shortcut: 'Ctrl+\\', action: toggleSidebar },
-      { label: '大纲', shortcut: 'Ctrl+Shift+\\', action: toggleOutline },
+    [t('menu.view')]: [
+      { label: t('menu.sidebar'), shortcut: 'Ctrl+\\', action: toggleSidebar },
+      { label: t('menu.outline'), shortcut: 'Ctrl+Shift+\\', action: toggleOutline },
       { divider: true, label: '' },
-      { label: '放大字体', action: handleIncreaseFontSize },
-      { label: '缩小字体', action: handleDecreaseFontSize },
-      { label: `当前字号: ${fontSize}`, action: () => {} },
+      { label: t('menu.zoomIn'), action: handleIncreaseFontSize },
+      { label: t('menu.zoomOut'), action: handleDecreaseFontSize },
+      { label: `${t('menu.currentFontSize')}: ${fontSize}`, action: () => {} },
       { divider: true, label: '' },
-      { label: theme === 'light' ? '暗色模式' : '亮色模式', shortcut: 'Ctrl+Shift+D', action: toggleTheme },
+      { label: theme === 'light' ? t('menu.darkMode') : t('menu.lightMode'), shortcut: 'Ctrl+Shift+D', action: toggleTheme },
+    ],
+    [t('menu.settings')]: [
+      { label: t('menu.settings'), shortcut: 'Ctrl+,', action: () => { setSettingsOpen(true); } },
     ],
   };
 
@@ -455,7 +357,6 @@ export function MenuBar() {
     activeMenuRef.current = activeMenuRef.current === label ? null : label;
   };
 
-  // Right-click context menu
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       const selection = window.getSelection();
@@ -549,7 +450,7 @@ export function MenuBar() {
                         padding: '6px 12px',
                         cursor: 'pointer',
                         fontSize: '13px',
-                        color: item.label.startsWith('当前') ? 'var(--color-muted)' : 'var(--color-ink)',
+                        color: item.label.startsWith(t('menu.currentFontSize')) ? 'var(--color-muted)' : 'var(--color-ink)',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -567,8 +468,27 @@ export function MenuBar() {
             )}
           </div>
         ))}
+
+        {/* Language toggle button */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+          <button
+            onClick={toggleLanguage}
+            style={{
+              padding: '4px 8px',
+              fontSize: '12px',
+              color: 'var(--color-ink)',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer',
+              height: '24px',
+            }}
+            title="Toggle Language"
+          >
+            {language === 'zh' ? 'EN' : '中'}
+          </button>
+        </div>
       </div>
-      {showShortcuts && <ShortcutSettings onClose={() => setShowShortcuts(false)} />}
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}

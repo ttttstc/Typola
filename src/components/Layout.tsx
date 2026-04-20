@@ -6,6 +6,7 @@ import { Editor } from './Editor';
 import { Outline } from './Outline';
 import { StatusBar } from './StatusBar';
 import { TabBar } from './TabBar';
+import { Settings } from './Settings';
 import { useUIStore } from '../store/ui';
 
 export function Layout() {
@@ -138,6 +139,7 @@ export function Layout() {
         )}
       </div>
       <StatusBar />
+      <Settings />
     </div>
   );
 }

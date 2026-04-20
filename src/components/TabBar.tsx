@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../store/editor';
 import { X } from 'lucide-react';
 
@@ -10,6 +11,7 @@ interface ConfirmDialogProps {
 }
 
 function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogProps) {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -50,7 +52,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
               cursor: 'pointer',
             }}
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={onConfirm}
@@ -64,7 +66,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
               cursor: 'pointer',
             }}
           >
-            确认
+            {t('common.confirm')}
           </button>
         </div>
       </div>
@@ -73,6 +75,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
 }
 
 export function TabBar() {
+  const { t } = useTranslation();
   const { openFiles, currentFile, setCurrentFile, removeOpenFile } = useEditorStore();
 
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -165,7 +168,7 @@ export function TabBar() {
                   background: 'var(--color-accent)',
                   flexShrink: 0,
                 }}
-                title="已修改"
+                title={t('tabBar.modified')}
               />
             )}
             <span
@@ -193,8 +196,8 @@ export function TabBar() {
       </div>
       {confirmDialog && (
         <ConfirmDialog
-          title="文件已修改"
-          message={`"${confirmDialog.file.name}" 已被修改，是否保存？`}
+          title={t('tabBar.fileModified')}
+          message={t('tabBar.fileModifiedMessage', { name: confirmDialog.file.name })}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
         />

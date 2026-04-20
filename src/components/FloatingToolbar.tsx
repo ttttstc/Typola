@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bold, Italic, Strikethrough, Code, Link, ChevronDown, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Pilcrow } from 'lucide-react';
 
 interface ToolbarState {
@@ -6,25 +7,25 @@ interface ToolbarState {
   position: { x: number; y: number };
 }
 
-const HEADING_OPTIONS = [
-  { id: 'p', label: '正文', icon: Pilcrow, shortcut: 'Ctrl+0' },
-  { id: 'h1', label: '标题 1', icon: Heading1, shortcut: 'Ctrl+1' },
-  { id: 'h2', label: '标题 2', icon: Heading2, shortcut: 'Ctrl+2' },
-  { id: 'h3', label: '标题 3', icon: Heading3, shortcut: 'Ctrl+3' },
-  { id: 'h4', label: '标题 4', icon: Heading4, shortcut: '' },
-  { id: 'h5', label: '标题 5', icon: Heading5, shortcut: '' },
-  { id: 'h6', label: '标题 6', icon: Heading6, shortcut: '' },
+const HEADING_OPTIONS = (t: (key: string) => string) => [
+  { id: 'p', label: t('floatingToolbar.body'), icon: Pilcrow, shortcut: 'Ctrl+0' },
+  { id: 'h1', label: t('floatingToolbar.heading1'), icon: Heading1, shortcut: 'Ctrl+1' },
+  { id: 'h2', label: t('floatingToolbar.heading2'), icon: Heading2, shortcut: 'Ctrl+2' },
+  { id: 'h3', label: t('floatingToolbar.heading3'), icon: Heading3, shortcut: 'Ctrl+3' },
+  { id: 'h4', label: t('floatingToolbar.heading4'), icon: Heading4, shortcut: '' },
+  { id: 'h5', label: t('floatingToolbar.heading5'), icon: Heading5, shortcut: '' },
+  { id: 'h6', label: t('floatingToolbar.heading6'), icon: Heading6, shortcut: '' },
 ];
 
-const FORMAT_OPTIONS = [
-  { id: 'bold', icon: Bold, command: 'bold', title: '粗体 (Ctrl+B)' },
-  { id: 'italic', icon: Italic, command: 'italic', title: '斜体 (Ctrl+I)' },
-  { id: 'strike', icon: Strikethrough, command: 'strikethrough', title: '删除线' },
-  { id: 'code', icon: Code, command: 'code', title: '行内代码' },
-  { id: 'link', icon: Link, command: 'link', title: '链接 (Ctrl+K)' },
+const FORMAT_OPTIONS = (t: (key: string) => string) => [
+  { id: 'bold', icon: Bold, command: 'bold', title: t('floatingToolbar.bold') },
+  { id: 'italic', icon: Italic, command: 'italic', title: t('floatingToolbar.italic') },
+  { id: 'strike', icon: Strikethrough, command: 'strikethrough', title: t('floatingToolbar.strikethrough') },
+  { id: 'code', icon: Code, command: 'code', title: t('floatingToolbar.inlineCode') },
+  { id: 'link', icon: Link, command: 'link', title: t('floatingToolbar.link') },
 ];
 
-function HeadingDropdown({ onSelect, onClose }: { onSelect: (id: string) => void; onClose: () => void }) {
+function HeadingDropdown({ onSelect, onClose, t }: { onSelect: (id: string) => void; onClose: () => void; t: (key: string) => string }) {
   return (
     <div
       style={{
@@ -41,7 +42,7 @@ function HeadingDropdown({ onSelect, onClose }: { onSelect: (id: string) => void
         zIndex: 1001,
       }}
     >
-      {HEADING_OPTIONS.map((opt) => {
+      {HEADING_OPTIONS(t).map((opt) => {
         const Icon = opt.icon;
         return (
           <button
@@ -74,6 +75,7 @@ function HeadingDropdown({ onSelect, onClose }: { onSelect: (id: string) => void
 }
 
 export function FloatingToolbar() {
+  const { t } = useTranslation();
   const [state, setState] = useState<ToolbarState>({
     visible: false,
     position: { x: 0, y: 0 },
@@ -133,7 +135,7 @@ export function FloatingToolbar() {
 
   const handleButtonClick = (command: string) => {
     if (command === 'link') {
-      const url = prompt('输入链接地址:');
+      const url = prompt(t('editor.enterLinkUrl'));
       if (url) {
         document.execCommand('createLink', false, url);
       }
@@ -226,7 +228,7 @@ export function FloatingToolbar() {
         document.execCommand('code', false);
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        const url = prompt('输入链接地址:');
+        const url = prompt(t('editor.enterLinkUrl'));
         if (url) {
           document.execCommand('createLink', false, url);
         }
@@ -282,7 +284,7 @@ export function FloatingToolbar() {
       <div style={{ position: 'relative' }}>
         <button
           onClick={() => handleButtonClick('heading')}
-          title="段落格式"
+          title={t('floatingToolbar.paragraphFormat')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -304,13 +306,14 @@ export function FloatingToolbar() {
           <HeadingDropdown
             onSelect={handleHeadingSelect}
             onClose={() => setShowHeadingDropdown(false)}
+            t={t}
           />
         )}
       </div>
 
       <div style={{ width: '1px', height: '16px', background: 'var(--color-line-soft)', margin: '0 4px' }} />
 
-      {FORMAT_OPTIONS.map((btn) => {
+      {FORMAT_OPTIONS(t).map((btn) => {
         const Icon = btn.icon;
         return (
           <button
