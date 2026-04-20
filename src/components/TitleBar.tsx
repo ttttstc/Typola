@@ -1,10 +1,6 @@
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Minus, Square, X } from 'lucide-react';
 import { useUIStore } from '../store/ui';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { useState, useEffect } from 'react';
-
-const appWindow = getCurrentWindow();
 
 export function TitleBar() {
   const theme = useUIStore((s) => s.theme);
@@ -13,29 +9,17 @@ export function TitleBar() {
 
   useEffect(() => {
     const checkMaximized = async () => {
-      setIsMaximized(await appWindow.isMaximized());
+      setIsMaximized(await window.electronAPI.windowIsMaximized());
     };
     checkMaximized();
-
-    const unlisten = appWindow.onResized(() => {
-      checkMaximized();
-    });
-
-    return () => {
-      unlisten.then(fn => fn());
-    };
   }, []);
 
-  const handleMinimize = () => appWindow.minimize();
+  const handleMinimize = () => window.electronAPI.windowMinimize();
   const handleMaximize = async () => {
-    if (await appWindow.isMaximized()) {
-      await appWindow.unmaximize();
-    } else {
-      await appWindow.maximize();
-    }
-    setIsMaximized(await appWindow.isMaximized());
+    await window.electronAPI.windowMaximize();
+    setIsMaximized(await window.electronAPI.windowIsMaximized());
   };
-  const handleClose = () => appWindow.close();
+  const handleClose = () => window.electronAPI.windowClose();
 
   return (
     <div
@@ -54,7 +38,7 @@ export function TitleBar() {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <img
-          src={convertFileSrc('resources/icons/32x32.png')}
+          src="/resources/icons/32x32.png"
           alt="Typola"
           style={{
             width: '16px',
@@ -62,7 +46,6 @@ export function TitleBar() {
             borderRadius: '3px',
           }}
           onError={(e) => {
-            // Fallback if icon not found
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />

@@ -5,8 +5,6 @@ import { gfm } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { useEditorStore } from '../store/editor';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { SlashMenu } from './SlashMenu';
 import { FloatingToolbar } from './FloatingToolbar';
 
@@ -21,7 +19,7 @@ export function MilkdownEditor() {
     if (!currentFile) return;
     setSaveStatus('saving');
     try {
-      await invoke('write_file', { path: currentFile, content });
+      await window.electronAPI.writeFile(currentFile, content);
       setIsDirty(false);
       setSaveStatus('saved');
     } catch (e) {
@@ -73,7 +71,7 @@ export function MilkdownEditor() {
 
     const loadAndSetContent = async () => {
       try {
-        const fileContent = await invoke<string>('read_file', { path: currentFile });
+        const fileContent = await window.electronAPI.readFile(currentFile);
         isInternalUpdate.current = true;
 
         if (editorRef.current) {
@@ -123,15 +121,15 @@ export function MilkdownEditor() {
 
   // File change listener
   useEffect(() => {
-    const unlisten = listen('file-changed', (event: any) => {
-      const path = event.payload.path as string;
+    const unsubscribe = window.electronAPI.onFileChanged((event) => {
+      const path = event.path;
       if (path === currentFile) {
         if (isDirty) {
           if (confirm('文件已被外部修改。是否保留当前修改？')) {
             saveFile();
           } else {
             const loadFile = async () => {
-              const newContent = await invoke<string>('read_file', { path });
+              const newContent = await window.electronAPI.readFile(path);
               setContent(newContent);
               setIsDirty(false);
               if (editorRef.current && containerRef.current) {
@@ -143,7 +141,7 @@ export function MilkdownEditor() {
           }
         } else {
           const loadFile = async () => {
-            const newContent = await invoke<string>('read_file', { path });
+            const newContent = await window.electronAPI.readFile(path);
             setContent(newContent);
             if (editorRef.current && containerRef.current) {
               editorRef.current.destroy();
@@ -154,8 +152,9 @@ export function MilkdownEditor() {
         }
       }
     });
+
     return () => {
-      unlisten.then((fn: () => void) => fn());
+      unsubscribe();
     };
   }, [currentFile, isDirty, saveFile, setContent, setIsDirty, initEditor]);
 

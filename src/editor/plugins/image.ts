@@ -1,5 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { useWorkspaceStore } from '../../store/workspace';
 
 export async function saveImage(data: Uint8Array, ext: string): Promise<string | null> {
@@ -10,11 +8,11 @@ export async function saveImage(data: Uint8Array, ext: string): Promise<string |
   }
 
   try {
-    const relativePath = await invoke<string>('save_image', {
+    const relativePath = await window.electronAPI.saveImage(
       workspaceRoot,
-      data: Array.from(data),
-      ext,
-    });
+      Array.from(data),
+      ext
+    );
     return relativePath;
   } catch (error) {
     console.error('Failed to save image:', error);
@@ -22,8 +20,8 @@ export async function saveImage(data: Uint8Array, ext: string): Promise<string |
   }
 }
 
-export function getImageUrl(relativePath: string): string {
-  return convertFileSrc(relativePath);
+export async function getImageUrl(relativePath: string): Promise<string> {
+  return window.electronAPI.getImageUrl(relativePath);
 }
 
 export function setupImageHandler() {

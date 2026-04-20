@@ -41,13 +41,13 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 
 ### Installer (Recommended)
 
-Download `Typola_0.1.0_x64-setup.exe` from the `release/` folder and run it.
+Download `Typola-Setup-0.1.0.exe` from the `release/` folder and run it.
 
 ### Portable Version
 
 Download `Typola-portable-0.1.0.exe` from the `release/` folder and run it directly. No installation required.
 
-**Requirements**: Windows 10 1803+ with WebView2 Runtime (pre-installed on most Windows 10/11 systems).
+**Requirements**: Windows 10/11 with WebView2 Runtime (pre-installed on most Windows 10/11 systems).
 
 ---
 
@@ -56,25 +56,24 @@ Download `Typola-portable-0.1.0.exe` from the `release/` folder and run it direc
 ### Prerequisites
 
 - Node.js 18+
-- Rust 1.70+
 - Windows 10/11
 
 ### Build Steps
 
 ```bash
 npm install
-npm run tauri build
+npm run electron:build
 ```
 
 The built executables will be in:
-- `src-tauri/target/release/bundle/nsis/` — NSIS installer
-- `src-tauri/target/release/typola.exe` — Portable executable
+- `release/win-unpacked/` — Unpacked application
+- `release/` — NSIS installer and portable executable
 
 ---
 
 ## Tech Stack
 
-- **Tauri 2.x** — Desktop shell (Rust + WebView2)
+- **Electron 33.x** — Desktop shell (Node.js + Chromium)
 - **React 18** + TypeScript — Frontend framework
 - **Milkdown** — ProseMirror-based Markdown editor
 - **Shiki** — Code syntax highlighting
@@ -92,13 +91,13 @@ typola/
 │   ├── editor/             # Milkdown editor setup
 │   ├── store/              # Zustand stores
 │   └── styles/             # CSS files
-├── src-tauri/              # Rust backend
-│   └── src/
-│       ├── file.rs         # File operations
-│       └── watcher.rs      # External change detection
-├── resources/               # Icons
+├── electron/               # Electron main process
+│   ├── main.ts             # Main process entry
+│   ├── preload.ts          # Preload script
+│   └── electron.d.ts       # TypeScript declarations
+├── resources/              # Icons
 ├── release/                # Built executables
-└── design/                 # Design documents
+└── design/                # Design documents
 ```
 
 ---

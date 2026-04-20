@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "electron:compile": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --outdir=electron --external:electron --external:fs --external:path",
+    "electron:dev": "npm run electron:compile && concurrently -k \"vite\" \"npm run electron:start\"",
+    "electron:start": "wait-on http://localhost:1420 && electron .",
+    "electron:build": "npm run build && npm run electron:compile && electron-builder",
+    "electron": "electron"
   },
   "dependencies": {
     "@milkdown/core": "^7.6.0",
@@ -18,9 +22,7 @@
     "@milkdown/preset-commonmark": "^7.6.0",
     "@milkdown/preset-gfm": "^7.6.0",
     "@milkdown/react": "^7.6.0",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-dialog": "^2.7.0",
-    "@tauri-apps/plugin-shell": "^2.3.5",
+    "electron-log": "^5.2.0",
     "lucide-react": "^0.400.0",
     "mermaid": "^11.14.0",
     "react": "^18.3.1",
@@ -29,12 +31,56 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
+    "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^9.0.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "esbuild": "^0.24.0",
     "sharp": "^0.34.5",
     "typescript": "^5.4.0",
-    "vite": "^5.4.0"
+    "vite": "^5.4.0",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.typola.app",
+    "productName": "Typola",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "resources/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": [
+        "resources/icons/32x32.png",
+        "resources/icons/128x128.png",
+        "resources/typola.ico"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "resources/typola.ico",
+      "uninstallerIcon": "resources/typola.ico",
+      "installMode": "currentUser"
+    },
+    "portable": {
+      "artifactName": "Typola-portable-${version}.exe"
+    }
   }
 }

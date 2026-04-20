@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { save } from '@tauri-apps/plugin-dialog';
 import { useEditorStore } from '../store/editor';
 import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
@@ -249,7 +247,7 @@ export function MenuBar() {
       while (true) {
         try {
           const testPath = `${workspaceRoot}/${fileName}`;
-          await invoke('read_file', { path: testPath });
+          await window.electronAPI.readFile(testPath);
           counter++;
           fileName = `未命名-${counter}.md`;
         } catch {
@@ -258,7 +256,7 @@ export function MenuBar() {
       }
       const newPath = `${workspaceRoot}/${fileName}`;
       try {
-        await invoke('create_file', { path: newPath });
+        await window.electronAPI.createFile(newPath);
         useEditorStore.getState().addOpenFile(newPath);
       } catch (err) {
         console.error('Failed to create file:', err);
@@ -272,18 +270,18 @@ export function MenuBar() {
       // For new files (containing "未命名"), show save dialog
       if (currentFile.includes('未命名')) {
         const fileName = currentFile.split(/[\\/]/).pop() || '未命名.md';
-        const selected = await save({
+        const selected = await window.electronAPI.showSaveDialog({
           defaultPath: fileName,
           filters: [{ name: 'Markdown', extensions: ['md'] }],
         });
         if (selected) {
-          await invoke('write_file', { path: selected, content });
+          await window.electronAPI.writeFile(selected, content);
           setIsDirty(false);
           // Update the store with the new path
           useEditorStore.getState().updateFilePath(currentFile, selected);
         }
       } else {
-        await invoke('write_file', { path: currentFile, content });
+        await window.electronAPI.writeFile(currentFile, content);
         setIsDirty(false);
       }
     } catch (err) {
