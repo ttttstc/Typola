@@ -81,3 +81,11 @@ input:focus {
   outline: none;
   border-color: var(--color-focus);
 }
+
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}

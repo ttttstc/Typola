@@ -2,7 +2,7 @@ import { useEditorStore } from '../store/editor';
 import { X } from 'lucide-react';
 
 export function TabBar() {
-  const { openFiles, currentFile, setCurrentFile, removeOpenFile, isDirty } = useEditorStore();
+  const { openFiles, currentFile, setCurrentFile, removeOpenFile } = useEditorStore();
 
   const handleTabClick = (path: string) => {
     setCurrentFile(path);
@@ -60,7 +60,7 @@ export function TabBar() {
           >
             {getFileName(file.path)}
           </span>
-          {file.path === currentFile && isDirty && (
+          {file.isDirty && (
             <span
               style={{
                 width: '8px',

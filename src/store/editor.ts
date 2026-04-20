@@ -1,11 +1,17 @@
 import { create } from 'zustand';
 
+interface OpenFile {
+  path: string;
+  name: string;
+  isDirty: boolean;
+}
+
 interface EditorState {
   currentFile: string | null;
   content: string;
   isDirty: boolean;
   saveStatus: 'saved' | 'saving' | 'error';
-  openFiles: { path: string; name: string }[];
+  openFiles: OpenFile[];
   setCurrentFile: (file: string | null) => void;
   setContent: (content: string) => void;
   setIsDirty: (dirty: boolean) => void;
@@ -13,6 +19,7 @@ interface EditorState {
   addOpenFile: (path: string) => void;
   removeOpenFile: (path: string) => void;
   updateFilePath: (oldPath: string, newPath: string) => void;
+  markCurrentFileDirty: (dirty: boolean) => void;
   reset: () => void;
 }
 
@@ -30,9 +37,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setCurrentFile: (file) => set({ currentFile: file }),
 
-  setContent: (content) => set({ content, isDirty: true }),
+  setContent: (content) => {
+    const state = get();
+    set({ content, isDirty: true });
+    // Mark current file as dirty in openFiles
+    if (state.currentFile) {
+      const newOpenFiles = state.openFiles.map((f) =>
+        f.path === state.currentFile ? { ...f, isDirty: true } : f
+      );
+      set({ openFiles: newOpenFiles });
+    }
+  },
 
-  setIsDirty: (dirty) => set({ isDirty: dirty }),
+  setIsDirty: (dirty) => {
+    const state = get();
+    set({ isDirty: dirty });
+    // Mark current file in openFiles
+    if (state.currentFile) {
+      const newOpenFiles = state.openFiles.map((f) =>
+        f.path === state.currentFile ? { ...f, isDirty: dirty } : f
+      );
+      set({ openFiles: newOpenFiles });
+    }
+  },
 
   setSaveStatus: (status) => set({ saveStatus: status }),
 
@@ -41,7 +68,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const exists = state.openFiles.some((f) => f.path === path);
     if (!exists) {
       set({
-        openFiles: [...state.openFiles, { path, name: getFileName(path) }],
+        openFiles: [...state.openFiles, { path, name: getFileName(path), isDirty: false }],
         currentFile: path,
       });
     } else {
@@ -52,12 +79,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateFilePath: (oldPath: string, newPath: string) => {
     const state = get();
     const newOpenFiles = state.openFiles.map((f) =>
-      f.path === oldPath ? { ...f, path: newPath, name: getFileName(newPath) } : f
+      f.path === oldPath ? { ...f, path: newPath, name: getFileName(newPath), isDirty: false } : f
     );
     set({
       openFiles: newOpenFiles,
       currentFile: newPath,
     });
+  },
+
+  markCurrentFileDirty: (dirty: boolean) => {
+    const state = get();
+    if (state.currentFile) {
+      const newOpenFiles = state.openFiles.map((f) =>
+        f.path === state.currentFile ? { ...f, isDirty: dirty } : f
+      );
+      set({ openFiles: newOpenFiles, isDirty: dirty });
+    }
   },
 
   removeOpenFile: (path: string) => {
