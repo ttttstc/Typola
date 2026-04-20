@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useEditorStore } from '../store/editor';
+import { useTranslation } from 'react-i18next';
+import { OpenFile, useEditorStore } from '../store/editor';
 import { X } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -10,6 +11,7 @@ interface ConfirmDialogProps {
 }
 
 function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogProps) {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -50,7 +52,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
               cursor: 'pointer',
             }}
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={onConfirm}
@@ -64,7 +66,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
               cursor: 'pointer',
             }}
           >
-            确认
+            {t('common.confirm')}
           </button>
         </div>
       </div>
@@ -73,33 +75,60 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
 }
 
 export function TabBar() {
+  const { t } = useTranslation();
   const { openFiles, currentFile, setCurrentFile, removeOpenFile } = useEditorStore();
 
   const [confirmDialog, setConfirmDialog] = useState<{
-    file: { path: string; name: string; isDirty: boolean };
+    file: OpenFile;
     onConfirm: () => void;
   } | null>(null);
+
+  const getSaveFileName = (filePath: string) => filePath.split(/[\\/]/).pop() || 'Untitled.md';
+
+  const selectSavePath = async (filePath: string) =>
+    window.electronAPI.showSaveDialog({
+      defaultPath: getSaveFileName(filePath),
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
 
   const handleTabClick = (path: string) => {
     setCurrentFile(path);
   };
 
-  const handleClose = (e: React.MouseEvent, file: { path: string; name: string; isDirty: boolean }) => {
+  const handleClose = (e: React.MouseEvent, file: OpenFile) => {
     e.stopPropagation();
     if (file.isDirty) {
       setConfirmDialog({
         file,
-        onConfirm: () => {
-          // If this is the current file, save it first
+        onConfirm: async () => {
           const editorState = useEditorStore.getState();
+          let pathToClose = file.path;
+
           if (editorState.currentFile === file.path && editorState.isDirty) {
-            // Save asynchronously - don't wait
-            window.electronAPI.writeFile(file.path, editorState.content).catch((err) => {
+            const targetPath = editorState.isDraftFile(file.path)
+              ? await selectSavePath(file.path)
+              : file.path;
+
+            if (!targetPath) {
+              setConfirmDialog(null);
+              return;
+            }
+
+            try {
+              await window.electronAPI.writeFile(targetPath, editorState.content);
+              editorState.setIsDirty(false);
+              if (targetPath !== file.path) {
+                editorState.updateFilePath(file.path, targetPath);
+                pathToClose = targetPath;
+              }
+            } catch (err) {
               console.error('Failed to save:', err);
-            });
+              setConfirmDialog(null);
+              return;
+            }
           }
-          // If not current file, changes should have been auto-saved when it was current
-          removeOpenFile(file.path);
+
+          removeOpenFile(pathToClose);
           setConfirmDialog(null);
         },
       });
@@ -165,7 +194,7 @@ export function TabBar() {
                   background: 'var(--color-accent)',
                   flexShrink: 0,
                 }}
-                title="已修改"
+                title={t('tabBar.modified')}
               />
             )}
             <span
@@ -193,8 +222,8 @@ export function TabBar() {
       </div>
       {confirmDialog && (
         <ConfirmDialog
-          title="文件已修改"
-          message={`"${confirmDialog.file.name}" 已被修改，是否保存？`}
+          title={t('tabBar.fileModified')}
+          message={t('tabBar.fileModifiedMessage', { name: confirmDialog.file.name })}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
         />

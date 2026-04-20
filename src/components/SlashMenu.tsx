@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Heading1,
   Heading2,
@@ -15,27 +16,28 @@ import {
   GitBranch,
 } from 'lucide-react';
 
-const SLASH_ITEMS = [
-  { id: 'h1', label: 'Heading 1', icon: Heading1, group: '文本' },
-  { id: 'h2', label: 'Heading 2', icon: Heading2, group: '文本' },
-  { id: 'h3', label: 'Heading 3', icon: Heading3, group: '文本' },
-  { id: 'quote', label: '引用', icon: Quote, group: '文本' },
-  { id: 'divider', label: '分割线', icon: Minus, group: '文本' },
-  { id: 'bullet', label: '无序列表', icon: List, group: '列表' },
-  { id: 'ordered', label: '有序列表', icon: ListOrdered, group: '列表' },
-  { id: 'todo', label: '待办清单', icon: CheckSquare, group: '列表' },
-  { id: 'table', label: '表格', icon: Table, group: '插入' },
-  { id: 'code', label: '代码块', icon: Code, group: '插入' },
-  { id: 'image', label: '图片', icon: Image, group: '插入' },
-  { id: 'link', label: '链接', icon: Link, group: '插入' },
-  { id: 'mermaid', label: 'Mermaid 图表', icon: GitBranch, group: '图表' },
-];
-
 export function SlashMenu() {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [filter, setFilter] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const SLASH_ITEMS = [
+    { id: 'h1', label: t('slashMenu.heading1'), icon: Heading1, group: 'text' },
+    { id: 'h2', label: t('slashMenu.heading2'), icon: Heading2, group: 'text' },
+    { id: 'h3', label: t('slashMenu.heading3'), icon: Heading3, group: 'text' },
+    { id: 'quote', label: t('slashMenu.quote'), icon: Quote, group: 'text' },
+    { id: 'divider', label: t('slashMenu.divider'), icon: Minus, group: 'text' },
+    { id: 'bullet', label: t('slashMenu.bulletList'), icon: List, group: 'list' },
+    { id: 'ordered', label: t('slashMenu.orderedList'), icon: ListOrdered, group: 'list' },
+    { id: 'todo', label: t('slashMenu.todoList'), icon: CheckSquare, group: 'list' },
+    { id: 'table', label: t('slashMenu.table'), icon: Table, group: 'insert' },
+    { id: 'code', label: t('slashMenu.codeBlock'), icon: Code, group: 'insert' },
+    { id: 'image', label: t('slashMenu.image'), icon: Image, group: 'insert' },
+    { id: 'link', label: t('slashMenu.link'), icon: Link, group: 'insert' },
+    { id: 'mermaid', label: t('slashMenu.mermaid'), icon: GitBranch, group: 'diagram' },
+  ];
 
   const filteredItems = SLASH_ITEMS.filter((item) =>
     item.label.toLowerCase().includes(filter.toLowerCase())
@@ -43,7 +45,6 @@ export function SlashMenu() {
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!visible) {
-      // Only trigger slash menu with / key
       if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         const selection = window.getSelection();
         if (selection && selection.rangeCount > 0) {
@@ -53,7 +54,6 @@ export function SlashMenu() {
             const text = textNode.textContent || '';
             const cursorPos = range.startOffset;
             const textBefore = text.slice(0, cursorPos);
-            // Only show if at start of line or after newline
             if (textBefore === '' || textBefore.endsWith('\n')) {
               e.preventDefault();
               setVisible(true);
@@ -66,7 +66,6 @@ export function SlashMenu() {
       return;
     }
 
-    // Slash menu is visible - only consume keys for menu navigation
     if (e.key === 'Escape') {
       setVisible(false);
       e.preventDefault();
@@ -89,16 +88,12 @@ export function SlashMenu() {
         e.preventDefault();
       } else {
         setVisible(false);
-        // Don't prevent default - let editor handle it
       }
     } else if (e.key === ' ' || e.key === '#') {
-      // Space or # at start of filter - likely markdown heading, close menu
       setVisible(false);
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-      // Regular character - add to filter and let it pass to editor
       setFilter((prev) => prev + e.key);
       setSelectedIndex(0);
-      // Don't prevent default - let editor handle normal input
     }
   }, [visible, filter, filteredItems, selectedIndex]);
 
@@ -166,7 +161,7 @@ export function SlashMenu() {
             setFilter(e.target.value);
             setSelectedIndex(0);
           }}
-          placeholder="输入以过滤..."
+          placeholder={t('slashMenu.filterPlaceholder')}
           style={{
             width: '100%',
             border: 'none',
@@ -215,7 +210,7 @@ export function SlashMenu() {
               fontSize: '13px',
             }}
           >
-            无匹配项
+            {t('slashMenu.noMatch')}
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { useUIStore } from './store/ui';
+import './i18n';
 import './styles/tokens.css';
 import './styles/light.css';
 import './styles/dark.css';

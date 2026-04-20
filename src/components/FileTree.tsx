@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Folder,
   FolderOpen,
@@ -20,6 +21,7 @@ interface ContextMenuProps {
 }
 
 function ContextMenu({ x, y, entry, onClose, onDelete }: ContextMenuProps) {
+  const { t } = useTranslation();
   useEffect(() => {
     const handleClick = () => onClose();
     setTimeout(() => document.addEventListener('click', handleClick), 0);
@@ -59,7 +61,7 @@ function ContextMenu({ x, y, entry, onClose, onDelete }: ContextMenuProps) {
         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
       >
         <Trash2 size={14} />
-        删除
+        {t('common.delete')}
       </div>
     </div>
   );
@@ -171,11 +173,12 @@ function TreeNode({ entry, level, onFileClick, onNewFile, onDelete }: TreeNodePr
 }
 
 export function FileTree() {
+  const { t } = useTranslation();
   const { workspaceRoot, setWorkspaceRoot, setFileTree } = useWorkspaceStore();
   const [loading, setLoading] = useState(false);
 
   const handleDelete = async (path: string) => {
-    const confirmed = window.confirm(`确定要删除 "${path.split(/[\\/]/).pop()}" 吗？此操作不可撤销。`);
+    const confirmed = window.confirm(t('fileTree.confirmDelete', { name: path.split(/[\\/]/).pop() }));
     if (!confirmed) return;
 
     try {
@@ -223,15 +226,15 @@ export function FileTree() {
   };
 
   const handleNewFile = async (dirPath: string) => {
-    const baseName = '未命名.md';
-    let fileName = baseName;
+    const baseName = t('fileTree.untitled') || 'Untitled';
+    let fileName = baseName + '.md';
     let counter = 1;
     while (true) {
       try {
         const testPath = `${dirPath}/${fileName}`;
         await window.electronAPI.readFile(testPath);
         counter++;
-        fileName = `未命名-${counter}.md`;
+        fileName = `${baseName}-${counter}.md`;
       } catch {
         break;
       }
@@ -243,7 +246,7 @@ export function FileTree() {
       if (workspaceRoot) {
         await loadWorkspace(workspaceRoot);
       }
-      handleFileClick(newPath);
+      useEditorStore.getState().addOpenFile(newPath, { isDraft: true });
     } catch (e) {
       console.error('Failed to create file:', e);
     }
@@ -274,11 +277,11 @@ export function FileTree() {
         }}
       >
         <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase' }}>
-          文件
+          {t('fileTree.files')}
         </span>
         <button
           onClick={handleOpenWorkspace}
-          title="打开工作区"
+          title={t('fileTree.openWorkspace')}
           style={{
             width: '24px',
             height: '24px',
@@ -315,12 +318,12 @@ export function FileTree() {
                 fontSize: '13px',
               }}
             >
-              打开工作区
+              {t('fileTree.openWorkspace')}
             </button>
           </div>
         ) : loading ? (
           <div style={{ padding: '12px', textAlign: 'center', color: 'var(--color-muted)', fontSize: '13px' }}>
-            加载中...
+            {t('fileTree.loading')}
           </div>
         ) : (
           <div>

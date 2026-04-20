@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 
-interface OpenFile {
+export interface OpenFile {
   path: string;
   name: string;
   isDirty: boolean;
+  isDraft: boolean;
 }
 
 interface EditorState {
@@ -17,9 +18,10 @@ interface EditorState {
   setLoadedContent: (content: string) => void;
   setIsDirty: (dirty: boolean) => void;
   setSaveStatus: (status: 'saved' | 'saving' | 'error') => void;
-  addOpenFile: (path: string) => void;
+  addOpenFile: (path: string, options?: { isDraft?: boolean }) => void;
   removeOpenFile: (path: string) => void;
   updateFilePath: (oldPath: string, newPath: string) => void;
+  isDraftFile: (path: string | null) => boolean;
   reset: () => void;
 }
 
@@ -91,29 +93,43 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setSaveStatus: (status) => set({ saveStatus: status }),
 
-  addOpenFile: (path: string) => {
+  addOpenFile: (path: string, options) => {
     const state = get();
-    const exists = state.openFiles.some((f) => f.path === path);
-    if (!exists) {
+    const existingFile = state.openFiles.find((f) => f.path === path);
+    if (!existingFile) {
       set({
-        openFiles: [...state.openFiles, { path, name: getFileName(path), isDirty: false }],
+        openFiles: [
+          ...state.openFiles,
+          { path, name: getFileName(path), isDirty: false, isDraft: options?.isDraft ?? false },
+        ],
         currentFile: path,
       });
     } else {
-      set({ currentFile: path });
+      const nextOpenFiles =
+        options?.isDraft && !existingFile.isDraft
+          ? state.openFiles.map((file) =>
+              file.path === path ? { ...file, isDraft: true } : file
+            )
+          : state.openFiles;
+      set({ openFiles: nextOpenFiles, currentFile: path });
     }
   },
 
   updateFilePath: (oldPath: string, newPath: string) => {
     const state = get();
     const newOpenFiles = state.openFiles.map((f) =>
-      f.path === oldPath ? { ...f, path: newPath, name: getFileName(newPath), isDirty: false } : f
+      f.path === oldPath
+        ? { ...f, path: newPath, name: getFileName(newPath), isDirty: false, isDraft: false }
+        : f
     );
     set({
       openFiles: newOpenFiles,
       currentFile: newPath,
     });
   },
+
+  isDraftFile: (path: string | null) =>
+    path !== null && get().openFiles.some((file) => file.path === path && file.isDraft),
 
   removeOpenFile: (path: string) => {
     const state = get();
