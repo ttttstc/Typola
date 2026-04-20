@@ -86,15 +86,19 @@ export function SlashMenu() {
       if (filter.length > 0) {
         setFilter((prev) => prev.slice(0, -1));
         setSelectedIndex(0);
+        e.preventDefault();
       } else {
         setVisible(false);
+        // Don't prevent default - let editor handle it
       }
-      e.preventDefault();
+    } else if (e.key === ' ' || e.key === '#') {
+      // Space or # at start of filter - likely markdown heading, close menu
+      setVisible(false);
     } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-      // Allow typing to filter when menu is open
+      // Regular character - add to filter and let it pass to editor
       setFilter((prev) => prev + e.key);
       setSelectedIndex(0);
-      // Let the character pass through to editor for actual input
+      // Don't prevent default - let editor handle normal input
     }
   }, [visible, filter, filteredItems, selectedIndex]);
 
