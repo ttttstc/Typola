@@ -38,6 +38,7 @@
     "concurrently": "^9.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
+    "electron-icon-builder": "^2.0.1",
     "esbuild": "^0.24.0",
     "sharp": "^0.34.5",
     "typescript": "^5.4.0",
@@ -65,7 +66,9 @@
       "target": [
         {
           "target": "zip",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "resources/typola.ico",
