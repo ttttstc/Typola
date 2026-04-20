@@ -1,13 +1,20 @@
 import { create } from 'zustand';
 
+interface OpenFile {
+  path: string;
+  name: string;
+  isDirty: boolean;
+}
+
 interface EditorState {
   currentFile: string | null;
   content: string;
   isDirty: boolean;
   saveStatus: 'saved' | 'saving' | 'error';
-  openFiles: { path: string; name: string }[];
+  openFiles: OpenFile[];
   setCurrentFile: (file: string | null) => void;
   setContent: (content: string) => void;
+  setLoadedContent: (content: string) => void;
   setIsDirty: (dirty: boolean) => void;
   setSaveStatus: (status: 'saved' | 'saving' | 'error') => void;
   addOpenFile: (path: string) => void;
@@ -30,9 +37,57 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setCurrentFile: (file) => set({ currentFile: file }),
 
-  setContent: (content) => set({ content, isDirty: true }),
+  // For user editing - marks file as dirty
+  setContent: (content) => {
+    const state = get();
+    const newIsDirty = true;
 
-  setIsDirty: (dirty) => set({ isDirty: dirty }),
+    let newOpenFiles = state.openFiles;
+    if (state.currentFile) {
+      newOpenFiles = state.openFiles.map((f) =>
+        f.path === state.currentFile ? { ...f, isDirty: true } : f
+      );
+    }
+
+    set({
+      content,
+      isDirty: newIsDirty,
+      openFiles: newOpenFiles,
+    });
+  },
+
+  // For loading content from disk - does NOT mark as dirty
+  setLoadedContent: (content) => {
+    const state = get();
+    let newOpenFiles = state.openFiles;
+    if (state.currentFile) {
+      newOpenFiles = state.openFiles.map((f) =>
+        f.path === state.currentFile ? { ...f, isDirty: false } : f
+      );
+    }
+
+    set({
+      content,
+      isDirty: false,
+      openFiles: newOpenFiles,
+    });
+  },
+
+  setIsDirty: (dirty) => {
+    const state = get();
+    let newOpenFiles = state.openFiles;
+
+    if (state.currentFile) {
+      newOpenFiles = state.openFiles.map((f) =>
+        f.path === state.currentFile ? { ...f, isDirty: dirty } : f
+      );
+    }
+
+    set({
+      isDirty: dirty,
+      openFiles: newOpenFiles,
+    });
+  },
 
   setSaveStatus: (status) => set({ saveStatus: status }),
 
@@ -41,7 +96,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const exists = state.openFiles.some((f) => f.path === path);
     if (!exists) {
       set({
-        openFiles: [...state.openFiles, { path, name: getFileName(path) }],
+        openFiles: [...state.openFiles, { path, name: getFileName(path), isDirty: false }],
         currentFile: path,
       });
     } else {
@@ -52,7 +107,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateFilePath: (oldPath: string, newPath: string) => {
     const state = get();
     const newOpenFiles = state.openFiles.map((f) =>
-      f.path === oldPath ? { ...f, path: newPath, name: getFileName(newPath) } : f
+      f.path === oldPath ? { ...f, path: newPath, name: getFileName(newPath), isDirty: false } : f
     );
     set({
       openFiles: newOpenFiles,

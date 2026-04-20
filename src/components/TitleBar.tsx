@@ -1,6 +1,7 @@
 import { Minus, Square, X } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import { useState, useEffect } from 'react';
+import icon32 from '../../resources/icons/32x32.png';
 
 export function TitleBar() {
   const theme = useUIStore((s) => s.theme);
@@ -32,23 +33,10 @@ export function TitleBar() {
   const handleClose = () => window.electronAPI.windowClose();
 
   return (
-    <div
-      data-tauri-drag-region
-      style={{
-        height: 'var(--titlebar-height)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'var(--color-paper)',
-        borderBottom: '1px solid var(--color-line-soft)',
-        padding: '0 8px',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <div className="titlebar-drag">
+      <div className="titlebar-icon">
         <img
-          src="/resources/icons/32x32.png"
+          src={icon32}
           alt="Typola"
           style={{
             width: '16px',
@@ -56,7 +44,6 @@ export function TitleBar() {
             borderRadius: '3px',
           }}
           onError={(e) => {
-            // Fallback if icon not found
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
@@ -71,18 +58,9 @@ export function TitleBar() {
         </span>
       </div>
 
-      <div
-        data-tauri-drag-region
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          flex: 1,
-          justifyContent: 'center',
-        }}
-      />
+      <div className="titlebar-spacer" />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div className="titlebar-no-drag">
         <button
           onClick={toggleTheme}
           title={`切换到${theme === 'light' ? '暗色' : '亮色'}主题 (Ctrl+Shift+D)`}

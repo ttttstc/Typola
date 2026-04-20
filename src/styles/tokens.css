@@ -6,6 +6,7 @@
   --color-surface-sunken: #F7F7F7;
   --color-muted: #6B6B6B;
   --color-focus: #0B0B0B;
+  --color-accent: #3B82F6;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -79,4 +80,33 @@ input {
 input:focus {
   outline: none;
   border-color: var(--color-focus);
+}
+
+.titlebar-drag {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--titlebar-height);
+  background: var(--color-paper);
+  border-bottom: 1px solid var(--color-line-soft);
+  padding: 0 8px;
+  user-select: none;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.titlebar-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titlebar-spacer {
+  flex: 1;
 }
