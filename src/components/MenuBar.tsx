@@ -130,7 +130,6 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
     // Check if there's actual selection
     if (selection.isCollapsed) {
       // No selection - try to find current block to change
-      const range = selection.getRangeAt(0);
       let node: Node | null = selection.anchorNode;
       while (node && node !== editor) {
         if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
