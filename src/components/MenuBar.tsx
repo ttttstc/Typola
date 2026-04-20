@@ -291,6 +291,20 @@ export function MenuBar() {
     }
   };
 
+  const handleSaveAs = async () => {
+    if (!currentFile) return;
+    const fileName = currentFile.split(/[\\/]/).pop() || '未命名.md';
+    const selected = await window.electronAPI.showSaveDialog({
+      defaultPath: fileName,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (selected) {
+      await window.electronAPI.writeFile(selected, content);
+      setIsDirty(false);
+      useEditorStore.getState().updateFilePath(currentFile, selected);
+    }
+  };
+
   const handleFormatBlock = (tag: string) => {
     const editor = document.querySelector('.ProseMirror');
     if (!editor) return;
@@ -359,6 +373,7 @@ export function MenuBar() {
     '文件': [
       { label: '新建文件', shortcut: 'Ctrl+N', action: handleNewFile },
       { label: '保存', shortcut: 'Ctrl+S', action: handleSave },
+      { label: '另存为', action: handleSaveAs },
       { divider: true, label: '' },
       { label: '退出', action: () => window.close() },
     ],

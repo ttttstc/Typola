@@ -30,3 +30,13 @@ npm-debug.log*
 
 # Tauri
 src-tauri/gen/
+
+# Electron build
+electron/*.js
+release/
+
+# Claude
+.claude/
+
+# Temp files
+未命名*.md

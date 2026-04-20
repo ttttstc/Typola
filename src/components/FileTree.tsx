@@ -8,19 +8,76 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import { useWorkspaceStore, FileEntry } from '../store/workspace';
 import { useEditorStore } from '../store/editor';
+
+interface ContextMenuProps {
+  x: number;
+  y: number;
+  entry: FileEntry;
+  onClose: () => void;
+  onDelete: (path: string) => void;
+}
+
+function ContextMenu({ x, y, entry, onClose, onDelete }: ContextMenuProps) {
+  useEffect(() => {
+    const handleClick = () => onClose();
+    setTimeout(() => document.addEventListener('click', handleClick), 0);
+    return () => document.removeEventListener('click', handleClick);
+  }, [onClose]);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        left: x,
+        top: y,
+        background: 'var(--color-paper)',
+        border: '1px solid var(--color-line-soft)',
+        borderRadius: 'var(--radius-md)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        padding: '4px 0',
+        minWidth: '120px',
+        zIndex: 3000,
+      }}
+    >
+      <div
+        onClick={() => {
+          onDelete(entry.path);
+          onClose();
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px 12px',
+          fontSize: '13px',
+          cursor: 'pointer',
+          color: '#dc2626',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+      >
+        <Trash2 size={14} />
+        删除
+      </div>
+    </div>
+  );
+}
 
 interface TreeNodeProps {
   entry: FileEntry;
   level: number;
   onFileClick: (path: string) => void;
   onNewFile: (dirPath: string) => void;
+  onDelete: (path: string) => void;
 }
 
-function TreeNode({ entry, level, onFileClick, onNewFile }: TreeNodeProps) {
+function TreeNode({ entry, level, onFileClick, onNewFile, onDelete }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const hasChildren = entry.children && entry.children.length > 0;
 
   const handleClick = () => {
@@ -29,6 +86,12 @@ function TreeNode({ entry, level, onFileClick, onNewFile }: TreeNodeProps) {
     } else if (entry.name.endsWith('.md')) {
       onFileClick(entry.path);
     }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   return (
@@ -46,6 +109,7 @@ function TreeNode({ entry, level, onFileClick, onNewFile }: TreeNodeProps) {
         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
       >
         {entry.isDir && (
           <span style={{ color: 'var(--color-muted)', width: '16px', display: 'flex' }}>
@@ -81,6 +145,15 @@ function TreeNode({ entry, level, onFileClick, onNewFile }: TreeNodeProps) {
           </button>
         )}
       </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          entry={entry}
+          onClose={() => setContextMenu(null)}
+          onDelete={onDelete}
+        />
+      )}
       {expanded && hasChildren && (
         <div>
           {entry.children!.map((child, i) => (
@@ -90,6 +163,7 @@ function TreeNode({ entry, level, onFileClick, onNewFile }: TreeNodeProps) {
               level={level + 1}
               onFileClick={onFileClick}
               onNewFile={onNewFile}
+              onDelete={onDelete}
             />
           ))}
         </div>
@@ -101,6 +175,26 @@ function TreeNode({ entry, level, onFileClick, onNewFile }: TreeNodeProps) {
 export function FileTree() {
   const { workspaceRoot, setWorkspaceRoot, setFileTree } = useWorkspaceStore();
   const [loading, setLoading] = useState(false);
+
+  const handleDelete = async (path: string) => {
+    const confirmed = window.confirm(`确定要删除 "${path.split(/[\\/]/).pop()}" 吗？此操作不可撤销。`);
+    if (!confirmed) return;
+
+    try {
+      await window.electronAPI.deletePath(path);
+      // If it's the current file, remove from open files
+      const currentFile = useEditorStore.getState().currentFile;
+      if (currentFile === path) {
+        useEditorStore.getState().removeOpenFile(path);
+      }
+      // Refresh workspace
+      if (workspaceRoot) {
+        await loadWorkspace(workspaceRoot);
+      }
+    } catch (e) {
+      console.error('Failed to delete:', e);
+    }
+  };
 
   const loadWorkspace = useCallback(async (root: string) => {
     setLoading(true);
@@ -240,6 +334,7 @@ export function FileTree() {
                 level={0}
                 onFileClick={handleFileClick}
                 onNewFile={handleNewFile}
+                onDelete={handleDelete}
               />
             ))}
           </div>

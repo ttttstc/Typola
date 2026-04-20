@@ -4,10 +4,6 @@ import { X } from 'lucide-react';
 export function TabBar() {
   const { openFiles, currentFile, setCurrentFile, removeOpenFile } = useEditorStore();
 
-  if (openFiles.length === 0) {
-    return null;
-  }
-
   const handleTabClick = (path: string) => {
     setCurrentFile(path);
   };
