@@ -47,4 +47,24 @@ describe('editor store', () => {
     expect(nextState.openFiles[0].path).toBe('C:\\workspace\\notes\\guide.md');
     expect(nextState.content).toBe('guide');
   });
+
+  it('keeps the active tab stable when updating a background draft path', () => {
+    const store = useEditorStore.getState();
+
+    store.addOpenFile('C:\\workspace\\active.md');
+    store.setLoadedContent('active content', 'C:\\workspace\\active.md');
+    store.setContent('still editing here');
+
+    store.addOpenFile('C:\\workspace\\draft.md', { isDraft: true });
+    store.setLoadedContent('draft content', 'C:\\workspace\\draft.md');
+    store.setCurrentFile('C:\\workspace\\active.md');
+
+    store.updateFilePath('C:\\workspace\\draft.md', 'C:\\workspace\\saved-draft.md');
+
+    const nextState = useEditorStore.getState();
+    expect(nextState.currentFile).toBe('C:\\workspace\\active.md');
+    expect(nextState.content).toBe('still editing here');
+    expect(nextState.isDirty).toBe(true);
+    expect(nextState.openFiles.map((file) => file.path)).toContain('C:\\workspace\\saved-draft.md');
+  });
 });

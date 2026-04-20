@@ -181,14 +181,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           }
         : file
     );
-    const nextActive = getOpenFileState(nextOpenFiles, newPath);
+    const nextCurrentFile = state.currentFile === oldPath ? newPath : state.currentFile;
+    const nextActive = getOpenFileState(nextOpenFiles, nextCurrentFile);
+    const activeFileChanged = nextCurrentFile !== state.currentFile;
 
     set({
       openFiles: nextOpenFiles,
-      currentFile: newPath,
-      content: nextActive.content,
-      isDirty: nextActive.isDirty,
-      saveStatus: 'saved',
+      currentFile: nextCurrentFile,
+      content: activeFileChanged ? nextActive.content : state.content,
+      isDirty: activeFileChanged ? nextActive.isDirty : state.isDirty,
+      saveStatus: activeFileChanged ? 'saved' : state.saveStatus,
     });
   },
 
