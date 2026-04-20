@@ -47,6 +47,7 @@
   "build": {
     "appId": "com.typola.app",
     "productName": "Typola",
+    "copyright": "Copyright © 2026 Typola",
     "directories": {
       "output": "release"
     },
@@ -58,7 +59,7 @@
     "win": {
       "target": [
         {
-          "target": "zip",
+          "target": "portable",
           "arch": ["x64"]
         }
       ],
