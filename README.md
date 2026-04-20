@@ -18,6 +18,8 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 - **Shiki syntax highlighting** — Beautiful code blocks with language labels
 - **Light/Dark theme** — Toggle with `Ctrl+Shift+D`
 - **File tree & outline** — Navigate large documents easily
+- **Tab bar** — Switch between multiple files
+- **Right-click delete** — Delete files from file tree
 
 ---
 
@@ -27,6 +29,7 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 |--------|----------|
 | New file | `Ctrl+N` |
 | Save | `Ctrl+S` |
+| Save As | `Ctrl+Shift+S` |
 | Toggle sidebar | `Ctrl+\` |
 | Toggle outline | `Ctrl+Shift+\` |
 | Toggle theme | `Ctrl+Shift+D` |
@@ -37,44 +40,30 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 
 ---
 
-## Installation
+## Download & Installation
 
-### Installer (Recommended)
+### System Requirements
 
-Download `Typola_0.1.0_x64-setup.exe` from the `release/` folder and run it.
+Windows 10/11
 
 ### Portable Version
 
-Download `Typola-portable-0.1.0.exe` from the `release/` folder and run it directly. No installation required.
+Download `Typola-portable.zip`, extract, and run `Typola.exe` directly.
 
-**Requirements**: Windows 10 1803+ with WebView2 Runtime (pre-installed on most Windows 10/11 systems).
-
----
-
-## Building from Source
-
-### Prerequisites
-
-- Node.js 18+
-- Rust 1.70+
-- Windows 10/11
-
-### Build Steps
+### Build from Source
 
 ```bash
 npm install
-npm run tauri build
+npm run electron:build
 ```
 
-The built executables will be in:
-- `src-tauri/target/release/bundle/nsis/` — NSIS installer
-- `src-tauri/target/release/typola.exe` — Portable executable
+Built files are in the `release/` directory.
 
 ---
 
 ## Tech Stack
 
-- **Tauri 2.x** — Desktop shell (Rust + WebView2)
+- **Electron 33.x** — Desktop runtime
 - **React 18** + TypeScript — Frontend framework
 - **Milkdown** — ProseMirror-based Markdown editor
 - **Shiki** — Code syntax highlighting
@@ -92,10 +81,9 @@ typola/
 │   ├── editor/             # Milkdown editor setup
 │   ├── store/              # Zustand stores
 │   └── styles/             # CSS files
-├── src-tauri/              # Rust backend
-│   └── src/
-│       ├── file.rs         # File operations
-│       └── watcher.rs      # External change detection
+├── electron/               # Electron main process
+│   ├── main.ts             # Main entry
+│   └── preload.ts          # Preload script
 ├── resources/               # Icons
 ├── release/                # Built executables
 └── design/                 # Design documents
