@@ -28,6 +28,7 @@ export function TabBar() {
         height: '32px',
         overflowX: 'auto',
         overflowY: 'hidden',
+        flexShrink: 0,
       }}
     >
       {openFiles.map((file) => (

@@ -13,11 +13,11 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   renamePath: (oldPath, newPath) => import_electron.ipcRenderer.invoke("rename_path", oldPath, newPath),
   showSaveDialog: (options) => import_electron.ipcRenderer.invoke("show_save_dialog", options),
   saveImage: (workspaceRoot, data, ext) => import_electron.ipcRenderer.invoke("save_image", workspaceRoot, data, ext),
-  // Image URL
   getImageUrl: (relativePath) => import_electron.ipcRenderer.invoke("get_image_url", relativePath),
   // Window controls
   windowMinimize: () => import_electron.ipcRenderer.invoke("window_minimize"),
   windowMaximize: () => import_electron.ipcRenderer.invoke("window_maximize"),
+  windowUnmaximize: () => import_electron.ipcRenderer.invoke("window_unmaximize"),
   windowClose: () => import_electron.ipcRenderer.invoke("window_close"),
   windowIsMaximized: () => import_electron.ipcRenderer.invoke("window_is_maximized"),
   // File watcher

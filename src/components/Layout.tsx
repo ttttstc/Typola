@@ -44,6 +44,7 @@ export function Layout() {
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
+            minWidth: 0,
           }}
         >
           <TabBar />

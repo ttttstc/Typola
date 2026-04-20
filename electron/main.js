@@ -67,27 +67,6 @@ import_electron.ipcMain.handle("pick_folder", async () => {
   });
   return result.canceled ? null : result.filePaths[0];
 });
-import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const result = [];
-  for (const entry of entries) {
-    if (entry.name.startsWith(".")) continue;
-    const fullPath = path.join(dirPath, entry.name);
-    const isDir = entry.isDirectory();
-    if (isDir) {
-      const children = await listDirRecursive(fullPath);
-      if (children.length > 0 || hasMarkdownFiles(fullPath)) {
-        result.push({ name: entry.name, path: fullPath, isDir: true, children });
-      }
-    } else if (entry.name.endsWith(".md")) {
-      result.push({ name: entry.name, path: fullPath, isDir: false });
-    }
-  }
-  return result.sort((a, b) => {
-    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-});
 function hasMarkdownFiles(dirPath) {
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -130,6 +109,27 @@ function listDirRecursive(dirPath) {
     }
   });
 }
+import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const result = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    const fullPath = path.join(dirPath, entry.name);
+    const isDir = entry.isDirectory();
+    if (isDir) {
+      const children = await listDirRecursive(fullPath);
+      if (children.length > 0 || hasMarkdownFiles(fullPath)) {
+        result.push({ name: entry.name, path: fullPath, isDir: true, children });
+      }
+    } else if (entry.name.endsWith(".md")) {
+      result.push({ name: entry.name, path: fullPath, isDir: false });
+    }
+  }
+  return result.sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+});
 import_electron.ipcMain.handle("create_file", async (_, filePath) => {
   fs.writeFileSync(filePath, "", "utf-8");
 });
@@ -169,11 +169,10 @@ import_electron.ipcMain.handle("window_minimize", () => {
   mainWindow?.minimize();
 });
 import_electron.ipcMain.handle("window_maximize", () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow?.maximize();
-  }
+  mainWindow?.maximize();
+});
+import_electron.ipcMain.handle("window_unmaximize", () => {
+  mainWindow?.unmaximize();
 });
 import_electron.ipcMain.handle("window_close", () => {
   mainWindow?.close();
