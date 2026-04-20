@@ -8,11 +8,7 @@ export async function saveImage(data: Uint8Array, ext: string): Promise<string |
   }
 
   try {
-    const relativePath = await window.electronAPI.saveImage(
-      workspaceRoot,
-      Array.from(data),
-      ext
-    );
+    const relativePath = await window.electronAPI.saveImage(workspaceRoot, Array.from(data), ext);
     return relativePath;
   } catch (error) {
     console.error('Failed to save image:', error);
@@ -20,8 +16,10 @@ export async function saveImage(data: Uint8Array, ext: string): Promise<string |
   }
 }
 
-export async function getImageUrl(relativePath: string): Promise<string> {
-  return window.electronAPI.getImageUrl(relativePath);
+export function getImageUrl(relativePath: string): string {
+  // For Electron, images are accessed via file:// protocol
+  // The relative path is returned from the main process
+  return relativePath;
 }
 
 export function setupImageHandler() {

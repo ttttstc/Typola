@@ -18,6 +18,8 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 - **Shiki syntax highlighting** — Beautiful code blocks with language labels
 - **Light/Dark theme** — Toggle with `Ctrl+Shift+D`
 - **File tree & outline** — Navigate large documents easily
+- **Tab bar** — Switch between multiple files
+- **Right-click delete** — Delete files from file tree
 
 ---
 
@@ -27,6 +29,7 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 |--------|----------|
 | New file | `Ctrl+N` |
 | Save | `Ctrl+S` |
+| Save As | `Ctrl+Shift+S` |
 | Toggle sidebar | `Ctrl+\` |
 | Toggle outline | `Ctrl+Shift+\` |
 | Toggle theme | `Ctrl+Shift+D` |
@@ -37,43 +40,30 @@ A lightweight, AI-friendly Markdown editor for Windows desktop.
 
 ---
 
-## Installation
+## Download & Installation
 
-### Installer (Recommended)
+### System Requirements
 
-Download `Typola-Setup-0.1.0.exe` from the `release/` folder and run it.
+Windows 10/11
 
 ### Portable Version
 
-Download `Typola-portable-0.1.0.exe` from the `release/` folder and run it directly. No installation required.
+Download `Typola-portable.zip`, extract, and run `Typola.exe` directly.
 
-**Requirements**: Windows 10/11 with WebView2 Runtime (pre-installed on most Windows 10/11 systems).
-
----
-
-## Building from Source
-
-### Prerequisites
-
-- Node.js 18+
-- Windows 10/11
-
-### Build Steps
+### Build from Source
 
 ```bash
 npm install
 npm run electron:build
 ```
 
-The built executables will be in:
-- `release/win-unpacked/` — Unpacked application
-- `release/` — NSIS installer and portable executable
+Built files are in the `release/` directory.
 
 ---
 
 ## Tech Stack
 
-- **Electron 33.x** — Desktop shell (Node.js + Chromium)
+- **Electron 33.x** — Desktop runtime
 - **React 18** + TypeScript — Frontend framework
 - **Milkdown** — ProseMirror-based Markdown editor
 - **Shiki** — Code syntax highlighting
@@ -92,12 +82,11 @@ typola/
 │   ├── store/              # Zustand stores
 │   └── styles/             # CSS files
 ├── electron/               # Electron main process
-│   ├── main.ts             # Main process entry
-│   ├── preload.ts          # Preload script
-│   └── electron.d.ts       # TypeScript declarations
-├── resources/              # Icons
+│   ├── main.ts             # Main entry
+│   └── preload.ts          # Preload script
+├── resources/               # Icons
 ├── release/                # Built executables
-└── design/                # Design documents
+└── design/                 # Design documents
 ```
 
 ---

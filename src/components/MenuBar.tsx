@@ -121,45 +121,79 @@ interface ContextMenuProps {
 
 function ContextMenu({ x, y, onClose }: ContextMenuProps) {
   const setHeading = useCallback((level: string) => {
-    const editor = document.querySelector('.ProseMirror');
-    if (!editor) return;
-
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-
-    // Find the block element containing the selection
-    let node: Node | null = selection.anchorNode;
-    while (node && node !== editor) {
-      if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
-        break;
-      }
-      node = node.parentNode;
+    if (!selection || selection.rangeCount === 0) {
+      onClose();
+      return;
     }
 
-    if (!node || node === editor) return;
+    if (selection.isCollapsed) {
+      // No selection - try to find current block to change
+      const editor = document.querySelector('.ProseMirror');
+      if (!editor) {
+        onClose();
+        return;
+      }
 
-    const block = node as HTMLElement;
+      let node: Node | null = selection.anchorNode;
+      while (node && node !== editor) {
+        if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
+          break;
+        }
+        node = node.parentNode;
+      }
 
-    if (level === 'p') {
-      if (/^H[1-6]$/.test(block.tagName)) {
-        const text = block.textContent || '';
-        const p = document.createElement('p');
-        p.textContent = text;
-        block.parentNode?.replaceChild(p, block);
+      if (node && node !== editor) {
+        const block = node as HTMLElement;
+        if (level === 'p') {
+          if (/^H[1-6]$/.test(block.tagName)) {
+            const text = block.textContent || '';
+            const p = document.createElement('p');
+            p.textContent = text;
+            block.parentNode?.replaceChild(p, block);
+          }
+        } else {
+          const tagName = level.toUpperCase();
+          if (block.tagName !== tagName) {
+            const text = block.textContent || '';
+            const heading = document.createElement(tagName);
+            heading.textContent = text;
+            block.parentNode?.replaceChild(heading, block);
+          }
+        }
       }
     } else {
-      const tagName = level.toUpperCase();
-      if (block.tagName !== tagName) {
-        const text = block.textContent || '';
-        const heading = document.createElement(tagName);
-        heading.textContent = text;
-        block.parentNode?.replaceChild(heading, block);
+      // Has selection - wrap selected text in heading
+      const range = selection.getRangeAt(0);
+      const selectedText = selection.toString().trim();
+      if (!selectedText) {
+        onClose();
+        return;
+      }
+
+      // Create heading element with selected text
+      const heading = document.createElement(level.toUpperCase());
+      heading.textContent = selectedText;
+
+      // Replace the selection with the heading
+      range.deleteContents();
+      range.insertNode(heading);
+
+      // Move cursor after the heading
+      const newRange = document.createRange();
+      newRange.setStartAfter(heading);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+
+      // Trigger input event for Milkdown to detect the change
+      const editor = document.querySelector('.ProseMirror');
+      if (editor) {
+        const event = new Event('input', { bubbles: true });
+        editor.dispatchEvent(event);
       }
     }
 
-    // Trigger content update event
-    const event = new Event('input', { bubbles: true });
-    editor.dispatchEvent(event);
     onClose();
   }, [onClose]);
 
@@ -289,6 +323,20 @@ export function MenuBar() {
     }
   };
 
+  const handleSaveAs = async () => {
+    if (!currentFile) return;
+    const fileName = currentFile.split(/[\\/]/).pop() || '未命名.md';
+    const selected = await window.electronAPI.showSaveDialog({
+      defaultPath: fileName,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (selected) {
+      await window.electronAPI.writeFile(selected, content);
+      setIsDirty(false);
+      useEditorStore.getState().updateFilePath(currentFile, selected);
+    }
+  };
+
   const handleFormatBlock = (tag: string) => {
     const editor = document.querySelector('.ProseMirror');
     if (!editor) return;
@@ -357,6 +405,7 @@ export function MenuBar() {
     '文件': [
       { label: '新建文件', shortcut: 'Ctrl+N', action: handleNewFile },
       { label: '保存', shortcut: 'Ctrl+S', action: handleSave },
+      { label: '另存为', action: handleSaveAs },
       { divider: true, label: '' },
       { label: '退出', action: () => window.close() },
     ],

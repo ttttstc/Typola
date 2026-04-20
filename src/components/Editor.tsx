@@ -121,8 +121,8 @@ export function MilkdownEditor() {
 
   // File change listener
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onFileChanged((event) => {
-      const path = event.path;
+    const cleanup = window.electronAPI.onFileChanged((data: { path: string }) => {
+      const path = data.path;
       if (path === currentFile) {
         if (isDirty) {
           if (confirm('文件已被外部修改。是否保留当前修改？')) {
@@ -152,10 +152,7 @@ export function MilkdownEditor() {
         }
       }
     });
-
-    return () => {
-      unsubscribe();
-    };
+    return () => cleanup();
   }, [currentFile, isDirty, saveFile, setContent, setIsDirty, initEditor]);
 
   return (

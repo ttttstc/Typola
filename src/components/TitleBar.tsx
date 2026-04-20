@@ -12,12 +12,22 @@ export function TitleBar() {
       setIsMaximized(await window.electronAPI.windowIsMaximized());
     };
     checkMaximized();
+
+    const cleanup = window.electronAPI.onMaximizedChange((isMaximized: boolean) => {
+      setIsMaximized(isMaximized);
+    });
+
+    return () => cleanup();
   }, []);
 
   const handleMinimize = () => window.electronAPI.windowMinimize();
   const handleMaximize = async () => {
-    await window.electronAPI.windowMaximize();
-    setIsMaximized(await window.electronAPI.windowIsMaximized());
+    if (isMaximized) {
+      await window.electronAPI.windowUnmaximize();
+    } else {
+      await window.electronAPI.windowMaximize();
+    }
+    setIsMaximized(!isMaximized);
   };
   const handleClose = () => window.electronAPI.windowClose();
 
@@ -46,6 +56,7 @@ export function TitleBar() {
             borderRadius: '3px',
           }}
           onError={(e) => {
+            // Fallback if icon not found
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />

@@ -28,6 +28,10 @@
 
 * **文件树和大纲** — 轻松导航长文档
 
+* **Tab 页签** — 多文件切换
+
+* **右键删除文件** — 文件树支持右键删除
+
 ***
 
 ## 快捷键
@@ -36,6 +40,7 @@
 | --------- | ------------------------------------ |
 | 新建文件      | `Ctrl+N`                             |
 | 保存        | `Ctrl+S`                             |
+| 另存为       | `Ctrl+Shift+S`                       |
 | 切换侧边栏     | `Ctrl+\`                             |
 | 切换大纲      | `Ctrl+Shift+\`                       |
 | 切换主题      | `Ctrl+Shift+D`                       |
@@ -46,44 +51,30 @@
 
 ***
 
-## 安装
+## 下载安装
 
-### 安装版（推荐）
+### 系统要求
 
-从 `release/` 文件夹下载 `Typola-Setup-0.1.0.exe` 并运行。
+Windows 10/11
 
 ### 便携版
 
-从 `release/` 文件夹下载 `Typola-portable-0.1.0.exe` 直接运行，无需安装。
+下载 `Typola-portable.zip` 并解压，直接运行 `Typola.exe` 即可。
 
-**系统要求**：Windows 10/11 及 WebView2 运行时（大多数 Windows 10/11 系统已预装）。
-
-***
-
-## 从源码构建
-
-### 环境要求
-
-* Node.js 18+
-* Windows 10/11
-
-### 构建步骤
+### 从源码构建
 
 ```bash
 npm install
 npm run electron:build
 ```
 
-构建产物位置：
-
-* `release/win-unpacked/` — 未打包的应用
-* `release/` — NSIS 安装包和便携版可执行文件
+构建产物位于 `release/` 目录。
 
 ***
 
 ## 技术栈
 
-* **Electron 33.x** — 桌面运行环境（Node.js + Chromium）
+* **Electron 33.x** — 桌面运行环境
 
 * **React 18** + TypeScript — 前端框架
 
@@ -108,8 +99,7 @@ typola/
 │   └── styles/             # CSS 样式文件
 ├── electron/               # Electron 主进程
 │   ├── main.ts             # 主进程入口
-│   ├── preload.ts           # Preload 脚本
-│   └── electron.d.ts        # TypeScript 类型声明
+│   └── preload.ts          # Preload 脚本
 ├── resources/               # 图标资源
 ├── release/                # 构建产物
 └── design/                 # 设计文档

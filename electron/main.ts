@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -13,6 +13,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
+    icon: path.join(__dirname, 'typola.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -32,13 +33,11 @@ function createWindow() {
   });
 }
 
-// File Operations
 ipcMain.handle('read_file', async (_, filePath: string) => {
   return fs.readFileSync(filePath, 'utf-8');
 });
 
 ipcMain.handle('write_file', async (_, filePath: string, content: string) => {
-  // Atomic write: write to temp file then rename
   const dir = path.dirname(filePath);
   const tempFile = path.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   fs.writeFileSync(tempFile, content, 'utf-8');
@@ -50,32 +49,6 @@ ipcMain.handle('pick_folder', async () => {
     properties: ['openDirectory'],
   });
   return result.canceled ? null : result.filePaths[0];
-});
-
-ipcMain.handle('list_dir', async (_, dirPath: string): Promise<any[]> => {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const result: any[] = [];
-
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue;
-
-    const fullPath = path.join(dirPath, entry.name);
-    const isDir = entry.isDirectory();
-
-    if (isDir) {
-      const children = await listDirRecursive(fullPath);
-      if (children.length > 0 || hasMarkdownFiles(fullPath)) {
-        result.push({ name: entry.name, path: fullPath, isDir: true, children });
-      }
-    } else if (entry.name.endsWith('.md')) {
-      result.push({ name: entry.name, path: fullPath, isDir: false });
-    }
-  }
-
-  return result.sort((a, b) => {
-    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
 });
 
 function hasMarkdownFiles(dirPath: string): boolean {
@@ -90,19 +63,24 @@ function hasMarkdownFiles(dirPath: string): boolean {
   return false;
 }
 
-function listDirRecursive(dirPath: string): Promise<any[]> {
+interface FileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  children?: FileEntry[];
+}
+
+function listDirRecursive(dirPath: string): Promise<FileEntry[]> {
   return new Promise((resolve) => {
     try {
       const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      const result: any[] = [];
-
+      const result: FileEntry[] = [];
       for (const entry of entries) {
         if (entry.name.startsWith('.')) continue;
         const fullPath = path.join(dirPath, entry.name);
         const isDir = entry.isDirectory();
-
         if (isDir) {
-          listDirRecursive(fullPath).then(children => {
+          listDirRecursive(fullPath).then((children) => {
             if (children.length > 0 || hasMarkdownFiles(fullPath)) {
               result.push({ name: entry.name, path: fullPath, isDir: true, children });
             }
@@ -111,7 +89,6 @@ function listDirRecursive(dirPath: string): Promise<any[]> {
           result.push({ name: entry.name, path: fullPath, isDir: false });
         }
       }
-
       setTimeout(() => {
         resolve(result.sort((a, b) => {
           if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
@@ -123,6 +100,28 @@ function listDirRecursive(dirPath: string): Promise<any[]> {
     }
   });
 }
+
+ipcMain.handle('list_dir', async (_, dirPath: string) => {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const result: FileEntry[] = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const fullPath = path.join(dirPath, entry.name);
+    const isDir = entry.isDirectory();
+    if (isDir) {
+      const children = await listDirRecursive(fullPath);
+      if (children.length > 0 || hasMarkdownFiles(fullPath)) {
+        result.push({ name: entry.name, path: fullPath, isDir: true, children });
+      }
+    } else if (entry.name.endsWith('.md')) {
+      result.push({ name: entry.name, path: fullPath, isDir: false });
+    }
+  }
+  return result.sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+});
 
 ipcMain.handle('create_file', async (_, filePath: string) => {
   fs.writeFileSync(filePath, '', 'utf-8');
@@ -165,17 +164,16 @@ ipcMain.handle('get_image_url', async (_, relativePath: string) => {
   return 'file:///' + relativePath.replace(/\\/g, '/');
 });
 
-// Window Controls
 ipcMain.handle('window_minimize', () => {
   mainWindow?.minimize();
 });
 
 ipcMain.handle('window_maximize', () => {
-  if (mainWindow?.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow?.maximize();
-  }
+  mainWindow?.maximize();
+});
+
+ipcMain.handle('window_unmaximize', () => {
+  mainWindow?.unmaximize();
 });
 
 ipcMain.handle('window_close', () => {
@@ -186,10 +184,8 @@ ipcMain.handle('window_is_maximized', () => {
   return mainWindow?.isMaximized() ?? false;
 });
 
-// File Watcher
 ipcMain.handle('watch_file', async (_, filePath: string) => {
   if (watchedFiles.has(filePath)) return;
-
   try {
     const watcher = fs.watch(filePath, (eventType) => {
       if (eventType === 'change') {
@@ -210,14 +206,11 @@ ipcMain.handle('unwatch_file', async (_, filePath: string) => {
   }
 });
 
-// App lifecycle
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  // Close all watchers
-  watchedFiles.forEach(watcher => watcher.close());
+  watchedFiles.forEach((watcher) => watcher.close());
   watchedFiles.clear();
-
   if (process.platform !== 'darwin') {
     app.quit();
   }

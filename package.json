@@ -2,7 +2,7 @@
   "name": "typola",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -38,6 +38,7 @@
     "concurrently": "^9.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
+    "electron-icon-builder": "^2.0.1",
     "esbuild": "^0.24.0",
     "sharp": "^0.34.5",
     "typescript": "^5.4.0",
@@ -47,37 +48,37 @@
   "build": {
     "appId": "com.typola.app",
     "productName": "Typola",
+    "copyright": "Copyright © 2026 Typola",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
-      "electron/**/*",
-      "resources/**/*"
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/typola.ico",
+        "to": "typola.ico"
+      }
     ],
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64"]
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": [
-        "resources/icons/32x32.png",
-        "resources/icons/128x128.png",
-        "resources/typola.ico"
-      ]
+      "icon": "resources/typola.ico",
+      "sign": false
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "resources/typola.ico",
-      "uninstallerIcon": "resources/typola.ico",
-      "installMode": "currentUser"
+      "uninstallerIcon": "resources/typola.ico"
     },
     "portable": {
       "artifactName": "Typola-portable-${version}.exe"
