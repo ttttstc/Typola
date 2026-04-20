@@ -121,15 +121,20 @@ interface ContextMenuProps {
 
 function ContextMenu({ x, y, onClose }: ContextMenuProps) {
   const setHeading = useCallback((level: string) => {
-    const editor = document.querySelector('.ProseMirror');
-    if (!editor) return;
-
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    if (!selection || selection.rangeCount === 0) {
+      onClose();
+      return;
+    }
 
-    // Check if there's actual selection
     if (selection.isCollapsed) {
       // No selection - try to find current block to change
+      const editor = document.querySelector('.ProseMirror');
+      if (!editor) {
+        onClose();
+        return;
+      }
+
       let node: Node | null = selection.anchorNode;
       while (node && node !== editor) {
         if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
@@ -137,6 +142,7 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
         }
         node = node.parentNode;
       }
+
       if (node && node !== editor) {
         const block = node as HTMLElement;
         if (level === 'p') {
@@ -157,40 +163,32 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
         }
       }
     } else {
-      // Has selection - wrap in heading
+      // Has selection - wrap selected text in heading
       const range = selection.getRangeAt(0);
-      const selectedText = selection.toString();
-
-      // Find the block containing the selection
-      let blockNode: Node | null = selection.anchorNode;
-      while (blockNode && blockNode !== editor) {
-        if (blockNode instanceof Element && (blockNode.tagName === 'P' || /^H[1-6]$/.test(blockNode.tagName))) {
-          break;
-        }
-        blockNode = blockNode.parentNode;
+      const selectedText = selection.toString().trim();
+      if (!selectedText) {
+        onClose();
+        return;
       }
 
-      if (!blockNode || blockNode === editor) {
-        // No block found, create a new heading with selected text
-        const heading = document.createElement(level.toUpperCase());
-        heading.textContent = selectedText;
-        range.deleteContents();
-        range.insertNode(heading);
+      // Create heading element with selected text
+      const heading = document.createElement(level.toUpperCase());
+      heading.textContent = selectedText;
 
-        // Move cursor after heading
-        const newRange = document.createRange();
-        newRange.setStartAfter(heading);
-        newRange.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-      } else {
-        // Replace the block with heading containing selected text
-        const block = blockNode as HTMLElement;
-        const heading = document.createElement(level.toUpperCase());
-        heading.textContent = selectedText;
-        block.parentNode?.replaceChild(heading, block);
+      // Replace the selection with the heading
+      range.deleteContents();
+      range.insertNode(heading);
 
-        // Trigger input event
+      // Move cursor after the heading
+      const newRange = document.createRange();
+      newRange.setStartAfter(heading);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+
+      // Trigger input event for Milkdown to detect the change
+      const editor = document.querySelector('.ProseMirror');
+      if (editor) {
         const event = new Event('input', { bubbles: true });
         editor.dispatchEvent(event);
       }
