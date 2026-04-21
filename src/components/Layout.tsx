@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { TitleBar } from './TitleBar';
 import { MenuBar } from './MenuBar';
-import { FileTree } from './FileTree';
+import { Sidebar } from './Sidebar';
 import { Editor } from './Editor';
 import { Outline } from './Outline';
 import { StatusBar } from './StatusBar';
@@ -85,7 +85,7 @@ export function Layout() {
                 flexShrink: 0,
               }}
             >
-              <FileTree />
+              <Sidebar />
             </div>
             <div
               onMouseDown={startResizeSidebar}

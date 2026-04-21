@@ -14,6 +14,10 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   showSaveDialog: (options) => import_electron.ipcRenderer.invoke("show_save_dialog", options),
   saveImage: (workspaceRoot, data, ext) => import_electron.ipcRenderer.invoke("save_image", workspaceRoot, data, ext),
   getImageUrl: (relativePath) => import_electron.ipcRenderer.invoke("get_image_url", relativePath),
+  workspaceSearch: (workspaceRoot, query, options) => import_electron.ipcRenderer.invoke("workspace_search", workspaceRoot, query, options),
+  previewWorkspaceReplace: (workspaceRoot, query, replacementText, options) => import_electron.ipcRenderer.invoke("preview_workspace_replace", workspaceRoot, query, replacementText, options),
+  applyWorkspaceReplace: (changes) => import_electron.ipcRenderer.invoke("apply_workspace_replace", changes),
+  exportDocument: (payload) => import_electron.ipcRenderer.invoke("export_document", payload),
   // Window controls
   windowMinimize: () => import_electron.ipcRenderer.invoke("window_minimize"),
   windowMaximize: () => import_electron.ipcRenderer.invoke("window_maximize"),

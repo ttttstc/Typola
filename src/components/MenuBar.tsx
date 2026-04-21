@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../store/editor';
+import { useSearchStore } from '../store/search';
 import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
 
@@ -152,6 +153,8 @@ export function MenuBar() {
   const {
     toggleSidebar,
     toggleOutline,
+    setSidebarVisible,
+    setSidebarTab,
     toggleTheme,
     toggleLanguage,
     language,
@@ -160,6 +163,7 @@ export function MenuBar() {
     setFontSize,
     setSettingsOpen,
     setSettingsActiveTab,
+    exportSettings,
   } = useUIStore();
 
   useEffect(() => {
@@ -254,6 +258,53 @@ export function MenuBar() {
     }
   };
 
+  const buildExportPayload = (type: 'pdf' | 'html') => {
+    const editorRoot = document.querySelector('.ProseMirror');
+    if (!(editorRoot instanceof HTMLElement)) {
+      return null;
+    }
+
+    const clone = editorRoot.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.copy-btn').forEach((node) => node.remove());
+
+    return {
+      type,
+      title: getSaveFileName(currentFile || t('menu.exportDefaultName')),
+      html: clone.innerHTML,
+      currentFilePath: currentFile,
+      theme,
+      pdf: {
+        pageSize: exportSettings.pdfPageSize,
+        margin: exportSettings.pdfMargin,
+        printBackground: exportSettings.pdfPrintBackground,
+        displayHeaderFooter: exportSettings.pdfHeaderFooter,
+      },
+      htmlOptions: {
+        imageMode: exportSettings.htmlImageMode,
+      },
+    };
+  };
+
+  const handleExport = async (type: 'pdf' | 'html') => {
+    const payload = buildExportPayload(type);
+    if (!payload) return;
+
+    try {
+      await window.electronAPI.exportDocument(payload);
+    } catch (error) {
+      console.error(`Failed to export ${type}:`, error);
+    }
+  };
+
+  const handleFindInFile = () => {
+    useSearchStore.getState().searchFileOpen(true);
+  };
+
+  const handleFindInWorkspace = () => {
+    setSidebarVisible(true);
+    setSidebarTab('search');
+  };
+
   const handleFormatBlock = (tag: string) => {
     const editor = document.querySelector('.ProseMirror');
     if (!editor) return;
@@ -326,11 +377,16 @@ export function MenuBar() {
       { label: t('menu.save'), shortcut: 'Ctrl+S', action: handleSave },
       { label: t('menu.saveAs'), action: handleSaveAs },
       { divider: true, label: '' },
+      { label: t('menu.exportPdf'), action: () => void handleExport('pdf') },
+      { label: t('menu.exportHtml'), action: () => void handleExport('html') },
+      { divider: true, label: '' },
       { label: t('menu.exit'), action: () => window.close() },
     ],
     [t('menu.edit')]: [
       { label: t('menu.undo'), shortcut: 'Ctrl+Z', action: handleUndo },
       { label: t('menu.redo'), shortcut: 'Ctrl+Shift+Z', action: handleRedo },
+      { label: t('menu.find'), shortcut: 'Ctrl+F', action: handleFindInFile },
+      { label: t('menu.findInWorkspace'), shortcut: 'Ctrl+Shift+F', action: handleFindInWorkspace },
       { divider: true, label: '' },
       { label: t('menu.selectAll'), shortcut: 'Ctrl+A', action: handleSelectAll },
       { divider: true, label: '' },
@@ -366,6 +422,7 @@ export function MenuBar() {
     ],
     [t('menu.settings')]: [
       { label: t('menu.settings'), shortcut: 'Ctrl+,', action: () => { setSettingsOpen(true); } },
+      { label: t('menu.exportSettings'), action: () => { setSettingsActiveTab('export'); setSettingsOpen(true); } },
     ],
   };
 

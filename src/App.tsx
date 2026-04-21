@@ -20,6 +20,11 @@ function App() {
         e.preventDefault();
         useUIStore.getState().toggleSidebar();
       }
+      if (e.key.toLowerCase() === 'f' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        useUIStore.getState().setSidebarVisible(true);
+        useUIStore.getState().setSidebarTab('search');
+      }
       if (e.key === '\\' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         useUIStore.getState().toggleOutline();

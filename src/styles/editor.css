@@ -225,3 +225,13 @@
   text-transform: uppercase;
 }
 
+::highlight(typola-search-match) {
+  background: rgba(250, 204, 21, 0.32);
+  border-radius: 2px;
+}
+
+::highlight(typola-search-active) {
+  background: rgba(249, 115, 22, 0.4);
+  border-radius: 2px;
+}
+

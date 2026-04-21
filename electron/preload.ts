@@ -12,6 +12,49 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showSaveDialog: (options: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => ipcRenderer.invoke('show_save_dialog', options),
   saveImage: (workspaceRoot: string, data: number[], ext: string) => ipcRenderer.invoke('save_image', workspaceRoot, data, ext),
   getImageUrl: (relativePath: string) => ipcRenderer.invoke('get_image_url', relativePath),
+  workspaceSearch: (
+    workspaceRoot: string,
+    query: string,
+    options: {
+      caseSensitive: boolean;
+      wholeWord: boolean;
+      useRegex: boolean;
+      includeGlob: string;
+      excludeGlob: string;
+      skipPaths?: string[];
+    }
+  ) => ipcRenderer.invoke('workspace_search', workspaceRoot, query, options),
+  previewWorkspaceReplace: (
+    workspaceRoot: string,
+    query: string,
+    replacementText: string,
+    options: {
+      caseSensitive: boolean;
+      wholeWord: boolean;
+      useRegex: boolean;
+      includeGlob: string;
+      excludeGlob: string;
+      skipPaths?: string[];
+    }
+  ) => ipcRenderer.invoke('preview_workspace_replace', workspaceRoot, query, replacementText, options),
+  applyWorkspaceReplace: (changes: Array<{ filePath: string; nextContent: string }>) =>
+    ipcRenderer.invoke('apply_workspace_replace', changes),
+  exportDocument: (payload: {
+    type: 'pdf' | 'html';
+    title: string;
+    html: string;
+    currentFilePath: string | null;
+    theme: 'light' | 'dark';
+    pdf: {
+      pageSize: 'A4' | 'Letter';
+      margin: 'compact' | 'normal' | 'wide';
+      printBackground: boolean;
+      displayHeaderFooter: boolean;
+    };
+    htmlOptions: {
+      imageMode: 'relative' | 'base64' | 'external';
+    };
+  }) => ipcRenderer.invoke('export_document', payload),
   // Window controls
   windowMinimize: () => ipcRenderer.invoke('window_minimize'),
   windowMaximize: () => ipcRenderer.invoke('window_maximize'),
