@@ -1,4 +1,6 @@
 // Mermaid lazy loading - will be dynamically imported when first used
+import i18n from '../../i18n';
+
 let mermaidModule: any = null;
 let lastValidSvg: string | null = null;
 
@@ -33,7 +35,7 @@ export async function renderMermaid(code: string): Promise<{ svg: string; error:
   } catch (error) {
     console.error('Mermaid render error:', error);
     return {
-      svg: lastValidSvg || `<div style="color: red;">Mermaid 语法错误</div>`,
+      svg: lastValidSvg || `<div style="color: red;">${i18n.t('editor.mermaidSyntaxError')}</div>`,
       error: true,
     };
   }
@@ -43,23 +45,23 @@ export function setupMermaidHandler() {
   const editor = document.querySelector('.ProseMirror');
   if (!editor) return () => {};
 
-  const processMermaidBlocks = async () => {
+  const processMermaidBlocks = async (force = false) => {
     const codeBlocks = editor.querySelectorAll('pre');
     for (const block of codeBlocks) {
-      if (block.classList.contains('mermaid-processed')) continue;
+      const existingCode = block.dataset.mermaidCode ?? '';
+      if (block.classList.contains('mermaid-processed') && !force) continue;
 
       const code = block.querySelector('code');
-      if (!code) continue;
-
-      const classList = Array.from(code.classList);
+      const classList = code ? Array.from(code.classList) : [];
       const langClass = classList.find((c) => c.startsWith('language-'));
       const lang = langClass ? langClass.replace('language-', '') : '';
+      const codeText = existingCode || code?.textContent || '';
 
-      if (lang.toLowerCase() !== 'mermaid') continue;
+      if (lang.toLowerCase() !== 'mermaid' && !existingCode) continue;
 
-      const codeText = code.textContent || '';
       const { svg, error } = await renderMermaid(codeText);
 
+      block.dataset.mermaidCode = codeText;
       block.innerHTML = svg;
       block.classList.add('mermaid-processed');
       block.style.cssText = `
@@ -73,10 +75,13 @@ export function setupMermaidHandler() {
         block.style.borderRadius = '8px';
       }
 
-      block.addEventListener('dblclick', () => {
-        if (block.classList.contains('mermaid-editing')) return;
-        enterEditMode(block, codeText);
-      });
+      if (block.dataset.mermaidBound !== 'true') {
+        block.addEventListener('dblclick', () => {
+          if (block.classList.contains('mermaid-editing')) return;
+          enterEditMode(block, block.dataset.mermaidCode || codeText);
+        });
+        block.dataset.mermaidBound = 'true';
+      }
     }
   };
 
@@ -154,6 +159,13 @@ export function setupMermaidHandler() {
 
   observer.observe(editor, { childList: true, subtree: true });
   processMermaidBlocks();
+  const handleLanguageChange = () => {
+    void processMermaidBlocks(true);
+  };
+  i18n.on('languageChanged', handleLanguageChange);
 
-  return () => observer.disconnect();
+  return () => {
+    observer.disconnect();
+    i18n.off('languageChanged', handleLanguageChange);
+  };
 }

@@ -94,6 +94,7 @@ export interface ElectronAPI {
   exportDocument: (
     payload: ExportPayload
   ) => Promise<{ canceled: boolean; path?: string }>;
+  setLanguagePreference: (language: 'zh' | 'en') => Promise<'zh' | 'en'>;
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
   windowUnmaximize: () => Promise<void>;
@@ -103,6 +104,42 @@ export interface ElectronAPI {
   unwatchFile: (path: string) => Promise<void>;
   onFileChanged: (callback: (data: { path: string }) => void) => () => void;
   onMaximizedChange: (callback: (isMaximized: boolean) => void) => () => void;
+  onMenuAction: (
+    callback: (
+      action:
+        | 'new-file'
+        | 'save'
+        | 'save-as'
+        | 'export-pdf'
+        | 'export-html'
+        | 'undo'
+        | 'redo'
+        | 'find-in-file'
+        | 'find-in-workspace'
+        | 'select-all'
+        | 'heading-1'
+        | 'heading-2'
+        | 'heading-3'
+        | 'body'
+        | 'ordered-list'
+        | 'unordered-list'
+        | 'blockquote'
+        | 'bold'
+        | 'italic'
+        | 'strikethrough'
+        | 'inline-code'
+        | 'link'
+        | 'toggle-sidebar'
+        | 'toggle-outline'
+        | 'zoom-in'
+        | 'zoom-out'
+        | 'toggle-theme'
+        | 'open-settings'
+        | 'open-export-settings'
+        | 'open-shortcuts'
+        | 'toggle-language'
+    ) => void
+  ) => () => void;
 }
 
 declare global {

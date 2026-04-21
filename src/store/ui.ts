@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import i18n from '../i18n';
+import i18n, { getInitialLanguage } from '../i18n';
+import type { AppLanguage } from '../shared/language';
 
 export type SettingsTab = 'general' | 'editor' | 'appearance' | 'terminal' | 'shortcuts' | 'export';
 
-export type Language = 'zh' | 'en';
+export type Language = AppLanguage;
 export type SidebarTab = 'files' | 'search';
 export type PdfPageSize = 'A4' | 'Letter';
 export type PdfMarginPreset = 'compact' | 'normal' | 'wide';
@@ -67,7 +68,7 @@ export const useUIStore = create<UIState>()(
       sidebarWidth: 240,
       outlineWidth: 220,
       fontSize: 14,
-      language: 'zh',
+      language: getInitialLanguage(),
       settingsOpen: false,
       settingsActiveTab: 'general',
       searchDefaults: {
@@ -122,6 +123,11 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'typola-ui',
+      onRehydrateStorage: () => (state) => {
+        if (state?.language) {
+          i18n.changeLanguage(state.language);
+        }
+      },
       partialize: (state) => ({
         theme: state.theme,
         sidebarVisible: state.sidebarVisible,
@@ -137,9 +143,3 @@ export const useUIStore = create<UIState>()(
     }
   )
 );
-
-// Initialize language from store on app load
-const initLanguage = useUIStore.getState().language;
-if (initLanguage) {
-  i18n.changeLanguage(initLanguage);
-}

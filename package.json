@@ -2,6 +2,8 @@
   "name": "typola",
   "private": true,
   "version": "0.1.0",
+  "description": "A desktop Markdown editor inspired by Typora.",
+  "author": "Typola contributors",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",

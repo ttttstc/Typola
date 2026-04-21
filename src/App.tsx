@@ -9,10 +9,16 @@ import './styles/editor.css';
 
 function App() {
   const theme = useUIStore((s) => s.theme);
+  const language = useUIStore((s) => s.language);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    void window.electronAPI.setLanguagePreference(language);
+  }, [language]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -1,9 +1,11 @@
 import { Minus, Square, X } from 'lucide-react';
-import { useUIStore } from '../store/ui';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import icon32 from '../../resources/icons/32x32.png';
+import { useUIStore } from '../store/ui';
 
 export function TitleBar() {
+  const { t } = useTranslation();
   const theme = useUIStore((s) => s.theme);
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -63,7 +65,9 @@ export function TitleBar() {
       <div className="titlebar-no-drag">
         <button
           onClick={toggleTheme}
-          title={`切换到${theme === 'light' ? '暗色' : '亮色'}主题 (Ctrl+Shift+D)`}
+          title={t('titleBar.switchThemeTo', {
+            theme: theme === 'light' ? t('titleBar.darkTheme') : t('titleBar.lightTheme'),
+          })}
           style={{
             width: '28px',
             height: '28px',
@@ -81,7 +85,7 @@ export function TitleBar() {
         </button>
         <button
           onClick={handleMinimize}
-          title="最小化"
+          title={t('titleBar.minimize')}
           style={{
             width: '28px',
             height: '28px',
@@ -99,7 +103,7 @@ export function TitleBar() {
         </button>
         <button
           onClick={handleMaximize}
-          title={isMaximized ? '还原' : '最大化'}
+          title={isMaximized ? t('titleBar.restore') : t('titleBar.maximize')}
           style={{
             width: '28px',
             height: '28px',
@@ -124,7 +128,7 @@ export function TitleBar() {
         </button>
         <button
           onClick={handleClose}
-          title="关闭"
+          title={t('titleBar.close')}
           style={{
             width: '28px',
             height: '28px',

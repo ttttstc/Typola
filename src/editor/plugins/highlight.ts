@@ -1,4 +1,5 @@
 import { createHighlighter, Highlighter } from 'shiki';
+import i18n from '../../i18n';
 
 let highlighter: Highlighter | null = null;
 
@@ -56,6 +57,10 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
+function getCopyLabel() {
+  return i18n.t('editor.copyCode');
+}
+
 export function setupCodeHighlight() {
   const editor = document.querySelector('.ProseMirror');
   if (!editor) return () => {};
@@ -81,7 +86,8 @@ export function setupCodeHighlight() {
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn';
-      copyBtn.textContent = '复制';
+      copyBtn.dataset.state = 'idle';
+      copyBtn.textContent = getCopyLabel();
       copyBtn.style.cssText = `
         position: absolute;
         top: 8px;
@@ -101,9 +107,11 @@ export function setupCodeHighlight() {
       copyBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         await navigator.clipboard.writeText(codeText);
+        copyBtn.dataset.state = 'copied';
         copyBtn.textContent = '✓';
         setTimeout(() => {
-          copyBtn.textContent = '复制';
+          copyBtn.dataset.state = 'idle';
+          copyBtn.textContent = getCopyLabel();
         }, 2000);
       });
 
@@ -131,12 +139,24 @@ export function setupCodeHighlight() {
     }
   };
 
+  const handleLanguageChange = () => {
+    editor.querySelectorAll<HTMLButtonElement>('.copy-btn').forEach((button) => {
+      if (button.dataset.state !== 'copied') {
+        button.textContent = getCopyLabel();
+      }
+    });
+  };
+
   const observer = new MutationObserver(() => {
     processCodeBlocks();
   });
 
   observer.observe(editor, { childList: true, subtree: true });
   processCodeBlocks();
+  i18n.on('languageChanged', handleLanguageChange);
 
-  return () => observer.disconnect();
+  return () => {
+    observer.disconnect();
+    i18n.off('languageChanged', handleLanguageChange);
+  };
 }

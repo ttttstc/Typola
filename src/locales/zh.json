@@ -6,6 +6,7 @@
     "save": "保存",
     "delete": "删除",
     "rename": "重命名",
+    "markdown": "Markdown",
     "yes": "是",
     "no": "否"
   },
@@ -48,18 +49,23 @@
     "zoomOut": "缩小字体",
     "currentFontSize": "当前字号",
     "lightMode": "亮色模式",
-    "darkMode": "暗色模式"
+    "darkMode": "暗色模式",
+    "toggleLanguage": "切换语言",
+    "switchToEnglish": "切换到英文",
+    "switchToChinese": "切换到中文"
   },
   "editor": {
     "enterLinkUrl": "输入链接地址:",
-    "externalChangeConfirm": "文件已被外部修改。是否保留当前修改并覆盖磁盘内容？"
+    "externalChangeConfirm": "文件已被外部修改。是否保留当前修改并覆盖磁盘内容？",
+    "copyCode": "复制",
+    "mermaidSyntaxError": "Mermaid 语法错误"
   },
   "slashMenu": {
     "filterPlaceholder": "输入以过滤...",
     "noMatch": "无匹配项",
-    "heading1": "Heading 1",
-    "heading2": "Heading 2",
-    "heading3": "Heading 3",
+    "heading1": "标题 1",
+    "heading2": "标题 2",
+    "heading3": "标题 3",
     "quote": "引用",
     "divider": "分割线",
     "bulletList": "无序列表",
@@ -69,7 +75,8 @@
     "codeBlock": "代码块",
     "image": "图片",
     "link": "链接",
-    "mermaid": "Mermaid 图表"
+    "mermaid": "Mermaid 图表",
+    "tableTemplate": "| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |\n"
   },
   "fileTree": {
     "files": "文件",
@@ -83,7 +90,12 @@
     "saved": "已保存",
     "saving": "保存中...",
     "error": "保存失败",
-    "unsaved": "未保存"
+    "unsaved": "未保存",
+    "characters": "{{count}} 字"
+  },
+  "outline": {
+    "title": "大纲",
+    "empty": "无标题"
   },
   "tabBar": {
     "fileModified": "文件已修改",
@@ -201,5 +213,14 @@
     "heading4": "标题 4",
     "heading5": "标题 5",
     "heading6": "标题 6"
+  },
+  "titleBar": {
+    "switchThemeTo": "切换到{{theme}}主题 (Ctrl+Shift+D)",
+    "lightTheme": "亮色",
+    "darkTheme": "暗色",
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "还原",
+    "close": "关闭"
   }
 }

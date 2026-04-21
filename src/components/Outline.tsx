@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface OutlineItem {
   id: string;
@@ -7,6 +8,7 @@ interface OutlineItem {
 }
 
 export function Outline() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<OutlineItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -128,7 +130,7 @@ export function Outline() {
             textTransform: 'uppercase',
           }}
         >
-          大纲
+          {t('outline.title')}
         </span>
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
@@ -141,7 +143,7 @@ export function Outline() {
               fontSize: '13px',
             }}
           >
-            无标题
+            {t('outline.empty')}
           </div>
         ) : (
           items.map((item) => (
