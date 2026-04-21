@@ -6,6 +6,7 @@
     "save": "Save",
     "delete": "Delete",
     "rename": "Rename",
+    "markdown": "Markdown",
     "yes": "Yes",
     "no": "No"
   },
@@ -48,11 +49,16 @@
     "zoomOut": "Zoom Out",
     "currentFontSize": "Current Font Size",
     "lightMode": "Light Mode",
-    "darkMode": "Dark Mode"
+    "darkMode": "Dark Mode",
+    "toggleLanguage": "Toggle language",
+    "switchToEnglish": "Switch to English",
+    "switchToChinese": "Switch to Chinese"
   },
   "editor": {
     "enterLinkUrl": "Enter link URL:",
-    "externalChangeConfirm": "This file changed outside Typola. Keep your local edits and overwrite the file on disk?"
+    "externalChangeConfirm": "This file changed outside Typola. Keep your local edits and overwrite the file on disk?",
+    "copyCode": "Copy",
+    "mermaidSyntaxError": "Mermaid syntax error"
   },
   "slashMenu": {
     "filterPlaceholder": "Type to filter...",
@@ -69,7 +75,8 @@
     "codeBlock": "Code Block",
     "image": "Image",
     "link": "Link",
-    "mermaid": "Mermaid Diagram"
+    "mermaid": "Mermaid Diagram",
+    "tableTemplate": "| Column 1 | Column 2 |\n| --- | --- |\n| Content | Content |\n"
   },
   "fileTree": {
     "files": "Files",
@@ -83,7 +90,12 @@
     "saved": "Saved",
     "saving": "Saving...",
     "error": "Save failed",
-    "unsaved": "Unsaved"
+    "unsaved": "Unsaved",
+    "characters": "{{count}} chars"
+  },
+  "outline": {
+    "title": "Outline",
+    "empty": "No headings"
   },
   "tabBar": {
     "fileModified": "File Modified",
@@ -201,5 +213,14 @@
     "heading4": "Heading 4",
     "heading5": "Heading 5",
     "heading6": "Heading 6"
+  },
+  "titleBar": {
+    "switchThemeTo": "Switch to {{theme}} theme (Ctrl+Shift+D)",
+    "lightTheme": "light",
+    "darkTheme": "dark",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   }
 }

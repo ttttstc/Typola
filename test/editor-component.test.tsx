@@ -116,6 +116,7 @@ describe('MilkdownEditor', () => {
       previewWorkspaceReplace: vi.fn(() => Promise.resolve([])),
       applyWorkspaceReplace: vi.fn(() => Promise.resolve({ updated: 0 })),
       exportDocument: vi.fn(() => Promise.resolve({ canceled: true })),
+      setLanguagePreference: vi.fn(() => Promise.resolve('en')),
       windowMinimize: vi.fn(() => Promise.resolve()),
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
@@ -132,6 +133,7 @@ describe('MilkdownEditor', () => {
         };
       }),
       onMaximizedChange: vi.fn(() => () => {}),
+      onMenuAction: vi.fn(() => () => {}),
     };
   });
 

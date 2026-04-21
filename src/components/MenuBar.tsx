@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../store/editor';
 import { useSearchStore } from '../store/search';
+import type { NativeMenuAction } from '../shared/menu';
 import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
 
@@ -179,12 +180,13 @@ export function MenuBar() {
 
   const [menusOpen, setMenusOpen] = useState<Record<string, boolean>>({});
 
-  const getSaveFileName = (filePath: string) => filePath.split(/[\\/]/).pop() || 'Untitled.md';
+  const getSaveFileName = (filePath: string) =>
+    filePath.split(/[\\/]/).pop() || `${t('fileTree.untitled')}.md`;
 
   const selectSavePath = async (filePath: string) =>
     window.electronAPI.showSaveDialog({
       defaultPath: getSaveFileName(filePath),
-      filters: [{ name: 'Markdown', extensions: ['md'] }],
+      filters: [{ name: t('common.markdown'), extensions: ['md'] }],
     });
 
   const persistFile = async (sourcePath: string, targetPath: string) => {
@@ -443,6 +445,114 @@ export function MenuBar() {
     return () => document.removeEventListener('contextmenu', handleContextMenu);
   }, []);
 
+  const runMenuAction = async (action: NativeMenuAction) => {
+    switch (action) {
+      case 'new-file':
+        await handleNewFile();
+        break;
+      case 'save':
+        await handleSave();
+        break;
+      case 'save-as':
+        await handleSaveAs();
+        break;
+      case 'export-pdf':
+        await handleExport('pdf');
+        break;
+      case 'export-html':
+        await handleExport('html');
+        break;
+      case 'undo':
+        handleUndo();
+        break;
+      case 'redo':
+        handleRedo();
+        break;
+      case 'find-in-file':
+        handleFindInFile();
+        break;
+      case 'find-in-workspace':
+        handleFindInWorkspace();
+        break;
+      case 'select-all':
+        handleSelectAll();
+        break;
+      case 'heading-1':
+        handleFormatBlock('h1');
+        break;
+      case 'heading-2':
+        handleFormatBlock('h2');
+        break;
+      case 'heading-3':
+        handleFormatBlock('h3');
+        break;
+      case 'body':
+        handleFormatBlock('p');
+        break;
+      case 'ordered-list':
+        handleList('ordered');
+        break;
+      case 'unordered-list':
+        handleList('unordered');
+        break;
+      case 'blockquote':
+        handleBlockquote();
+        break;
+      case 'bold':
+        handleBold();
+        break;
+      case 'italic':
+        handleItalic();
+        break;
+      case 'strikethrough':
+        handleStrikethrough();
+        break;
+      case 'inline-code':
+        handleCode();
+        break;
+      case 'link':
+        handleLink();
+        break;
+      case 'toggle-sidebar':
+        toggleSidebar();
+        break;
+      case 'toggle-outline':
+        toggleOutline();
+        break;
+      case 'zoom-in':
+        handleIncreaseFontSize();
+        break;
+      case 'zoom-out':
+        handleDecreaseFontSize();
+        break;
+      case 'toggle-theme':
+        toggleTheme();
+        break;
+      case 'open-settings':
+        setSettingsOpen(true);
+        break;
+      case 'open-export-settings':
+        setSettingsActiveTab('export');
+        setSettingsOpen(true);
+        break;
+      case 'open-shortcuts':
+        setSettingsActiveTab('shortcuts');
+        setSettingsOpen(true);
+        break;
+      case 'toggle-language':
+        toggleLanguage();
+        break;
+    }
+  };
+
+  useEffect(() => {
+    const cleanup = window.electronAPI.onMenuAction((action) => {
+      void runMenuAction(action);
+    });
+
+    return () => cleanup();
+  });
+
   return (
     <>
       <div
@@ -557,7 +667,7 @@ export function MenuBar() {
               cursor: 'pointer',
               height: '24px',
             }}
-            title="Toggle Language"
+            title={t('menu.toggleLanguage')}
           >
             {language === 'zh' ? 'EN' : '中'}
           </button>

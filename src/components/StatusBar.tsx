@@ -28,7 +28,7 @@ export function StatusBar() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <span>{wordCount} 字</span>
+        <span>{t('statusBar.characters', { count: wordCount })}</span>
         <span>
           {isDirty && t('statusBar.unsaved')}
           {!isDirty && saveStatus === 'saved' && t('statusBar.saved')}

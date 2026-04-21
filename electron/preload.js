@@ -18,6 +18,7 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   previewWorkspaceReplace: (workspaceRoot, query, replacementText, options) => import_electron.ipcRenderer.invoke("preview_workspace_replace", workspaceRoot, query, replacementText, options),
   applyWorkspaceReplace: (changes) => import_electron.ipcRenderer.invoke("apply_workspace_replace", changes),
   exportDocument: (payload) => import_electron.ipcRenderer.invoke("export_document", payload),
+  setLanguagePreference: (language) => import_electron.ipcRenderer.invoke("set_language_preference", language),
   // Window controls
   windowMinimize: () => import_electron.ipcRenderer.invoke("window_minimize"),
   windowMaximize: () => import_electron.ipcRenderer.invoke("window_maximize"),
@@ -37,5 +38,10 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
     const handler = (_, isMaximized) => callback(isMaximized);
     import_electron.ipcRenderer.on("maximized-change", handler);
     return () => import_electron.ipcRenderer.removeListener("maximized-change", handler);
+  },
+  onMenuAction: (callback) => {
+    const handler = (_, action) => callback(action);
+    import_electron.ipcRenderer.on("menu-action", handler);
+    return () => import_electron.ipcRenderer.removeListener("menu-action", handler);
   }
 });

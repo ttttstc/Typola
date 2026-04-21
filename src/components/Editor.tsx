@@ -36,8 +36,8 @@ export function MilkdownEditor() {
   const setFileTree = useWorkspaceStore((s) => s.setFileTree);
 
   const getSaveFileName = useCallback(
-    (filePath: string) => filePath.split(/[\\/]/).pop() || 'Untitled.md',
-    []
+    (filePath: string) => filePath.split(/[\\/]/).pop() || `${t('fileTree.untitled')}.md`,
+    [t]
   );
 
   const setupEditorPlugins = useCallback(() => {
@@ -99,7 +99,7 @@ export function MilkdownEditor() {
       const targetPath = wasDraft
         ? await window.electronAPI.showSaveDialog({
             defaultPath: getSaveFileName(currentFile),
-            filters: [{ name: 'Markdown', extensions: ['md'] }],
+            filters: [{ name: t('common.markdown'), extensions: ['md'] }],
           })
         : currentFile;
 
@@ -130,7 +130,7 @@ export function MilkdownEditor() {
       setSaveStatus('error');
       return false;
     }
-  }, [content, currentFile, getSaveFileName, isDraftFile, setFileTree, setSaveStatus, updateFilePath, workspaceRoot]);
+  }, [content, currentFile, getSaveFileName, isDraftFile, setFileTree, setSaveStatus, t, updateFilePath, workspaceRoot]);
 
   useEffect(() => {
     let cancelled = false;

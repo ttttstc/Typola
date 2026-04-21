@@ -84,12 +84,13 @@ export function TabBar() {
     onConfirm: () => void;
   } | null>(null);
 
-  const getSaveFileName = (filePath: string) => filePath.split(/[\\/]/).pop() || 'Untitled.md';
+  const getSaveFileName = (filePath: string) =>
+    filePath.split(/[\\/]/).pop() || `${t('fileTree.untitled')}.md`;
 
   const selectSavePath = async (filePath: string) =>
     window.electronAPI.showSaveDialog({
       defaultPath: getSaveFileName(filePath),
-      filters: [{ name: 'Markdown', extensions: ['md'] }],
+      filters: [{ name: t('common.markdown'), extensions: ['md'] }],
     });
 
   const handleTabClick = (path: string) => {

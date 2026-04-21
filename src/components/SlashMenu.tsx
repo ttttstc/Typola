@@ -115,7 +115,7 @@ export function SlashMenu() {
       bullet: '- ',
       ordered: '1. ',
       todo: '- [ ] ',
-      table: '| 列1 | 列2 |\n| --- | --- |\n| 内容 | 内容 |\n',
+      table: t('slashMenu.tableTemplate'),
       code: '```\n\n```',
       image: '![image]()',
       link: '[text](url)',
