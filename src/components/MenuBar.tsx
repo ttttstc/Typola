@@ -1,10 +1,22 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../store/editor';
 import { useSearchStore } from '../store/search';
 import type { NativeMenuAction } from '../shared/menu';
 import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
+import {
+  applyBlockFormat,
+  applyInlineFormat,
+  applyLink,
+  getActiveLinkHref,
+  hasEditorSelection,
+  isEditorTarget,
+  rememberEditorSelection,
+  redoEditor,
+  selectAllEditor,
+  undoEditor,
+} from '../editor/formatting';
 
 interface MenuItemData {
   label: string;
@@ -21,76 +33,23 @@ interface ContextMenuProps {
 
 function ContextMenu({ x, y, onClose }: ContextMenuProps) {
   const { t } = useTranslation();
-  const setHeading = useCallback((level: string) => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      onClose();
-      return;
-    }
-
-    if (selection.isCollapsed) {
-      const editor = document.querySelector('.ProseMirror');
-      if (!editor) {
-        onClose();
-        return;
-      }
-
-      let node: Node | null = selection.anchorNode;
-      while (node && node !== editor) {
-        if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
-          break;
-        }
-        node = node.parentNode;
-      }
-
-      if (node && node !== editor) {
-        const block = node as HTMLElement;
-        if (level === 'p') {
-          if (/^H[1-6]$/.test(block.tagName)) {
-            const text = block.textContent || '';
-            const p = document.createElement('p');
-            p.textContent = text;
-            block.parentNode?.replaceChild(p, block);
-          }
-        } else {
-          const tagName = level.toUpperCase();
-          if (block.tagName !== tagName) {
-            const text = block.textContent || '';
-            const heading = document.createElement(tagName);
-            heading.textContent = text;
-            block.parentNode?.replaceChild(heading, block);
-          }
-        }
-      }
-    } else {
-      const range = selection.getRangeAt(0);
-      const selectedText = selection.toString().trim();
-      if (!selectedText) {
-        onClose();
-        return;
-      }
-
-      const heading = document.createElement(level.toUpperCase());
-      heading.textContent = selectedText;
-
-      range.deleteContents();
-      range.insertNode(heading);
-
-      const newRange = document.createRange();
-      newRange.setStartAfter(heading);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-
-      const editor = document.querySelector('.ProseMirror');
-      if (editor) {
-        const event = new Event('input', { bubbles: true });
-        editor.dispatchEvent(event);
-      }
-    }
-
+  const handleMouseDown = useCallback((event: ReactMouseEvent) => {
+    event.preventDefault();
+    rememberEditorSelection();
+  }, []);
+  const runAction = useCallback((action: () => void) => {
+    action();
     onClose();
   }, [onClose]);
+
+  const handleLink = useCallback(() => {
+    rememberEditorSelection();
+    const url = window.prompt(t('editor.enterLinkUrl'), getActiveLinkHref() ?? 'https://');
+    if (url !== null) {
+      applyLink(url);
+    }
+    onClose();
+  }, [onClose, t]);
 
   useEffect(() => {
     const handleClick = () => onClose();
@@ -98,18 +57,30 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
     return () => document.removeEventListener('click', handleClick);
   }, [onClose]);
 
-  const menuItems = [
-    { label: t('contextMenu.body'), action: () => setHeading('p') },
-    { label: t('contextMenu.heading1'), action: () => setHeading('h1') },
-    { label: t('contextMenu.heading2'), action: () => setHeading('h2') },
-    { label: t('contextMenu.heading3'), action: () => setHeading('h3') },
-    { label: t('contextMenu.heading4'), action: () => setHeading('h4') },
-    { label: t('contextMenu.heading5'), action: () => setHeading('h5') },
-    { label: t('contextMenu.heading6'), action: () => setHeading('h6') },
+  const menuItems: MenuItemData[] = [
+    { label: t('menu.bold'), action: () => runAction(() => { applyInlineFormat('bold'); }) },
+    { label: t('menu.italic'), action: () => runAction(() => { applyInlineFormat('italic'); }) },
+    { label: t('menu.strikethrough'), action: () => runAction(() => { applyInlineFormat('strikethrough'); }) },
+    { label: t('menu.inlineCode'), action: () => runAction(() => { applyInlineFormat('inline-code'); }) },
+    { label: t('menu.link'), action: handleLink },
+    { label: 'inline-divider', divider: true },
+    { label: t('contextMenu.body'), action: () => runAction(() => { applyBlockFormat('paragraph'); }) },
+    { label: t('contextMenu.heading1'), action: () => runAction(() => { applyBlockFormat('heading-1'); }) },
+    { label: t('contextMenu.heading2'), action: () => runAction(() => { applyBlockFormat('heading-2'); }) },
+    { label: t('contextMenu.heading3'), action: () => runAction(() => { applyBlockFormat('heading-3'); }) },
+    { label: t('contextMenu.heading4'), action: () => runAction(() => { applyBlockFormat('heading-4'); }) },
+    { label: t('contextMenu.heading5'), action: () => runAction(() => { applyBlockFormat('heading-5'); }) },
+    { label: t('contextMenu.heading6'), action: () => runAction(() => { applyBlockFormat('heading-6'); }) },
+    { label: 'block-divider', divider: true },
+    { label: t('menu.quote'), action: () => runAction(() => { applyBlockFormat('blockquote'); }) },
+    { label: t('menu.orderedList'), action: () => runAction(() => { applyBlockFormat('ordered-list'); }) },
+    { label: t('menu.unorderedList'), action: () => runAction(() => { applyBlockFormat('bullet-list'); }) },
+    { label: t('slashMenu.codeBlock'), action: () => runAction(() => { applyBlockFormat('code-block'); }) },
   ];
 
   return (
     <div
+      onMouseDown={handleMouseDown}
       style={{
         position: 'fixed',
         left: x,
@@ -123,22 +94,34 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
         zIndex: 3000,
       }}
     >
-      {menuItems.map((item) => (
-        <div
-          key={item.label}
-          onClick={item.action}
-          style={{
-            padding: '6px 12px',
-            fontSize: '13px',
-            cursor: 'pointer',
-            color: 'var(--color-ink)',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-        >
-          {item.label}
-        </div>
-      ))}
+      {menuItems.map((item, index) =>
+        item.divider ? (
+          <div
+            key={`divider-${index}`}
+            style={{
+              height: '1px',
+              background: 'var(--color-line-soft)',
+              margin: '4px 0',
+            }}
+          />
+        ) : (
+          <div
+            key={`${item.label}-${index}`}
+            onClick={item.action}
+            onMouseDown={handleMouseDown}
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              cursor: 'pointer',
+              color: 'var(--color-ink)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            {item.label}
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -308,67 +291,42 @@ export function MenuBar() {
   };
 
   const handleFormatBlock = (tag: string) => {
-    const editor = document.querySelector('.ProseMirror');
-    if (!editor) return;
+    const formatMap: Record<string, Parameters<typeof applyBlockFormat>[0]> = {
+      p: 'paragraph',
+      h1: 'heading-1',
+      h2: 'heading-2',
+      h3: 'heading-3',
+      h4: 'heading-4',
+      h5: 'heading-5',
+      h6: 'heading-6',
+    };
 
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
-
-    let node: Node | null = selection.anchorNode;
-    while (node && node !== editor) {
-      if (node instanceof Element && (node.tagName === 'P' || /^H[1-6]$/.test(node.tagName))) {
-        break;
-      }
-      node = node.parentNode;
+    const format = formatMap[tag];
+    if (format) {
+      applyBlockFormat(format);
     }
-
-    if (!node || node === editor) return;
-    const block = node as HTMLElement;
-
-    if (tag === 'p') {
-      if (/^H[1-6]$/.test(block.tagName)) {
-        const text = block.textContent || '';
-        const p = document.createElement('p');
-        p.textContent = text;
-        block.parentNode?.replaceChild(p, block);
-      }
-    } else {
-      const tagName = tag.toUpperCase();
-      if (block.tagName !== tagName) {
-        const text = block.textContent || '';
-        const heading = document.createElement(tagName);
-        heading.textContent = text;
-        block.parentNode?.replaceChild(heading, block);
-      }
-    }
-
-    const event = new Event('input', { bubbles: true });
-    editor.dispatchEvent(event);
   };
 
   const handleList = (type: 'ordered' | 'unordered') => {
-    if (type === 'ordered') {
-      document.execCommand('insertOrderedList');
-    } else {
-      document.execCommand('insertUnorderedList');
+    applyBlockFormat(type === 'ordered' ? 'ordered-list' : 'bullet-list');
+  };
+
+  const handleBlockquote = () => { applyBlockFormat('blockquote'); };
+
+  const handleBold = () => { applyInlineFormat('bold'); };
+  const handleItalic = () => { applyInlineFormat('italic'); };
+  const handleStrikethrough = () => { applyInlineFormat('strikethrough'); };
+  const handleCode = () => { applyInlineFormat('inline-code'); };
+  const handleLink = () => {
+    rememberEditorSelection();
+    const url = window.prompt(t('editor.enterLinkUrl'), getActiveLinkHref() ?? 'https://');
+    if (url !== null) {
+      applyLink(url);
     }
   };
-
-  const handleBlockquote = () => {
-    document.execCommand('formatBlock', false, 'blockquote');
-  };
-
-  const handleBold = () => document.execCommand('bold');
-  const handleItalic = () => document.execCommand('italic');
-  const handleStrikethrough = () => document.execCommand('strikethrough');
-  const handleCode = () => document.execCommand('code');
-  const handleLink = () => {
-    const url = prompt(t('editor.enterLinkUrl'));
-    if (url) document.execCommand('createLink', false, url);
-  };
-  const handleUndo = () => document.execCommand('undo');
-  const handleRedo = () => document.execCommand('redo');
-  const handleSelectAll = () => document.execCommand('selectAll');
+  const handleUndo = () => { undoEditor(); };
+  const handleRedo = () => { redoEditor(); };
+  const handleSelectAll = () => { selectAllEditor(); };
 
   const handleIncreaseFontSize = () => setFontSize(fontSize + 1);
   const handleDecreaseFontSize = () => setFontSize(fontSize - 1);
@@ -435,11 +393,10 @@ export function MenuBar() {
 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
-      const selection = window.getSelection();
-      if (selection && !selection.isCollapsed && selection.toString().length > 0) {
-        e.preventDefault();
-        setContextMenu({ x: e.clientX, y: e.clientY });
-      }
+      if (!isEditorTarget(e.target) || !hasEditorSelection()) return;
+      e.preventDefault();
+      rememberEditorSelection();
+      setContextMenu({ x: e.clientX, y: e.clientY });
     };
     document.addEventListener('contextmenu', handleContextMenu);
     return () => document.removeEventListener('contextmenu', handleContextMenu);

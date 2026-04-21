@@ -431,6 +431,7 @@ var en_default = {
     confirm: "Confirm",
     close: "Close",
     save: "Save",
+    discard: "Discard",
     delete: "Delete",
     rename: "Rename",
     markdown: "Markdown",
@@ -483,6 +484,8 @@ var en_default = {
   },
   editor: {
     enterLinkUrl: "Enter link URL:",
+    enterLinkText: "Enter link text:",
+    enterImageUrl: "Enter image URL:",
     externalChangeConfirm: "This file changed outside Typola. Keep your local edits and overwrite the file on disk?",
     copyCode: "Copy",
     mermaidSyntaxError: "Mermaid syntax error"
@@ -659,6 +662,7 @@ var zh_default = {
     confirm: "\u786E\u8BA4",
     close: "\u5173\u95ED",
     save: "\u4FDD\u5B58",
+    discard: "\u4E22\u5F03",
     delete: "\u5220\u9664",
     rename: "\u91CD\u547D\u540D",
     markdown: "Markdown",
@@ -711,6 +715,8 @@ var zh_default = {
   },
   editor: {
     enterLinkUrl: "\u8F93\u5165\u94FE\u63A5\u5730\u5740:",
+    enterLinkText: "\u8F93\u5165\u94FE\u63A5\u6587\u672C:",
+    enterImageUrl: "\u8F93\u5165\u56FE\u7247\u5730\u5740:",
     externalChangeConfirm: "\u6587\u4EF6\u5DF2\u88AB\u5916\u90E8\u4FEE\u6539\u3002\u662F\u5426\u4FDD\u7559\u5F53\u524D\u4FEE\u6539\u5E76\u8986\u76D6\u78C1\u76D8\u5185\u5BB9\uFF1F",
     copyCode: "\u590D\u5236",
     mermaidSyntaxError: "Mermaid \u8BED\u6CD5\u9519\u8BEF"

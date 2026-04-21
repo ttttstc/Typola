@@ -7,11 +7,12 @@ import { X } from 'lucide-react';
 interface ConfirmDialogProps {
   title: string;
   message: string;
-  onConfirm: () => void;
+  onDiscard: () => void;
+  onSave: () => void;
   onCancel: () => void;
 }
 
-function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogProps) {
+function ConfirmDialog({ title, message, onDiscard, onSave, onCancel }: ConfirmDialogProps) {
   const { t } = useTranslation();
   return (
     <div
@@ -43,7 +44,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
         <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--color-muted)' }}>{message}</p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
           <button
-            onClick={onCancel}
+            onClick={onDiscard}
             style={{
               padding: '8px 16px',
               background: 'var(--color-surface-sunken)',
@@ -53,10 +54,10 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
               cursor: 'pointer',
             }}
           >
-            {t('common.cancel')}
+            {t('common.discard')}
           </button>
           <button
-            onClick={onConfirm}
+            onClick={onSave}
             style={{
               padding: '8px 16px',
               background: 'var(--color-accent)',
@@ -67,7 +68,7 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogPro
               cursor: 'pointer',
             }}
           >
-            {t('common.confirm')}
+            {t('common.save')}
           </button>
         </div>
       </div>
@@ -81,7 +82,8 @@ export function TabBar() {
 
   const [confirmDialog, setConfirmDialog] = useState<{
     file: OpenFile;
-    onConfirm: () => void;
+    onDiscard: () => void;
+    onSave: () => void;
   } | null>(null);
 
   const getSaveFileName = (filePath: string) =>
@@ -102,7 +104,11 @@ export function TabBar() {
     if (file.isDirty) {
       setConfirmDialog({
         file,
-        onConfirm: async () => {
+        onDiscard: () => {
+          removeOpenFile(file.path);
+          setConfirmDialog(null);
+        },
+        onSave: async () => {
           const editorState = useEditorStore.getState();
           let pathToClose = file.path;
 
@@ -206,8 +212,9 @@ export function TabBar() {
                 title={t('tabBar.modified')}
               />
             )}
-            <span
+            <button
               onClick={(e) => handleClose(e, file)}
+              aria-label={`${t('common.close')} ${getFileName(file.path)}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -216,6 +223,10 @@ export function TabBar() {
                 height: '16px',
                 borderRadius: '2px',
                 color: 'var(--color-muted)',
+                border: 'none',
+                padding: 0,
+                background: 'transparent',
+                cursor: 'pointer',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--color-line-soft)';
@@ -225,7 +236,7 @@ export function TabBar() {
               }}
             >
               <X size={12} />
-            </span>
+            </button>
           </div>
         ))}
       </div>
@@ -233,7 +244,8 @@ export function TabBar() {
         <ConfirmDialog
           title={t('tabBar.fileModified')}
           message={t('tabBar.fileModifiedMessage', { name: confirmDialog.file.name })}
-          onConfirm={confirmDialog.onConfirm}
+          onDiscard={confirmDialog.onDiscard}
+          onSave={confirmDialog.onSave}
           onCancel={() => setConfirmDialog(null)}
         />
       )}

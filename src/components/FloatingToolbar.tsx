@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bold, Italic, Strikethrough, Code, Link, ChevronDown, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6, Pilcrow } from 'lucide-react';
+import {
+  applyBlockFormat,
+  applyInlineFormat,
+  applyLink,
+  getActiveLinkHref,
+  hasEditorSelection,
+  isInlineFormatActive,
+  rememberEditorSelection,
+} from '../editor/formatting';
 
 interface ToolbarState {
   visible: boolean;
@@ -85,7 +94,7 @@ export function FloatingToolbar() {
 
   const updateToolbar = useCallback(() => {
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !hasEditorSelection()) {
       setState((prev) => ({ ...prev, visible: false }));
       setShowHeadingDropdown(false);
       return;
@@ -135,68 +144,43 @@ export function FloatingToolbar() {
 
   const handleButtonClick = (command: string) => {
     if (command === 'link') {
-      const url = prompt(t('editor.enterLinkUrl'));
-      if (url) {
-        document.execCommand('createLink', false, url);
+      rememberEditorSelection();
+      const url = window.prompt(t('editor.enterLinkUrl'), getActiveLinkHref() ?? 'https://');
+      if (url !== null) {
+        applyLink(url);
       }
     } else if (command === 'heading') {
       setShowHeadingDropdown(!showHeadingDropdown);
     } else {
-      document.execCommand(command, false);
+      const formatMap = {
+        bold: 'bold',
+        italic: 'italic',
+        strikethrough: 'strikethrough',
+        code: 'inline-code',
+      } as const;
+
+      const format = formatMap[command as keyof typeof formatMap];
+      if (format) {
+        applyInlineFormat(format);
+      }
     }
   };
 
   const handleHeadingSelect = (level: string) => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
+    const formatMap = {
+      p: 'paragraph',
+      h1: 'heading-1',
+      h2: 'heading-2',
+      h3: 'heading-3',
+      h4: 'heading-4',
+      h5: 'heading-5',
+      h6: 'heading-6',
+    } as const;
 
-    // Find the block container (paragraph or heading)
-    let node = selection.anchorNode;
-    while (node && node.parentElement && !node.parentElement.classList.contains('ProseMirror')) {
-      node = node.parentElement;
+    const format = formatMap[level as keyof typeof formatMap];
+    if (format) {
+      applyBlockFormat(format);
     }
-
-    if (!node) return;
-
-    // Find the actual paragraph/heading element
-    let block = selection.anchorNode?.parentElement;
-    while (block && !block.classList.contains('ProseMirror')) {
-      if (block.tagName === 'P' || /^H[1-6]$/.test(block.tagName)) {
-        break;
-      }
-      block = block.parentElement;
-    }
-
-    if (!block) return;
-
-    const editor = document.querySelector('.ProseMirror');
-    if (!editor) return;
-
-    // Get the position in the document
-    const editorContent = editor as HTMLElement;
-
-    if (level === 'p') {
-      // Convert to paragraph
-      if (/^H[1-6]$/.test(block.tagName)) {
-        const text = block.textContent || '';
-        const p = document.createElement('p');
-        p.textContent = text;
-        block.parentNode?.replaceChild(p, block);
-      }
-    } else {
-      // Convert to heading
-      const tagName = level.toUpperCase();
-      if (block.tagName !== tagName) {
-        const text = block.textContent || '';
-        const heading = document.createElement(tagName);
-        heading.textContent = text;
-        block.parentNode?.replaceChild(heading, block);
-      }
-    }
-
-    // Trigger content update
-    const event = new Event('input', { bubbles: true });
-    editorContent.dispatchEvent(event);
   };
 
   // Close dropdown when clicking outside
@@ -210,52 +194,15 @@ export function FloatingToolbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!state.visible) return;
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-        e.preventDefault();
-        document.execCommand('bold', false);
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
-        e.preventDefault();
-        document.execCommand('italic', false);
-      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 's') {
-        e.preventDefault();
-        document.execCommand('strikethrough', false);
-      } else if ((e.ctrlKey || e.metaKey) && e.key === '`') {
-        e.preventDefault();
-        document.execCommand('code', false);
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        const url = prompt(t('editor.enterLinkUrl'));
-        if (url) {
-          document.execCommand('createLink', false, url);
-        }
-      } else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
-        e.preventDefault();
-        handleHeadingSelect('p');
-      } else if ((e.ctrlKey || e.metaKey) && e.key === '1') {
-        e.preventDefault();
-        handleHeadingSelect('h1');
-      } else if ((e.ctrlKey || e.metaKey) && e.key === '2') {
-        e.preventDefault();
-        handleHeadingSelect('h2');
-      } else if ((e.ctrlKey || e.metaKey) && e.key === '3') {
-        e.preventDefault();
-        handleHeadingSelect('h3');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.visible]);
-
   if (!state.visible) return null;
 
   return (
     <div
       ref={toolbarRef}
+      onMouseDown={(event) => {
+        event.preventDefault();
+        rememberEditorSelection();
+      }}
       style={{
         position: 'absolute',
         left: state.position.x,
@@ -315,6 +262,19 @@ export function FloatingToolbar() {
 
       {FORMAT_OPTIONS(t).map((btn) => {
         const Icon = btn.icon;
+        const active =
+          btn.command === 'link'
+            ? Boolean(getActiveLinkHref())
+            : isInlineFormatActive(
+                btn.command === 'bold'
+                  ? 'bold'
+                  : btn.command === 'italic'
+                    ? 'italic'
+                    : btn.command === 'strikethrough'
+                      ? 'strikethrough'
+                      : 'inline-code'
+              );
+
         return (
           <button
             key={btn.id}
@@ -328,9 +288,10 @@ export function FloatingToolbar() {
               justifyContent: 'center',
               borderRadius: 'var(--radius-sm)',
               color: 'var(--color-ink)',
+              background: active ? 'var(--color-surface-sunken)' : 'transparent',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = active ? 'var(--color-surface-sunken)' : 'transparent')}
           >
             <Icon size={14} />
           </button>

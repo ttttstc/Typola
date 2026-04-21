@@ -15,6 +15,19 @@ import {
   Link,
   GitBranch,
 } from 'lucide-react';
+import {
+  applyBlockFormat,
+  getActiveLinkHref,
+  hasEditorSelection,
+  insertCodeBlock,
+  insertDivider,
+  insertImage,
+  insertLink,
+  insertMermaidBlock,
+  insertTable,
+  insertTaskList,
+  rememberEditorSelection,
+} from '../editor/formatting';
 
 export function SlashMenu() {
   const { t } = useTranslation();
@@ -103,27 +116,70 @@ export function SlashMenu() {
   }, [handleKeyDown]);
 
   const insertBlock = (id: string) => {
-    const editor = document.querySelector('.ProseMirror');
-    if (!editor) return;
+    switch (id) {
+      case 'h1':
+        applyBlockFormat('heading-1');
+        break;
+      case 'h2':
+        applyBlockFormat('heading-2');
+        break;
+      case 'h3':
+        applyBlockFormat('heading-3');
+        break;
+      case 'quote':
+        applyBlockFormat('blockquote');
+        break;
+      case 'divider':
+        insertDivider();
+        break;
+      case 'bullet':
+        applyBlockFormat('bullet-list');
+        break;
+      case 'ordered':
+        applyBlockFormat('ordered-list');
+        break;
+      case 'todo':
+        insertTaskList();
+        break;
+      case 'table':
+        insertTable();
+        break;
+      case 'code':
+        insertCodeBlock();
+        break;
+      case 'image': {
+        rememberEditorSelection();
+        const imageUrl = window.prompt(t('editor.enterImageUrl'), 'https://');
+        if (imageUrl !== null) {
+          insertImage(imageUrl, 'image');
+        }
+        break;
+      }
+      case 'link': {
+        rememberEditorSelection();
+        if (hasEditorSelection()) {
+          const linkUrl = window.prompt(t('editor.enterLinkUrl'), getActiveLinkHref() ?? 'https://');
+          if (linkUrl !== null) {
+            insertLink(linkUrl);
+          }
+          break;
+        }
 
-    const blockContent: Record<string, string> = {
-      h1: '# ',
-      h2: '## ',
-      h3: '### ',
-      quote: '> ',
-      divider: '\n---\n',
-      bullet: '- ',
-      ordered: '1. ',
-      todo: '- [ ] ',
-      table: t('slashMenu.tableTemplate'),
-      code: '```\n\n```',
-      image: '![image]()',
-      link: '[text](url)',
-      mermaid: '```mermaid\nflowchart LR\n  A --> B\n```',
-    };
+        const linkText = window.prompt(t('editor.enterLinkText'), 'text');
+        if (linkText === null) {
+          break;
+        }
 
-    const content = blockContent[id] || '';
-    document.execCommand('insertText', false, content);
+        const linkUrl = window.prompt(t('editor.enterLinkUrl'), 'https://');
+        if (linkUrl !== null) {
+          insertLink(linkUrl, linkText);
+        }
+        break;
+      }
+      case 'mermaid':
+        insertMermaidBlock();
+        break;
+    }
   };
 
   if (!visible) return null;

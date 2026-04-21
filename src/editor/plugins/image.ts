@@ -1,4 +1,5 @@
 import { useWorkspaceStore } from '../../store/workspace';
+import { insertImage } from '../formatting';
 
 export async function saveImage(data: Uint8Array, ext: string): Promise<string | null> {
   const workspaceRoot = useWorkspaceStore.getState().workspaceRoot;
@@ -42,7 +43,7 @@ export function setupImageHandler() {
           const data = new Uint8Array(buffer);
           saveImage(data, ext).then((relativePath) => {
             if (relativePath) {
-              document.execCommand('insertText', false, `![image](./${relativePath})`);
+              insertImage(`./${relativePath}`, 'image');
             }
           });
         });
@@ -63,7 +64,7 @@ export function setupImageHandler() {
           const data = new Uint8Array(buffer);
           saveImage(data, ext).then((relativePath) => {
             if (relativePath) {
-              document.execCommand('insertText', false, `![image](./${relativePath})`);
+              insertImage(`./${relativePath}`, 'image');
             }
           });
         });

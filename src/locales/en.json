@@ -4,6 +4,7 @@
     "confirm": "Confirm",
     "close": "Close",
     "save": "Save",
+    "discard": "Discard",
     "delete": "Delete",
     "rename": "Rename",
     "markdown": "Markdown",
@@ -56,6 +57,8 @@
   },
   "editor": {
     "enterLinkUrl": "Enter link URL:",
+    "enterLinkText": "Enter link text:",
+    "enterImageUrl": "Enter image URL:",
     "externalChangeConfirm": "This file changed outside Typola. Keep your local edits and overwrite the file on disk?",
     "copyCode": "Copy",
     "mermaidSyntaxError": "Mermaid syntax error"

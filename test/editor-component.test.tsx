@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MilkdownEditor } from '../src/components/Editor';
 import { useEditorStore } from '../src/store/editor';
 
-const { listenerCtxToken, editorInstances } = vi.hoisted(() => ({
+const { listenerCtxToken, editorInstances, prosePluginsCtxToken } = vi.hoisted(() => ({
   listenerCtxToken: Symbol('listenerCtx'),
   editorInstances: [] as Array<{ destroy: ReturnType<typeof vi.fn> }>,
+  prosePluginsCtxToken: Symbol('prosePluginsCtx'),
 }));
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -43,9 +44,16 @@ vi.mock('@milkdown/core', () => ({
   Editor: {
     make() {
       const instance = {
-        config(fn: (ctx: { set: ReturnType<typeof vi.fn>; get: (token: symbol) => { markdownUpdated: ReturnType<typeof vi.fn> } | undefined }) => void) {
+        config(
+          fn: (ctx: {
+            get: (token: symbol) => { markdownUpdated: ReturnType<typeof vi.fn> } | undefined;
+            set: ReturnType<typeof vi.fn>;
+            update: ReturnType<typeof vi.fn>;
+          }) => void
+        ) {
           fn({
             set: vi.fn(),
+            update: vi.fn(),
             get: (token: symbol) =>
               token === listenerCtxToken
                 ? {
@@ -70,6 +78,7 @@ vi.mock('@milkdown/core', () => ({
   },
   rootCtx: Symbol('rootCtx'),
   defaultValueCtx: Symbol('defaultValueCtx'),
+  prosePluginsCtx: prosePluginsCtxToken,
 }));
 
 vi.mock('@milkdown/preset-commonmark', () => ({

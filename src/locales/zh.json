@@ -4,6 +4,7 @@
     "confirm": "确认",
     "close": "关闭",
     "save": "保存",
+    "discard": "丢弃",
     "delete": "删除",
     "rename": "重命名",
     "markdown": "Markdown",
@@ -56,6 +57,8 @@
   },
   "editor": {
     "enterLinkUrl": "输入链接地址:",
+    "enterLinkText": "输入链接文本:",
+    "enterImageUrl": "输入图片地址:",
     "externalChangeConfirm": "文件已被外部修改。是否保留当前修改并覆盖磁盘内容？",
     "copyCode": "复制",
     "mermaidSyntaxError": "Mermaid 语法错误"

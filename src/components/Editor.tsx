@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Editor as MilkdownEditorType, rootCtx, defaultValueCtx } from '@milkdown/core';
+import { Editor as MilkdownEditorType, defaultValueCtx, prosePluginsCtx, rootCtx } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
 import { gfm } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
@@ -10,7 +10,17 @@ import { useUIStore } from '../store/ui';
 import { useWorkspaceStore } from '../store/workspace';
 import { setupCodeHighlight } from '../editor/plugins/highlight';
 import { setupImageHandler } from '../editor/plugins/image';
+import { createMarkdownSyntaxPlugin } from '../editor/plugins/markdownSyntax';
 import { setupMermaidHandler } from '../editor/plugins/mermaid';
+import {
+  applyBlockFormat,
+  applyInlineFormat,
+  applyLink,
+  bindEditorFormatting,
+  getActiveLinkHref,
+  hasEditorSelection,
+  isEditorFocused,
+} from '../editor/formatting';
 import { SlashMenu } from './SlashMenu';
 import { FloatingToolbar } from './FloatingToolbar';
 import { SearchBar } from './SearchBar';
@@ -47,6 +57,7 @@ export function MilkdownEditor() {
 
   const initEditor = useCallback((container: HTMLElement, initialContent: string) => {
     if (editorRef.current) {
+      bindEditorFormatting(null);
       editorRef.current.destroy();
       editorRef.current = null;
     }
@@ -56,6 +67,7 @@ export function MilkdownEditor() {
       .config((ctx: any) => {
         ctx.set(rootCtx, container);
         ctx.set(defaultValueCtx, initialContent);
+        ctx.update(prosePluginsCtx, (plugins: unknown[]) => [...plugins, createMarkdownSyntaxPlugin()]);
         ctx.get(listenerCtx).markdownUpdated((_ctx: any, markdown: string) => {
           if (!isInternalUpdate.current) {
             setContent(markdown);
@@ -72,6 +84,8 @@ export function MilkdownEditor() {
     editor.create();
     // @ts-ignore
     editorRef.current = editor;
+    // The formatting helpers need access to the active Milkdown instance.
+    bindEditorFormatting(editor);
   }, [setContent]);
 
   const replaceEditorContent = useCallback((nextContent: string) => {
@@ -207,15 +221,96 @@ export function MilkdownEditor() {
       if ((event.ctrlKey || event.metaKey) && event.key === 's') {
         event.preventDefault();
         await saveFile();
+        return;
       }
       if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
         event.preventDefault();
+        return;
+      }
+
+      if (!event.ctrlKey && !event.metaKey) return;
+      if (!isEditorFocused() && !hasEditorSelection()) return;
+
+      const key = event.key.toLowerCase();
+
+      if (!event.shiftKey && key === 'b') {
+        event.preventDefault();
+        applyInlineFormat('bold');
+        return;
+      }
+
+      if (!event.shiftKey && key === 'i') {
+        event.preventDefault();
+        applyInlineFormat('italic');
+        return;
+      }
+
+      if (event.shiftKey && key === 's') {
+        event.preventDefault();
+        applyInlineFormat('strikethrough');
+        return;
+      }
+
+      if (!event.shiftKey && (event.key === '`' || event.code === 'Backquote')) {
+        event.preventDefault();
+        applyInlineFormat('inline-code');
+        return;
+      }
+
+      if (!event.shiftKey && key === 'k') {
+        event.preventDefault();
+        const url = window.prompt(t('editor.enterLinkUrl'), getActiveLinkHref() ?? 'https://');
+        if (url !== null) {
+          applyLink(url);
+        }
+        return;
+      }
+
+      if (!event.shiftKey && key === '0') {
+        event.preventDefault();
+        applyBlockFormat('paragraph');
+        return;
+      }
+
+      if (!event.shiftKey && key === '1') {
+        event.preventDefault();
+        applyBlockFormat('heading-1');
+        return;
+      }
+
+      if (!event.shiftKey && key === '2') {
+        event.preventDefault();
+        applyBlockFormat('heading-2');
+        return;
+      }
+
+      if (!event.shiftKey && key === '3') {
+        event.preventDefault();
+        applyBlockFormat('heading-3');
+        return;
+      }
+
+      if (!event.shiftKey && key === '4') {
+        event.preventDefault();
+        applyBlockFormat('heading-4');
+        return;
+      }
+
+      if (!event.shiftKey && key === '5') {
+        event.preventDefault();
+        applyBlockFormat('heading-5');
+        return;
+      }
+
+      if (!event.shiftKey && key === '6') {
+        event.preventDefault();
+        applyBlockFormat('heading-6');
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [saveFile]);
+  }, [saveFile, t]);
 
   useEffect(() => {
     if (!currentFile) return;
@@ -242,6 +337,7 @@ export function MilkdownEditor() {
   }, [replaceEditorContent]);
 
   useEffect(() => () => {
+    bindEditorFormatting(null);
     pluginCleanupRef.current.forEach((cleanup) => cleanup());
   }, []);
 
@@ -253,6 +349,29 @@ export function MilkdownEditor() {
         background: 'var(--color-paper)',
       }}
     >
+      <style>
+        {`
+          .ProseMirror .md-syntax-marker {
+            position: relative;
+          }
+
+          .ProseMirror .md-syntax-marker::before,
+          .ProseMirror .md-syntax-marker::after {
+            color: var(--color-muted);
+            opacity: 0.75;
+            pointer-events: none;
+            white-space: pre;
+          }
+
+          .ProseMirror .md-syntax-marker::before {
+            content: attr(data-md-prefix);
+          }
+
+          .ProseMirror .md-syntax-marker::after {
+            content: attr(data-md-suffix);
+          }
+        `}
+      </style>
       <div
         ref={containerRef}
         style={{
