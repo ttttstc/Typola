@@ -1,14 +1,97 @@
 import { useEffect } from 'react';
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useUIStore, SettingsTab } from '../../store/ui';
 import { X } from 'lucide-react';
+import { useUIStore, SettingsTab } from '../../store/ui';
+import { syncWorkspaceSearchDefaultsFromSettings } from '../../store/search';
+
+function FieldLabel({ title, description }: { title: string; description?: string }) {
+  return (
+    <div style={{ display: 'grid', gap: '2px' }}>
+      <div style={{ fontSize: '13px', fontWeight: 600 }}>{title}</div>
+      {description ? <div style={{ fontSize: '12px', color: 'var(--color-muted)' }}>{description}</div> : null}
+    </div>
+  );
+}
+
+function Row({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px',
+        padding: '12px 0',
+        borderBottom: '1px solid var(--color-line-soft)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      style={{
+        width: '280px',
+        height: '36px',
+        padding: '0 10px',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--color-line-soft)',
+        background: 'var(--color-paper)',
+        color: 'var(--color-ink)',
+        ...(props.style ?? {}),
+      }}
+    />
+  );
+}
+
+function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      style={{
+        minWidth: '160px',
+        height: '36px',
+        padding: '0 10px',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--color-line-soft)',
+        background: 'var(--color-paper)',
+        color: 'var(--color-ink)',
+        ...(props.style ?? {}),
+      }}
+    />
+  );
+}
+
+function Checkbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+}) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
 
 function ShortcutsContent() {
   const { t } = useTranslation();
 
-  const SHORTCUTS = [
+  const shortcuts = [
     { label: t('shortcuts.save'), key: 'Ctrl+S' },
     { label: t('shortcuts.newFile'), key: 'Ctrl+N' },
+    { label: t('shortcuts.findInFile'), key: 'Ctrl+F' },
+    { label: t('shortcuts.findInWorkspace'), key: 'Ctrl+Shift+F' },
     { label: t('shortcuts.toggleSidebar'), key: 'Ctrl+\\' },
     { label: t('shortcuts.toggleOutline'), key: 'Ctrl+Shift+\\' },
     { label: t('shortcuts.toggleTheme'), key: 'Ctrl+Shift+D' },
@@ -28,9 +111,9 @@ function ShortcutsContent() {
     <div>
       <h2 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600 }}>{t('shortcuts.title')}</h2>
       <div style={{ display: 'grid', gap: '8px' }}>
-        {SHORTCUTS.map((s) => (
+        {shortcuts.map((shortcut) => (
           <div
-            key={s.label}
+            key={shortcut.label}
             style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -40,7 +123,7 @@ function ShortcutsContent() {
               borderRadius: 'var(--radius-sm)',
             }}
           >
-            <span style={{ fontSize: '13px' }}>{s.label}</span>
+            <span style={{ fontSize: '13px' }}>{shortcut.label}</span>
             <kbd
               style={{
                 padding: '4px 8px',
@@ -51,7 +134,7 @@ function ShortcutsContent() {
                 fontFamily: 'var(--font-mono)',
               }}
             >
-              {s.key}
+              {shortcut.key}
             </kbd>
           </div>
         ))}
@@ -68,7 +151,7 @@ function PlaceholderContent({ title }: { title: string }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        height: '200px',
+        height: '220px',
         color: 'var(--color-muted)',
         fontSize: '14px',
       }}
@@ -80,36 +163,139 @@ function PlaceholderContent({ title }: { title: string }) {
 
 function GeneralContent() {
   const { t } = useTranslation();
-  return <PlaceholderContent title={t('settings.general')} />;
+  const searchDefaults = useUIStore((state) => state.searchDefaults);
+  const setSearchDefaults = useUIStore((state) => state.setSearchDefaults);
+
+  const updateSearchDefaults = (patch: Partial<typeof searchDefaults>) => {
+    setSearchDefaults(patch);
+    syncWorkspaceSearchDefaultsFromSettings();
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: '8px' }}>
+      <h2 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 600 }}>{t('settings.searchGroup')}</h2>
+      <Row>
+        <FieldLabel title={t('search.caseSensitive')} description={t('settings.defaultSearchDescription')} />
+        <Checkbox
+          checked={searchDefaults.caseSensitive}
+          onChange={(checked) => updateSearchDefaults({ caseSensitive: checked })}
+          label={t('settings.enableByDefault')}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('search.wholeWord')} description={t('settings.wholeWordDescription')} />
+        <Checkbox
+          checked={searchDefaults.wholeWord}
+          onChange={(checked) => updateSearchDefaults({ wholeWord: checked })}
+          label={t('settings.enableByDefault')}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('search.regex')} description={t('settings.regexDescription')} />
+        <Checkbox
+          checked={searchDefaults.useRegex}
+          onChange={(checked) => updateSearchDefaults({ useRegex: checked })}
+          label={t('settings.enableByDefault')}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('settings.includeGlob')} description={t('settings.includeGlobDescription')} />
+        <TextInput
+          value={searchDefaults.includeGlob}
+          onChange={(event) => updateSearchDefaults({ includeGlob: event.target.value })}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('settings.excludeGlob')} description={t('settings.excludeGlobDescription')} />
+        <TextInput
+          value={searchDefaults.excludeGlob}
+          onChange={(event) => updateSearchDefaults({ excludeGlob: event.target.value })}
+        />
+      </Row>
+    </div>
+  );
 }
 
-function EditorContent() {
+function ExportContent() {
   const { t } = useTranslation();
-  return <PlaceholderContent title={t('settings.editor')} />;
-}
+  const exportSettings = useUIStore((state) => state.exportSettings);
+  const setExportSettings = useUIStore((state) => state.setExportSettings);
 
-function AppearanceContent() {
-  const { t } = useTranslation();
-  return <PlaceholderContent title={t('settings.appearance')} />;
-}
+  return (
+    <div style={{ display: 'grid', gap: '8px' }}>
+      <h2 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 600 }}>{t('settings.exportPdf')}</h2>
+      <Row>
+        <FieldLabel title={t('settings.pageSize')} description={t('settings.pageSizeDescription')} />
+        <Select
+          value={exportSettings.pdfPageSize}
+          onChange={(event) => setExportSettings({ pdfPageSize: event.target.value as 'A4' | 'Letter' })}
+        >
+          <option value="A4">A4</option>
+          <option value="Letter">Letter</option>
+        </Select>
+      </Row>
+      <Row>
+        <FieldLabel title={t('settings.margin')} description={t('settings.marginDescription')} />
+        <Select
+          value={exportSettings.pdfMargin}
+          onChange={(event) => setExportSettings({ pdfMargin: event.target.value as 'compact' | 'normal' | 'wide' })}
+        >
+          <option value="compact">{t('settings.marginCompact')}</option>
+          <option value="normal">{t('settings.marginNormal')}</option>
+          <option value="wide">{t('settings.marginWide')}</option>
+        </Select>
+      </Row>
+      <Row>
+        <FieldLabel title={t('settings.printBackground')} description={t('settings.printBackgroundDescription')} />
+        <Checkbox
+          checked={exportSettings.pdfPrintBackground}
+          onChange={(checked) => setExportSettings({ pdfPrintBackground: checked })}
+          label={t('settings.enableByDefault')}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('settings.headerFooter')} description={t('settings.headerFooterDescription')} />
+        <Checkbox
+          checked={exportSettings.pdfHeaderFooter}
+          onChange={(checked) => setExportSettings({ pdfHeaderFooter: checked })}
+          label={t('settings.enableByDefault')}
+        />
+      </Row>
 
-function TerminalContent() {
-  const { t } = useTranslation();
-  return <PlaceholderContent title={t('settings.terminal')} />;
+      <h2 style={{ margin: '16px 0 8px', fontSize: '16px', fontWeight: 600 }}>{t('settings.exportHtml')}</h2>
+      <Row>
+        <FieldLabel title={t('settings.imageMode')} description={t('settings.imageModeDescription')} />
+        <Select
+          value={exportSettings.htmlImageMode}
+          onChange={(event) =>
+            setExportSettings({ htmlImageMode: event.target.value as 'relative' | 'base64' | 'external' })
+          }
+        >
+          <option value="relative">{t('settings.imageModeRelative')}</option>
+          <option value="base64">{t('settings.imageModeBase64')}</option>
+          <option value="external">{t('settings.imageModeExternal')}</option>
+        </Select>
+      </Row>
+    </div>
+  );
 }
 
 function SettingsContent({ activeTab }: { activeTab: SettingsTab }) {
+  const { t } = useTranslation();
+
   switch (activeTab) {
     case 'shortcuts':
       return <ShortcutsContent />;
     case 'general':
       return <GeneralContent />;
+    case 'export':
+      return <ExportContent />;
     case 'editor':
-      return <EditorContent />;
+      return <PlaceholderContent title={t('settings.editor')} />;
     case 'appearance':
-      return <AppearanceContent />;
+      return <PlaceholderContent title={t('settings.appearance')} />;
     case 'terminal':
-      return <TerminalContent />;
+      return <PlaceholderContent title={t('settings.terminal')} />;
     default:
       return <GeneralContent />;
   }
@@ -117,33 +303,35 @@ function SettingsContent({ activeTab }: { activeTab: SettingsTab }) {
 
 export function Settings() {
   const { t } = useTranslation();
-  const settingsOpen = useUIStore((s) => s.settingsOpen);
-  const settingsActiveTab = useUIStore((s) => s.settingsActiveTab);
-  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
-  const setSettingsActiveTab = useUIStore((s) => s.setSettingsActiveTab);
+  const settingsOpen = useUIStore((state) => state.settingsOpen);
+  const settingsActiveTab = useUIStore((state) => state.settingsActiveTab);
+  const setSettingsOpen = useUIStore((state) => state.setSettingsOpen);
+  const setSettingsActiveTab = useUIStore((state) => state.setSettingsActiveTab);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
-        e.preventDefault();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === ',') {
+        event.preventDefault();
         setSettingsOpen(true);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setSettingsOpen]);
 
-  const TAB_GROUPS = [
+  const tabGroups = [
     {
-      label: t('settings.common') || 'Common',
+      label: t('settings.common'),
       items: [
         { id: 'general' as SettingsTab, label: t('settings.general') },
         { id: 'editor' as SettingsTab, label: t('settings.editor') },
         { id: 'appearance' as SettingsTab, label: t('settings.appearance') },
+        { id: 'export' as SettingsTab, label: t('settings.export') },
       ],
     },
     {
-      label: t('settings.advanced') || 'Advanced',
+      label: t('settings.advanced'),
       items: [
         { id: 'terminal' as SettingsTab, label: t('settings.terminal') },
         { id: 'shortcuts' as SettingsTab, label: t('settings.shortcuts') },
@@ -153,14 +341,13 @@ export function Settings() {
 
   if (!settingsOpen) return null;
 
+  const activeItem = tabGroups.flatMap((group) => group.items).find((item) => item.id === settingsActiveTab);
+
   return (
     <div
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        inset: 0,
         background: 'rgba(0,0,0,0.5)',
         display: 'flex',
         alignItems: 'center',
@@ -173,24 +360,23 @@ export function Settings() {
         style={{
           background: 'var(--color-paper)',
           borderRadius: 'var(--radius-lg)',
-          width: '700px',
-          height: '500px',
+          width: '780px',
+          height: '560px',
           display: 'flex',
           overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
-        {/* Left sidebar */}
         <div
           style={{
-            width: '180px',
+            width: '190px',
             borderRight: '1px solid var(--color-line-soft)',
             padding: '16px 0',
             overflow: 'auto',
           }}
         >
-          {TAB_GROUPS.map((group) => (
+          {tabGroups.map((group) => (
             <div key={group.label} style={{ marginBottom: '16px' }}>
               <div
                 style={{
@@ -211,28 +397,11 @@ export function Settings() {
                     padding: '8px 16px',
                     fontSize: '13px',
                     cursor: 'pointer',
-                    background:
-                      settingsActiveTab === item.id
-                        ? 'var(--color-surface-sunken)'
-                        : 'transparent',
-                    color:
-                      settingsActiveTab === item.id
-                        ? 'var(--color-ink)'
-                        : 'var(--color-ink)',
+                    background: settingsActiveTab === item.id ? 'var(--color-surface-sunken)' : 'transparent',
                     borderLeft:
                       settingsActiveTab === item.id
                         ? '2px solid var(--color-accent)'
                         : '2px solid transparent',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (settingsActiveTab !== item.id) {
-                      e.currentTarget.style.background = 'var(--color-surface-sunken)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (settingsActiveTab !== item.id) {
-                      e.currentTarget.style.background = 'transparent';
-                    }
                   }}
                 >
                   {item.label}
@@ -242,7 +411,6 @@ export function Settings() {
           ))}
         </div>
 
-        {/* Right content */}
         <div style={{ flex: 1, padding: '24px', overflow: 'auto' }}>
           <div
             style={{
@@ -252,10 +420,8 @@ export function Settings() {
               marginBottom: '16px',
             }}
           >
-            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
-              {TAB_GROUPS.flatMap((g) => g.items).find((i) => i.id === settingsActiveTab)?.label}
-            </h1>
-            <div
+            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>{activeItem?.label}</h1>
+            <button
               onClick={() => setSettingsOpen(false)}
               style={{
                 width: '28px',
@@ -266,16 +432,12 @@ export function Settings() {
                 borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
                 color: 'var(--color-muted)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--color-surface-sunken)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
+                border: 'none',
+                background: 'transparent',
               }}
             >
               <X size={18} />
-            </div>
+            </button>
           </div>
           <SettingsContent activeTab={settingsActiveTab} />
         </div>

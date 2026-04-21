@@ -2,11 +2,145 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { matchesWatchedFile, rememberRecentWrite, shouldIgnoreWatchEvent } from './fileWatch';
+import {
+  ExportPayload,
+  buildExportDocumentHtml,
+  getPdfPrintOptions,
+  rewriteHtmlImages,
+} from './export';
+import { SearchOptions, previewReplaceText, searchText, shouldSearchPath } from '../src/shared/search';
 
 let mainWindow: BrowserWindow | null = null;
 const watchedFiles = new Map<string, fs.FSWatcher>();
 const recentWrites = new Map<string, number>();
 let imageCounter = 0;
+
+const SEARCHABLE_EXTENSIONS = new Set(['.md', '.markdown', '.mdx', '.txt']);
+
+interface WorkspaceSearchRequest extends SearchOptions {
+  includeGlob: string;
+  excludeGlob: string;
+  skipPaths?: string[];
+}
+
+function writeFileAtomically(filePath: string, content: string) {
+  const dir = path.dirname(filePath);
+  const tempFile = path.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  fs.writeFileSync(tempFile, content, 'utf-8');
+  rememberRecentWrite(recentWrites, filePath);
+  fs.renameSync(tempFile, filePath);
+}
+
+function collectWorkspaceFiles(rootDir: string) {
+  const files: string[] = [];
+  const queue = [rootDir];
+
+  while (queue.length > 0) {
+    const currentDir = queue.shift();
+    if (!currentDir) continue;
+
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'release') {
+        continue;
+      }
+
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        queue.push(fullPath);
+        continue;
+      }
+
+      if (!SEARCHABLE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        continue;
+      }
+
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function relativeWorkspacePath(workspaceRoot: string, filePath: string) {
+  return path.relative(workspaceRoot, filePath).replace(/\\/g, '/');
+}
+
+async function exportDocument(payload: ExportPayload) {
+  const baseName = payload.currentFilePath
+    ? path.parse(payload.currentFilePath).name
+    : payload.title.replace(/\.[^.]+$/, '') || 'Untitled';
+  const extension = payload.type === 'pdf' ? 'pdf' : 'html';
+  const defaultPath = payload.currentFilePath
+    ? path.join(path.dirname(payload.currentFilePath), `${baseName}.${extension}`)
+    : `${baseName}.${extension}`;
+
+  const selectedPath = await dialog.showSaveDialog({
+    defaultPath,
+    filters: [
+      {
+        name: payload.type.toUpperCase(),
+        extensions: [extension],
+      },
+    ],
+  });
+
+  if (selectedPath.canceled || !selectedPath.filePath) {
+    return { canceled: true };
+  }
+
+  if (payload.type === 'html') {
+    const bodyHtml = rewriteHtmlImages(
+      payload.html,
+      payload.currentFilePath,
+      selectedPath.filePath,
+      payload.htmlOptions.imageMode
+    );
+    const documentHtml = buildExportDocumentHtml(payload.title, bodyHtml, payload.theme, {
+      forPrint: false,
+    });
+    fs.writeFileSync(selectedPath.filePath, documentHtml, 'utf-8');
+    return { canceled: false, path: selectedPath.filePath };
+  }
+
+  const printWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      sandbox: true,
+    },
+  });
+
+  try {
+    const bodyHtml = rewriteHtmlImages(
+      payload.html,
+      payload.currentFilePath,
+      selectedPath.filePath,
+      'base64'
+    );
+    const documentHtml = buildExportDocumentHtml(payload.title, bodyHtml, payload.theme, {
+      forPrint: true,
+      pageSize: payload.pdf.pageSize,
+      margin: payload.pdf.margin,
+    });
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(documentHtml)}`);
+    await printWindow.webContents.executeJavaScript(
+      'document.fonts && document.fonts.ready ? document.fonts.ready.then(() => true) : Promise.resolve(true)'
+    );
+    const pdfBuffer = await printWindow.webContents.printToPDF(getPdfPrintOptions(payload.pdf));
+    fs.writeFileSync(selectedPath.filePath, pdfBuffer);
+    return { canceled: false, path: selectedPath.filePath };
+  } finally {
+    if (!printWindow.isDestroyed()) {
+      printWindow.close();
+    }
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -40,11 +174,7 @@ ipcMain.handle('read_file', async (_, filePath: string) => {
 });
 
 ipcMain.handle('write_file', async (_, filePath: string, content: string) => {
-  const dir = path.dirname(filePath);
-  const tempFile = path.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-  fs.writeFileSync(tempFile, content, 'utf-8');
-  rememberRecentWrite(recentWrites, filePath);
-  fs.renameSync(tempFile, filePath);
+  writeFileAtomically(filePath, content);
 });
 
 ipcMain.handle('pick_folder', async () => {
@@ -150,6 +280,97 @@ ipcMain.handle('show_save_dialog', async (_, options: { defaultPath?: string; fi
   });
   return result.canceled ? null : result.filePath;
 });
+
+ipcMain.handle('workspace_search', async (_, workspaceRoot: string, query: string, request: WorkspaceSearchRequest) => {
+  const results = collectWorkspaceFiles(workspaceRoot)
+    .map((filePath) => {
+      const relativePath = relativeWorkspacePath(workspaceRoot, filePath);
+      if (!shouldSearchPath(relativePath, request.includeGlob, request.excludeGlob)) {
+        return null;
+      }
+
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const matches = searchText(content, query, request, 1);
+        if (matches.length === 0) return null;
+
+        return {
+          filePath,
+          relativePath,
+          totalMatches: matches.length,
+          matches: matches.map((match) => ({
+            lineNumber: match.lineNumber,
+            column: match.column,
+            lineText: match.lineText,
+            matchText: match.matchText,
+            contextBefore: match.contextBefore,
+            contextAfter: match.contextAfter,
+          })),
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((result): result is NonNullable<typeof result> => result !== null)
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+  return results;
+});
+
+ipcMain.handle(
+  'preview_workspace_replace',
+  async (_, workspaceRoot: string, query: string, replacementText: string, request: WorkspaceSearchRequest) => {
+    const skippedPaths = new Set(request.skipPaths ?? []);
+
+    const results = collectWorkspaceFiles(workspaceRoot)
+      .map((filePath) => {
+        if (skippedPaths.has(filePath)) {
+          return null;
+        }
+
+        const relativePath = relativeWorkspacePath(workspaceRoot, filePath);
+        if (!shouldSearchPath(relativePath, request.includeGlob, request.excludeGlob)) {
+          return null;
+        }
+
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const preview = previewReplaceText(content, query, replacementText, request);
+
+          if (preview.replacementCount === 0) {
+            return null;
+          }
+
+          return {
+            filePath,
+            relativePath,
+            replacementCount: preview.replacementCount,
+            nextContent: preview.nextContent,
+            changes: preview.changes,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter((result): result is NonNullable<typeof result> => result !== null)
+      .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+    return results;
+  }
+);
+
+ipcMain.handle(
+  'apply_workspace_replace',
+  async (_, changes: Array<{ filePath: string; nextContent: string }>) => {
+    for (const change of changes) {
+      writeFileAtomically(change.filePath, change.nextContent);
+    }
+
+    return { updated: changes.length };
+  }
+);
+
+ipcMain.handle('export_document', async (_, payload: ExportPayload) => exportDocument(payload));
 
 ipcMain.handle('save_image', async (_, workspaceRoot: string, data: number[], ext: string) => {
   const resourcesDir = path.join(workspaceRoot, '.resources');

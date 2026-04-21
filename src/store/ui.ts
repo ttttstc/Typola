@@ -2,13 +2,34 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import i18n from '../i18n';
 
-export type SettingsTab = 'general' | 'editor' | 'appearance' | 'terminal' | 'shortcuts';
+export type SettingsTab = 'general' | 'editor' | 'appearance' | 'terminal' | 'shortcuts' | 'export';
 
 export type Language = 'zh' | 'en';
+export type SidebarTab = 'files' | 'search';
+export type PdfPageSize = 'A4' | 'Letter';
+export type PdfMarginPreset = 'compact' | 'normal' | 'wide';
+export type HtmlImageMode = 'relative' | 'base64' | 'external';
+
+interface SearchDefaults {
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  useRegex: boolean;
+  includeGlob: string;
+  excludeGlob: string;
+}
+
+interface ExportSettings {
+  pdfPageSize: PdfPageSize;
+  pdfMargin: PdfMarginPreset;
+  pdfPrintBackground: boolean;
+  pdfHeaderFooter: boolean;
+  htmlImageMode: HtmlImageMode;
+}
 
 interface UIState {
   theme: 'light' | 'dark';
   sidebarVisible: boolean;
+  sidebarTab: SidebarTab;
   outlineVisible: boolean;
   sidebarWidth: number;
   outlineWidth: number;
@@ -16,9 +37,12 @@ interface UIState {
   language: Language;
   settingsOpen: boolean;
   settingsActiveTab: SettingsTab;
+  searchDefaults: SearchDefaults;
+  exportSettings: ExportSettings;
   setTheme: (theme: 'light' | 'dark') => void;
   toggleTheme: () => void;
   setSidebarVisible: (visible: boolean) => void;
+  setSidebarTab: (tab: SidebarTab) => void;
   setOutlineVisible: (visible: boolean) => void;
   toggleSidebar: () => void;
   toggleOutline: () => void;
@@ -29,6 +53,8 @@ interface UIState {
   toggleLanguage: () => void;
   setSettingsOpen: (open: boolean) => void;
   setSettingsActiveTab: (tab: SettingsTab) => void;
+  setSearchDefaults: (patch: Partial<SearchDefaults>) => void;
+  setExportSettings: (patch: Partial<ExportSettings>) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -36,6 +62,7 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       theme: 'light',
       sidebarVisible: true,
+      sidebarTab: 'files',
       outlineVisible: true,
       sidebarWidth: 240,
       outlineWidth: 220,
@@ -43,9 +70,24 @@ export const useUIStore = create<UIState>()(
       language: 'zh',
       settingsOpen: false,
       settingsActiveTab: 'general',
+      searchDefaults: {
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: false,
+        includeGlob: '**/*.md, **/*.mdx, **/*.markdown, **/*.txt',
+        excludeGlob: '**/node_modules/**, **/.git/**, **/dist/**, **/release/**',
+      },
+      exportSettings: {
+        pdfPageSize: 'A4',
+        pdfMargin: 'normal',
+        pdfPrintBackground: true,
+        pdfHeaderFooter: false,
+        htmlImageMode: 'relative',
+      },
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
+      setSidebarTab: (tab) => set({ sidebarTab: tab }),
       setOutlineVisible: (visible) => set({ outlineVisible: visible }),
       toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
       toggleOutline: () => set((state) => ({ outlineVisible: !state.outlineVisible })),
@@ -63,17 +105,34 @@ export const useUIStore = create<UIState>()(
       }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setSettingsActiveTab: (tab) => set({ settingsActiveTab: tab }),
+      setSearchDefaults: (patch) =>
+        set((state) => ({
+          searchDefaults: {
+            ...state.searchDefaults,
+            ...patch,
+          },
+        })),
+      setExportSettings: (patch) =>
+        set((state) => ({
+          exportSettings: {
+            ...state.exportSettings,
+            ...patch,
+          },
+        })),
     }),
     {
       name: 'typola-ui',
       partialize: (state) => ({
         theme: state.theme,
         sidebarVisible: state.sidebarVisible,
+        sidebarTab: state.sidebarTab,
         outlineVisible: state.outlineVisible,
         sidebarWidth: state.sidebarWidth,
         outlineWidth: state.outlineWidth,
         fontSize: state.fontSize,
         language: state.language,
+        searchDefaults: state.searchDefaults,
+        exportSettings: state.exportSettings,
       }),
     }
   )

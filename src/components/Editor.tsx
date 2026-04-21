@@ -13,6 +13,7 @@ import { setupImageHandler } from '../editor/plugins/image';
 import { setupMermaidHandler } from '../editor/plugins/mermaid';
 import { SlashMenu } from './SlashMenu';
 import { FloatingToolbar } from './FloatingToolbar';
+import { SearchBar } from './SearchBar';
 
 export function MilkdownEditor() {
   const { t } = useTranslation();
@@ -221,6 +222,25 @@ export function MilkdownEditor() {
     queueMicrotask(setupEditorPlugins);
   }, [currentFile, theme, setupEditorPlugins]);
 
+  useEffect(() => {
+    const handleSetContent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ content: string; dirty: boolean }>;
+      const nextContent = customEvent.detail?.content ?? '';
+      const dirty = customEvent.detail?.dirty ?? false;
+
+      replaceEditorContent(nextContent);
+
+      if (dirty) {
+        useEditorStore.getState().setContent(nextContent);
+      } else {
+        useEditorStore.getState().setLoadedContent(nextContent);
+      }
+    };
+
+    window.addEventListener('editor-set-content', handleSetContent);
+    return () => window.removeEventListener('editor-set-content', handleSetContent);
+  }, [replaceEditorContent]);
+
   useEffect(() => () => {
     pluginCleanupRef.current.forEach((cleanup) => cleanup());
   }, []);
@@ -248,6 +268,7 @@ export function Editor() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <MilkdownEditor />
+      <SearchBar />
       <SlashMenu />
       <FloatingToolbar />
     </div>
