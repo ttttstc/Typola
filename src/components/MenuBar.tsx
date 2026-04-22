@@ -5,6 +5,7 @@ import { useSearchStore } from '../store/search';
 import type { NativeMenuAction } from '../shared/menu';
 import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
+import { openNewTerminalTab, toggleTerminalPanel } from '../store/terminal';
 import {
   applyBlockFormat,
   applyInlineFormat,
@@ -366,13 +367,15 @@ export function MenuBar() {
       { label: t('menu.bold'), shortcut: 'Ctrl+B', action: handleBold },
       { label: t('menu.italic'), shortcut: 'Ctrl+I', action: handleItalic },
       { label: t('menu.strikethrough'), shortcut: 'Ctrl+Shift+S', action: handleStrikethrough },
-      { label: t('menu.inlineCode'), shortcut: 'Ctrl+`', action: handleCode },
+      { label: t('menu.inlineCode'), action: handleCode },
       { divider: true, label: '' },
       { label: t('menu.link'), shortcut: 'Ctrl+K', action: handleLink },
     ],
-    [t('menu.view')]: [
+  [t('menu.view')]: [
       { label: t('menu.sidebar'), shortcut: 'Ctrl+\\', action: toggleSidebar },
       { label: t('menu.outline'), shortcut: 'Ctrl+Shift+\\', action: toggleOutline },
+      { label: t('menu.terminal'), shortcut: 'Ctrl+`', action: () => { void toggleTerminalPanel(); } },
+      { label: t('menu.newTerminal'), shortcut: 'Ctrl+Shift+`', action: () => { void openNewTerminalTab(); } },
       { divider: true, label: '' },
       { label: t('menu.zoomIn'), action: handleIncreaseFontSize },
       { label: t('menu.zoomOut'), action: handleDecreaseFontSize },
@@ -475,6 +478,12 @@ export function MenuBar() {
         break;
       case 'toggle-outline':
         toggleOutline();
+        break;
+      case 'toggle-terminal':
+        await toggleTerminalPanel();
+        break;
+      case 'new-terminal':
+        await openNewTerminalTab();
         break;
       case 'zoom-in':
         handleIncreaseFontSize();

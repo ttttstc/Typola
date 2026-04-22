@@ -23,6 +23,8 @@ export type NativeMenuAction =
   | 'link'
   | 'toggle-sidebar'
   | 'toggle-outline'
+  | 'toggle-terminal'
+  | 'new-terminal'
   | 'zoom-in'
   | 'zoom-out'
   | 'toggle-theme'

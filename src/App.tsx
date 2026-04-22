@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { useUIStore } from './store/ui';
+import { openNewTerminalTab, toggleTerminalPanel } from './store/terminal';
 import './i18n';
 import './styles/tokens.css';
 import './styles/light.css';
 import './styles/dark.css';
 import './styles/editor.css';
+import '@xterm/xterm/css/xterm.css';
 
 function App() {
   const theme = useUIStore((s) => s.theme);
@@ -34,6 +36,14 @@ function App() {
       if (e.key === '\\' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         useUIStore.getState().toggleOutline();
+      }
+      if (e.code === 'Backquote' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        void toggleTerminalPanel();
+      }
+      if (e.code === 'Backquote' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        void openNewTerminalTab();
       }
       if (e.key === 'd' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
         e.preventDefault();

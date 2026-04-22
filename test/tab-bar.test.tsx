@@ -48,6 +48,16 @@ describe('TabBar', () => {
       saveImage: vi.fn(() => Promise.resolve('.resources/test.png')),
       setLanguagePreference: vi.fn(() => Promise.resolve('en')),
       showSaveDialog: vi.fn(() => Promise.resolve(null)),
+      termCreate: vi.fn(() =>
+        Promise.resolve({ termId: 1, cwd: 'C:\\workspace', shellPath: 'powershell.exe', processName: 'powershell.exe' })
+      ),
+      termWrite: vi.fn(() => Promise.resolve()),
+      termResize: vi.fn(() => Promise.resolve()),
+      termKill: vi.fn(() => Promise.resolve()),
+      termClear: vi.fn(() => Promise.resolve()),
+      readClipboardText: vi.fn(() => Promise.resolve('')),
+      writeClipboardText: vi.fn(() => Promise.resolve()),
+      openExternal: vi.fn(() => Promise.resolve()),
       unwatchFile: vi.fn(() => Promise.resolve()),
       watchFile: vi.fn(() => Promise.resolve()),
       windowClose: vi.fn(() => Promise.resolve()),
@@ -55,6 +65,8 @@ describe('TabBar', () => {
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowMinimize: vi.fn(() => Promise.resolve()),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
+      onTerminalData: vi.fn(() => () => {}),
+      onTerminalExit: vi.fn(() => () => {}),
       workspaceSearch: vi.fn(() => Promise.resolve([])),
       writeFile: vi.fn(() => Promise.resolve()),
     };

@@ -251,12 +251,6 @@ export function MilkdownEditor() {
         return;
       }
 
-      if (!event.shiftKey && (event.key === '`' || event.code === 'Backquote')) {
-        event.preventDefault();
-        applyInlineFormat('inline-code');
-        return;
-      }
-
       if (!event.shiftKey && key === 'k') {
         event.preventDefault();
         const url = window.prompt(t('editor.enterLinkUrl'), getActiveLinkHref() ?? 'https://');

@@ -1,3 +1,12 @@
+import type { NativeMenuAction } from '../src/shared/menu';
+import type {
+  TerminalCreateRequest,
+  TerminalCreateResult,
+  TerminalExitPayload,
+  TerminalResizeRequest,
+  TerminalWriteRequest,
+} from '../src/shared/terminal';
+
 export interface SearchOptions {
   caseSensitive: boolean;
   wholeWord: boolean;
@@ -95,6 +104,14 @@ export interface ElectronAPI {
     payload: ExportPayload
   ) => Promise<{ canceled: boolean; path?: string }>;
   setLanguagePreference: (language: 'zh' | 'en') => Promise<'zh' | 'en'>;
+  termCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>;
+  termWrite: (request: TerminalWriteRequest) => Promise<void>;
+  termResize: (request: TerminalResizeRequest) => Promise<void>;
+  termKill: (termId: number) => Promise<void>;
+  termClear: (termId: number) => Promise<void>;
+  readClipboardText: () => Promise<string>;
+  writeClipboardText: (text: string) => Promise<void>;
+  openExternal: (url: string) => Promise<void>;
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
   windowUnmaximize: () => Promise<void>;
@@ -104,42 +121,9 @@ export interface ElectronAPI {
   unwatchFile: (path: string) => Promise<void>;
   onFileChanged: (callback: (data: { path: string }) => void) => () => void;
   onMaximizedChange: (callback: (isMaximized: boolean) => void) => () => void;
-  onMenuAction: (
-    callback: (
-      action:
-        | 'new-file'
-        | 'save'
-        | 'save-as'
-        | 'export-pdf'
-        | 'export-html'
-        | 'undo'
-        | 'redo'
-        | 'find-in-file'
-        | 'find-in-workspace'
-        | 'select-all'
-        | 'heading-1'
-        | 'heading-2'
-        | 'heading-3'
-        | 'body'
-        | 'ordered-list'
-        | 'unordered-list'
-        | 'blockquote'
-        | 'bold'
-        | 'italic'
-        | 'strikethrough'
-        | 'inline-code'
-        | 'link'
-        | 'toggle-sidebar'
-        | 'toggle-outline'
-        | 'zoom-in'
-        | 'zoom-out'
-        | 'toggle-theme'
-        | 'open-settings'
-        | 'open-export-settings'
-        | 'open-shortcuts'
-        | 'toggle-language'
-    ) => void
-  ) => () => void;
+  onTerminalData: (termId: number, callback: (data: string) => void) => () => void;
+  onTerminalExit: (termId: number, callback: (data: TerminalExitPayload) => void) => () => void;
+  onMenuAction: (callback: (action: NativeMenuAction) => void) => () => void;
 }
 
 declare global {

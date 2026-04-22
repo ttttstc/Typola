@@ -31,6 +31,7 @@ An AI Powered and efficient Markdown editor for Windows.
 
 - **Mermaid diagrams** — Insert diagrams, double-click to edit, live preview
 - **Code highlighting** — Automatically recognizes and highlights code with language labels, copy support
+- **Integrated terminal** — Run `git`, `claude`, `aider`, and other CLI tools without leaving the workspace
 - **Light/Dark theme** — One-click toggle for different lighting conditions
 - **File tree** — Clear view of workspace, support create/delete/rename
 - **Outline view** — Navigate large documents with ease
@@ -46,11 +47,12 @@ An AI Powered and efficient Markdown editor for Windows.
 | Save / Save As | `Ctrl+S` / `Ctrl+Shift+S` |
 | Toggle sidebar | `Ctrl+\` |
 | Toggle outline | `Ctrl+Shift+\` |
+| Toggle terminal / New terminal | `` Ctrl+` `` / `` Ctrl+Shift+` `` |
 | Toggle theme | `Ctrl+Shift+D` |
 | H1 / H2 / H3 | `Ctrl+1` / `Ctrl+2` / `Ctrl+3` |
 | Body text | `Ctrl+0` |
 | Bold / Italic / Strikethrough | `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+S` |
-| Inline code / Link | `` Ctrl+` `` / `Ctrl+K` |
+| Link | `Ctrl+K` |
 
 ---
 

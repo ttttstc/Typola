@@ -25,7 +25,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 // electron/main.ts
 var import_electron = require("electron");
 var path3 = __toESM(require("path"));
-var fs2 = __toESM(require("fs"));
+var fs3 = __toESM(require("fs"));
 
 // electron/fileWatch.ts
 var path = __toESM(require("path"));
@@ -473,6 +473,8 @@ var en_default = {
     link: "Link",
     sidebar: "Sidebar",
     outline: "Outline",
+    terminal: "Terminal",
+    newTerminal: "New Terminal",
     zoomIn: "Zoom In",
     zoomOut: "Zoom Out",
     currentFontSize: "Current Font Size",
@@ -540,6 +542,8 @@ var en_default = {
     findInWorkspace: "Find in Workspace",
     toggleSidebar: "Toggle Sidebar",
     toggleOutline: "Toggle Outline",
+    toggleTerminal: "Toggle Terminal",
+    newTerminal: "New Terminal",
     toggleTheme: "Toggle Theme",
     bold: "Bold",
     italic: "Italic",
@@ -551,6 +555,39 @@ var en_default = {
     heading2: "Heading 2",
     heading3: "Heading 3",
     openSettings: "Open Settings"
+  },
+  terminal: {
+    title: "Terminal",
+    empty: "No terminal session yet.",
+    newTab: "New Terminal",
+    hidePanel: "Hide terminal panel",
+    closeTab: "Close {{name}}",
+    copy: "Copy",
+    paste: "Paste",
+    selectAll: "Select All",
+    clear: "Clear",
+    processExited: "Process exited with code {{code}}",
+    confirmMultilinePaste: "Paste multiple lines into the terminal?",
+    shellPath: "Shell Path",
+    shellPathDescription: "Leave empty to auto-detect the default shell for the current platform.",
+    fontFamily: "Font Family",
+    fontFamilyDescription: "Controls the monospace font used by the integrated terminal.",
+    fontSize: "Font Size",
+    fontSizeDescription: "Choose the default terminal font size.",
+    cursorStyle: "Cursor Style",
+    cursorStyleDescription: "Pick how the caret is rendered inside the terminal.",
+    cursorBlock: "Block",
+    cursorBar: "Bar",
+    cursorUnderline: "Underline",
+    cursorBlink: "Blinking Cursor",
+    cursorBlinkDescription: "Animate the caret when the terminal has focus.",
+    shortcutPreset: "Copy/Paste Shortcut Style",
+    shortcutPresetDescription: "Use Windows-style or Linux-style terminal shortcuts.",
+    shortcutPresetWindows: "Windows",
+    shortcutPresetLinux: "Linux",
+    confirmMultilinePasteDescription: "Ask before sending pasted text that spans multiple lines.",
+    autoShellWindows: "Auto (powershell.exe)",
+    autoShellPosix: "Auto ($SHELL / /bin/bash)"
   },
   settings: {
     common: "Common",
@@ -704,6 +741,8 @@ var zh_default = {
     link: "\u94FE\u63A5",
     sidebar: "\u4FA7\u8FB9\u680F",
     outline: "\u5927\u7EB2",
+    terminal: "\u7EC8\u7AEF",
+    newTerminal: "\u65B0\u5EFA\u7EC8\u7AEF",
     zoomIn: "\u653E\u5927\u5B57\u4F53",
     zoomOut: "\u7F29\u5C0F\u5B57\u4F53",
     currentFontSize: "\u5F53\u524D\u5B57\u53F7",
@@ -771,6 +810,8 @@ var zh_default = {
     findInWorkspace: "\u5DE5\u4F5C\u533A\u67E5\u627E",
     toggleSidebar: "\u5207\u6362\u4FA7\u8FB9\u680F",
     toggleOutline: "\u5207\u6362\u5927\u7EB2",
+    toggleTerminal: "\u5207\u6362\u7EC8\u7AEF",
+    newTerminal: "\u65B0\u5EFA\u7EC8\u7AEF",
     toggleTheme: "\u5207\u6362\u4E3B\u9898",
     bold: "\u7C97\u4F53",
     italic: "\u659C\u4F53",
@@ -782,6 +823,39 @@ var zh_default = {
     heading2: "\u6807\u98982",
     heading3: "\u6807\u98983",
     openSettings: "\u6253\u5F00\u8BBE\u7F6E"
+  },
+  terminal: {
+    title: "\u7EC8\u7AEF",
+    empty: "\u8FD8\u6CA1\u6709\u7EC8\u7AEF\u4F1A\u8BDD\u3002",
+    newTab: "\u65B0\u5EFA\u7EC8\u7AEF",
+    hidePanel: "\u9690\u85CF\u7EC8\u7AEF\u9762\u677F",
+    closeTab: "\u5173\u95ED {{name}}",
+    copy: "\u590D\u5236",
+    paste: "\u7C98\u8D34",
+    selectAll: "\u5168\u9009",
+    clear: "\u6E05\u5C4F",
+    processExited: "\u8FDB\u7A0B\u5DF2\u9000\u51FA\uFF0C\u9000\u51FA\u7801 {{code}}",
+    confirmMultilinePaste: "\u8981\u5C06\u591A\u884C\u5185\u5BB9\u7C98\u8D34\u5230\u7EC8\u7AEF\u5417\uFF1F",
+    shellPath: "Shell \u8DEF\u5F84",
+    shellPathDescription: "\u7559\u7A7A\u5219\u81EA\u52A8\u68C0\u6D4B\u5F53\u524D\u5E73\u53F0\u7684\u9ED8\u8BA4 shell\u3002",
+    fontFamily: "\u5B57\u4F53",
+    fontFamilyDescription: "\u63A7\u5236\u96C6\u6210\u7EC8\u7AEF\u4F7F\u7528\u7684\u7B49\u5BBD\u5B57\u4F53\u3002",
+    fontSize: "\u5B57\u53F7",
+    fontSizeDescription: "\u8BBE\u7F6E\u7EC8\u7AEF\u9ED8\u8BA4\u5B57\u53F7\u3002",
+    cursorStyle: "\u5149\u6807\u6837\u5F0F",
+    cursorStyleDescription: "\u9009\u62E9\u7EC8\u7AEF\u4E2D\u7684\u5149\u6807\u663E\u793A\u65B9\u5F0F\u3002",
+    cursorBlock: "\u5757\u72B6",
+    cursorBar: "\u7AD6\u7EBF",
+    cursorUnderline: "\u4E0B\u5212\u7EBF",
+    cursorBlink: "\u5149\u6807\u95EA\u70C1",
+    cursorBlinkDescription: "\u7EC8\u7AEF\u805A\u7126\u65F6\u8BA9\u5149\u6807\u95EA\u70C1\u3002",
+    shortcutPreset: "\u590D\u5236\u7C98\u8D34\u5FEB\u6377\u952E\u98CE\u683C",
+    shortcutPresetDescription: "\u5728 Windows \u98CE\u683C\u548C Linux \u98CE\u683C\u7EC8\u7AEF\u5FEB\u6377\u952E\u4E4B\u95F4\u5207\u6362\u3002",
+    shortcutPresetWindows: "Windows",
+    shortcutPresetLinux: "Linux",
+    confirmMultilinePasteDescription: "\u591A\u884C\u6587\u672C\u7C98\u8D34\u5230\u7EC8\u7AEF\u524D\u5148\u786E\u8BA4\u3002",
+    autoShellWindows: "\u81EA\u52A8 (powershell.exe)",
+    autoShellPosix: "\u81EA\u52A8 ($SHELL / /bin/bash)"
   },
   settings: {
     common: "\u5E38\u7528",
@@ -886,6 +960,94 @@ var zh_default = {
   }
 };
 
+// electron/terminal.ts
+var fs2 = __toESM(require("fs"));
+var os = __toESM(require("os"));
+var import_node_pty = require("node-pty");
+var terminals = /* @__PURE__ */ new Map();
+var nextTerminalId = 1;
+function resolveTerminalCwd(cwd) {
+  if (cwd && fs2.existsSync(cwd)) {
+    return cwd;
+  }
+  return os.homedir();
+}
+function resolveShellPath(shell2) {
+  if (shell2?.trim()) {
+    return shell2.trim();
+  }
+  if (process.platform === "win32") {
+    return "powershell.exe";
+  }
+  return process.env.SHELL || "/bin/bash";
+}
+function clampDimension(value, fallback) {
+  if (!value || Number.isNaN(value)) {
+    return fallback;
+  }
+  return Math.max(2, Math.floor(value));
+}
+function createTerminal(webContents, request) {
+  const termId = nextTerminalId;
+  nextTerminalId += 1;
+  const shellPath = resolveShellPath(request.shell);
+  const cwd = resolveTerminalCwd(request.cwd);
+  const pty = (0, import_node_pty.spawn)(shellPath, [], {
+    name: "xterm-256color",
+    cwd,
+    cols: clampDimension(request.cols, 80),
+    rows: clampDimension(request.rows, 24),
+    env: {
+      ...process.env,
+      TERM_PROGRAM: "Typola"
+    }
+  });
+  terminals.set(termId, {
+    id: termId,
+    pty
+  });
+  pty.onData((data) => {
+    webContents.send(`term_data_${termId}`, data);
+  });
+  pty.onExit((event) => {
+    const payload = {
+      exitCode: event.exitCode,
+      signal: event.signal
+    };
+    terminals.delete(termId);
+    webContents.send(`term_exit_${termId}`, payload);
+  });
+  return {
+    termId,
+    cwd,
+    shellPath,
+    processName: pty.process
+  };
+}
+function writeTerminal(termId, data) {
+  terminals.get(termId)?.pty.write(data);
+}
+function resizeTerminal(termId, cols, rows) {
+  terminals.get(termId)?.pty.resize(clampDimension(cols, 80), clampDimension(rows, 24));
+}
+function killTerminal(termId) {
+  const terminal = terminals.get(termId);
+  if (!terminal) {
+    return;
+  }
+  terminal.pty.kill();
+  terminals.delete(termId);
+}
+function clearTerminal(termId) {
+  terminals.get(termId)?.pty.clear();
+}
+function killAllTerminals() {
+  for (const terminal of terminals.values()) {
+    terminal.pty.kill();
+  }
+  terminals.clear();
+}
+
 // electron/main.ts
 var mainWindow = null;
 var watchedFiles = /* @__PURE__ */ new Map();
@@ -962,7 +1124,7 @@ function buildNativeMenu() {
           accelerator: "Ctrl+Shift+S",
           click: () => sendMenuAction("strikethrough")
         },
-        { label: t("menu.inlineCode"), accelerator: "Ctrl+`", click: () => sendMenuAction("inline-code") },
+        { label: t("menu.inlineCode"), click: () => sendMenuAction("inline-code") },
         { type: "separator" },
         { label: t("menu.link"), accelerator: "Ctrl+K", click: () => sendMenuAction("link") }
       ]
@@ -975,6 +1137,16 @@ function buildNativeMenu() {
           label: t("menu.outline"),
           accelerator: "Ctrl+Shift+\\",
           click: () => sendMenuAction("toggle-outline")
+        },
+        {
+          label: t("menu.terminal"),
+          accelerator: "Ctrl+`",
+          click: () => sendMenuAction("toggle-terminal")
+        },
+        {
+          label: t("menu.newTerminal"),
+          accelerator: "Ctrl+Shift+`",
+          click: () => sendMenuAction("new-terminal")
         },
         { type: "separator" },
         { label: t("menu.zoomIn"), click: () => sendMenuAction("zoom-in") },
@@ -1006,9 +1178,9 @@ function buildNativeMenu() {
 function writeFileAtomically(filePath, content) {
   const dir = path3.dirname(filePath);
   const tempFile = path3.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-  fs2.writeFileSync(tempFile, content, "utf-8");
+  fs3.writeFileSync(tempFile, content, "utf-8");
   rememberRecentWrite(recentWrites, filePath);
-  fs2.renameSync(tempFile, filePath);
+  fs3.renameSync(tempFile, filePath);
 }
 function collectWorkspaceFiles(rootDir) {
   const files = [];
@@ -1018,7 +1190,7 @@ function collectWorkspaceFiles(rootDir) {
     if (!currentDir) continue;
     let entries = [];
     try {
-      entries = fs2.readdirSync(currentDir, { withFileTypes: true });
+      entries = fs3.readdirSync(currentDir, { withFileTypes: true });
     } catch {
       continue;
     }
@@ -1068,7 +1240,7 @@ async function exportDocument(payload) {
     const documentHtml = buildExportDocumentHtml(payload.title, bodyHtml, payload.theme, {
       forPrint: false
     });
-    fs2.writeFileSync(selectedPath.filePath, documentHtml, "utf-8");
+    fs3.writeFileSync(selectedPath.filePath, documentHtml, "utf-8");
     return { canceled: false, path: selectedPath.filePath };
   }
   const printWindow = new import_electron.BrowserWindow({
@@ -1094,7 +1266,7 @@ async function exportDocument(payload) {
       "document.fonts && document.fonts.ready ? document.fonts.ready.then(() => true) : Promise.resolve(true)"
     );
     const pdfBuffer = await printWindow.webContents.printToPDF(getPdfPrintOptions(payload.pdf));
-    fs2.writeFileSync(selectedPath.filePath, pdfBuffer);
+    fs3.writeFileSync(selectedPath.filePath, pdfBuffer);
     return { canceled: false, path: selectedPath.filePath };
   } finally {
     if (!printWindow.isDestroyed()) {
@@ -1123,12 +1295,19 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path3.join(__dirname, "../dist/index.html"));
   }
+  mainWindow.on("maximize", () => {
+    mainWindow?.webContents.send("maximized-change", true);
+  });
+  mainWindow.on("unmaximize", () => {
+    mainWindow?.webContents.send("maximized-change", false);
+  });
   mainWindow.on("closed", () => {
+    killAllTerminals();
     mainWindow = null;
   });
 }
 import_electron.ipcMain.handle("read_file", async (_, filePath) => {
-  return fs2.readFileSync(filePath, "utf-8");
+  return fs3.readFileSync(filePath, "utf-8");
 });
 import_electron.ipcMain.handle("write_file", async (_, filePath, content) => {
   writeFileAtomically(filePath, content);
@@ -1141,7 +1320,7 @@ import_electron.ipcMain.handle("pick_folder", async () => {
 });
 function hasMarkdownFiles(dirPath) {
   try {
-    const entries = fs2.readdirSync(dirPath, { withFileTypes: true });
+    const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue;
       if (entry.isDirectory() && hasMarkdownFiles(path3.join(dirPath, entry.name))) return true;
@@ -1154,7 +1333,7 @@ function hasMarkdownFiles(dirPath) {
 function listDirRecursive(dirPath) {
   return new Promise((resolve2) => {
     try {
-      const entries = fs2.readdirSync(dirPath, { withFileTypes: true });
+      const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
       const result = [];
       for (const entry of entries) {
         if (entry.name.startsWith(".")) continue;
@@ -1182,7 +1361,7 @@ function listDirRecursive(dirPath) {
   });
 }
 import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
-  const entries = fs2.readdirSync(dirPath, { withFileTypes: true });
+  const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
   const result = [];
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
@@ -1203,18 +1382,18 @@ import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
   });
 });
 import_electron.ipcMain.handle("create_file", async (_, filePath) => {
-  fs2.writeFileSync(filePath, "", "utf-8");
+  fs3.writeFileSync(filePath, "", "utf-8");
 });
 import_electron.ipcMain.handle("delete_path", async (_, targetPath) => {
-  const stat = fs2.statSync(targetPath);
+  const stat = fs3.statSync(targetPath);
   if (stat.isDirectory()) {
-    fs2.rmSync(targetPath, { recursive: true });
+    fs3.rmSync(targetPath, { recursive: true });
   } else {
-    fs2.unlinkSync(targetPath);
+    fs3.unlinkSync(targetPath);
   }
 });
 import_electron.ipcMain.handle("rename_path", async (_, oldPath, newPath) => {
-  fs2.renameSync(oldPath, newPath);
+  fs3.renameSync(oldPath, newPath);
 });
 import_electron.ipcMain.handle("show_save_dialog", async (_, options) => {
   const result = await import_electron.dialog.showSaveDialog({
@@ -1228,6 +1407,31 @@ import_electron.ipcMain.handle("set_language_preference", async (_, language) =>
   buildNativeMenu();
   return currentLanguage;
 });
+import_electron.ipcMain.handle("term_create", async (_, request) => {
+  if (!mainWindow) {
+    throw new Error("Main window is not ready");
+  }
+  return createTerminal(mainWindow.webContents, request);
+});
+import_electron.ipcMain.handle("term_write", async (_, request) => {
+  writeTerminal(request.termId, request.data);
+});
+import_electron.ipcMain.handle("term_resize", async (_, request) => {
+  resizeTerminal(request.termId, request.cols, request.rows);
+});
+import_electron.ipcMain.handle("term_kill", async (_, termId) => {
+  killTerminal(termId);
+});
+import_electron.ipcMain.handle("term_clear", async (_, termId) => {
+  clearTerminal(termId);
+});
+import_electron.ipcMain.handle("clipboard_read_text", async () => import_electron.clipboard.readText());
+import_electron.ipcMain.handle("clipboard_write_text", async (_, text) => {
+  import_electron.clipboard.writeText(text);
+});
+import_electron.ipcMain.handle("open_external", async (_, url) => {
+  await import_electron.shell.openExternal(url);
+});
 import_electron.ipcMain.handle("workspace_search", async (_, workspaceRoot, query, request) => {
   const results = collectWorkspaceFiles(workspaceRoot).map((filePath) => {
     const relativePath = relativeWorkspacePath(workspaceRoot, filePath);
@@ -1235,7 +1439,7 @@ import_electron.ipcMain.handle("workspace_search", async (_, workspaceRoot, quer
       return null;
     }
     try {
-      const content = fs2.readFileSync(filePath, "utf-8");
+      const content = fs3.readFileSync(filePath, "utf-8");
       const matches = searchText(content, query, request, 1);
       if (matches.length === 0) return null;
       return {
@@ -1270,7 +1474,7 @@ import_electron.ipcMain.handle(
         return null;
       }
       try {
-        const content = fs2.readFileSync(filePath, "utf-8");
+        const content = fs3.readFileSync(filePath, "utf-8");
         const preview = previewReplaceText(content, query, replacementText, request);
         if (preview.replacementCount === 0) {
           return null;
@@ -1301,13 +1505,13 @@ import_electron.ipcMain.handle(
 import_electron.ipcMain.handle("export_document", async (_, payload) => exportDocument(payload));
 import_electron.ipcMain.handle("save_image", async (_, workspaceRoot, data, ext) => {
   const resourcesDir = path3.join(workspaceRoot, ".resources");
-  if (!fs2.existsSync(resourcesDir)) {
-    fs2.mkdirSync(resourcesDir, { recursive: true });
+  if (!fs3.existsSync(resourcesDir)) {
+    fs3.mkdirSync(resourcesDir, { recursive: true });
   }
   const filename = `${Date.now()}-${(++imageCounter).toString(36).slice(-8)}.${ext}`;
   const fullPath = path3.join(resourcesDir, filename);
   const buffer = Buffer.from(data);
-  fs2.writeFileSync(fullPath, buffer);
+  fs3.writeFileSync(fullPath, buffer);
   return `.resources/${filename}`;
 });
 import_electron.ipcMain.handle("get_image_url", async (_, relativePath) => {
@@ -1331,10 +1535,10 @@ import_electron.ipcMain.handle("window_is_maximized", () => {
 import_electron.ipcMain.handle("watch_file", async (_, filePath) => {
   if (watchedFiles.has(filePath)) return;
   try {
-    const watcher = fs2.watch(path3.dirname(filePath), (_eventType, filename) => {
+    const watcher = fs3.watch(path3.dirname(filePath), (_eventType, filename) => {
       if (!matchesWatchedFile(filePath, filename)) return;
       if (shouldIgnoreWatchEvent(recentWrites, filePath)) return;
-      if (fs2.existsSync(filePath)) {
+      if (fs3.existsSync(filePath)) {
         mainWindow?.webContents.send("file-changed", { path: filePath });
       }
     });
@@ -1357,6 +1561,7 @@ import_electron.app.whenReady().then(() => {
 import_electron.app.on("window-all-closed", () => {
   watchedFiles.forEach((watcher) => watcher.close());
   watchedFiles.clear();
+  killAllTerminals();
   if (process.platform !== "darwin") {
     import_electron.app.quit();
   }

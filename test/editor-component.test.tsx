@@ -126,6 +126,16 @@ describe('MilkdownEditor', () => {
       applyWorkspaceReplace: vi.fn(() => Promise.resolve({ updated: 0 })),
       exportDocument: vi.fn(() => Promise.resolve({ canceled: true })),
       setLanguagePreference: vi.fn(() => Promise.resolve('en')),
+      termCreate: vi.fn(() =>
+        Promise.resolve({ termId: 1, cwd: 'C:\\workspace', shellPath: 'powershell.exe', processName: 'powershell.exe' })
+      ),
+      termWrite: vi.fn(() => Promise.resolve()),
+      termResize: vi.fn(() => Promise.resolve()),
+      termKill: vi.fn(() => Promise.resolve()),
+      termClear: vi.fn(() => Promise.resolve()),
+      readClipboardText: vi.fn(() => Promise.resolve('')),
+      writeClipboardText: vi.fn(() => Promise.resolve()),
+      openExternal: vi.fn(() => Promise.resolve()),
       windowMinimize: vi.fn(() => Promise.resolve()),
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
@@ -142,6 +152,8 @@ describe('MilkdownEditor', () => {
         };
       }),
       onMaximizedChange: vi.fn(() => () => {}),
+      onTerminalData: vi.fn(() => () => {}),
+      onTerminalExit: vi.fn(() => () => {}),
       onMenuAction: vi.fn(() => () => {}),
     };
   });

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { matchesWatchedFile, rememberRecentWrite, shouldIgnoreWatchEvent } from './fileWatch';
@@ -11,8 +11,17 @@ import {
 import { SearchOptions, previewReplaceText, searchText, shouldSearchPath } from '../src/shared/search';
 import { resolveLanguage, type AppLanguage } from '../src/shared/language';
 import type { NativeMenuAction } from '../src/shared/menu';
+import type { TerminalCreateRequest, TerminalResizeRequest, TerminalWriteRequest } from '../src/shared/terminal';
 import en from '../src/locales/en.json';
 import zh from '../src/locales/zh.json';
+import {
+  clearTerminal,
+  createTerminal,
+  killAllTerminals,
+  killTerminal,
+  resizeTerminal,
+  writeTerminal,
+} from './terminal';
 
 let mainWindow: BrowserWindow | null = null;
 const watchedFiles = new Map<string, fs.FSWatcher>();
@@ -102,7 +111,7 @@ function buildNativeMenu() {
           accelerator: 'Ctrl+Shift+S',
           click: () => sendMenuAction('strikethrough'),
         },
-        { label: t('menu.inlineCode'), accelerator: 'Ctrl+`', click: () => sendMenuAction('inline-code') },
+        { label: t('menu.inlineCode'), click: () => sendMenuAction('inline-code') },
         { type: 'separator' },
         { label: t('menu.link'), accelerator: 'Ctrl+K', click: () => sendMenuAction('link') },
       ],
@@ -115,6 +124,16 @@ function buildNativeMenu() {
           label: t('menu.outline'),
           accelerator: 'Ctrl+Shift+\\',
           click: () => sendMenuAction('toggle-outline'),
+        },
+        {
+          label: t('menu.terminal'),
+          accelerator: 'Ctrl+`',
+          click: () => sendMenuAction('toggle-terminal'),
+        },
+        {
+          label: t('menu.newTerminal'),
+          accelerator: 'Ctrl+Shift+`',
+          click: () => sendMenuAction('new-terminal'),
         },
         { type: 'separator' },
         { label: t('menu.zoomIn'), click: () => sendMenuAction('zoom-in') },
@@ -288,7 +307,16 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('maximized-change', true);
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('maximized-change', false);
+  });
+
   mainWindow.on('closed', () => {
+    killAllTerminals();
     mainWindow = null;
   });
 }
@@ -409,6 +437,40 @@ ipcMain.handle('set_language_preference', async (_, language: string) => {
   currentLanguage = resolveLanguage(language, currentLanguage);
   buildNativeMenu();
   return currentLanguage;
+});
+
+ipcMain.handle('term_create', async (_, request: TerminalCreateRequest) => {
+  if (!mainWindow) {
+    throw new Error('Main window is not ready');
+  }
+
+  return createTerminal(mainWindow.webContents, request);
+});
+
+ipcMain.handle('term_write', async (_, request: TerminalWriteRequest) => {
+  writeTerminal(request.termId, request.data);
+});
+
+ipcMain.handle('term_resize', async (_, request: TerminalResizeRequest) => {
+  resizeTerminal(request.termId, request.cols, request.rows);
+});
+
+ipcMain.handle('term_kill', async (_, termId: number) => {
+  killTerminal(termId);
+});
+
+ipcMain.handle('term_clear', async (_, termId: number) => {
+  clearTerminal(termId);
+});
+
+ipcMain.handle('clipboard_read_text', async () => clipboard.readText());
+
+ipcMain.handle('clipboard_write_text', async (_, text: string) => {
+  clipboard.writeText(text);
+});
+
+ipcMain.handle('open_external', async (_, url: string) => {
+  await shell.openExternal(url);
 });
 
 ipcMain.handle('workspace_search', async (_, workspaceRoot: string, query: string, request: WorkspaceSearchRequest) => {
@@ -571,6 +633,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   watchedFiles.forEach((watcher) => watcher.close());
   watchedFiles.clear();
+  killAllTerminals();
   if (process.platform !== 'darwin') {
     app.quit();
   }

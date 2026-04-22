@@ -7,6 +7,7 @@ import { Outline } from './Outline';
 import { StatusBar } from './StatusBar';
 import { TabBar } from './TabBar';
 import { Settings } from './Settings';
+import { TerminalPanel } from './TerminalPanel';
 import { useUIStore } from '../store/ui';
 
 export function Layout() {
@@ -111,6 +112,7 @@ export function Layout() {
         >
           <TabBar />
           <Editor />
+          <TerminalPanel />
         </div>
         {outlineVisible && (
           <>
