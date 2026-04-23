@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TabBar } from '../src/components/TabBar';
 import { useEditorStore } from '../src/store/editor';
@@ -48,6 +49,16 @@ describe('TabBar', () => {
       saveImage: vi.fn(() => Promise.resolve('.resources/test.png')),
       setLanguagePreference: vi.fn(() => Promise.resolve('en')),
       showSaveDialog: vi.fn(() => Promise.resolve(null)),
+      termCreate: vi.fn(() =>
+        Promise.resolve({ termId: 1, cwd: 'C:\\workspace', shellPath: 'powershell.exe', processName: 'powershell.exe' })
+      ),
+      termWrite: vi.fn(() => Promise.resolve()),
+      termResize: vi.fn(() => Promise.resolve()),
+      termKill: vi.fn(() => Promise.resolve()),
+      termClear: vi.fn(() => Promise.resolve()),
+      readClipboardText: vi.fn(() => Promise.resolve('')),
+      writeClipboardText: vi.fn(() => Promise.resolve()),
+      openExternal: vi.fn(() => Promise.resolve()),
       unwatchFile: vi.fn(() => Promise.resolve()),
       watchFile: vi.fn(() => Promise.resolve()),
       windowClose: vi.fn(() => Promise.resolve()),
@@ -55,6 +66,8 @@ describe('TabBar', () => {
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowMinimize: vi.fn(() => Promise.resolve()),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
+      onTerminalData: vi.fn(() => () => {}),
+      onTerminalExit: vi.fn(() => () => {}),
       workspaceSearch: vi.fn(() => Promise.resolve([])),
       writeFile: vi.fn(() => Promise.resolve()),
     };
@@ -94,5 +107,42 @@ describe('TabBar', () => {
       expect(useEditorStore.getState().currentFile).toBeNull();
     });
     expect(window.electronAPI.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('does not rerender the tab strip on every keystroke once tab metadata is unchanged', () => {
+    const store = useEditorStore.getState();
+
+    for (let index = 0; index < 24; index += 1) {
+      const filePath = `C:\\workspace\\note-${index}.md`;
+      store.addOpenFile(filePath);
+      store.setLoadedContent(`seed ${index}`, filePath);
+    }
+    store.setCurrentFile('C:\\workspace\\note-0.md');
+
+    let renderCount = 0;
+    render(
+      <Profiler
+        id="tab-bar"
+        onRender={() => {
+          renderCount += 1;
+        }}
+      >
+        <TabBar />
+      </Profiler>
+    );
+
+    act(() => {
+      useEditorStore.getState().setContent('draft 1');
+    });
+    const renderCountAfterDirtyTransition = renderCount;
+
+    for (let index = 2; index <= 8; index += 1) {
+      act(() => {
+        useEditorStore.getState().setContent(`draft ${index}`);
+      });
+    }
+
+    expect(renderCountAfterDirtyTransition).toBeGreaterThan(1);
+    expect(renderCount).toBe(renderCountAfterDirtyTransition);
   });
 });

@@ -1,5 +1,7 @@
 export type NativeMenuAction =
   | 'new-file'
+  | 'open-file'
+  | 'open-folder'
   | 'save'
   | 'save-as'
   | 'export-pdf'
@@ -23,6 +25,8 @@ export type NativeMenuAction =
   | 'link'
   | 'toggle-sidebar'
   | 'toggle-outline'
+  | 'toggle-terminal'
+  | 'new-terminal'
   | 'zoom-in'
   | 'zoom-out'
   | 'toggle-theme'

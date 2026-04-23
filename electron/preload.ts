@@ -1,12 +1,21 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { AppLanguage } from '../src/shared/language';
 import type { NativeMenuAction } from '../src/shared/menu';
+import type {
+  TerminalCreateRequest,
+  TerminalCreateResult,
+  TerminalExitPayload,
+  TerminalResizeRequest,
+  TerminalWriteRequest,
+} from '../src/shared/terminal';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // File operations
   readFile: (filePath: string) => ipcRenderer.invoke('read_file', filePath),
   writeFile: (filePath: string, content: string) => ipcRenderer.invoke('write_file', filePath, content),
   pickFolder: () => ipcRenderer.invoke('pick_folder'),
+  pickFile: (options?: { filters?: { name: string; extensions: string[] }[] }) =>
+    ipcRenderer.invoke('pick_file', options),
   listDir: (dirPath: string) => ipcRenderer.invoke('list_dir', dirPath),
   createFile: (filePath: string) => ipcRenderer.invoke('create_file', filePath),
   deletePath: (targetPath: string) => ipcRenderer.invoke('delete_path', targetPath),
@@ -58,6 +67,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
   }) => ipcRenderer.invoke('export_document', payload),
   setLanguagePreference: (language: AppLanguage) => ipcRenderer.invoke('set_language_preference', language),
+  termCreate: (request: TerminalCreateRequest): Promise<TerminalCreateResult> =>
+    ipcRenderer.invoke('term_create', request),
+  termWrite: (request: TerminalWriteRequest) => ipcRenderer.invoke('term_write', request),
+  termResize: (request: TerminalResizeRequest) => ipcRenderer.invoke('term_resize', request),
+  termKill: (termId: number) => ipcRenderer.invoke('term_kill', termId),
+  termClear: (termId: number) => ipcRenderer.invoke('term_clear', termId),
+  readClipboardText: () => ipcRenderer.invoke('clipboard_read_text'),
+  writeClipboardText: (text: string) => ipcRenderer.invoke('clipboard_write_text', text),
+  openExternal: (url: string) => ipcRenderer.invoke('open_external', url),
   // Window controls
   windowMinimize: () => ipcRenderer.invoke('window_minimize'),
   windowMaximize: () => ipcRenderer.invoke('window_maximize'),
@@ -77,6 +95,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: Electron.IpcRendererEvent, isMaximized: boolean) => callback(isMaximized);
     ipcRenderer.on('maximized-change', handler);
     return () => ipcRenderer.removeListener('maximized-change', handler);
+  },
+  onTerminalData: (termId: number, callback: (data: string) => void) => {
+    const channel = `term_data_${termId}`;
+    const handler = (_: Electron.IpcRendererEvent, data: string) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  onTerminalExit: (termId: number, callback: (data: TerminalExitPayload) => void) => {
+    const channel = `term_exit_${termId}`;
+    const handler = (_: Electron.IpcRendererEvent, data: TerminalExitPayload) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
   },
   onMenuAction: (callback: (action: NativeMenuAction) => void) => {
     const handler = (_: Electron.IpcRendererEvent, action: NativeMenuAction) => callback(action);

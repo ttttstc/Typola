@@ -3,7 +3,6 @@ import { create } from 'zustand';
 export interface OpenFile {
   path: string;
   name: string;
-  content: string;
   isDirty: boolean;
   isDraft: boolean;
 }
@@ -14,6 +13,7 @@ interface EditorState {
   isDirty: boolean;
   saveStatus: 'saved' | 'saving' | 'error';
   openFiles: OpenFile[];
+  fileContents: Record<string, string>;
   setCurrentFile: (file: string | null) => void;
   setContent: (content: string) => void;
   setLoadedContent: (content: string, filePath?: string) => void;
@@ -23,6 +23,7 @@ interface EditorState {
   removeOpenFile: (path: string) => void;
   updateFilePath: (oldPath: string, newPath: string) => void;
   replacePathPrefix: (oldPath: string, newPath: string) => void;
+  getFileContent: (path: string | null) => string;
   isDraftFile: (path: string | null) => boolean;
   reset: () => void;
 }
@@ -44,7 +45,82 @@ const remapPath = (path: string, oldPrefix: string, newPrefix: string) => {
   return path;
 };
 
-const getOpenFileState = (openFiles: OpenFile[], path: string | null) => {
+const updateOpenFileCollection = (
+  openFiles: OpenFile[],
+  targetPath: string | null,
+  updater: (file: OpenFile) => OpenFile
+) => {
+  if (!targetPath) {
+    return openFiles;
+  }
+
+  let changed = false;
+  const nextOpenFiles = openFiles.map((file) => {
+    if (file.path !== targetPath) {
+      return file;
+    }
+
+    const nextFile = updater(file);
+    if (nextFile !== file) {
+      changed = true;
+    }
+    return nextFile;
+  });
+
+  return changed ? nextOpenFiles : openFiles;
+};
+
+const moveFileContent = (
+  fileContents: Record<string, string>,
+  oldPath: string,
+  newPath: string
+) => {
+  if (oldPath === newPath || !(oldPath in fileContents)) {
+    return fileContents;
+  }
+
+  const { [oldPath]: movedContent = '', ...rest } = fileContents;
+  return {
+    ...rest,
+    [newPath]: movedContent,
+  };
+};
+
+const replaceFileContentPrefix = (
+  fileContents: Record<string, string>,
+  oldPath: string,
+  newPath: string
+) => {
+  let changed = false;
+  const nextEntries = Object.entries(fileContents).map(([path, content]) => {
+    const remappedPath = remapPath(path, oldPath, newPath);
+    if (remappedPath !== path) {
+      changed = true;
+    }
+    return [remappedPath, content] as const;
+  });
+
+  if (!changed) {
+    return fileContents;
+  }
+
+  return Object.fromEntries(nextEntries);
+};
+
+const removeFileContent = (fileContents: Record<string, string>, path: string) => {
+  if (!(path in fileContents)) {
+    return fileContents;
+  }
+
+  const { [path]: _removed, ...rest } = fileContents;
+  return rest;
+};
+
+const getOpenFileState = (
+  openFiles: OpenFile[],
+  fileContents: Record<string, string>,
+  path: string | null
+) => {
   if (!path) {
     return {
       content: '',
@@ -54,7 +130,7 @@ const getOpenFileState = (openFiles: OpenFile[], path: string | null) => {
 
   const openFile = openFiles.find((file) => file.path === path);
   return {
-    content: openFile?.content ?? '',
+    content: fileContents[path] ?? '',
     isDirty: openFile?.isDirty ?? false,
   };
 };
@@ -65,10 +141,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isDirty: false,
   saveStatus: 'saved',
   openFiles: [],
+  fileContents: {},
 
   setCurrentFile: (file) =>
     set((state) => {
-      const nextActive = getOpenFileState(state.openFiles, file);
+      const nextActive = getOpenFileState(state.openFiles, state.fileContents, file);
       return {
         currentFile: file,
         content: nextActive.content,
@@ -79,45 +156,53 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setContent: (content) => {
     const state = get();
-    const nextOpenFiles = state.currentFile
-      ? state.openFiles.map((file) =>
-          file.path === state.currentFile ? { ...file, content, isDirty: true } : file
-        )
-      : state.openFiles;
+    const nextOpenFiles = updateOpenFileCollection(state.openFiles, state.currentFile, (file) =>
+      file.isDirty ? file : { ...file, isDirty: true }
+    );
+    const nextFileContents = state.currentFile
+      ? {
+          ...state.fileContents,
+          [state.currentFile]: content,
+        }
+      : state.fileContents;
 
     set({
       content,
       isDirty: true,
       saveStatus: 'saved',
       openFiles: nextOpenFiles,
+      fileContents: nextFileContents,
     });
   },
 
   setLoadedContent: (content, filePath) => {
     const state = get();
     const targetPath = filePath ?? state.currentFile;
-    const nextOpenFiles = targetPath
-      ? state.openFiles.map((file) =>
-          file.path === targetPath ? { ...file, content, isDirty: false } : file
-        )
-      : state.openFiles;
+    const nextOpenFiles = updateOpenFileCollection(state.openFiles, targetPath, (file) =>
+      file.isDirty ? { ...file, isDirty: false } : file
+    );
+    const nextFileContents = targetPath
+      ? {
+          ...state.fileContents,
+          [targetPath]: content,
+        }
+      : state.fileContents;
     const isActiveFile = targetPath === state.currentFile;
 
     set({
       content: isActiveFile ? content : state.content,
       isDirty: isActiveFile ? false : state.isDirty,
       openFiles: nextOpenFiles,
+      fileContents: nextFileContents,
     });
   },
 
   setIsDirty: (dirty, filePath) => {
     const state = get();
     const targetPath = filePath ?? state.currentFile;
-    const nextOpenFiles = targetPath
-      ? state.openFiles.map((file) =>
-          file.path === targetPath ? { ...file, isDirty: dirty } : file
-        )
-      : state.openFiles;
+    const nextOpenFiles = updateOpenFileCollection(state.openFiles, targetPath, (file) =>
+      file.isDirty === dirty ? file : { ...file, isDirty: dirty }
+    );
     const isActiveFile = targetPath === state.currentFile;
 
     set({
@@ -139,13 +224,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           {
             path,
             name: getFileName(path),
-            content: '',
             isDirty: false,
             isDraft: options?.isDraft ?? false,
           },
         ],
+        fileContents: {
+          ...state.fileContents,
+          [path]: state.fileContents[path] ?? '',
+        },
         currentFile: path,
-        content: '',
+        content: state.fileContents[path] ?? '',
         isDirty: false,
         saveStatus: 'saved',
       });
@@ -154,15 +242,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const nextOpenFiles =
       options?.isDraft && !existingFile.isDraft
-        ? state.openFiles.map((file) =>
-            file.path === path ? { ...file, isDraft: true } : file
+        ? updateOpenFileCollection(state.openFiles, path, (file) =>
+            file.isDraft ? file : { ...file, isDraft: true }
           )
         : state.openFiles;
 
     set({
       openFiles: nextOpenFiles,
       currentFile: path,
-      content: existingFile.content,
+      content: state.fileContents[path] ?? '',
       isDirty: existingFile.isDirty,
       saveStatus: 'saved',
     });
@@ -182,11 +270,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         : file
     );
     const nextCurrentFile = state.currentFile === oldPath ? newPath : state.currentFile;
-    const nextActive = getOpenFileState(nextOpenFiles, nextCurrentFile);
+    const nextFileContents = moveFileContent(state.fileContents, oldPath, newPath);
+    const nextActive = getOpenFileState(nextOpenFiles, nextFileContents, nextCurrentFile);
     const activeFileChanged = nextCurrentFile !== state.currentFile;
 
     set({
       openFiles: nextOpenFiles,
+      fileContents: nextFileContents,
       currentFile: nextCurrentFile,
       content: activeFileChanged ? nextActive.content : state.content,
       isDirty: activeFileChanged ? nextActive.isDirty : state.isDirty,
@@ -207,16 +297,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           };
     });
     const nextCurrentFile = state.currentFile ? remapPath(state.currentFile, oldPath, newPath) : null;
-    const nextActive = getOpenFileState(nextOpenFiles, nextCurrentFile);
+    const nextFileContents = replaceFileContentPrefix(state.fileContents, oldPath, newPath);
+    const nextActive = getOpenFileState(nextOpenFiles, nextFileContents, nextCurrentFile);
 
     set({
       openFiles: nextOpenFiles,
+      fileContents: nextFileContents,
       currentFile: nextCurrentFile,
       content: nextCurrentFile === state.currentFile ? state.content : nextActive.content,
       isDirty: nextCurrentFile === state.currentFile ? state.isDirty : nextActive.isDirty,
       saveStatus: 'saved',
     });
   },
+
+  getFileContent: (path: string | null) => (path ? get().fileContents[path] ?? '' : ''),
 
   isDraftFile: (path: string | null) =>
     path !== null && get().openFiles.some((file) => file.path === path && file.isDraft),
@@ -230,13 +324,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       nextCurrentFile = nextOpenFiles.length > 0 ? nextOpenFiles[nextOpenFiles.length - 1].path : null;
     }
 
+    const nextFileContents = removeFileContent(state.fileContents, path);
     const nextActive =
       state.currentFile === path
-        ? getOpenFileState(nextOpenFiles, nextCurrentFile)
+        ? getOpenFileState(nextOpenFiles, nextFileContents, nextCurrentFile)
         : { content: state.content, isDirty: state.isDirty };
 
     set({
       openFiles: nextOpenFiles,
+      fileContents: nextFileContents,
       currentFile: nextCurrentFile,
       content: nextActive.content,
       isDirty: nextActive.isDirty,
@@ -251,5 +347,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: false,
       saveStatus: 'saved',
       openFiles: [],
+      fileContents: {},
     }),
 }));

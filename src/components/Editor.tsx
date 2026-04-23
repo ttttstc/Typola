@@ -5,6 +5,7 @@ import { commonmark } from '@milkdown/preset-commonmark';
 import { gfm } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
+import { replaceAll } from '@milkdown/utils';
 import { useEditorStore } from '../store/editor';
 import { useUIStore } from '../store/ui';
 import { useWorkspaceStore } from '../store/workspace';
@@ -30,16 +31,20 @@ export function MilkdownEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<MilkdownEditorType | null>(null);
   const isInternalUpdate = useRef(false);
+  // Milkdown's markdownUpdated listener is debounced (~200ms), so it fires
+  // long after the synchronous replaceAll() returns. Track how many
+  // programmatic replaces are still waiting for their debounced listener
+  // fire so we can drop them instead of treating them as user edits (which
+  // would mark every freshly switched tab as dirty).
+  const pendingProgrammaticFiresRef = useRef(0);
   const pluginCleanupRef = useRef<Array<() => void>>([]);
+  const watchQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const watchedFileRef = useRef<string | null>(null);
 
-  const {
-    currentFile,
-    content,
-    setContent,
-    setSaveStatus,
-    updateFilePath,
-    isDraftFile,
-  } = useEditorStore();
+  const currentFile = useEditorStore((state) => state.currentFile);
+  const setContent = useEditorStore((state) => state.setContent);
+  const setSaveStatus = useEditorStore((state) => state.setSaveStatus);
+  const updateFilePath = useEditorStore((state) => state.updateFilePath);
   const fontSize = useUIStore((s) => s.fontSize);
   const theme = useUIStore((s) => s.theme);
   const workspaceRoot = useWorkspaceStore((s) => s.workspaceRoot);
@@ -69,10 +74,16 @@ export function MilkdownEditor() {
         ctx.set(defaultValueCtx, initialContent);
         ctx.update(prosePluginsCtx, (plugins: unknown[]) => [...plugins, createMarkdownSyntaxPlugin()]);
         ctx.get(listenerCtx).markdownUpdated((_ctx: any, markdown: string) => {
-          if (!isInternalUpdate.current) {
-            setContent(markdown);
-            window.dispatchEvent(new Event('editor-content-changed'));
+          if (isInternalUpdate.current) return;
+          // The listener is debounced ~200ms by @milkdown/plugin-listener and
+          // collapses bursts into a single fire. Consume one programmatic
+          // replace per debounce so that subsequent user edits still flow.
+          if (pendingProgrammaticFiresRef.current > 0) {
+            pendingProgrammaticFiresRef.current = 0;
+            return;
           }
+          setContent(markdown);
+          window.dispatchEvent(new Event('editor-content-changed'));
         });
       })
       .use(commonmark)
@@ -93,9 +104,19 @@ export function MilkdownEditor() {
     if (!container) return;
 
     isInternalUpdate.current = true;
-    initEditor(container, nextContent);
+    // The post-replace listener fire is debounced. Mark a single pending fire
+    // to drop, so the next programmatic listener invocation is ignored
+    // instead of being treated as a user edit.
+    pendingProgrammaticFiresRef.current = 1;
+    if (!editorRef.current) {
+      initEditor(container, nextContent);
+      // Plugin handlers attach to the stable .ProseMirror element via a
+      // MutationObserver; they only need to be installed once per editor.
+      queueMicrotask(setupEditorPlugins);
+    } else {
+      editorRef.current.action(replaceAll(nextContent, true));
+    }
     isInternalUpdate.current = false;
-    queueMicrotask(setupEditorPlugins);
   }, [initEditor, setupEditorPlugins]);
 
   const loadFileFromDisk = useCallback(async (filePath: string) => {
@@ -105,11 +126,40 @@ export function MilkdownEditor() {
     useEditorStore.getState().setSaveStatus('saved');
   }, [replaceEditorContent]);
 
+  const syncWatchedFile = useCallback((nextFilePath: string | null) => {
+    watchQueueRef.current = watchQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        const activeWatchedFile = watchedFileRef.current;
+
+        if (activeWatchedFile && activeWatchedFile !== nextFilePath) {
+          await window.electronAPI.unwatchFile(activeWatchedFile);
+          if (watchedFileRef.current === activeWatchedFile) {
+            watchedFileRef.current = null;
+          }
+        }
+
+        if (!nextFilePath || watchedFileRef.current === nextFilePath) {
+          return;
+        }
+
+        await window.electronAPI.watchFile(nextFilePath);
+        watchedFileRef.current = nextFilePath;
+      })
+      .catch((error) => {
+        console.error('Failed to sync file watcher:', error);
+      });
+
+    return watchQueueRef.current;
+  }, []);
+
   const saveFile = useCallback(async () => {
     if (!currentFile) return false;
 
     try {
-      const wasDraft = isDraftFile(currentFile);
+      const editorState = useEditorStore.getState();
+      const content = editorState.getFileContent(currentFile);
+      const wasDraft = editorState.isDraftFile(currentFile);
       const targetPath = wasDraft
         ? await window.electronAPI.showSaveDialog({
             defaultPath: getSaveFileName(currentFile),
@@ -144,7 +194,7 @@ export function MilkdownEditor() {
       setSaveStatus('error');
       return false;
     }
-  }, [content, currentFile, getSaveFileName, isDraftFile, setFileTree, setSaveStatus, t, updateFilePath, workspaceRoot]);
+  }, [currentFile, getSaveFileName, setFileTree, setSaveStatus, t, updateFilePath, workspaceRoot]);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,10 +208,11 @@ export function MilkdownEditor() {
         return;
       }
 
-      const openFile = useEditorStore.getState().openFiles.find((file) => file.path === currentFile);
+      const editorState = useEditorStore.getState();
+      const openFile = editorState.openFiles.find((file) => file.path === currentFile);
 
       if (openFile?.isDirty) {
-        replaceEditorContent(openFile.content);
+        replaceEditorContent(editorState.getFileContent(currentFile));
         setSaveStatus('saved');
         return;
       }
@@ -188,14 +239,12 @@ export function MilkdownEditor() {
   }, [currentFile, replaceEditorContent, setSaveStatus]);
 
   useEffect(() => {
-    if (!currentFile) return;
+    void syncWatchedFile(currentFile);
+  }, [currentFile, syncWatchedFile]);
 
-    void window.electronAPI.watchFile(currentFile);
-
-    return () => {
-      void window.electronAPI.unwatchFile(currentFile);
-    };
-  }, [currentFile]);
+  useEffect(() => () => {
+    void syncWatchedFile(null);
+  }, [syncWatchedFile]);
 
   useEffect(() => {
     const cleanup = window.electronAPI.onFileChanged((data: { path: string }) => {
@@ -248,12 +297,6 @@ export function MilkdownEditor() {
       if (event.shiftKey && key === 's') {
         event.preventDefault();
         applyInlineFormat('strikethrough');
-        return;
-      }
-
-      if (!event.shiftKey && (event.key === '`' || event.code === 'Backquote')) {
-        event.preventDefault();
-        applyInlineFormat('inline-code');
         return;
       }
 
@@ -313,9 +356,9 @@ export function MilkdownEditor() {
   }, [saveFile, t]);
 
   useEffect(() => {
-    if (!currentFile) return;
+    if (!editorRef.current) return;
     queueMicrotask(setupEditorPlugins);
-  }, [currentFile, theme, setupEditorPlugins]);
+  }, [theme, setupEditorPlugins]);
 
   useEffect(() => {
     const handleSetContent = (event: Event) => {
@@ -339,12 +382,15 @@ export function MilkdownEditor() {
   useEffect(() => () => {
     bindEditorFormatting(null);
     pluginCleanupRef.current.forEach((cleanup) => cleanup());
+    editorRef.current?.destroy();
+    editorRef.current = null;
   }, []);
 
   return (
     <div
       style={{
         flex: 1,
+        minHeight: 0,
         overflow: 'auto',
         background: 'var(--color-paper)',
       }}
@@ -385,7 +431,16 @@ export function MilkdownEditor() {
 
 export function Editor() {
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <div
+      data-testid="editor-shell"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+      }}
+    >
       <MilkdownEditor />
       <SearchBar />
       <SlashMenu />

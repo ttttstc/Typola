@@ -78,7 +78,10 @@ function ConfirmDialog({ title, message, onDiscard, onSave, onCancel }: ConfirmD
 
 export function TabBar() {
   const { t } = useTranslation();
-  const { openFiles, currentFile, setCurrentFile, removeOpenFile } = useEditorStore();
+  const openFiles = useEditorStore((state) => state.openFiles);
+  const currentFile = useEditorStore((state) => state.currentFile);
+  const setCurrentFile = useEditorStore((state) => state.setCurrentFile);
+  const removeOpenFile = useEditorStore((state) => state.removeOpenFile);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     file: OpenFile;
@@ -110,6 +113,7 @@ export function TabBar() {
         },
         onSave: async () => {
           const editorState = useEditorStore.getState();
+          const fileContent = editorState.getFileContent(file.path);
           let pathToClose = file.path;
 
           const wasDraft = editorState.isDraftFile(file.path);
@@ -123,12 +127,12 @@ export function TabBar() {
           }
 
           try {
-            await window.electronAPI.writeFile(targetPath, file.content);
+            await window.electronAPI.writeFile(targetPath, fileContent);
             if (wasDraft || targetPath !== file.path) {
               editorState.updateFilePath(file.path, targetPath);
               pathToClose = targetPath;
             }
-            editorState.setLoadedContent(file.content, targetPath);
+            editorState.setLoadedContent(fileContent, targetPath);
             if (wasDraft && targetPath !== file.path) {
               await window.electronAPI.deletePath(file.path);
               const { workspaceRoot, setFileTree } = useWorkspaceStore.getState();

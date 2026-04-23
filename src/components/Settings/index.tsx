@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { useUIStore, SettingsTab } from '../../store/ui';
 import { syncWorkspaceSearchDefaultsFromSettings } from '../../store/search';
+import { clampTerminalFontSize } from '../../shared/terminal';
 
 function FieldLabel({ title, description }: { title: string; description?: string }) {
   return (
@@ -94,11 +95,12 @@ function ShortcutsContent() {
     { label: t('shortcuts.findInWorkspace'), key: 'Ctrl+Shift+F' },
     { label: t('shortcuts.toggleSidebar'), key: 'Ctrl+\\' },
     { label: t('shortcuts.toggleOutline'), key: 'Ctrl+Shift+\\' },
+    { label: t('shortcuts.toggleTerminal'), key: 'Ctrl+`' },
+    { label: t('shortcuts.newTerminal'), key: 'Ctrl+Shift+`' },
     { label: t('shortcuts.toggleTheme'), key: 'Ctrl+Shift+D' },
     { label: t('shortcuts.bold'), key: 'Ctrl+B' },
     { label: t('shortcuts.italic'), key: 'Ctrl+I' },
     { label: t('shortcuts.strikethrough'), key: 'Ctrl+Shift+S' },
-    { label: t('shortcuts.inlineCode'), key: 'Ctrl+`' },
     { label: t('shortcuts.link'), key: 'Ctrl+K' },
     { label: t('shortcuts.body'), key: 'Ctrl+0' },
     { label: t('shortcuts.heading1'), key: 'Ctrl+1' },
@@ -280,6 +282,100 @@ function ExportContent() {
   );
 }
 
+function TerminalContent() {
+  const { t } = useTranslation();
+  const terminalSettings = useUIStore((state) => state.terminalSettings);
+  const setTerminalSettings = useUIStore((state) => state.setTerminalSettings);
+
+  const autoShellLabel = navigator.platform.startsWith('Win')
+    ? t('terminal.autoShellWindows')
+    : t('terminal.autoShellPosix');
+
+  return (
+    <div style={{ display: 'grid', gap: '8px' }}>
+      <h2 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 600 }}>{t('settings.terminal')}</h2>
+      <Row>
+        <FieldLabel title={t('terminal.shellPath')} description={t('terminal.shellPathDescription')} />
+        <TextInput
+          value={terminalSettings.shellPath}
+          placeholder={autoShellLabel}
+          onChange={(event) => setTerminalSettings({ shellPath: event.target.value })}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('terminal.fontFamily')} description={t('terminal.fontFamilyDescription')} />
+        <TextInput
+          value={terminalSettings.fontFamily}
+          onChange={(event) => setTerminalSettings({ fontFamily: event.target.value })}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('terminal.fontSize')} description={t('terminal.fontSizeDescription')} />
+        <TextInput
+          type="number"
+          min={11}
+          max={20}
+          value={terminalSettings.fontSize}
+          onChange={(event) =>
+            setTerminalSettings({
+              fontSize: clampTerminalFontSize(Number(event.target.value) || terminalSettings.fontSize),
+            })
+          }
+          style={{ width: '120px' }}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('terminal.cursorStyle')} description={t('terminal.cursorStyleDescription')} />
+        <Select
+          value={terminalSettings.cursorStyle}
+          onChange={(event) =>
+            setTerminalSettings({
+              cursorStyle: event.target.value as 'block' | 'bar' | 'underline',
+            })
+          }
+        >
+          <option value="block">{t('terminal.cursorBlock')}</option>
+          <option value="bar">{t('terminal.cursorBar')}</option>
+          <option value="underline">{t('terminal.cursorUnderline')}</option>
+        </Select>
+      </Row>
+      <Row>
+        <FieldLabel title={t('terminal.cursorBlink')} description={t('terminal.cursorBlinkDescription')} />
+        <Checkbox
+          checked={terminalSettings.cursorBlink}
+          onChange={(checked) => setTerminalSettings({ cursorBlink: checked })}
+          label={t('settings.enableByDefault')}
+        />
+      </Row>
+      <Row>
+        <FieldLabel title={t('terminal.shortcutPreset')} description={t('terminal.shortcutPresetDescription')} />
+        <Select
+          value={terminalSettings.shortcutPreset}
+          onChange={(event) =>
+            setTerminalSettings({
+              shortcutPreset: event.target.value as 'windows' | 'linux',
+            })
+          }
+        >
+          <option value="windows">{t('terminal.shortcutPresetWindows')}</option>
+          <option value="linux">{t('terminal.shortcutPresetLinux')}</option>
+        </Select>
+      </Row>
+      <Row>
+        <FieldLabel
+          title={t('terminal.confirmMultilinePaste')}
+          description={t('terminal.confirmMultilinePasteDescription')}
+        />
+        <Checkbox
+          checked={terminalSettings.confirmMultilinePaste}
+          onChange={(checked) => setTerminalSettings({ confirmMultilinePaste: checked })}
+          label={t('settings.enableByDefault')}
+        />
+      </Row>
+    </div>
+  );
+}
+
 function SettingsContent({ activeTab }: { activeTab: SettingsTab }) {
   const { t } = useTranslation();
 
@@ -295,7 +391,7 @@ function SettingsContent({ activeTab }: { activeTab: SettingsTab }) {
     case 'appearance':
       return <PlaceholderContent title={t('settings.appearance')} />;
     case 'terminal':
-      return <PlaceholderContent title={t('settings.terminal')} />;
+      return <TerminalContent />;
     default:
       return <GeneralContent />;
   }

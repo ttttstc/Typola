@@ -7,6 +7,7 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   readFile: (filePath) => import_electron.ipcRenderer.invoke("read_file", filePath),
   writeFile: (filePath, content) => import_electron.ipcRenderer.invoke("write_file", filePath, content),
   pickFolder: () => import_electron.ipcRenderer.invoke("pick_folder"),
+  pickFile: (options) => import_electron.ipcRenderer.invoke("pick_file", options),
   listDir: (dirPath) => import_electron.ipcRenderer.invoke("list_dir", dirPath),
   createFile: (filePath) => import_electron.ipcRenderer.invoke("create_file", filePath),
   deletePath: (targetPath) => import_electron.ipcRenderer.invoke("delete_path", targetPath),
@@ -19,6 +20,14 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   applyWorkspaceReplace: (changes) => import_electron.ipcRenderer.invoke("apply_workspace_replace", changes),
   exportDocument: (payload) => import_electron.ipcRenderer.invoke("export_document", payload),
   setLanguagePreference: (language) => import_electron.ipcRenderer.invoke("set_language_preference", language),
+  termCreate: (request) => import_electron.ipcRenderer.invoke("term_create", request),
+  termWrite: (request) => import_electron.ipcRenderer.invoke("term_write", request),
+  termResize: (request) => import_electron.ipcRenderer.invoke("term_resize", request),
+  termKill: (termId) => import_electron.ipcRenderer.invoke("term_kill", termId),
+  termClear: (termId) => import_electron.ipcRenderer.invoke("term_clear", termId),
+  readClipboardText: () => import_electron.ipcRenderer.invoke("clipboard_read_text"),
+  writeClipboardText: (text) => import_electron.ipcRenderer.invoke("clipboard_write_text", text),
+  openExternal: (url) => import_electron.ipcRenderer.invoke("open_external", url),
   // Window controls
   windowMinimize: () => import_electron.ipcRenderer.invoke("window_minimize"),
   windowMaximize: () => import_electron.ipcRenderer.invoke("window_maximize"),
@@ -38,6 +47,18 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
     const handler = (_, isMaximized) => callback(isMaximized);
     import_electron.ipcRenderer.on("maximized-change", handler);
     return () => import_electron.ipcRenderer.removeListener("maximized-change", handler);
+  },
+  onTerminalData: (termId, callback) => {
+    const channel = `term_data_${termId}`;
+    const handler = (_, data) => callback(data);
+    import_electron.ipcRenderer.on(channel, handler);
+    return () => import_electron.ipcRenderer.removeListener(channel, handler);
+  },
+  onTerminalExit: (termId, callback) => {
+    const channel = `term_exit_${termId}`;
+    const handler = (_, data) => callback(data);
+    import_electron.ipcRenderer.on(channel, handler);
+    return () => import_electron.ipcRenderer.removeListener(channel, handler);
   },
   onMenuAction: (callback) => {
     const handler = (_, action) => callback(action);

@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import i18n, { getInitialLanguage } from '../i18n';
 import type { AppLanguage } from '../shared/language';
+import {
+  clampTerminalFontSize,
+  DEFAULT_TERMINAL_HEIGHT,
+  DEFAULT_TERMINAL_SETTINGS,
+  type TerminalSettings,
+} from '../shared/terminal';
 
 export type SettingsTab = 'general' | 'editor' | 'appearance' | 'terminal' | 'shortcuts' | 'export';
 
@@ -38,6 +44,9 @@ interface UIState {
   language: Language;
   settingsOpen: boolean;
   settingsActiveTab: SettingsTab;
+  terminalVisible: boolean;
+  terminalHeight: number;
+  terminalSettings: TerminalSettings;
   searchDefaults: SearchDefaults;
   exportSettings: ExportSettings;
   setTheme: (theme: 'light' | 'dark') => void;
@@ -54,6 +63,10 @@ interface UIState {
   toggleLanguage: () => void;
   setSettingsOpen: (open: boolean) => void;
   setSettingsActiveTab: (tab: SettingsTab) => void;
+  setTerminalVisible: (visible: boolean) => void;
+  toggleTerminalVisible: () => void;
+  setTerminalHeight: (height: number) => void;
+  setTerminalSettings: (patch: Partial<TerminalSettings>) => void;
   setSearchDefaults: (patch: Partial<SearchDefaults>) => void;
   setExportSettings: (patch: Partial<ExportSettings>) => void;
 }
@@ -71,6 +84,9 @@ export const useUIStore = create<UIState>()(
       language: getInitialLanguage(),
       settingsOpen: false,
       settingsActiveTab: 'general',
+      terminalVisible: false,
+      terminalHeight: DEFAULT_TERMINAL_HEIGHT,
+      terminalSettings: DEFAULT_TERMINAL_SETTINGS,
       searchDefaults: {
         caseSensitive: false,
         wholeWord: false,
@@ -106,6 +122,23 @@ export const useUIStore = create<UIState>()(
       }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setSettingsActiveTab: (tab) => set({ settingsActiveTab: tab }),
+      setTerminalVisible: (visible) => set({ terminalVisible: visible }),
+      toggleTerminalVisible: () => set((state) => ({ terminalVisible: !state.terminalVisible })),
+      setTerminalHeight: (height) =>
+        set({
+          terminalHeight: Math.max(160, Math.min(height, 720)),
+        }),
+      setTerminalSettings: (patch) =>
+        set((state) => ({
+          terminalSettings: {
+            ...state.terminalSettings,
+            ...patch,
+            fontSize:
+              patch.fontSize === undefined
+                ? state.terminalSettings.fontSize
+                : clampTerminalFontSize(patch.fontSize),
+          },
+        })),
       setSearchDefaults: (patch) =>
         set((state) => ({
           searchDefaults: {
@@ -137,6 +170,8 @@ export const useUIStore = create<UIState>()(
         outlineWidth: state.outlineWidth,
         fontSize: state.fontSize,
         language: state.language,
+        terminalHeight: state.terminalHeight,
+        terminalSettings: state.terminalSettings,
         searchDefaults: state.searchDefaults,
         exportSettings: state.exportSettings,
       }),

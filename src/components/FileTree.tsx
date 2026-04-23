@@ -8,8 +8,9 @@ import {
   ChevronDown,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react';
-import { useWorkspaceStore, FileEntry } from '../store/workspace';
+import { useWorkspaceStore, FileEntry, WorkspaceRoot } from '../store/workspace';
 import { useEditorStore } from '../store/editor';
 
 interface ContextMenuProps {
@@ -196,34 +197,202 @@ function TreeNode({ entry, level, onFileClick, onNewFile, onDelete, onRename }: 
   );
 }
 
+interface RootSectionProps {
+  root: WorkspaceRoot;
+  isActive: boolean;
+  onActivate: (path: string) => void;
+  onToggleExpanded: (path: string) => void;
+  onRemove: (root: WorkspaceRoot) => void;
+  onFileClick: (path: string) => void;
+  onNewFile: (dirPath: string) => void;
+  onDelete: (path: string, rootPath: string) => void;
+  onRename: (entry: FileEntry, rootPath: string) => void;
+}
+
+function RootSection({
+  root,
+  isActive,
+  onActivate,
+  onToggleExpanded,
+  onRemove,
+  onFileClick,
+  onNewFile,
+  onDelete,
+  onRename,
+}: RootSectionProps) {
+  const { t } = useTranslation();
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--color-line-soft)' }}>
+      <div
+        onClick={() => {
+          onActivate(root.path);
+          onToggleExpanded(root.path);
+        }}
+        title={root.path}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '6px 8px',
+          cursor: 'pointer',
+          background: isActive ? 'var(--color-surface-sunken)' : 'transparent',
+        }}
+      >
+        <span style={{ color: 'var(--color-muted)', width: '16px', display: 'flex' }}>
+          {root.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--color-ink)',
+            textTransform: 'uppercase',
+            flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {root.name}
+        </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(root);
+          }}
+          title={t('fileTree.removeProject')}
+          style={{
+            width: '20px',
+            height: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 'var(--radius-sm)',
+            color: 'var(--color-muted)',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+          }}
+        >
+          <X size={12} />
+        </button>
+      </div>
+      {root.expanded && (
+        <div>
+          {root.fileTree.length === 0 ? (
+            <div style={{ padding: '8px 12px', color: 'var(--color-muted)', fontSize: '12px' }}>
+              {t('fileTree.loading')}
+            </div>
+          ) : (
+            root.fileTree.map((entry, i) => (
+              <TreeNode
+                key={`${entry.path}-${i}`}
+                entry={entry}
+                level={0}
+                onFileClick={(path) => {
+                  onActivate(root.path);
+                  onFileClick(path);
+                }}
+                onNewFile={onNewFile}
+                onDelete={(path) => onDelete(path, root.path)}
+                onRename={(entry) => onRename(entry, root.path)}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FileTree() {
   const { t } = useTranslation();
-  const { workspaceRoot, setWorkspaceRoot, setFileTree } = useWorkspaceStore();
-  const [loading, setLoading] = useState(false);
+  const workspaceRoots = useWorkspaceStore((s) => s.workspaceRoots);
+  const activeRootPath = useWorkspaceStore((s) => s.activeRootPath);
+  const addWorkspaceRoot = useWorkspaceStore((s) => s.addWorkspaceRoot);
+  const removeWorkspaceRoot = useWorkspaceStore((s) => s.removeWorkspaceRoot);
+  const setActiveRoot = useWorkspaceStore((s) => s.setActiveRoot);
+  const setRootFileTree = useWorkspaceStore((s) => s.setRootFileTree);
+  const toggleRootExpanded = useWorkspaceStore((s) => s.toggleRootExpanded);
 
-  const handleDelete = async (path: string) => {
-    const confirmed = window.confirm(t('fileTree.confirmDelete', { name: path.split(/[\\/]/).pop() }));
+  const refreshRoot = useCallback(
+    async (rootPath: string) => {
+      try {
+        const entries = await window.electronAPI.listDir(rootPath);
+        setRootFileTree(rootPath, entries);
+      } catch (e) {
+        console.error('Failed to load workspace root:', e);
+      }
+    },
+    [setRootFileTree]
+  );
+
+  // Load tree for any root that doesn't have one yet.
+  useEffect(() => {
+    workspaceRoots
+      .filter((r) => r.fileTree.length === 0)
+      .forEach((r) => {
+        void refreshRoot(r.path);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceRoots.length]);
+
+  const findContainingRoot = (path: string): WorkspaceRoot | undefined => {
+    return workspaceRoots.find(
+      (r) => path === r.path || path.startsWith(`${r.path}\\`) || path.startsWith(`${r.path}/`)
+    );
+  };
+
+  const handleAddProject = async () => {
+    try {
+      const selected = await window.electronAPI.pickFolder();
+      if (selected) {
+        addWorkspaceRoot(selected);
+        await refreshRoot(selected);
+      }
+    } catch (e) {
+      console.error('Failed to pick folder:', e);
+    }
+  };
+
+  const handleRemoveProject = (root: WorkspaceRoot) => {
+    const confirmed = window.confirm(
+      t('fileTree.confirmRemoveProject', { name: root.name })
+    );
+    if (!confirmed) return;
+    removeWorkspaceRoot(root.path);
+  };
+
+  const handleDelete = async (path: string, rootPath: string) => {
+    const confirmed = window.confirm(
+      t('fileTree.confirmDelete', { name: path.split(/[\\/]/).pop() })
+    );
     if (!confirmed) return;
 
     try {
       await window.electronAPI.deletePath(path);
       const { openFiles, removeOpenFile } = useEditorStore.getState();
       openFiles
-        .filter((file) => file.path === path || file.path.startsWith(`${path}\\`) || file.path.startsWith(`${path}/`))
+        .filter(
+          (file) =>
+            file.path === path ||
+            file.path.startsWith(`${path}\\`) ||
+            file.path.startsWith(`${path}/`)
+        )
         .forEach((file) => removeOpenFile(file.path));
 
-      // Refresh workspace
-      if (workspaceRoot) {
-        await loadWorkspace(workspaceRoot);
-      }
+      await refreshRoot(rootPath);
     } catch (e) {
       console.error('Failed to delete:', e);
     }
   };
 
-  const handleRename = async (entry: FileEntry) => {
+  const handleRename = async (entry: FileEntry, rootPath: string) => {
     const currentName = entry.name;
-    const nextName = window.prompt(t('fileTree.renamePrompt', { name: currentName }), currentName)?.trim();
+    const nextName = window
+      .prompt(t('fileTree.renamePrompt', { name: currentName }), currentName)
+      ?.trim();
 
     if (!nextName || nextName === currentName) return;
 
@@ -233,43 +402,18 @@ export function FileTree() {
     try {
       await window.electronAPI.renamePath(entry.path, nextPath);
       useEditorStore.getState().replacePathPrefix(entry.path, nextPath);
-      if (workspaceRoot) {
-        await loadWorkspace(workspaceRoot);
-      }
+      await refreshRoot(rootPath);
     } catch (error) {
       console.error('Failed to rename:', error);
     }
   };
 
-  const loadWorkspace = useCallback(async (root: string) => {
-    setLoading(true);
-    try {
-      const entries = await window.electronAPI.listDir(root);
-      setFileTree(entries);
-    } catch (e) {
-      console.error('Failed to load workspace:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [setFileTree]);
-
-  const handleOpenWorkspace = async () => {
-    try {
-      const selected = await window.electronAPI.pickFolder();
-      if (selected) {
-        setWorkspaceRoot(selected);
-        await loadWorkspace(selected);
-      }
-    } catch (e) {
-      console.error('Failed to pick folder:', e);
-    }
-  };
-
-  const handleFileClick = async (path: string) => {
+  const handleFileClick = (path: string) => {
     useEditorStore.getState().addOpenFile(path);
   };
 
   const handleNewFile = async (dirPath: string) => {
+    const owningRoot = findContainingRoot(dirPath);
     const baseName = t('fileTree.untitled') || 'Untitled';
     let fileName = baseName + '.md';
     let counter = 1;
@@ -286,21 +430,14 @@ export function FileTree() {
     try {
       const newPath = `${dirPath}/${fileName}`;
       await window.electronAPI.createFile(newPath);
-      // Refresh the workspace
-      if (workspaceRoot) {
-        await loadWorkspace(workspaceRoot);
+      if (owningRoot) {
+        await refreshRoot(owningRoot.path);
       }
       useEditorStore.getState().addOpenFile(newPath, { isDraft: true });
     } catch (e) {
       console.error('Failed to create file:', e);
     }
   };
-
-  useEffect(() => {
-    if (workspaceRoot) {
-      loadWorkspace(workspaceRoot);
-    }
-  }, [workspaceRoot, loadWorkspace]);
 
   return (
     <div
@@ -320,27 +457,39 @@ export function FileTree() {
           justifyContent: 'space-between',
         }}
       >
-        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase' }}>
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--color-muted)',
+            textTransform: 'uppercase',
+          }}
+        >
           {t('fileTree.files')}
         </span>
         <button
-          onClick={handleOpenWorkspace}
-          title={t('fileTree.openWorkspace')}
+          onClick={handleAddProject}
+          title={t('fileTree.addProject')}
           style={{
-            width: '24px',
-            height: '24px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
+            gap: '4px',
+            padding: '2px 8px',
+            height: '24px',
             borderRadius: 'var(--radius-sm)',
             color: 'var(--color-muted)',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '12px',
           }}
         >
           <Plus size={14} />
+          <span>{t('fileTree.addProject')}</span>
         </button>
       </div>
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
-        {!workspaceRoot ? (
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {workspaceRoots.length === 0 ? (
           <div
             style={{
               padding: '24px 12px',
@@ -350,7 +499,7 @@ export function FileTree() {
             }}
           >
             <button
-              onClick={handleOpenWorkspace}
+              onClick={handleAddProject}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -360,22 +509,25 @@ export function FileTree() {
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--color-ink)',
                 fontSize: '13px',
+                border: 'none',
+                cursor: 'pointer',
               }}
             >
-              {t('fileTree.openWorkspace')}
+              <Plus size={14} />
+              {t('fileTree.addProject')}
             </button>
-          </div>
-        ) : loading ? (
-          <div style={{ padding: '12px', textAlign: 'center', color: 'var(--color-muted)', fontSize: '13px' }}>
-            {t('fileTree.loading')}
+            <div style={{ marginTop: '12px', fontSize: '12px' }}>{t('fileTree.noProjects')}</div>
           </div>
         ) : (
           <div>
-            {useWorkspaceStore.getState().fileTree.map((entry, i) => (
-              <TreeNode
-                key={`${entry.path}-${i}`}
-                entry={entry}
-                level={0}
+            {workspaceRoots.map((root) => (
+              <RootSection
+                key={root.path}
+                root={root}
+                isActive={root.path === activeRootPath}
+                onActivate={setActiveRoot}
+                onToggleExpanded={toggleRootExpanded}
+                onRemove={handleRemoveProject}
                 onFileClick={handleFileClick}
                 onNewFile={handleNewFile}
                 onDelete={handleDelete}
