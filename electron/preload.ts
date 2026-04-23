@@ -50,6 +50,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ) => ipcRenderer.invoke('preview_workspace_replace', workspaceRoot, query, replacementText, options),
   applyWorkspaceReplace: (changes: Array<{ filePath: string; nextContent: string }>) =>
     ipcRenderer.invoke('apply_workspace_replace', changes),
+  getRecentFiles: () => ipcRenderer.invoke('get_recent_files'),
+  addRecentFile: (filePath: string) => ipcRenderer.invoke('add_recent_file', filePath),
+  clearRecentFiles: () => ipcRenderer.invoke('clear_recent_files'),
+  onRecentFilesChanged: (
+    callback: (entries: Array<{ path: string; addedAt: number }>) => void
+  ) => {
+    const handler = (
+      _: Electron.IpcRendererEvent,
+      entries: Array<{ path: string; addedAt: number }>
+    ) => callback(entries);
+    ipcRenderer.on('recent-files-changed', handler);
+    return () => ipcRenderer.removeListener('recent-files-changed', handler);
+  },
+  onOpenRecentFile: (callback: (filePath: string) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, filePath: string) => callback(filePath);
+    ipcRenderer.on('open-recent-file', handler);
+    return () => ipcRenderer.removeListener('open-recent-file', handler);
+  },
   exportDocument: (payload: {
     type: 'pdf' | 'html';
     title: string;

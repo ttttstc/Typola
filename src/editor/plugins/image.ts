@@ -1,10 +1,32 @@
 import { useWorkspaceStore } from '../../store/workspace';
 import { insertImage } from '../formatting';
 
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const MIME_TO_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+  'image/bmp': 'bmp',
+};
+
+function extFromMime(mime: string): string | null {
+  const normalized = mime.toLowerCase();
+  if (MIME_TO_EXT[normalized]) return MIME_TO_EXT[normalized];
+  if (normalized.startsWith('image/')) {
+    const candidate = normalized.split('/')[1]?.split(';')[0]?.trim();
+    return candidate || null;
+  }
+  return null;
+}
+
 export async function saveImage(data: Uint8Array, ext: string): Promise<string | null> {
   const workspaceRoot = useWorkspaceStore.getState().workspaceRoot;
   if (!workspaceRoot) {
-    console.error('No workspace root set');
+    console.warn('Skipping image save: no workspace root.');
     return null;
   }
 
@@ -18,9 +40,38 @@ export async function saveImage(data: Uint8Array, ext: string): Promise<string |
 }
 
 export function getImageUrl(relativePath: string): string {
-  // For Electron, images are accessed via file:// protocol
-  // The relative path is returned from the main process
   return relativePath;
+}
+
+async function handleImageFile(file: File) {
+  if (file.size > MAX_IMAGE_BYTES) {
+    console.warn(`Image "${file.name}" exceeds ${MAX_IMAGE_BYTES} bytes; skipping.`);
+    return;
+  }
+
+  const ext = extFromMime(file.type) ?? 'png';
+  try {
+    const buffer = await file.arrayBuffer();
+    const data = new Uint8Array(buffer);
+    const relativePath = await saveImage(data, ext);
+    if (relativePath) {
+      const altText = file.name ? file.name.replace(/\.[^.]+$/, '') : 'image';
+      insertImage(`./${relativePath}`, altText);
+    }
+  } catch (error) {
+    console.error('Failed to process image:', error);
+  }
+}
+
+function collectImageFiles(fileList: FileList | null | undefined): File[] {
+  if (!fileList || fileList.length === 0) return [];
+  const images: File[] = [];
+  for (const file of Array.from(fileList)) {
+    if (file.type.startsWith('image/')) {
+      images.push(file);
+    }
+  }
+  return images;
 }
 
 export function setupImageHandler() {
@@ -32,44 +83,25 @@ export function setupImageHandler() {
     const items = clipboardEvent.clipboardData?.items;
     if (!items) return;
 
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
+    const imageFiles: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
         const file = item.getAsFile();
-        if (!file) continue;
-
-        const ext = item.type.split('/')[1] || 'png';
-        file.arrayBuffer().then((buffer) => {
-          const data = new Uint8Array(buffer);
-          saveImage(data, ext).then((relativePath) => {
-            if (relativePath) {
-              insertImage(`./${relativePath}`, 'image');
-            }
-          });
-        });
+        if (file) imageFiles.push(file);
       }
     }
+
+    if (imageFiles.length === 0) return;
+    e.preventDefault();
+    void Promise.all(imageFiles.map(handleImageFile));
   };
 
   const handleDrop = (e: Event) => {
     const dragEvent = e as DragEvent;
-    const files = dragEvent.dataTransfer?.files;
-    if (!files || files.length === 0) return;
-
-    for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        e.preventDefault();
-        const ext = file.type.split('/')[1] || 'png';
-        file.arrayBuffer().then((buffer) => {
-          const data = new Uint8Array(buffer);
-          saveImage(data, ext).then((relativePath) => {
-            if (relativePath) {
-              insertImage(`./${relativePath}`, 'image');
-            }
-          });
-        });
-      }
-    }
+    const imageFiles = collectImageFiles(dragEvent.dataTransfer?.files);
+    if (imageFiles.length === 0) return;
+    e.preventDefault();
+    void Promise.all(imageFiles.map(handleImageFile));
   };
 
   editor.addEventListener('paste', handlePaste);

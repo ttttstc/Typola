@@ -22,14 +22,14 @@ export async function renderMermaid(code: string): Promise<{ svg: string; error:
 
   try {
     const mermaid = await getMermaid();
-    mermaid.default.initialize({
+    mermaid.initialize({
       startOnLoad: false,
       theme,
       securityLevel: 'loose',
     });
 
-    const id = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const { svg } = await mermaid.default.render(id, code);
+    const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    const { svg } = await mermaid.render(id, code);
     lastValidSvg = svg;
     return { svg, error: false };
   } catch (error) {

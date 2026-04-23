@@ -3,7 +3,7 @@ import type { RenderType } from '@milkdown/components/table-block';
 import { commandsCtx } from '@milkdown/core';
 import { insertHardbreakCommand } from '@milkdown/preset-commonmark';
 import { exitTable } from '@milkdown/preset-gfm';
-import { findTable } from 'prosemirror-tables';
+import { addRowAfter, findTable, goToNextCell, isInTable } from 'prosemirror-tables';
 import { keymap } from 'prosemirror-keymap';
 
 const TABLE_BUTTON_ICONS: Record<RenderType, string> = {
@@ -55,6 +55,22 @@ export function createTableKeyboardPlugin(ctx: Ctx) {
       }
 
       return commands.call(exitTable.key);
+    },
+    // Typora-style table navigation: Tab moves to next cell, Shift-Tab to
+    // previous. At the last cell, Tab inserts a new row below.
+    Tab: (state, dispatch, view) => {
+      if (!isInTable(state)) return false;
+      if (goToNextCell(1)(state, dispatch)) return true;
+      if (!view) return false;
+      if (addRowAfter(view.state, view.dispatch)) {
+        goToNextCell(1)(view.state, view.dispatch);
+        return true;
+      }
+      return false;
+    },
+    'Shift-Tab': (state, dispatch) => {
+      if (!isInTable(state)) return false;
+      return goToNextCell(-1)(state, dispatch) ?? false;
     },
   });
 }

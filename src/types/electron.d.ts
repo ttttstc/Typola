@@ -100,6 +100,13 @@ interface ElectronAPI {
   exportDocument: (
     payload: ExportPayload
   ) => Promise<{ canceled: boolean; path?: string }>;
+  getRecentFiles: () => Promise<Array<{ path: string; addedAt: number }>>;
+  addRecentFile: (filePath: string) => Promise<Array<{ path: string; addedAt: number }>>;
+  clearRecentFiles: () => Promise<Array<{ path: string; addedAt: number }>>;
+  onRecentFilesChanged: (
+    callback: (entries: Array<{ path: string; addedAt: number }>) => void
+  ) => () => void;
+  onOpenRecentFile: (callback: (filePath: string) => void) => () => void;
   setLanguagePreference: (language: 'zh' | 'en') => Promise<'zh' | 'en'>;
   termCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>;
   termWrite: (request: TerminalWriteRequest) => Promise<void>;

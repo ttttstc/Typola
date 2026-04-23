@@ -200,6 +200,29 @@ export function MenuBar() {
   }, []);
 
   const [menusOpen, setMenusOpen] = useState<Record<string, boolean>>({});
+  const [recentFiles, setRecentFiles] = useState<Array<{ path: string; addedAt: number }>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.electronAPI.getRecentFiles().then((entries) => {
+      if (!cancelled) setRecentFiles(entries);
+    }).catch(() => {});
+    const cleanup = window.electronAPI.onRecentFilesChanged((entries) => {
+      setRecentFiles(entries);
+    });
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, []);
+
+  const openRecentFile = (filePath: string) => {
+    useEditorStore.getState().addOpenFile(filePath);
+  };
+
+  const handleClearRecentFiles = () => {
+    void window.electronAPI.clearRecentFiles();
+  };
 
   const getSaveFileName = (filePath: string) =>
     filePath.split(/[\\/]/).pop() || `${t('fileTree.untitled')}.md`;
@@ -411,6 +434,19 @@ export function MenuBar() {
       { label: t('menu.newFile'), shortcut: 'Ctrl+N', action: handleNewFile },
       { label: t('menu.openFile'), shortcut: 'Ctrl+O', action: handleOpenFile },
       { label: t('menu.openFolder'), shortcut: 'Ctrl+Shift+O', action: handleOpenFolder },
+      ...(recentFiles.length > 0
+        ? [
+            { divider: true, label: '' } as MenuItemData,
+            ...recentFiles.slice(0, 8).map<MenuItemData>((entry) => ({
+              label: entry.path.split(/[\\/]/).pop() || entry.path,
+              action: () => openRecentFile(entry.path),
+            })),
+            {
+              label: t('menu.clearRecentFiles'),
+              action: handleClearRecentFiles,
+            } as MenuItemData,
+          ]
+        : []),
       { divider: true, label: '' },
       { label: t('menu.save'), shortcut: 'Ctrl+S', action: handleSave },
       { label: t('menu.saveAs'), action: handleSaveAs },
@@ -595,13 +631,24 @@ export function MenuBar() {
     }
   };
 
+  const runMenuActionRef = useRef(runMenuAction);
+  useEffect(() => {
+    runMenuActionRef.current = runMenuAction;
+  });
   useEffect(() => {
     const cleanup = window.electronAPI.onMenuAction((action) => {
-      void runMenuAction(action);
+      void runMenuActionRef.current(action);
     });
 
     return () => cleanup();
-  }, [runMenuAction]);
+  }, []);
+
+  useEffect(() => {
+    const cleanup = window.electronAPI.onOpenRecentFile((filePath) => {
+      useEditorStore.getState().addOpenFile(filePath);
+    });
+    return () => cleanup();
+  }, []);
 
   return (
     <>

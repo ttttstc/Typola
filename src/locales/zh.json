@@ -21,6 +21,9 @@
     "newFile": "新建文件",
     "openFile": "打开文件",
     "openFolder": "打开项目/文件夹",
+    "openRecent": "打开最近",
+    "noRecentFiles": "无最近文件",
+    "clearRecentFiles": "清空最近文件",
     "save": "保存",
     "saveAs": "另存为",
     "exportPdf": "导出 PDF",
@@ -107,7 +110,9 @@
     "saving": "保存中...",
     "error": "保存失败",
     "unsaved": "未保存",
-    "characters": "{{count}} 字"
+    "characters": "{{count}} 字符",
+    "words": "{{count}} 词",
+    "lines": "{{count}} 行"
   },
   "outline": {
     "title": "大纲",

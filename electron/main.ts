@@ -3,6 +3,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { matchesWatchedFile, rememberRecentWrite, shouldIgnoreWatchEvent } from './fileWatch';
 import {
+  addRecentFile,
+  loadRecentFiles,
+  pruneMissingRecentFiles,
+  saveRecentFiles,
+  type RecentEntry,
+} from './recentFiles';
+import {
   ExportPayload,
   buildExportDocumentHtml,
   getPdfPrintOptions,
@@ -28,6 +35,30 @@ const watchedFiles = new Map<string, fs.FSWatcher>();
 const recentWrites = new Map<string, number>();
 let imageCounter = 0;
 let currentLanguage: AppLanguage = resolveLanguage(app.getLocale(), 'en');
+let recentFiles: RecentEntry[] = [];
+
+function getUserDataDir() {
+  return app.getPath('userData');
+}
+
+function notifyRecentFilesChanged() {
+  mainWindow?.webContents.send('recent-files-changed', recentFiles);
+}
+
+function registerRecentFile(filePath: string) {
+  if (!filePath) return;
+  recentFiles = addRecentFile(recentFiles, filePath);
+  saveRecentFiles(getUserDataDir(), recentFiles);
+  buildNativeMenu();
+  notifyRecentFilesChanged();
+}
+
+function clearRecentFiles() {
+  recentFiles = [];
+  saveRecentFiles(getUserDataDir(), recentFiles);
+  buildNativeMenu();
+  notifyRecentFilesChanged();
+}
 
 const SEARCHABLE_EXTENSIONS = new Set(['.md', '.markdown', '.mdx', '.txt']);
 const translations = { en, zh } as const;
@@ -59,6 +90,17 @@ function sendMenuAction(action: NativeMenuAction) {
 
 function buildNativeMenu() {
   const t = (key: string) => translate(currentLanguage, key);
+  const recentSubmenu: MenuItemConstructorOptions[] = recentFiles.length === 0
+    ? [{ label: t('menu.noRecentFiles'), enabled: false }]
+    : [
+        ...recentFiles.map<MenuItemConstructorOptions>((entry) => ({
+          label: entry.path,
+          click: () => mainWindow?.webContents.send('open-recent-file', entry.path),
+        })),
+        { type: 'separator' as const },
+        { label: t('menu.clearRecentFiles'), click: () => clearRecentFiles() },
+      ];
+
   const template: MenuItemConstructorOptions[] = [
     {
       label: t('menu.file'),
@@ -66,6 +108,7 @@ function buildNativeMenu() {
         { label: t('menu.newFile'), accelerator: 'Ctrl+N', click: () => sendMenuAction('new-file') },
         { label: t('menu.openFile'), accelerator: 'Ctrl+O', click: () => sendMenuAction('open-file') },
         { label: t('menu.openFolder'), accelerator: 'Ctrl+Shift+O', click: () => sendMenuAction('open-folder') },
+        { label: t('menu.openRecent'), submenu: recentSubmenu },
         { type: 'separator' },
         { label: t('menu.save'), accelerator: 'Ctrl+S', click: () => sendMenuAction('save') },
         { label: t('menu.saveAs'), click: () => sendMenuAction('save-as') },
@@ -331,7 +374,9 @@ function createWindow() {
 }
 
 ipcMain.handle('read_file', async (_, filePath: string) => {
-  return fs.readFileSync(filePath, 'utf-8');
+  const content = fs.readFileSync(filePath, 'utf-8');
+  registerRecentFile(filePath);
+  return content;
 });
 
 ipcMain.handle('write_file', async (_, filePath: string, content: string) => {
@@ -587,6 +632,18 @@ ipcMain.handle(
 
 ipcMain.handle('export_document', async (_, payload: ExportPayload) => exportDocument(payload));
 
+ipcMain.handle('get_recent_files', async () => recentFiles);
+
+ipcMain.handle('add_recent_file', async (_, filePath: string) => {
+  registerRecentFile(filePath);
+  return recentFiles;
+});
+
+ipcMain.handle('clear_recent_files', async () => {
+  clearRecentFiles();
+  return recentFiles;
+});
+
 ipcMain.handle('save_image', async (_, workspaceRoot: string, data: number[], ext: string) => {
   const resourcesDir = path.join(workspaceRoot, '.resources');
   if (!fs.existsSync(resourcesDir)) {
@@ -663,6 +720,8 @@ ipcMain.handle('unwatch_file', async (_, filePath: string) => {
 });
 
 app.whenReady().then(() => {
+  recentFiles = pruneMissingRecentFiles(loadRecentFiles(getUserDataDir()));
+  saveRecentFiles(getUserDataDir(), recentFiles);
   buildNativeMenu();
   createWindow();
 });
