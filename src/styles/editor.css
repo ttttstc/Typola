@@ -81,6 +81,7 @@
   border-collapse: collapse;
   width: 100%;
   margin: 0 0 0.8em;
+  table-layout: fixed;
 }
 
 .ProseMirror td, .ProseMirror th {
@@ -96,6 +97,161 @@
 
 .ProseMirror tr:hover td {
   background: var(--color-surface-sunken);
+}
+
+.ProseMirror .milkdown-table-block {
+  position: relative;
+  margin: 0 0 1.1em;
+}
+
+.ProseMirror .milkdown-table-block .table-wrapper {
+  position: relative;
+}
+
+.ProseMirror .milkdown-table-block .handle {
+  position: absolute;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.ProseMirror .milkdown-table-block .handle[data-show="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ProseMirror .milkdown-table-block .cell-handle {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-paper) 88%, var(--color-surface-sunken));
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.ProseMirror .milkdown-table-block .cell-handle:hover {
+  color: var(--color-ink);
+  border-color: var(--color-line-strong);
+}
+
+.ProseMirror .milkdown-table-block .cell-handle[data-role="col-drag-handle"] {
+  transform: translateY(-14px);
+}
+
+.ProseMirror .milkdown-table-block .cell-handle[data-role="row-drag-handle"] {
+  transform: translateX(-14px);
+}
+
+.ProseMirror .milkdown-table-block .milkdown-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ProseMirror .milkdown-table-block .milkdown-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ProseMirror .milkdown-table-block .button-group {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 999px;
+  background: var(--color-paper);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ProseMirror .milkdown-table-block .button-group[data-show="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ProseMirror .milkdown-table-block .button-group button,
+.ProseMirror .milkdown-table-block .add-button {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ProseMirror .milkdown-table-block .button-group button:hover,
+.ProseMirror .milkdown-table-block .add-button:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+}
+
+.ProseMirror .milkdown-table-block .line-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ProseMirror .milkdown-table-block .line-handle[data-display-type="indicator"] {
+  background: color-mix(in srgb, var(--color-ink) 16%, transparent);
+  border-radius: 999px;
+}
+
+.ProseMirror .milkdown-table-block .line-handle[data-role="x-line-drag-handle"] {
+  left: 0;
+}
+
+.ProseMirror .milkdown-table-block .line-handle[data-role="y-line-drag-handle"] {
+  top: 0;
+}
+
+.ProseMirror .milkdown-table-block .line-handle[data-display-type="tool"] .add-button {
+  background: var(--color-paper);
+  border: 1px solid var(--color-line-soft);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.ProseMirror .milkdown-table-block .drag-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--color-paper) 72%, var(--color-surface-sunken));
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.ProseMirror .milkdown-table-block .drag-preview[data-show="true"] {
+  opacity: 0.9;
+}
+
+.ProseMirror .milkdown-table-block .drag-preview table {
+  margin: 0;
+}
+
+.ProseMirror .milkdown-table-block .selectedCell,
+.ProseMirror .milkdown-table-block td.selectedCell,
+.ProseMirror .milkdown-table-block th.selectedCell {
+  background: color-mix(in srgb, var(--color-surface-sunken) 88%, var(--color-paper));
 }
 
 .ProseMirror a {

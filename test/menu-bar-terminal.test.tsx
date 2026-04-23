@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MenuBar } from '../src/components/MenuBar';
+import * as formatting from '../src/editor/formatting';
 import { useEditorStore } from '../src/store/editor';
 import { useTerminalStore } from '../src/store/terminal';
 import { useUIStore } from '../src/store/ui';
@@ -30,6 +31,8 @@ vi.mock('react-i18next', async (importOriginal) => {
           'menu.darkMode': 'Dark Mode',
           'menu.lightMode': 'Light Mode',
           'fileTree.untitled': 'Untitled',
+          'table.insertRowAbove': 'Insert Row Above',
+          'table.insertLineBreak': 'Insert Line Break',
         };
 
         return dictionary[key] ?? key;
@@ -39,15 +42,27 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 vi.mock('../src/editor/formatting', () => ({
+  addTableColumnAfter: vi.fn(),
+  addTableColumnBefore: vi.fn(),
+  addTableRowAfter: vi.fn(),
+  addTableRowBefore: vi.fn(),
   applyBlockFormat: vi.fn(),
   applyInlineFormat: vi.fn(),
   applyLink: vi.fn(),
+  deleteCurrentTable: vi.fn(),
+  deleteCurrentTableColumn: vi.fn(),
+  deleteCurrentTableRow: vi.fn(),
+  exitCurrentTable: vi.fn(),
   getActiveLinkHref: vi.fn(() => null),
   hasEditorSelection: vi.fn(() => false),
   isEditorTarget: vi.fn(() => false),
+  isSelectionInsideTable: vi.fn(() => false),
+  isTableTarget: vi.fn(() => false),
+  insertTableLineBreak: vi.fn(),
   rememberEditorSelection: vi.fn(),
   redoEditor: vi.fn(),
   selectAllEditor: vi.fn(),
+  setCurrentTableColumnAlignment: vi.fn(),
   undoEditor: vi.fn(),
 }));
 
@@ -116,10 +131,16 @@ describe('MenuBar terminal entry', () => {
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowMinimize: vi.fn(() => Promise.resolve()),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
+      windowToggleMaximize: vi.fn(() => Promise.resolve(true)),
       workspaceSearch: vi.fn(() => Promise.resolve([])),
       writeClipboardText: vi.fn(() => Promise.resolve()),
       writeFile: vi.fn(() => Promise.resolve()),
     };
+
+    vi.mocked(formatting.hasEditorSelection).mockReturnValue(false);
+    vi.mocked(formatting.isEditorTarget).mockReturnValue(false);
+    vi.mocked(formatting.isSelectionInsideTable).mockReturnValue(false);
+    vi.mocked(formatting.isTableTarget).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -141,5 +162,18 @@ describe('MenuBar terminal entry', () => {
       rows: 24,
     });
     expect(useTerminalStore.getState().tabs).toHaveLength(1);
+  });
+
+  it('shows table actions from the editor context menu even without a text selection', async () => {
+    vi.mocked(formatting.isEditorTarget).mockReturnValue(true);
+    vi.mocked(formatting.isTableTarget).mockReturnValue(true);
+    vi.mocked(formatting.hasEditorSelection).mockReturnValue(false);
+
+    render(<MenuBar />);
+
+    fireEvent.contextMenu(document, { target: document.body, clientX: 80, clientY: 40 });
+
+    expect(await screen.findByText('Insert Row Above')).toBeInTheDocument();
+    expect(screen.getByText('Insert Line Break')).toBeInTheDocument();
   });
 });

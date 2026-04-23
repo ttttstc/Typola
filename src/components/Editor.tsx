@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { tableBlock, tableBlockConfig } from '@milkdown/components/table-block';
 import { Editor as MilkdownEditorType, defaultValueCtx, prosePluginsCtx, rootCtx } from '@milkdown/core';
-import { commonmark } from '@milkdown/preset-commonmark';
+import { commonmark, hardbreakFilterNodes } from '@milkdown/preset-commonmark';
 import { gfm } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
@@ -13,6 +14,7 @@ import { setupCodeHighlight } from '../editor/plugins/highlight';
 import { setupImageHandler } from '../editor/plugins/image';
 import { createMarkdownSyntaxPlugin } from '../editor/plugins/markdownSyntax';
 import { setupMermaidHandler } from '../editor/plugins/mermaid';
+import { createTableKeyboardPlugin, renderTableBlockButton } from '../editor/plugins/table';
 import {
   applyBlockFormat,
   applyInlineFormat,
@@ -46,7 +48,6 @@ export function MilkdownEditor() {
   const setSaveStatus = useEditorStore((state) => state.setSaveStatus);
   const updateFilePath = useEditorStore((state) => state.updateFilePath);
   const fontSize = useUIStore((s) => s.fontSize);
-  const theme = useUIStore((s) => s.theme);
   const workspaceRoot = useWorkspaceStore((s) => s.workspaceRoot);
   const setFileTree = useWorkspaceStore((s) => s.setFileTree);
 
@@ -55,7 +56,7 @@ export function MilkdownEditor() {
     [t]
   );
 
-  const setupEditorPlugins = useCallback(() => {
+  const installEditorPlugins = useCallback(() => {
     pluginCleanupRef.current.forEach((cleanup) => cleanup());
     pluginCleanupRef.current = [setupImageHandler(), setupCodeHighlight(), setupMermaidHandler()];
   }, []);
@@ -72,7 +73,15 @@ export function MilkdownEditor() {
       .config((ctx: any) => {
         ctx.set(rootCtx, container);
         ctx.set(defaultValueCtx, initialContent);
-        ctx.update(prosePluginsCtx, (plugins: unknown[]) => [...plugins, createMarkdownSyntaxPlugin()]);
+        ctx.set(hardbreakFilterNodes.key, ['code_block']);
+        ctx.set(tableBlockConfig.key, {
+          renderButton: renderTableBlockButton,
+        });
+        ctx.update(prosePluginsCtx, (plugins: unknown[]) => [
+          createTableKeyboardPlugin(ctx),
+          ...plugins,
+          createMarkdownSyntaxPlugin(),
+        ]);
         ctx.get(listenerCtx).markdownUpdated((_ctx: any, markdown: string) => {
           if (isInternalUpdate.current) return;
           // The listener is debounced ~200ms by @milkdown/plugin-listener and
@@ -89,6 +98,7 @@ export function MilkdownEditor() {
       .use(commonmark)
       .use(gfm)
       .use(history)
+      .use(tableBlock)
       .use(listener);
 
     // @ts-ignore
@@ -112,12 +122,12 @@ export function MilkdownEditor() {
       initEditor(container, nextContent);
       // Plugin handlers attach to the stable .ProseMirror element via a
       // MutationObserver; they only need to be installed once per editor.
-      queueMicrotask(setupEditorPlugins);
+      queueMicrotask(installEditorPlugins);
     } else {
       editorRef.current.action(replaceAll(nextContent, true));
     }
     isInternalUpdate.current = false;
-  }, [initEditor, setupEditorPlugins]);
+  }, [initEditor, installEditorPlugins]);
 
   const loadFileFromDisk = useCallback(async (filePath: string) => {
     const nextContent = await window.electronAPI.readFile(filePath);
@@ -354,11 +364,6 @@ export function MilkdownEditor() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [saveFile, t]);
-
-  useEffect(() => {
-    if (!editorRef.current) return;
-    queueMicrotask(setupEditorPlugins);
-  }, [theme, setupEditorPlugins]);
 
   useEffect(() => {
     const handleSetContent = (event: Event) => {

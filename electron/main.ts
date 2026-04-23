@@ -623,6 +623,20 @@ ipcMain.handle('window_is_maximized', () => {
   return mainWindow?.isMaximized() ?? false;
 });
 
+ipcMain.handle('window_toggle_maximize', () => {
+  if (!mainWindow) {
+    return false;
+  }
+
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+    return false;
+  }
+
+  mainWindow.maximize();
+  return true;
+});
+
 ipcMain.handle('watch_file', async (_, filePath: string) => {
   if (watchedFiles.has(filePath)) return;
   try {

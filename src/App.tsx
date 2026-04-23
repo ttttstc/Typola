@@ -15,6 +15,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    window.dispatchEvent(new CustomEvent('app-theme-changed', { detail: { theme } }));
   }, [theme]);
 
   useEffect(() => {

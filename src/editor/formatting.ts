@@ -6,6 +6,7 @@ import {
   codeBlockSchema,
   createCodeBlockCommand,
   headingSchema,
+  insertHardbreakCommand,
   insertHrCommand,
   insertImageCommand,
   linkSchema,
@@ -19,15 +20,25 @@ import {
   turnIntoTextCommand,
   updateLinkCommand,
 } from '@milkdown/preset-commonmark';
-import { insertTableCommand, toggleStrikethroughCommand } from '@milkdown/preset-gfm';
+import {
+  addColAfterCommand,
+  addColBeforeCommand,
+  addRowAfterCommand,
+  addRowBeforeCommand,
+  exitTable,
+  insertTableCommand,
+  toggleStrikethroughCommand,
+} from '@milkdown/preset-gfm';
 import { redoCommand, undoCommand } from '@milkdown/plugin-history';
 import { lift, setBlockType, wrapIn } from 'prosemirror-commands';
 import type { Mark as ProseMark, Node as ProseNode } from 'prosemirror-model';
 import { AllSelection, TextSelection, type EditorState, type Selection } from 'prosemirror-state';
 import { liftListItem, wrapInList } from 'prosemirror-schema-list';
+import { TableMap, deleteColumn, deleteRow, deleteTable, findTable } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
 
 export type InlineFormat = 'bold' | 'italic' | 'strikethrough' | 'inline-code';
+export type TableAlignment = 'left' | 'center' | 'right';
 export type BlockFormat =
   | 'paragraph'
   | 'heading-1'
@@ -152,6 +163,22 @@ function hasAncestor(selection: Selection, typeName: string) {
   }
 
   return false;
+}
+
+function getCurrentTableSelection(selection: Selection) {
+  const table = findTable(selection.$from);
+  if (!table) {
+    return null;
+  }
+
+  const rowIndex = selection.$from.index(table.depth);
+  const columnIndex = selection.$from.index(table.depth + 1);
+
+  return {
+    table,
+    rowIndex,
+    columnIndex,
+  };
 }
 
 function findAncestorDepth(
@@ -422,6 +449,83 @@ export function insertTable(row = 2, col = 2) {
   return runCommand(insertTableCommand, { row, col });
 }
 
+export function addTableRowBefore() {
+  return runCommand(addRowBeforeCommand);
+}
+
+export function addTableRowAfter() {
+  return runCommand(addRowAfterCommand);
+}
+
+export function addTableColumnBefore() {
+  return runCommand(addColBeforeCommand);
+}
+
+export function addTableColumnAfter() {
+  return runCommand(addColAfterCommand);
+}
+
+export function deleteCurrentTableRow() {
+  return Boolean(runWithMutableEditor((_ctx, view) => runProseCommand(view, deleteRow)));
+}
+
+export function deleteCurrentTableColumn() {
+  return Boolean(runWithMutableEditor((_ctx, view) => runProseCommand(view, deleteColumn)));
+}
+
+export function deleteCurrentTable() {
+  return Boolean(runWithMutableEditor((_ctx, view) => runProseCommand(view, deleteTable)));
+}
+
+export function setCurrentTableColumnAlignment(alignment: TableAlignment) {
+  return Boolean(
+    runWithMutableEditor((_ctx, view) => {
+      const currentTable = getCurrentTableSelection(view.state.selection);
+      if (!currentTable) {
+        return false;
+      }
+
+      const map = TableMap.get(currentTable.table.node);
+      let tr = view.state.tr;
+      let changed = false;
+
+      for (let rowIndex = 0; rowIndex < map.height; rowIndex += 1) {
+        const cellPos = currentTable.table.start + map.positionAt(rowIndex, currentTable.columnIndex, currentTable.table.node);
+        const cell = tr.doc.nodeAt(cellPos);
+        if (!cell) {
+          continue;
+        }
+
+        const currentAlignment = (cell.attrs.alignment as TableAlignment | undefined) ?? 'left';
+        if (currentAlignment === alignment) {
+          continue;
+        }
+
+        tr = tr.setNodeMarkup(cellPos, undefined, {
+          ...cell.attrs,
+          alignment,
+        });
+        changed = true;
+      }
+
+      if (!changed) {
+        return false;
+      }
+
+      view.dispatch(tr.scrollIntoView());
+      return true;
+    })
+  );
+}
+
+export function insertTableLineBreak() {
+  return runCommand(insertHardbreakCommand);
+}
+
+export function exitCurrentTable() {
+  return runCommand(exitTable);
+}
+
 export function insertImage(src: string, alt = 'image', title = '') {
   const nextSrc = src.trim();
   if (!nextSrc) {
@@ -554,6 +658,14 @@ function isInsideEditor(node: Node | null) {
 
 export function isEditorTarget(target: EventTarget | null) {
   return target instanceof Node && isInsideEditor(target);
+}
+
+export function isTableTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('.milkdown-table-block, td, th'));
+}
+
+export function isSelectionInsideTable() {
+  return Boolean(runWithEditor((_ctx, view) => Boolean(getCurrentTableSelection(view.state.selection))));
 }
 
 export function hasEditorSelection() {

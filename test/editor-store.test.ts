@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useEditorStore } from '../src/store/editor';
+import { useWorkspaceStore } from '../src/store/workspace';
 
 describe('editor store', () => {
   beforeEach(() => {
     useEditorStore.getState().reset();
+    useWorkspaceStore.getState().setWorkspaceRoot(null);
   });
 
   it('preserves a dirty draft when switching tabs', () => {
@@ -66,5 +68,21 @@ describe('editor store', () => {
     expect(nextState.content).toBe('still editing here');
     expect(nextState.isDirty).toBe(true);
     expect(nextState.openFiles.map((file) => file.path)).toContain('C:\\workspace\\saved-draft.md');
+  });
+
+  it('syncs the active workspace root when the current file moves to another project', () => {
+    const workspaceStore = useWorkspaceStore.getState();
+    workspaceStore.addWorkspaceRoot('C:\\root-a');
+    workspaceStore.addWorkspaceRoot('C:\\root-b');
+
+    const editorStore = useEditorStore.getState();
+    editorStore.addOpenFile('C:\\root-a\\a.md');
+    editorStore.addOpenFile('C:\\root-b\\b.md');
+
+    expect(useWorkspaceStore.getState().workspaceRoot).toBe('C:\\root-b');
+
+    editorStore.setCurrentFile('C:\\root-a\\a.md');
+
+    expect(useWorkspaceStore.getState().workspaceRoot).toBe('C:\\root-a');
   });
 });

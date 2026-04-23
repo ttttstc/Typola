@@ -2,8 +2,14 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Editor, MilkdownEditor } from '../src/components/Editor';
 import { useEditorStore } from '../src/store/editor';
+import { useUIStore } from '../src/store/ui';
 
 const {
+  commandCallMock,
+  commandsCtxToken,
+  ctxSetMock,
+  ctxUpdateMock,
+  hardbreakFilterNodesKey,
   listenerCtxToken,
   editorInstances,
   prosePluginsCtxToken,
@@ -12,7 +18,14 @@ const {
   setupCodeHighlightMock,
   setupImageHandlerMock,
   setupMermaidHandlerMock,
+  tableBlockConfigKey,
+  tableBlockPlugin,
 } = vi.hoisted(() => ({
+  commandCallMock: vi.fn(() => true),
+  commandsCtxToken: Symbol('commandsCtx'),
+  ctxSetMock: vi.fn(),
+  ctxUpdateMock: vi.fn((_: unknown, updater: (plugins: unknown[]) => unknown[]) => updater([])),
+  hardbreakFilterNodesKey: Symbol('hardbreakFilterNodes'),
   listenerCtxToken: Symbol('listenerCtx'),
   editorInstances: [] as Array<{
     action: ReturnType<typeof vi.fn>;
@@ -24,6 +37,8 @@ const {
   setupCodeHighlightMock: vi.fn(() => () => {}),
   setupImageHandlerMock: vi.fn(() => () => {}),
   setupMermaidHandlerMock: vi.fn(() => () => {}),
+  tableBlockConfigKey: Symbol('tableBlockConfig'),
+  tableBlockPlugin: { name: 'table-block-plugin' },
 }));
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -80,13 +95,13 @@ vi.mock('@milkdown/core', () => ({
         config(
           fn: (ctx: {
             get: (token: symbol) => { markdownUpdated: (cb: (ctx: unknown, markdown: string) => void) => void } | undefined;
-            set: ReturnType<typeof vi.fn>;
-            update: ReturnType<typeof vi.fn>;
+            set: typeof ctxSetMock;
+            update: typeof ctxUpdateMock;
           }) => void
         ) {
           fn({
-            set: vi.fn(),
-            update: vi.fn(),
+            set: ctxSetMock,
+            update: ctxUpdateMock,
             get: (token: symbol) =>
               token === listenerCtxToken
                 ? {
@@ -94,13 +109,15 @@ vi.mock('@milkdown/core', () => ({
                       markdownUpdatedListeners.push(cb);
                     },
                   }
+                : token === commandsCtxToken
+                  ? {
+                      call: commandCallMock,
+                    }
                 : undefined,
           });
           return instance;
         },
-        use() {
-          return instance;
-        },
+        use: vi.fn(() => instance),
         create() {
           return instance;
         },
@@ -117,19 +134,28 @@ vi.mock('@milkdown/core', () => ({
   },
   rootCtx: Symbol('rootCtx'),
   defaultValueCtx: Symbol('defaultValueCtx'),
+  commandsCtx: commandsCtxToken,
   prosePluginsCtx: prosePluginsCtxToken,
 }));
 
 vi.mock('@milkdown/preset-commonmark', () => ({
   commonmark: {},
+  hardbreakFilterNodes: { key: hardbreakFilterNodesKey },
+  insertHardbreakCommand: { key: Symbol('insertHardbreakCommand') },
 }));
 
 vi.mock('@milkdown/preset-gfm', () => ({
   gfm: {},
+  exitTable: { key: Symbol('exitTable') },
 }));
 
 vi.mock('@milkdown/plugin-history', () => ({
   history: {},
+}));
+
+vi.mock('@milkdown/components/table-block', () => ({
+  tableBlock: tableBlockPlugin,
+  tableBlockConfig: { key: tableBlockConfigKey },
 }));
 
 describe('MilkdownEditor', () => {
@@ -143,6 +169,9 @@ describe('MilkdownEditor', () => {
     useEditorStore.getState().reset();
     editorInstances.length = 0;
     replaceAllMock.mockClear();
+    ctxSetMock.mockClear();
+    ctxUpdateMock.mockClear();
+    commandCallMock.mockClear();
     markdownUpdatedListeners.length = 0;
     setupCodeHighlightMock.mockClear();
     setupImageHandlerMock.mockClear();
@@ -183,6 +212,7 @@ describe('MilkdownEditor', () => {
       windowMinimize: vi.fn(() => Promise.resolve()),
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
+      windowToggleMaximize: vi.fn(() => Promise.resolve(true)),
       windowClose: vi.fn(() => Promise.resolve()),
       windowIsMaximized: vi.fn(() => Promise.resolve(false)),
       watchFile: watchFileMock,
@@ -375,6 +405,59 @@ describe('MilkdownEditor', () => {
     expect(setupCodeHighlightMock).toHaveBeenCalledTimes(initialCodeCalls);
     expect(setupImageHandlerMock).toHaveBeenCalledTimes(initialImageCalls);
     expect(setupMermaidHandlerMock).toHaveBeenCalledTimes(initialMermaidCalls);
+  });
+
+  it('does not reinstall plugin handlers when the app theme changes', async () => {
+    act(() => {
+      useEditorStore.getState().addOpenFile('alpha.md');
+      useUIStore.setState({ theme: 'light' });
+    });
+
+    render(<MilkdownEditor />);
+
+    await waitFor(() => expect(readFileMock).toHaveBeenCalledWith('alpha.md'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const initialCodeCalls = setupCodeHighlightMock.mock.calls.length;
+    const initialImageCalls = setupImageHandlerMock.mock.calls.length;
+    const initialMermaidCalls = setupMermaidHandlerMock.mock.calls.length;
+
+    act(() => {
+      useUIStore.setState({ theme: 'dark' });
+      window.dispatchEvent(new CustomEvent('app-theme-changed', { detail: { theme: 'dark' } }));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(setupCodeHighlightMock).toHaveBeenCalledTimes(initialCodeCalls);
+    expect(setupImageHandlerMock).toHaveBeenCalledTimes(initialImageCalls);
+    expect(setupMermaidHandlerMock).toHaveBeenCalledTimes(initialMermaidCalls);
+    expect(editorInstances).toHaveLength(1);
+    expect(editorInstances[0].destroy).not.toHaveBeenCalled();
+  });
+
+  it('configures table editing plugins and hard breaks for table cells', async () => {
+    act(() => {
+      useEditorStore.getState().addOpenFile('table.md');
+    });
+
+    render(<MilkdownEditor />);
+
+    await waitFor(() => expect(readFileMock).toHaveBeenCalledWith('table.md'));
+
+    expect(ctxSetMock).toHaveBeenCalledWith(hardbreakFilterNodesKey, ['code_block']);
+    expect(ctxSetMock).toHaveBeenCalledWith(
+      tableBlockConfigKey,
+      expect.objectContaining({
+        renderButton: expect.any(Function),
+      })
+    );
+    expect(ctxUpdateMock).toHaveBeenCalledWith(prosePluginsCtxToken, expect.any(Function));
+    expect(editorInstances[0]?.use).toHaveBeenCalledWith(tableBlockPlugin);
   });
 
   it('drops the debounced markdownUpdated fire that follows a programmatic replace', async () => {

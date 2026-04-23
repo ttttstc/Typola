@@ -10,7 +10,12 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useWorkspaceStore, FileEntry, WorkspaceRoot } from '../store/workspace';
+import {
+  useWorkspaceStore,
+  FileEntry,
+  WorkspaceRoot,
+  findContainingWorkspaceRoot,
+} from '../store/workspace';
 import { useEditorStore } from '../store/editor';
 
 interface ContextMenuProps {
@@ -98,6 +103,161 @@ interface TreeNodeProps {
   onRename: (entry: FileEntry) => void;
 }
 
+interface RenameDialogProps {
+  currentName: string;
+  error: string | null;
+  pending: boolean;
+  value: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  onChange: (value: string) => void;
+}
+
+function RenameDialog({
+  currentName,
+  error,
+  pending,
+  value,
+  onCancel,
+  onConfirm,
+  onChange,
+}: RenameDialogProps) {
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(15, 23, 42, 0.32)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 4000,
+      }}
+      onClick={onCancel}
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onConfirm();
+        }}
+        onClick={(event) => event.stopPropagation()}
+        style={{
+          width: 'min(420px, calc(100vw - 32px))',
+          background: 'var(--color-paper)',
+          border: '1px solid var(--color-line-soft)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 16px 48px rgba(15, 23, 42, 0.2)',
+          padding: '18px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <strong style={{ fontSize: '14px', color: 'var(--color-ink)' }}>
+            {t('common.rename')}
+          </strong>
+          <span style={{ fontSize: '12px', color: 'var(--color-muted)' }}>
+            {t('fileTree.renamePrompt', { name: currentName })}
+          </span>
+        </div>
+        <input
+          autoFocus
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={pending}
+          style={{
+            width: '100%',
+            height: '36px',
+            padding: '0 10px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-line-soft)',
+            background: 'var(--color-paper)',
+            color: 'var(--color-ink)',
+            fontSize: '13px',
+            outline: 'none',
+          }}
+        />
+        <div
+          style={{
+            minHeight: '18px',
+            fontSize: '12px',
+            color: error ? '#dc2626' : 'var(--color-muted)',
+          }}
+        >
+          {error ?? t('fileTree.renameHint')}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={pending}
+            style={{
+              height: '32px',
+              padding: '0 12px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-line-soft)',
+              background: 'transparent',
+              color: 'var(--color-ink)',
+              cursor: pending ? 'default' : 'pointer',
+            }}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={pending}
+            style={{
+              height: '32px',
+              padding: '0 12px',
+              borderRadius: 'var(--radius-md)',
+              border: 'none',
+              background: 'var(--color-ink)',
+              color: 'var(--color-paper)',
+              cursor: pending ? 'default' : 'pointer',
+            }}
+          >
+            {pending ? t('statusBar.saving') : t('common.confirm')}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function findSiblingEntries(entries: FileEntry[], targetPath: string): FileEntry[] | null {
+  for (const entry of entries) {
+    if (entry.path === targetPath) {
+      return entries;
+    }
+
+    if (!entry.children) {
+      continue;
+    }
+
+    const nested = findSiblingEntries(entry.children, targetPath);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
 function TreeNode({ entry, level, onFileClick, onNewFile, onDelete, onRename }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -129,6 +289,7 @@ function TreeNode({ entry, level, onFileClick, onNewFile, onDelete, onRename }: 
           borderRadius: 'var(--radius-sm)',
           gap: '4px',
         }}
+        title={entry.name}
         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         onClick={handleClick}
@@ -315,6 +476,10 @@ export function FileTree() {
   const setActiveRoot = useWorkspaceStore((s) => s.setActiveRoot);
   const setRootFileTree = useWorkspaceStore((s) => s.setRootFileTree);
   const toggleRootExpanded = useWorkspaceStore((s) => s.toggleRootExpanded);
+  const [renameTarget, setRenameTarget] = useState<{ entry: FileEntry; rootPath: string } | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renamePending, setRenamePending] = useState(false);
 
   const refreshRoot = useCallback(
     async (rootPath: string) => {
@@ -337,12 +502,6 @@ export function FileTree() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceRoots.length]);
-
-  const findContainingRoot = (path: string): WorkspaceRoot | undefined => {
-    return workspaceRoots.find(
-      (r) => path === r.path || path.startsWith(`${r.path}\\`) || path.startsWith(`${r.path}/`)
-    );
-  };
 
   const handleAddProject = async () => {
     try {
@@ -389,31 +548,78 @@ export function FileTree() {
   };
 
   const handleRename = async (entry: FileEntry, rootPath: string) => {
-    const currentName = entry.name;
-    const nextName = window
-      .prompt(t('fileTree.renamePrompt', { name: currentName }), currentName)
-      ?.trim();
+    setRenameTarget({ entry, rootPath });
+    setRenameValue(entry.name);
+    setRenameError(null);
+  };
 
-    if (!nextName || nextName === currentName) return;
+  const handleRenameConfirm = useCallback(async () => {
+    if (!renameTarget) {
+      return;
+    }
 
-    const parentDir = entry.path.split(/[\\/]/).slice(0, -1).join('\\');
-    const nextPath = `${parentDir}\\${nextName}`;
+    const nextName = renameValue.trim();
+    if (!nextName) {
+      setRenameError(t('fileTree.renameEmpty'));
+      return;
+    }
+
+    if (/[\\/]/.test(nextName)) {
+      setRenameError(t('fileTree.renameInvalid'));
+      return;
+    }
+
+    if (nextName === renameTarget.entry.name) {
+      setRenameTarget(null);
+      setRenameValue('');
+      setRenameError(null);
+      return;
+    }
+
+    const root = workspaceRoots.find((candidate) => candidate.path === renameTarget.rootPath);
+    const siblingEntries = root ? findSiblingEntries(root.fileTree, renameTarget.entry.path) : null;
+    const hasConflict = siblingEntries?.some(
+      (candidate) =>
+        candidate.path !== renameTarget.entry.path &&
+        candidate.name.localeCompare(nextName, undefined, { sensitivity: 'accent' }) === 0
+    );
+
+    if (hasConflict) {
+      setRenameError(t('fileTree.renameConflict', { name: nextName }));
+      return;
+    }
+
+    const lastSlash = Math.max(
+      renameTarget.entry.path.lastIndexOf('/'),
+      renameTarget.entry.path.lastIndexOf('\\')
+    );
+    const parentDir = lastSlash >= 0 ? renameTarget.entry.path.slice(0, lastSlash) : '';
+    const separator =
+      renameTarget.entry.path.includes('\\') || !renameTarget.entry.path.includes('/') ? '\\' : '/';
+    const nextPath = parentDir ? `${parentDir}${separator}${nextName}` : nextName;
 
     try {
-      await window.electronAPI.renamePath(entry.path, nextPath);
-      useEditorStore.getState().replacePathPrefix(entry.path, nextPath);
-      await refreshRoot(rootPath);
+      setRenamePending(true);
+      await window.electronAPI.renamePath(renameTarget.entry.path, nextPath);
+      useEditorStore.getState().replacePathPrefix(renameTarget.entry.path, nextPath);
+      await refreshRoot(renameTarget.rootPath);
+      setRenameTarget(null);
+      setRenameValue('');
+      setRenameError(null);
     } catch (error) {
       console.error('Failed to rename:', error);
+      setRenameError(t('fileTree.renameFailed'));
+    } finally {
+      setRenamePending(false);
     }
-  };
+  }, [refreshRoot, renameTarget, renameValue, t, workspaceRoots]);
 
   const handleFileClick = (path: string) => {
     useEditorStore.getState().addOpenFile(path);
   };
 
   const handleNewFile = async (dirPath: string) => {
-    const owningRoot = findContainingRoot(dirPath);
+    const owningRoot = findContainingWorkspaceRoot(workspaceRoots, dirPath);
     const baseName = t('fileTree.untitled') || 'Untitled';
     let fileName = baseName + '.md';
     let counter = 1;
@@ -537,6 +743,29 @@ export function FileTree() {
           </div>
         )}
       </div>
+      {renameTarget && (
+        <RenameDialog
+          currentName={renameTarget.entry.name}
+          error={renameError}
+          pending={renamePending}
+          value={renameValue}
+          onCancel={() => {
+            if (renamePending) return;
+            setRenameTarget(null);
+            setRenameValue('');
+            setRenameError(null);
+          }}
+          onConfirm={() => {
+            void handleRenameConfirm();
+          }}
+          onChange={(value) => {
+            setRenameValue(value);
+            if (renameError) {
+              setRenameError(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

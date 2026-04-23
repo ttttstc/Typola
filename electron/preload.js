@@ -32,6 +32,7 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   windowMinimize: () => import_electron.ipcRenderer.invoke("window_minimize"),
   windowMaximize: () => import_electron.ipcRenderer.invoke("window_maximize"),
   windowUnmaximize: () => import_electron.ipcRenderer.invoke("window_unmaximize"),
+  windowToggleMaximize: () => import_electron.ipcRenderer.invoke("window_toggle_maximize"),
   windowClose: () => import_electron.ipcRenderer.invoke("window_close"),
   windowIsMaximized: () => import_electron.ipcRenderer.invoke("window_is_maximized"),
   // File watcher

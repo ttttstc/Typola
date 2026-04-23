@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowMinimize: () => ipcRenderer.invoke('window_minimize'),
   windowMaximize: () => ipcRenderer.invoke('window_maximize'),
   windowUnmaximize: () => ipcRenderer.invoke('window_unmaximize'),
+  windowToggleMaximize: () => ipcRenderer.invoke('window_toggle_maximize'),
   windowClose: () => ipcRenderer.invoke('window_close'),
   windowIsMaximized: () => ipcRenderer.invoke('window_is_maximized'),
   // File watcher

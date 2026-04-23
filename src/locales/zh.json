@@ -91,6 +91,11 @@
     "loading": "加载中...",
     "confirmDelete": "确定要删除 \"{{name}}\" 吗？此操作不可撤销。",
     "renamePrompt": "请输入 \"{{name}}\" 的新名称：",
+    "renameHint": "按 Enter 确认，Esc 取消。",
+    "renameEmpty": "名称不能为空。",
+    "renameInvalid": "名称不能包含 / 或 \\\\。",
+    "renameConflict": "\"{{name}}\" 已存在，请换一个名称。",
+    "renameFailed": "重命名失败，请稍后重试。",
     "untitled": "未命名",
     "addProject": "添加项目",
     "removeProject": "移除项目",
@@ -245,6 +250,20 @@
     "heading4": "标题 4",
     "heading5": "标题 5",
     "heading6": "标题 6"
+  },
+  "table": {
+    "insertLineBreak": "单元格内换行",
+    "exitTable": "跳出表格",
+    "insertRowAbove": "在上方插入行",
+    "insertRowBelow": "在下方插入行",
+    "insertColumnLeft": "在左侧插入列",
+    "insertColumnRight": "在右侧插入列",
+    "alignLeft": "左对齐列",
+    "alignCenter": "居中对齐列",
+    "alignRight": "右对齐列",
+    "deleteRow": "删除当前行",
+    "deleteColumn": "删除当前列",
+    "deleteTable": "删除表格"
   },
   "floatingToolbar": {
     "paragraphFormat": "段落格式",
