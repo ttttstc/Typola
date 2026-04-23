@@ -143,6 +143,7 @@ describe('TerminalPanel theme', () => {
       windowMinimize: vi.fn(() => Promise.resolve()),
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
+      windowToggleMaximize: vi.fn(() => Promise.resolve(true)),
       windowClose: vi.fn(() => Promise.resolve()),
       windowIsMaximized: vi.fn(() => Promise.resolve(false)),
       watchFile: vi.fn(() => Promise.resolve()),

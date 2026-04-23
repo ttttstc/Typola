@@ -14,6 +14,37 @@ export interface WorkspaceRoot {
   expanded: boolean;
 }
 
+function isPathWithinRoot(targetPath: string, rootPath: string) {
+  return (
+    targetPath === rootPath ||
+    targetPath.startsWith(`${rootPath}\\`) ||
+    targetPath.startsWith(`${rootPath}/`)
+  );
+}
+
+export function findContainingWorkspaceRoot(
+  workspaceRoots: WorkspaceRoot[],
+  targetPath: string | null
+) {
+  if (!targetPath) {
+    return null;
+  }
+
+  let matchedRoot: WorkspaceRoot | null = null;
+
+  for (const root of workspaceRoots) {
+    if (!isPathWithinRoot(targetPath, root.path)) {
+      continue;
+    }
+
+    if (!matchedRoot || root.path.length > matchedRoot.path.length) {
+      matchedRoot = root;
+    }
+  }
+
+  return matchedRoot;
+}
+
 interface WorkspaceState {
   workspaceRoots: WorkspaceRoot[];
   activeRootPath: string | null;

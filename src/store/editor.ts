@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { findContainingWorkspaceRoot, useWorkspaceStore } from './workspace';
 
 export interface OpenFile {
   path: string;
@@ -135,6 +136,20 @@ const getOpenFileState = (
   };
 };
 
+const syncActiveWorkspaceRoot = (path: string | null) => {
+  if (!path) {
+    return;
+  }
+
+  const workspaceState = useWorkspaceStore.getState();
+  const owningRoot = findContainingWorkspaceRoot(workspaceState.workspaceRoots, path);
+  if (!owningRoot || owningRoot.path === workspaceState.activeRootPath) {
+    return;
+  }
+
+  workspaceState.setActiveRoot(owningRoot.path);
+};
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   currentFile: null,
   content: '',
@@ -143,7 +158,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   openFiles: [],
   fileContents: {},
 
-  setCurrentFile: (file) =>
+  setCurrentFile: (file) => {
     set((state) => {
       const nextActive = getOpenFileState(state.openFiles, state.fileContents, file);
       return {
@@ -152,7 +167,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         isDirty: nextActive.isDirty,
         saveStatus: 'saved',
       };
-    }),
+    });
+    syncActiveWorkspaceRoot(file);
+  },
 
   setContent: (content) => {
     const state = get();
@@ -237,6 +254,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         isDirty: false,
         saveStatus: 'saved',
       });
+      syncActiveWorkspaceRoot(path);
       return;
     }
 
@@ -254,6 +272,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: existingFile.isDirty,
       saveStatus: 'saved',
     });
+    syncActiveWorkspaceRoot(path);
   },
 
   updateFilePath: (oldPath: string, newPath: string) => {
@@ -282,6 +301,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: activeFileChanged ? nextActive.isDirty : state.isDirty,
       saveStatus: activeFileChanged ? 'saved' : state.saveStatus,
     });
+    syncActiveWorkspaceRoot(nextCurrentFile);
   },
 
   replacePathPrefix: (oldPath: string, newPath: string) => {
@@ -308,6 +328,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: nextCurrentFile === state.currentFile ? state.isDirty : nextActive.isDirty,
       saveStatus: 'saved',
     });
+    syncActiveWorkspaceRoot(nextCurrentFile);
   },
 
   getFileContent: (path: string | null) => (path ? get().fileContents[path] ?? '' : ''),
@@ -338,6 +359,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: nextActive.isDirty,
       saveStatus: 'saved',
     });
+    syncActiveWorkspaceRoot(nextCurrentFile);
   },
 
   reset: () =>

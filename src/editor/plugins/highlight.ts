@@ -65,24 +65,29 @@ export function setupCodeHighlight() {
   const editor = document.querySelector('.ProseMirror');
   if (!editor) return () => {};
 
-  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  let queuedMode: 'none' | 'normal' | 'force' = 'none';
+  let processing = false;
 
-  const processCodeBlocks = async () => {
-    const codeBlocks = editor.querySelectorAll('pre');
+  const processCodeBlocks = async (force = false) => {
+    const codeBlocks = editor.querySelectorAll<HTMLPreElement>('pre');
+    const isDark = document.documentElement.dataset.theme === 'dark';
     for (const block of codeBlocks) {
-      if (block.classList.contains('shiki-processed')) continue;
+      if (!force && block.classList.contains('shiki-processed')) continue;
 
       const code = block.querySelector('code');
-      if (!code) continue;
-
-      const codeText = code.textContent || '';
-      const classList = Array.from(code.classList);
+      const classList = code ? Array.from(code.classList) : [];
       const langClass = classList.find((c) => c.startsWith('language-'));
-      const lang = langClass ? langClass.replace('language-', '') : 'text';
+      const lang = block.dataset.highlightLang ?? (langClass ? langClass.replace('language-', '') : 'text');
+      const codeText = block.dataset.rawCode
+        ? decodeURIComponent(block.dataset.rawCode)
+        : code?.textContent || '';
+      if (!codeText) continue;
 
-      const highlighted = await highlightCode(codeText, lang, theme === 'dark');
+      const highlighted = await highlightCode(codeText, lang, isDark);
       block.innerHTML = highlighted;
       block.classList.add('shiki-processed');
+      block.dataset.rawCode = encodeURIComponent(codeText);
+      block.dataset.highlightLang = lang;
 
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn';
@@ -139,6 +144,29 @@ export function setupCodeHighlight() {
     }
   };
 
+  const scheduleProcessCodeBlocks = (force = false) => {
+    queuedMode = force ? 'force' : queuedMode === 'none' ? 'normal' : queuedMode;
+    if (processing) {
+      return;
+    }
+
+    processing = true;
+    void (async () => {
+      try {
+        while (queuedMode !== 'none') {
+          const forceRun = queuedMode === 'force';
+          queuedMode = 'none';
+          await processCodeBlocks(forceRun);
+        }
+      } finally {
+        processing = false;
+        if (queuedMode !== 'none') {
+          scheduleProcessCodeBlocks();
+        }
+      }
+    })();
+  };
+
   const handleLanguageChange = () => {
     editor.querySelectorAll<HTMLButtonElement>('.copy-btn').forEach((button) => {
       if (button.dataset.state !== 'copied') {
@@ -146,17 +174,22 @@ export function setupCodeHighlight() {
       }
     });
   };
+  const handleThemeChange = () => {
+    scheduleProcessCodeBlocks(true);
+  };
 
   const observer = new MutationObserver(() => {
-    processCodeBlocks();
+    scheduleProcessCodeBlocks();
   });
 
   observer.observe(editor, { childList: true, subtree: true });
-  processCodeBlocks();
+  scheduleProcessCodeBlocks();
   i18n.on('languageChanged', handleLanguageChange);
+  window.addEventListener('app-theme-changed', handleThemeChange);
 
   return () => {
     observer.disconnect();
     i18n.off('languageChanged', handleLanguageChange);
+    window.removeEventListener('app-theme-changed', handleThemeChange);
   };
 }

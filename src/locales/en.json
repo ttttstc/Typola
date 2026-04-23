@@ -91,6 +91,11 @@
     "loading": "Loading...",
     "confirmDelete": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
     "renamePrompt": "Enter a new name for \"{{name}}\":",
+    "renameHint": "Press Enter to confirm or Esc to cancel.",
+    "renameEmpty": "Name cannot be empty.",
+    "renameInvalid": "Names cannot include / or \\.",
+    "renameConflict": "\"{{name}}\" already exists. Choose a different name.",
+    "renameFailed": "Rename failed. Please try again.",
     "untitled": "Untitled",
     "addProject": "Add Project",
     "removeProject": "Remove Project",
@@ -245,6 +250,20 @@
     "heading4": "Heading 4",
     "heading5": "Heading 5",
     "heading6": "Heading 6"
+  },
+  "table": {
+    "insertLineBreak": "Insert Line Break",
+    "exitTable": "Exit Table",
+    "insertRowAbove": "Insert Row Above",
+    "insertRowBelow": "Insert Row Below",
+    "insertColumnLeft": "Insert Column Left",
+    "insertColumnRight": "Insert Column Right",
+    "alignLeft": "Align Column Left",
+    "alignCenter": "Align Column Center",
+    "alignRight": "Align Column Right",
+    "deleteRow": "Delete Row",
+    "deleteColumn": "Delete Column",
+    "deleteTable": "Delete Table"
   },
   "floatingToolbar": {
     "paragraphFormat": "Format",

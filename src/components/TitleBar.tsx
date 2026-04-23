@@ -25,12 +25,8 @@ export function TitleBar() {
 
   const handleMinimize = () => window.electronAPI.windowMinimize();
   const handleMaximize = async () => {
-    if (isMaximized) {
-      await window.electronAPI.windowUnmaximize();
-    } else {
-      await window.electronAPI.windowMaximize();
-    }
-    setIsMaximized(!isMaximized);
+    const nextState = await window.electronAPI.windowToggleMaximize();
+    setIsMaximized(nextState);
   };
   const handleClose = () => window.electronAPI.windowClose();
 

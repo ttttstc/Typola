@@ -253,12 +253,35 @@ function TerminalSessionView({
       return;
     }
 
-    const frame = requestAnimationFrame(() => {
-      fitAddonRef.current?.fit();
-      terminalRef.current?.focus();
-    });
+    let cancelled = false;
 
-    return () => cancelAnimationFrame(frame);
+    const refitTerminal = () => {
+      requestAnimationFrame(() => {
+        if (cancelled) {
+          return;
+        }
+
+        fitAddonRef.current?.fit();
+        terminalRef.current?.focus();
+      });
+    };
+
+    refitTerminal();
+
+    if ('fonts' in document) {
+      void Promise.allSettled([
+        document.fonts.ready,
+        document.fonts.load(`${fontSize}px ${fontFamily}`),
+      ]).then(() => {
+        if (!cancelled) {
+          refitTerminal();
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [active, visible, fontFamily, fontSize]);
 
   useEffect(() => {

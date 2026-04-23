@@ -48,7 +48,7 @@ export const MIN_TERMINAL_FONT_SIZE = 11;
 
 export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   shellPath: '',
-  fontFamily: 'Consolas, "Cascadia Mono", "SFMono-Regular", Menlo, monospace',
+  fontFamily: '"Anthropic Mono", "JetBrains Mono", Consolas, monospace',
   fontSize: 13,
   cursorStyle: 'block',
   cursorBlink: true,

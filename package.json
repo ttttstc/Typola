@@ -19,6 +19,7 @@
     "electron": "electron"
   },
   "dependencies": {
+    "@milkdown/components": "^7.20.0",
     "@milkdown/core": "^7.6.0",
     "@milkdown/plugin-history": "^7.6.0",
     "@milkdown/plugin-listener": "^7.6.0",

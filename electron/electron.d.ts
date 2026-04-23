@@ -118,6 +118,7 @@ export interface ElectronAPI {
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
   windowUnmaximize: () => Promise<void>;
+  windowToggleMaximize: () => Promise<boolean>;
   windowClose: () => Promise<void>;
   windowIsMaximized: () => Promise<boolean>;
   watchFile: (path: string) => Promise<void>;

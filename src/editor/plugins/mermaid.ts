@@ -45,9 +45,14 @@ export function setupMermaidHandler() {
   const editor = document.querySelector('.ProseMirror');
   if (!editor) return () => {};
 
+  let queuedMode: 'none' | 'normal' | 'force' = 'none';
+  let processing = false;
+
   const processMermaidBlocks = async (force = false) => {
-    const codeBlocks = editor.querySelectorAll('pre');
+    const codeBlocks = editor.querySelectorAll<HTMLPreElement>('pre');
     for (const block of codeBlocks) {
+      if (block.classList.contains('mermaid-editing')) continue;
+
       const existingCode = block.dataset.mermaidCode ?? '';
       if (block.classList.contains('mermaid-processed') && !force) continue;
 
@@ -83,6 +88,29 @@ export function setupMermaidHandler() {
         block.dataset.mermaidBound = 'true';
       }
     }
+  };
+
+  const scheduleProcessMermaidBlocks = (force = false) => {
+    queuedMode = force ? 'force' : queuedMode === 'none' ? 'normal' : queuedMode;
+    if (processing) {
+      return;
+    }
+
+    processing = true;
+    void (async () => {
+      try {
+        while (queuedMode !== 'none') {
+          const forceRun = queuedMode === 'force';
+          queuedMode = 'none';
+          await processMermaidBlocks(forceRun);
+        }
+      } finally {
+        processing = false;
+        if (queuedMode !== 'none') {
+          scheduleProcessMermaidBlocks();
+        }
+      }
+    })();
   };
 
   const enterEditMode = async (block: HTMLPreElement, originalCode: string) => {
@@ -154,18 +182,23 @@ export function setupMermaidHandler() {
   };
 
   const observer = new MutationObserver(() => {
-    processMermaidBlocks();
+    scheduleProcessMermaidBlocks();
   });
 
   observer.observe(editor, { childList: true, subtree: true });
-  processMermaidBlocks();
+  scheduleProcessMermaidBlocks();
   const handleLanguageChange = () => {
-    void processMermaidBlocks(true);
+    scheduleProcessMermaidBlocks(true);
+  };
+  const handleThemeChange = () => {
+    scheduleProcessMermaidBlocks(true);
   };
   i18n.on('languageChanged', handleLanguageChange);
+  window.addEventListener('app-theme-changed', handleThemeChange);
 
   return () => {
     observer.disconnect();
     i18n.off('languageChanged', handleLanguageChange);
+    window.removeEventListener('app-theme-changed', handleThemeChange);
   };
 }

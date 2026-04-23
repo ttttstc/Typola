@@ -518,6 +518,11 @@ var en_default = {
     loading: "Loading...",
     confirmDelete: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.',
     renamePrompt: 'Enter a new name for "{{name}}":',
+    renameHint: "Press Enter to confirm or Esc to cancel.",
+    renameEmpty: "Name cannot be empty.",
+    renameInvalid: "Names cannot include / or \\.",
+    renameConflict: '"{{name}}" already exists. Choose a different name.',
+    renameFailed: "Rename failed. Please try again.",
     untitled: "Untitled",
     addProject: "Add Project",
     removeProject: "Remove Project",
@@ -673,6 +678,20 @@ var en_default = {
     heading5: "Heading 5",
     heading6: "Heading 6"
   },
+  table: {
+    insertLineBreak: "Insert Line Break",
+    exitTable: "Exit Table",
+    insertRowAbove: "Insert Row Above",
+    insertRowBelow: "Insert Row Below",
+    insertColumnLeft: "Insert Column Left",
+    insertColumnRight: "Insert Column Right",
+    alignLeft: "Align Column Left",
+    alignCenter: "Align Column Center",
+    alignRight: "Align Column Right",
+    deleteRow: "Delete Row",
+    deleteColumn: "Delete Column",
+    deleteTable: "Delete Table"
+  },
   floatingToolbar: {
     paragraphFormat: "Format",
     bold: "Bold (Ctrl+B)",
@@ -793,6 +812,11 @@ var zh_default = {
     loading: "\u52A0\u8F7D\u4E2D...",
     confirmDelete: '\u786E\u5B9A\u8981\u5220\u9664 "{{name}}" \u5417\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002',
     renamePrompt: '\u8BF7\u8F93\u5165 "{{name}}" \u7684\u65B0\u540D\u79F0\uFF1A',
+    renameHint: "\u6309 Enter \u786E\u8BA4\uFF0CEsc \u53D6\u6D88\u3002",
+    renameEmpty: "\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A\u3002",
+    renameInvalid: "\u540D\u79F0\u4E0D\u80FD\u5305\u542B / \u6216 \\\\\u3002",
+    renameConflict: '"{{name}}" \u5DF2\u5B58\u5728\uFF0C\u8BF7\u6362\u4E00\u4E2A\u540D\u79F0\u3002',
+    renameFailed: "\u91CD\u547D\u540D\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002",
     untitled: "\u672A\u547D\u540D",
     addProject: "\u6DFB\u52A0\u9879\u76EE",
     removeProject: "\u79FB\u9664\u9879\u76EE",
@@ -947,6 +971,20 @@ var zh_default = {
     heading4: "\u6807\u9898 4",
     heading5: "\u6807\u9898 5",
     heading6: "\u6807\u9898 6"
+  },
+  table: {
+    insertLineBreak: "\u5355\u5143\u683C\u5185\u6362\u884C",
+    exitTable: "\u8DF3\u51FA\u8868\u683C",
+    insertRowAbove: "\u5728\u4E0A\u65B9\u63D2\u5165\u884C",
+    insertRowBelow: "\u5728\u4E0B\u65B9\u63D2\u5165\u884C",
+    insertColumnLeft: "\u5728\u5DE6\u4FA7\u63D2\u5165\u5217",
+    insertColumnRight: "\u5728\u53F3\u4FA7\u63D2\u5165\u5217",
+    alignLeft: "\u5DE6\u5BF9\u9F50\u5217",
+    alignCenter: "\u5C45\u4E2D\u5BF9\u9F50\u5217",
+    alignRight: "\u53F3\u5BF9\u9F50\u5217",
+    deleteRow: "\u5220\u9664\u5F53\u524D\u884C",
+    deleteColumn: "\u5220\u9664\u5F53\u524D\u5217",
+    deleteTable: "\u5220\u9664\u8868\u683C"
   },
   floatingToolbar: {
     paragraphFormat: "\u6BB5\u843D\u683C\u5F0F",
@@ -1572,6 +1610,17 @@ import_electron.ipcMain.handle("window_close", () => {
 });
 import_electron.ipcMain.handle("window_is_maximized", () => {
   return mainWindow?.isMaximized() ?? false;
+});
+import_electron.ipcMain.handle("window_toggle_maximize", () => {
+  if (!mainWindow) {
+    return false;
+  }
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+    return false;
+  }
+  mainWindow.maximize();
+  return true;
 });
 import_electron.ipcMain.handle("watch_file", async (_, filePath) => {
   if (watchedFiles.has(filePath)) return;

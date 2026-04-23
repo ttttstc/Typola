@@ -7,15 +7,27 @@ import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
 import { openNewTerminalTab, toggleTerminalPanel } from '../store/terminal';
 import {
+  addTableColumnAfter,
+  addTableColumnBefore,
+  addTableRowAfter,
+  addTableRowBefore,
   applyBlockFormat,
   applyInlineFormat,
   applyLink,
+  deleteCurrentTable,
+  deleteCurrentTableColumn,
+  deleteCurrentTableRow,
+  exitCurrentTable,
   getActiveLinkHref,
   hasEditorSelection,
   isEditorTarget,
+  isSelectionInsideTable,
+  isTableTarget,
+  insertTableLineBreak,
   rememberEditorSelection,
   redoEditor,
   selectAllEditor,
+  setCurrentTableColumnAlignment,
   undoEditor,
 } from '../editor/formatting';
 
@@ -27,12 +39,13 @@ interface MenuItemData {
 }
 
 interface ContextMenuProps {
+  isTableContext: boolean;
   x: number;
   y: number;
   onClose: () => void;
 }
 
-function ContextMenu({ x, y, onClose }: ContextMenuProps) {
+function ContextMenu({ isTableContext, x, y, onClose }: ContextMenuProps) {
   const { t } = useTranslation();
   const handleMouseDown = useCallback((event: ReactMouseEvent) => {
     event.preventDefault();
@@ -58,7 +71,7 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
     return () => document.removeEventListener('click', handleClick);
   }, [onClose]);
 
-  const menuItems: MenuItemData[] = [
+  const formatMenuItems: MenuItemData[] = [
     { label: t('menu.bold'), action: () => runAction(() => { applyInlineFormat('bold'); }) },
     { label: t('menu.italic'), action: () => runAction(() => { applyInlineFormat('italic'); }) },
     { label: t('menu.strikethrough'), action: () => runAction(() => { applyInlineFormat('strikethrough'); }) },
@@ -78,6 +91,28 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
     { label: t('menu.unorderedList'), action: () => runAction(() => { applyBlockFormat('bullet-list'); }) },
     { label: t('slashMenu.codeBlock'), action: () => runAction(() => { applyBlockFormat('code-block'); }) },
   ];
+
+  const tableMenuItems: MenuItemData[] = [
+    { label: t('table.insertLineBreak'), action: () => runAction(() => { insertTableLineBreak(); }) },
+    { label: t('table.exitTable'), action: () => runAction(() => { exitCurrentTable(); }) },
+    { label: 'table-divider-1', divider: true },
+    { label: t('table.insertRowAbove'), action: () => runAction(() => { addTableRowBefore(); }) },
+    { label: t('table.insertRowBelow'), action: () => runAction(() => { addTableRowAfter(); }) },
+    { label: t('table.insertColumnLeft'), action: () => runAction(() => { addTableColumnBefore(); }) },
+    { label: t('table.insertColumnRight'), action: () => runAction(() => { addTableColumnAfter(); }) },
+    { label: 'table-divider-2', divider: true },
+    { label: t('table.alignLeft'), action: () => runAction(() => { setCurrentTableColumnAlignment('left'); }) },
+    { label: t('table.alignCenter'), action: () => runAction(() => { setCurrentTableColumnAlignment('center'); }) },
+    { label: t('table.alignRight'), action: () => runAction(() => { setCurrentTableColumnAlignment('right'); }) },
+    { label: 'table-divider-3', divider: true },
+    { label: t('table.deleteRow'), action: () => runAction(() => { deleteCurrentTableRow(); }) },
+    { label: t('table.deleteColumn'), action: () => runAction(() => { deleteCurrentTableColumn(); }) },
+    { label: t('table.deleteTable'), action: () => runAction(() => { deleteCurrentTable(); }) },
+  ];
+
+  const menuItems = isTableContext
+    ? [...tableMenuItems, { label: 'table-divider-format', divider: true }, ...formatMenuItems]
+    : formatMenuItems;
 
   return (
     <div
@@ -129,7 +164,7 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
 
 export function MenuBar() {
   const { t } = useTranslation();
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; isTable: boolean } | null>(null);
   const activeMenuRef = useRef<string | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
@@ -438,10 +473,11 @@ export function MenuBar() {
 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
-      if (!isEditorTarget(e.target) || !hasEditorSelection()) return;
+      const tableContext = isTableTarget(e.target) || isSelectionInsideTable();
+      if (!isEditorTarget(e.target) || (!hasEditorSelection() && !tableContext)) return;
       e.preventDefault();
       rememberEditorSelection();
-      setContextMenu({ x: e.clientX, y: e.clientY });
+      setContextMenu({ x: e.clientX, y: e.clientY, isTable: tableContext });
     };
     document.addEventListener('contextmenu', handleContextMenu);
     return () => document.removeEventListener('contextmenu', handleContextMenu);
@@ -709,6 +745,7 @@ export function MenuBar() {
       </div>
       {contextMenu && (
         <ContextMenu
+          isTableContext={contextMenu.isTable}
           x={contextMenu.x}
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}

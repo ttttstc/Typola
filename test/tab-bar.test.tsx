@@ -65,6 +65,7 @@ describe('TabBar', () => {
       windowIsMaximized: vi.fn(() => Promise.resolve(false)),
       windowMaximize: vi.fn(() => Promise.resolve()),
       windowMinimize: vi.fn(() => Promise.resolve()),
+      windowToggleMaximize: vi.fn(() => Promise.resolve(true)),
       windowUnmaximize: vi.fn(() => Promise.resolve()),
       onTerminalData: vi.fn(() => () => {}),
       onTerminalExit: vi.fn(() => () => {}),
@@ -144,5 +145,28 @@ describe('TabBar', () => {
 
     expect(renderCountAfterDirtyTransition).toBeGreaterThan(1);
     expect(renderCount).toBe(renderCountAfterDirtyTransition);
+  });
+
+  it('switches the active workspace root when selecting a tab from another project', async () => {
+    const workspaceStore = useWorkspaceStore.getState();
+    workspaceStore.addWorkspaceRoot('C:\\root-a');
+    workspaceStore.addWorkspaceRoot('C:\\root-b');
+
+    const editorStore = useEditorStore.getState();
+    editorStore.addOpenFile('C:\\root-a\\a.md');
+    editorStore.setLoadedContent('alpha', 'C:\\root-a\\a.md');
+    editorStore.addOpenFile('C:\\root-b\\b.md');
+    editorStore.setLoadedContent('beta', 'C:\\root-b\\b.md');
+
+    expect(useWorkspaceStore.getState().workspaceRoot).toBe('C:\\root-b');
+
+    render(<TabBar />);
+
+    fireEvent.click(screen.getByText('a.md'));
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().currentFile).toBe('C:\\root-a\\a.md');
+      expect(useWorkspaceStore.getState().workspaceRoot).toBe('C:\\root-a');
+    });
   });
 });
