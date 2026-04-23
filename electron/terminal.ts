@@ -67,7 +67,12 @@ export function createTerminal(webContents: WebContents, request: TerminalCreate
   });
 
   pty.onData((data) => {
-    webContents.send(`term_data_${termId}`, data);
+    if (webContents.isDestroyed()) return;
+    try {
+      webContents.send(`term_data_${termId}`, data);
+    } catch {
+      // WebContents was destroyed between the check and the send — ignore.
+    }
   });
 
   pty.onExit((event) => {
@@ -76,7 +81,12 @@ export function createTerminal(webContents: WebContents, request: TerminalCreate
       signal: event.signal,
     };
     terminals.delete(termId);
-    webContents.send(`term_exit_${termId}`, payload);
+    if (webContents.isDestroyed()) return;
+    try {
+      webContents.send(`term_exit_${termId}`, payload);
+    } catch {
+      // WebContents was destroyed before exit could be reported — ignore.
+    }
   });
 
   return {

@@ -19,6 +19,8 @@
     "view": "View",
     "settings": "Settings",
     "newFile": "New File",
+    "openFile": "Open File",
+    "openFolder": "Open Project/Folder",
     "save": "Save",
     "saveAs": "Save As",
     "exportPdf": "Export PDF",
@@ -89,7 +91,11 @@
     "loading": "Loading...",
     "confirmDelete": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
     "renamePrompt": "Enter a new name for \"{{name}}\":",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "addProject": "Add Project",
+    "removeProject": "Remove Project",
+    "noProjects": "No projects yet. Click \"Add Project\" above to start.",
+    "confirmRemoveProject": "Remove project \"{{name}}\" from the workspace? Files on disk are not deleted."
   },
   "statusBar": {
     "saved": "Saved",
@@ -202,7 +208,8 @@
   },
   "sidebar": {
     "files": "Files",
-    "search": "Search"
+    "search": "Search",
+    "terminal": "Terminal"
   },
   "search": {
     "workspaceTitle": "Workspace Search",

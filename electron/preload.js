@@ -7,6 +7,7 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   readFile: (filePath) => import_electron.ipcRenderer.invoke("read_file", filePath),
   writeFile: (filePath, content) => import_electron.ipcRenderer.invoke("write_file", filePath, content),
   pickFolder: () => import_electron.ipcRenderer.invoke("pick_folder"),
+  pickFile: (options) => import_electron.ipcRenderer.invoke("pick_file", options),
   listDir: (dirPath) => import_electron.ipcRenderer.invoke("list_dir", dirPath),
   createFile: (filePath) => import_electron.ipcRenderer.invoke("create_file", filePath),
   deletePath: (targetPath) => import_electron.ipcRenderer.invoke("delete_path", targetPath),

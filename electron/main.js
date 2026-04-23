@@ -446,6 +446,8 @@ var en_default = {
     view: "View",
     settings: "Settings",
     newFile: "New File",
+    openFile: "Open File",
+    openFolder: "Open Project/Folder",
     save: "Save",
     saveAs: "Save As",
     exportPdf: "Export PDF",
@@ -516,7 +518,11 @@ var en_default = {
     loading: "Loading...",
     confirmDelete: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.',
     renamePrompt: 'Enter a new name for "{{name}}":',
-    untitled: "Untitled"
+    untitled: "Untitled",
+    addProject: "Add Project",
+    removeProject: "Remove Project",
+    noProjects: 'No projects yet. Click "Add Project" above to start.',
+    confirmRemoveProject: 'Remove project "{{name}}" from the workspace? Files on disk are not deleted.'
   },
   statusBar: {
     saved: "Saved",
@@ -629,7 +635,8 @@ var en_default = {
   },
   sidebar: {
     files: "Files",
-    search: "Search"
+    search: "Search",
+    terminal: "Terminal"
   },
   search: {
     workspaceTitle: "Workspace Search",
@@ -714,6 +721,8 @@ var zh_default = {
     view: "\u89C6\u56FE",
     settings: "\u8BBE\u7F6E",
     newFile: "\u65B0\u5EFA\u6587\u4EF6",
+    openFile: "\u6253\u5F00\u6587\u4EF6",
+    openFolder: "\u6253\u5F00\u9879\u76EE/\u6587\u4EF6\u5939",
     save: "\u4FDD\u5B58",
     saveAs: "\u53E6\u5B58\u4E3A",
     exportPdf: "\u5BFC\u51FA PDF",
@@ -784,7 +793,11 @@ var zh_default = {
     loading: "\u52A0\u8F7D\u4E2D...",
     confirmDelete: '\u786E\u5B9A\u8981\u5220\u9664 "{{name}}" \u5417\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002',
     renamePrompt: '\u8BF7\u8F93\u5165 "{{name}}" \u7684\u65B0\u540D\u79F0\uFF1A',
-    untitled: "\u672A\u547D\u540D"
+    untitled: "\u672A\u547D\u540D",
+    addProject: "\u6DFB\u52A0\u9879\u76EE",
+    removeProject: "\u79FB\u9664\u9879\u76EE",
+    noProjects: "\u8FD8\u6CA1\u6709\u9879\u76EE\uFF0C\u70B9\u51FB\u4E0A\u65B9\u201C\u6DFB\u52A0\u9879\u76EE\u201D\u5F00\u59CB\u3002",
+    confirmRemoveProject: '\u786E\u5B9A\u8981\u4ECE\u5DE5\u4F5C\u533A\u79FB\u9664\u9879\u76EE "{{name}}" \u5417\uFF1F\u78C1\u76D8\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002'
   },
   statusBar: {
     saved: "\u5DF2\u4FDD\u5B58",
@@ -897,7 +910,8 @@ var zh_default = {
   },
   sidebar: {
     files: "\u6587\u4EF6",
-    search: "\u641C\u7D22"
+    search: "\u641C\u7D22",
+    terminal: "\u7EC8\u7AEF"
   },
   search: {
     workspaceTitle: "\u5DE5\u4F5C\u533A\u641C\u7D22",
@@ -1007,7 +1021,11 @@ function createTerminal(webContents, request) {
     pty
   });
   pty.onData((data) => {
-    webContents.send(`term_data_${termId}`, data);
+    if (webContents.isDestroyed()) return;
+    try {
+      webContents.send(`term_data_${termId}`, data);
+    } catch {
+    }
   });
   pty.onExit((event) => {
     const payload = {
@@ -1015,7 +1033,11 @@ function createTerminal(webContents, request) {
       signal: event.signal
     };
     terminals.delete(termId);
-    webContents.send(`term_exit_${termId}`, payload);
+    if (webContents.isDestroyed()) return;
+    try {
+      webContents.send(`term_exit_${termId}`, payload);
+    } catch {
+    }
   });
   return {
     termId,
@@ -1077,6 +1099,9 @@ function buildNativeMenu() {
       label: t("menu.file"),
       submenu: [
         { label: t("menu.newFile"), accelerator: "Ctrl+N", click: () => sendMenuAction("new-file") },
+        { label: t("menu.openFile"), accelerator: "Ctrl+O", click: () => sendMenuAction("open-file") },
+        { label: t("menu.openFolder"), accelerator: "Ctrl+Shift+O", click: () => sendMenuAction("open-folder") },
+        { type: "separator" },
         { label: t("menu.save"), accelerator: "Ctrl+S", click: () => sendMenuAction("save") },
         { label: t("menu.saveAs"), click: () => sendMenuAction("save-as") },
         { type: "separator" },
@@ -1301,6 +1326,9 @@ function createWindow() {
   mainWindow.on("unmaximize", () => {
     mainWindow?.webContents.send("maximized-change", false);
   });
+  mainWindow.on("close", () => {
+    killAllTerminals();
+  });
   mainWindow.on("closed", () => {
     killAllTerminals();
     mainWindow = null;
@@ -1318,6 +1346,19 @@ import_electron.ipcMain.handle("pick_folder", async () => {
   });
   return result.canceled ? null : result.filePaths[0];
 });
+import_electron.ipcMain.handle(
+  "pick_file",
+  async (_, options) => {
+    const result = await import_electron.dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: options?.filters ?? [
+        { name: "Markdown", extensions: ["md", "markdown"] },
+        { name: "All Files", extensions: ["*"] }
+      ]
+    });
+    return result.canceled ? null : result.filePaths[0];
+  }
+);
 function hasMarkdownFiles(dirPath) {
   try {
     const entries = fs3.readdirSync(dirPath, { withFileTypes: true });

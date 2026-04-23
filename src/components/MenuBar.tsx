@@ -133,8 +133,9 @@ export function MenuBar() {
   const activeMenuRef = useRef<string | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
-  const { currentFile, content, updateFilePath, isDraftFile } = useEditorStore();
-  const { workspaceRoot, setFileTree } = useWorkspaceStore();
+  const currentFile = useEditorStore((state) => state.currentFile);
+  const updateFilePath = useEditorStore((state) => state.updateFilePath);
+  const { workspaceRoot, setFileTree, addWorkspaceRoot } = useWorkspaceStore();
   const {
     toggleSidebar,
     toggleOutline,
@@ -149,6 +150,7 @@ export function MenuBar() {
     setSettingsOpen,
     setSettingsActiveTab,
     exportSettings,
+    terminalVisible,
   } = useUIStore();
 
   useEffect(() => {
@@ -174,7 +176,9 @@ export function MenuBar() {
     });
 
   const persistFile = async (sourcePath: string, targetPath: string) => {
-    const wasDraft = isDraftFile(sourcePath);
+    const editorState = useEditorStore.getState();
+    const content = editorState.getFileContent(sourcePath);
+    const wasDraft = editorState.isDraftFile(sourcePath);
     await window.electronAPI.writeFile(targetPath, content);
 
     if (wasDraft || sourcePath !== targetPath) {
@@ -190,6 +194,41 @@ export function MenuBar() {
     if (workspaceRoot) {
       const entries = await window.electronAPI.listDir(workspaceRoot);
       setFileTree(entries);
+    }
+  };
+
+  const handleOpenFile = async () => {
+    try {
+      const selected = await window.electronAPI.pickFile({
+        filters: [
+          { name: t('common.markdown'), extensions: ['md', 'markdown'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      if (selected) {
+        useEditorStore.getState().addOpenFile(selected);
+      }
+    } catch (err) {
+      console.error('Failed to open file:', err);
+    }
+  };
+
+  const handleOpenFolder = async () => {
+    try {
+      const selected = await window.electronAPI.pickFolder();
+      if (selected) {
+        addWorkspaceRoot(selected);
+        try {
+          const entries = await window.electronAPI.listDir(selected);
+          useWorkspaceStore.getState().setRootFileTree(selected, entries);
+        } catch (err) {
+          console.error('Failed to load folder:', err);
+        }
+        setSidebarVisible(true);
+        setSidebarTab('files');
+      }
+    } catch (err) {
+      console.error('Failed to pick folder:', err);
     }
   };
 
@@ -223,7 +262,7 @@ export function MenuBar() {
   const handleSave = async () => {
     if (!currentFile) return;
     try {
-      if (isDraftFile(currentFile)) {
+      if (useEditorStore.getState().isDraftFile(currentFile)) {
         const selected = await selectSavePath(currentFile);
         if (selected) {
           await persistFile(currentFile, selected);
@@ -335,6 +374,9 @@ export function MenuBar() {
   const menus: Record<string, MenuItemData[]> = {
     [t('menu.file')]: [
       { label: t('menu.newFile'), shortcut: 'Ctrl+N', action: handleNewFile },
+      { label: t('menu.openFile'), shortcut: 'Ctrl+O', action: handleOpenFile },
+      { label: t('menu.openFolder'), shortcut: 'Ctrl+Shift+O', action: handleOpenFolder },
+      { divider: true, label: '' },
       { label: t('menu.save'), shortcut: 'Ctrl+S', action: handleSave },
       { label: t('menu.saveAs'), action: handleSaveAs },
       { divider: true, label: '' },
@@ -371,7 +413,7 @@ export function MenuBar() {
       { divider: true, label: '' },
       { label: t('menu.link'), shortcut: 'Ctrl+K', action: handleLink },
     ],
-  [t('menu.view')]: [
+    [t('menu.view')]: [
       { label: t('menu.sidebar'), shortcut: 'Ctrl+\\', action: toggleSidebar },
       { label: t('menu.outline'), shortcut: 'Ctrl+Shift+\\', action: toggleOutline },
       { label: t('menu.terminal'), shortcut: 'Ctrl+`', action: () => { void toggleTerminalPanel(); } },
@@ -409,6 +451,12 @@ export function MenuBar() {
     switch (action) {
       case 'new-file':
         await handleNewFile();
+        break;
+      case 'open-file':
+        await handleOpenFile();
+        break;
+      case 'open-folder':
+        await handleOpenFolder();
         break;
       case 'save':
         await handleSave();
@@ -517,7 +565,7 @@ export function MenuBar() {
     });
 
     return () => cleanup();
-  });
+  }, [runMenuAction]);
 
   return (
     <>
@@ -619,8 +667,28 @@ export function MenuBar() {
           </div>
         ))}
 
+        {/* Top-level Terminal entry — single button, sits alongside File/Edit/etc. */}
+        <button
+          onClick={() => {
+            void toggleTerminalPanel();
+          }}
+          title={t('menu.terminal')}
+          style={{
+            padding: '4px 12px',
+            fontSize: '13px',
+            color: 'var(--color-ink)',
+            background: terminalVisible ? 'var(--color-surface-sunken)' : 'transparent',
+            border: 'none',
+            borderRadius: 'var(--radius-sm)',
+            cursor: 'pointer',
+            height: '24px',
+          }}
+        >
+          {t('menu.terminal')}
+        </button>
+
         {/* Language toggle button */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 8px' }}>
           <button
             onClick={toggleLanguage}
             style={{

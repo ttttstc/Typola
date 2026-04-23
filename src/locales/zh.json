@@ -19,6 +19,8 @@
     "view": "视图",
     "settings": "设置",
     "newFile": "新建文件",
+    "openFile": "打开文件",
+    "openFolder": "打开项目/文件夹",
     "save": "保存",
     "saveAs": "另存为",
     "exportPdf": "导出 PDF",
@@ -89,7 +91,11 @@
     "loading": "加载中...",
     "confirmDelete": "确定要删除 \"{{name}}\" 吗？此操作不可撤销。",
     "renamePrompt": "请输入 \"{{name}}\" 的新名称：",
-    "untitled": "未命名"
+    "untitled": "未命名",
+    "addProject": "添加项目",
+    "removeProject": "移除项目",
+    "noProjects": "还没有项目，点击上方“添加项目”开始。",
+    "confirmRemoveProject": "确定要从工作区移除项目 \"{{name}}\" 吗？磁盘文件不会被删除。"
   },
   "statusBar": {
     "saved": "已保存",
@@ -202,7 +208,8 @@
   },
   "sidebar": {
     "files": "文件",
-    "search": "搜索"
+    "search": "搜索",
+    "terminal": "终端"
   },
   "search": {
     "workspaceTitle": "工作区搜索",

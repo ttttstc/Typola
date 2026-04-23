@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (filePath: string) => ipcRenderer.invoke('read_file', filePath),
   writeFile: (filePath: string, content: string) => ipcRenderer.invoke('write_file', filePath, content),
   pickFolder: () => ipcRenderer.invoke('pick_folder'),
+  pickFile: (options?: { filters?: { name: string; extensions: string[] }[] }) =>
+    ipcRenderer.invoke('pick_file', options),
   listDir: (dirPath: string) => ipcRenderer.invoke('list_dir', dirPath),
   createFile: (filePath: string) => ipcRenderer.invoke('create_file', filePath),
   deletePath: (targetPath: string) => ipcRenderer.invoke('delete_path', targetPath),

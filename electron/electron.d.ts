@@ -71,6 +71,9 @@ export interface ElectronAPI {
   readFile: (path: string) => Promise<string>;
   writeFile: (path: string, content: string) => Promise<void>;
   pickFolder: () => Promise<string | null>;
+  pickFile: (options?: {
+    filters?: { name: string; extensions: string[] }[];
+  }) => Promise<string | null>;
   listDir: (path: string) => Promise<FileEntry[]>;
   createFile: (path: string) => Promise<void>;
   deletePath: (path: string) => Promise<void>;

@@ -64,6 +64,9 @@ function buildNativeMenu() {
       label: t('menu.file'),
       submenu: [
         { label: t('menu.newFile'), accelerator: 'Ctrl+N', click: () => sendMenuAction('new-file') },
+        { label: t('menu.openFile'), accelerator: 'Ctrl+O', click: () => sendMenuAction('open-file') },
+        { label: t('menu.openFolder'), accelerator: 'Ctrl+Shift+O', click: () => sendMenuAction('open-folder') },
+        { type: 'separator' },
         { label: t('menu.save'), accelerator: 'Ctrl+S', click: () => sendMenuAction('save') },
         { label: t('menu.saveAs'), click: () => sendMenuAction('save-as') },
         { type: 'separator' },
@@ -315,6 +318,12 @@ function createWindow() {
     mainWindow?.webContents.send('maximized-change', false);
   });
 
+  // Kill PTYs before the window/webContents are destroyed so any in-flight
+  // node-pty data callbacks don't try to send to a destroyed WebContents.
+  mainWindow.on('close', () => {
+    killAllTerminals();
+  });
+
   mainWindow.on('closed', () => {
     killAllTerminals();
     mainWindow = null;
@@ -335,6 +344,20 @@ ipcMain.handle('pick_folder', async () => {
   });
   return result.canceled ? null : result.filePaths[0];
 });
+
+ipcMain.handle(
+  'pick_file',
+  async (_, options?: { filters?: { name: string; extensions: string[] }[] }) => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: options?.filters ?? [
+        { name: 'Markdown', extensions: ['md', 'markdown'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  }
+);
 
 function hasMarkdownFiles(dirPath: string): boolean {
   try {

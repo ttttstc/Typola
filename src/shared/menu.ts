@@ -1,5 +1,7 @@
 export type NativeMenuAction =
   | 'new-file'
+  | 'open-file'
+  | 'open-folder'
   | 'save'
   | 'save-as'
   | 'export-pdf'

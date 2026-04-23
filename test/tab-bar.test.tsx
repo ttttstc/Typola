@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TabBar } from '../src/components/TabBar';
 import { useEditorStore } from '../src/store/editor';
@@ -106,5 +107,42 @@ describe('TabBar', () => {
       expect(useEditorStore.getState().currentFile).toBeNull();
     });
     expect(window.electronAPI.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('does not rerender the tab strip on every keystroke once tab metadata is unchanged', () => {
+    const store = useEditorStore.getState();
+
+    for (let index = 0; index < 24; index += 1) {
+      const filePath = `C:\\workspace\\note-${index}.md`;
+      store.addOpenFile(filePath);
+      store.setLoadedContent(`seed ${index}`, filePath);
+    }
+    store.setCurrentFile('C:\\workspace\\note-0.md');
+
+    let renderCount = 0;
+    render(
+      <Profiler
+        id="tab-bar"
+        onRender={() => {
+          renderCount += 1;
+        }}
+      >
+        <TabBar />
+      </Profiler>
+    );
+
+    act(() => {
+      useEditorStore.getState().setContent('draft 1');
+    });
+    const renderCountAfterDirtyTransition = renderCount;
+
+    for (let index = 2; index <= 8; index += 1) {
+      act(() => {
+        useEditorStore.getState().setContent(`draft ${index}`);
+      });
+    }
+
+    expect(renderCountAfterDirtyTransition).toBeGreaterThan(1);
+    expect(renderCount).toBe(renderCountAfterDirtyTransition);
   });
 });
