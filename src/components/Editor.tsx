@@ -13,6 +13,7 @@ import { useWorkspaceStore } from '../store/workspace';
 import { setupCodeHighlight } from '../editor/plugins/highlight';
 import { setupImageHandler } from '../editor/plugins/image';
 import { createMarkdownSyntaxPlugin } from '../editor/plugins/markdownSyntax';
+import { createAutoPairPlugin } from '../editor/plugins/autoPair';
 import { setupMermaidHandler } from '../editor/plugins/mermaid';
 import { createTableKeyboardPlugin, renderTableBlockButton } from '../editor/plugins/table';
 import {
@@ -81,6 +82,7 @@ export function MilkdownEditor() {
           createTableKeyboardPlugin(ctx),
           ...plugins,
           createMarkdownSyntaxPlugin(),
+          createAutoPairPlugin(),
         ]);
         ctx.get(listenerCtx).markdownUpdated((_ctx: any, markdown: string) => {
           if (isInternalUpdate.current) return;

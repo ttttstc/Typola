@@ -21,6 +21,9 @@
     "newFile": "New File",
     "openFile": "Open File",
     "openFolder": "Open Project/Folder",
+    "openRecent": "Open Recent",
+    "noRecentFiles": "No Recent Files",
+    "clearRecentFiles": "Clear Recent Files",
     "save": "Save",
     "saveAs": "Save As",
     "exportPdf": "Export PDF",
@@ -107,7 +110,9 @@
     "saving": "Saving...",
     "error": "Save failed",
     "unsaved": "Unsaved",
-    "characters": "{{count}} chars"
+    "characters": "{{count}} chars",
+    "words": "{{count}} words",
+    "lines": "{{count}} lines"
   },
   "outline": {
     "title": "Outline",
