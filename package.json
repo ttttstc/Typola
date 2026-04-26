@@ -81,7 +81,7 @@
         }
       ],
       "icon": "resources/typola.ico",
-      "sign": false
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

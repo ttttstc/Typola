@@ -4,6 +4,9 @@ import { useEditorStore } from '../store/editor';
 import { useSearchStore } from '../store/search';
 import { useWorkspaceStore } from '../store/workspace';
 import { useUIStore } from '../store/ui';
+import { useAIStore } from '../store/ai';
+import { captureSelectionSnapshot } from '../ai/selection';
+import type { AIRightClickAction } from '../llm/types';
 
 interface MenuItemData {
   label: string;
@@ -20,6 +23,37 @@ interface ContextMenuProps {
 
 function ContextMenu({ x, y, onClose }: ContextMenuProps) {
   const { t } = useTranslation();
+  const aiSettings = useAIStore((state) => state.settings);
+  const setPendingAction = useAIStore((state) => state.setPendingAction);
+  const runAction = useAIStore((state) => state.runAction);
+  const setSettingsOpen = useUIStore((state) => state.setSettingsOpen);
+  const setSettingsActiveTab = useUIStore((state) => state.setSettingsActiveTab);
+
+  const handleAIAction = useCallback(
+    async (action: AIRightClickAction) => {
+      const snapshot = captureSelectionSnapshot();
+      if (!snapshot) {
+        onClose();
+        return;
+      }
+
+      if (!aiSettings.configured || !aiSettings.hasApiKey) {
+        setPendingAction({
+          action,
+          selection: snapshot,
+        });
+        setSettingsActiveTab('ai');
+        setSettingsOpen(true);
+        onClose();
+        return;
+      }
+
+      await runAction(action, snapshot);
+      onClose();
+    },
+    [aiSettings.configured, aiSettings.hasApiKey, onClose, runAction, setPendingAction, setSettingsActiveTab, setSettingsOpen]
+  );
+
   const setHeading = useCallback((level: string) => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -98,6 +132,11 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
   }, [onClose]);
 
   const menuItems = [
+    { label: t('aiContext.explain'), action: () => void handleAIAction('explain') },
+    { label: t('aiContext.rewrite'), action: () => void handleAIAction('rewrite') },
+    { label: t('aiContext.summarize'), action: () => void handleAIAction('summarize') },
+    { label: t('aiContext.translate'), action: () => void handleAIAction('translate') },
+    { divider: true, label: 'ai-divider' },
     { label: t('contextMenu.body'), action: () => setHeading('p') },
     { label: t('contextMenu.heading1'), action: () => setHeading('h1') },
     { label: t('contextMenu.heading2'), action: () => setHeading('h2') },
@@ -122,22 +161,37 @@ function ContextMenu({ x, y, onClose }: ContextMenuProps) {
         zIndex: 3000,
       }}
     >
-      {menuItems.map((item) => (
-        <div
-          key={item.label}
-          onClick={item.action}
-          style={{
-            padding: '6px 12px',
-            fontSize: '13px',
-            cursor: 'pointer',
-            color: 'var(--color-ink)',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-        >
-          {item.label}
-        </div>
-      ))}
+      {menuItems.map((item, index) => {
+        if ('divider' in item && item.divider) {
+          return (
+            <div
+              key={`${item.label}-${index}`}
+              style={{
+                height: '1px',
+                background: 'var(--color-line-soft)',
+                margin: '4px 8px',
+              }}
+            />
+          );
+        }
+
+        return (
+          <div
+            key={item.label}
+            onClick={item.action}
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              cursor: 'pointer',
+              color: 'var(--color-ink)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-surface-sunken)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            {item.label}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -418,7 +472,7 @@ export function MenuBar() {
       { label: t('menu.zoomOut'), action: handleDecreaseFontSize },
       { label: `${t('menu.currentFontSize')}: ${fontSize}`, action: () => {} },
       { divider: true, label: '' },
-      { label: theme === 'light' ? t('menu.darkMode') : t('menu.lightMode'), shortcut: 'Ctrl+Shift+D', action: toggleTheme },
+      { label: `${t('themes.' + theme)}`, shortcut: 'Ctrl+Shift+D', action: toggleTheme },
     ],
     [t('menu.settings')]: [
       { label: t('menu.settings'), shortcut: 'Ctrl+,', action: () => { setSettingsOpen(true); } },
@@ -433,8 +487,8 @@ export function MenuBar() {
 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
-      const selection = window.getSelection();
-      if (selection && !selection.isCollapsed && selection.toString().length > 0) {
+      const snapshot = captureSelectionSnapshot();
+      if (snapshot) {
         e.preventDefault();
         setContextMenu({ x: e.clientX, y: e.clientY });
       }

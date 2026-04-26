@@ -1,9 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { useUIStore, SettingsTab } from '../../store/ui';
 import { syncWorkspaceSearchDefaultsFromSettings } from '../../store/search';
+import { useAIStore } from '../../store/ai';
+import {
+  ANTHROPIC_MODELS,
+  OPENAI_COMPAT_PRESETS,
+  getErrorMessage,
+  type AIProviderSetupInput,
+  type AISettingsSummary,
+  type OpenAICompatiblePreset,
+} from '../../llm/types';
 
 function FieldLabel({ title, description }: { title: string; description?: string }) {
   return (
@@ -64,6 +73,64 @@ function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
         ...(props.style ?? {}),
       }}
     />
+  );
+}
+
+function SecondaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        height: '36px',
+        padding: '0 12px',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--color-line-soft)',
+        background: 'var(--color-paper)',
+        color: 'var(--color-ink)',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PrimaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        height: '36px',
+        padding: '0 12px',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid transparent',
+        background: 'var(--color-ink)',
+        color: 'var(--color-paper)',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -280,6 +347,309 @@ function ExportContent() {
   );
 }
 
+function summaryToForm(summary: AISettingsSummary): AIProviderSetupInput {
+  if (summary.provider === 'anthropic') {
+    return {
+      provider: 'anthropic',
+      apiKey: '',
+      model: summary.model,
+      requestTimeoutMs: summary.requestTimeoutMs,
+    };
+  }
+
+  return {
+    provider: 'openai-compatible',
+    apiKey: '',
+    model: summary.model,
+    baseUrl: summary.baseUrl,
+    preset: summary.preset,
+    requestTimeoutMs: summary.requestTimeoutMs,
+  };
+}
+
+function AIContent() {
+  const { t } = useTranslation();
+  const settings = useAIStore((state) => state.settings);
+  const pendingAction = useAIStore((state) => state.pendingAction);
+  const lastError = useAIStore((state) => state.lastError);
+  const lastSuccess = useAIStore((state) => state.lastSuccess);
+  const setSettings = useAIStore((state) => state.setSettings);
+  const setLastError = useAIStore((state) => state.setLastError);
+  const setLastSuccess = useAIStore((state) => state.setLastSuccess);
+  const clearMessages = useAIStore((state) => state.clearMessages);
+  const clearPendingAction = useAIStore((state) => state.clearPendingAction);
+  const runAction = useAIStore((state) => state.runAction);
+  const [form, setForm] = useState<AIProviderSetupInput>(() => summaryToForm(settings));
+  const [submitting, setSubmitting] = useState(false);
+  const setSettingsOpen = useUIStore((state) => state.setSettingsOpen);
+
+  useEffect(() => {
+    setForm(summaryToForm(settings));
+  }, [settings]);
+
+  const presetItems = useMemo(() => Object.values(OPENAI_COMPAT_PRESETS), []);
+
+  const setProvider = (provider: 'anthropic' | 'openai-compatible') => {
+    clearMessages();
+    if (provider === 'anthropic') {
+      setForm({
+        provider: 'anthropic',
+        apiKey: '',
+        model: ANTHROPIC_MODELS[0],
+        requestTimeoutMs: 30000,
+      });
+      return;
+    }
+
+    const preset = OPENAI_COMPAT_PRESETS.openai;
+    setForm({
+      provider: 'openai-compatible',
+      apiKey: '',
+      preset: preset.id,
+      baseUrl: preset.baseUrl,
+      model: preset.defaultModel,
+      requestTimeoutMs: 30000,
+    });
+  };
+
+  const applyPreset = (presetId: OpenAICompatiblePreset) => {
+    if (presetId === 'custom') {
+      setForm((prev) =>
+        prev.provider === 'openai-compatible'
+          ? {
+              ...prev,
+              preset: 'custom',
+            }
+          : {
+              provider: 'openai-compatible',
+              apiKey: '',
+              preset: 'custom',
+              baseUrl: '',
+              model: '',
+              requestTimeoutMs: 30000,
+            }
+      );
+      return;
+    }
+
+    const preset = OPENAI_COMPAT_PRESETS[presetId];
+    setForm((prev) => ({
+      provider: 'openai-compatible',
+      apiKey: prev.provider === 'openai-compatible' ? prev.apiKey : '',
+      preset: preset.id,
+      baseUrl: preset.baseUrl,
+      model: preset.defaultModel,
+      requestTimeoutMs: prev.requestTimeoutMs ?? 30000,
+    }));
+  };
+
+  const handleSave = async () => {
+    clearMessages();
+    setSubmitting(true);
+    try {
+      const saved = await window.electronAPI.saveAISettings(form);
+      setSettings(saved);
+      setLastSuccess(t('settings.aiSaved'));
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : t('settings.aiSaveFailed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleTest = async () => {
+    clearMessages();
+    setSubmitting(true);
+    try {
+      const saved = await window.electronAPI.saveAISettings(form);
+      setSettings(saved);
+
+      const result = await window.electronAPI.testAIConnection();
+      if (!result.ok) {
+        setLastError(getErrorMessage(result.error));
+        return;
+      }
+
+      setLastSuccess(`${t('settings.aiConnectionOk')}: ${result.data.providerLabel} · ${result.data.model}`);
+
+      if (pendingAction) {
+        const actionResult = await runAction(pendingAction.action, pendingAction.selection);
+        clearPendingAction();
+        if (actionResult.ok) {
+          setSettingsOpen(false);
+        }
+      }
+    } catch (error) {
+      setLastError(error instanceof Error ? error.message : t('settings.aiSaveFailed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const savedKeyHint = settings.hasApiKey ? t('settings.aiKeySavedHint') : t('settings.aiKeyRequiredHint');
+
+  return (
+    <div style={{ display: 'grid', gap: '16px' }}>
+      <div style={{ display: 'grid', gap: '8px' }}>
+        <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{t('settings.aiProvider')}</h2>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <SecondaryButton onClick={() => setProvider('anthropic')}>
+            Anthropic
+          </SecondaryButton>
+          <SecondaryButton onClick={() => setProvider('openai-compatible')}>
+            OpenAI Compatible
+          </SecondaryButton>
+        </div>
+      </div>
+
+      {form.provider === 'anthropic' ? (
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <Row>
+            <FieldLabel
+              title={t('settings.aiConsoleLink')}
+              description={t('settings.aiAnthropicConsoleDescription')}
+            />
+            <a
+              href="https://console.anthropic.com/settings/keys"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: 'var(--color-ink)', fontSize: '13px' }}
+            >
+              console.anthropic.com
+            </a>
+          </Row>
+          <Row>
+            <FieldLabel title={t('settings.aiApiKey')} description={savedKeyHint} />
+            <TextInput
+              type="password"
+              placeholder="sk-ant-..."
+              value={form.apiKey}
+              onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
+            />
+          </Row>
+          <Row>
+            <FieldLabel title={t('settings.aiModel')} />
+            <Select
+              value={form.model}
+              onChange={(event) => setForm({ ...form, model: event.target.value })}
+            >
+              {ANTHROPIC_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </Select>
+          </Row>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <Row>
+            <FieldLabel title={t('settings.aiPreset')} description={t('settings.aiPresetDescription')} />
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {presetItems.map((preset) => (
+                <SecondaryButton key={preset.id} onClick={() => applyPreset(preset.id)}>
+                  {preset.label}
+                </SecondaryButton>
+              ))}
+              <SecondaryButton onClick={() => applyPreset('custom')}>Custom</SecondaryButton>
+            </div>
+          </Row>
+          <Row>
+            <FieldLabel title={t('settings.aiApiKey')} description={savedKeyHint} />
+            <TextInput
+              type="password"
+              placeholder="sk-..."
+              value={form.apiKey}
+              onChange={(event) => setForm({ ...form, apiKey: event.target.value })}
+            />
+          </Row>
+          <Row>
+            <FieldLabel title={t('settings.aiBaseUrl')} />
+            <TextInput
+              value={form.baseUrl}
+              onChange={(event) => setForm({ ...form, baseUrl: event.target.value })}
+            />
+          </Row>
+          <Row>
+            <FieldLabel title={t('settings.aiModel')} />
+            <TextInput
+              value={form.model}
+              onChange={(event) => setForm({ ...form, model: event.target.value })}
+            />
+          </Row>
+        </div>
+      )}
+
+      <Row>
+        <FieldLabel title={t('settings.aiTimeout')} description={t('settings.aiTimeoutDescription')} />
+        <TextInput
+          type="number"
+          min={5000}
+          step={1000}
+          value={String(form.requestTimeoutMs ?? 30000)}
+          onChange={(event) =>
+            setForm({
+              ...form,
+              requestTimeoutMs: Number(event.target.value) || 30000,
+            })
+          }
+        />
+      </Row>
+
+      {pendingAction ? (
+        <div
+          style={{
+            fontSize: '12px',
+            color: 'var(--color-muted)',
+            background: 'var(--color-surface-sunken)',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 12px',
+          }}
+        >
+          {t('settings.aiPendingAction')}
+        </div>
+      ) : null}
+
+      {lastError ? (
+        <div
+          style={{
+            fontSize: '12px',
+            color: '#b42318',
+            background: '#fef3f2',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 12px',
+          }}
+        >
+          {lastError}
+        </div>
+      ) : null}
+
+      {lastSuccess ? (
+        <div
+          style={{
+            fontSize: '12px',
+            color: '#067647',
+            background: '#ecfdf3',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 12px',
+          }}
+        >
+          {lastSuccess}
+        </div>
+      ) : null}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+        <SecondaryButton onClick={handleSave} disabled={submitting}>
+          {t('common.save')}
+        </SecondaryButton>
+        <PrimaryButton onClick={handleTest} disabled={submitting}>
+          {submitting ? t('settings.aiTesting') : t('settings.aiTestConnection')}
+        </PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
 function SettingsContent({ activeTab }: { activeTab: SettingsTab }) {
   const { t } = useTranslation();
 
@@ -288,6 +658,8 @@ function SettingsContent({ activeTab }: { activeTab: SettingsTab }) {
       return <ShortcutsContent />;
     case 'general':
       return <GeneralContent />;
+    case 'ai':
+      return <AIContent />;
     case 'export':
       return <ExportContent />;
     case 'editor':
@@ -325,6 +697,7 @@ export function Settings() {
       label: t('settings.common'),
       items: [
         { id: 'general' as SettingsTab, label: t('settings.general') },
+        { id: 'ai' as SettingsTab, label: t('settings.ai') },
         { id: 'editor' as SettingsTab, label: t('settings.editor') },
         { id: 'appearance' as SettingsTab, label: t('settings.appearance') },
         { id: 'export' as SettingsTab, label: t('settings.export') },

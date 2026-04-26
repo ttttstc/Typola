@@ -23,9 +23,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // electron/main.ts
-var import_electron = require("electron");
-var path3 = __toESM(require("path"));
-var fs2 = __toESM(require("fs"));
+var import_electron2 = require("electron");
+var path4 = __toESM(require("path"));
+var fs3 = __toESM(require("fs"));
 
 // electron/fileWatch.ts
 var path = __toESM(require("path"));
@@ -408,6 +408,601 @@ function previewReplaceText(content, query, replacementText, options) {
   };
 }
 
+// electron/aiConfig.ts
+var import_electron = require("electron");
+var fs2 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
+
+// src/llm/types.ts
+var LEGACY_MINIMAX_BASE_URLS = [
+  "https://api.minimaxi.chat/v1",
+  "https://api.minimax.io/v1"
+];
+var LEGACY_MINIMAX_MODEL = "MiniMax-Text-01";
+var ANTHROPIC_MODELS = [
+  "claude-3-5-haiku-latest",
+  "claude-3-7-sonnet-latest",
+  "claude-sonnet-4-0"
+];
+var OPENAI_COMPAT_PRESETS = {
+  openai: {
+    id: "openai",
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    defaultModel: "gpt-4.1-mini"
+  },
+  deepseek: {
+    id: "deepseek",
+    label: "DeepSeek",
+    baseUrl: "https://api.deepseek.com/v1",
+    defaultModel: "deepseek-chat"
+  },
+  minimax: {
+    id: "minimax",
+    label: "MiniMax",
+    baseUrl: "https://api.minimaxi.com/v1",
+    defaultModel: "MiniMax-M2.7"
+  },
+  glm: {
+    id: "glm",
+    label: "GLM",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    defaultModel: "glm-4-flash"
+  },
+  kimi: {
+    id: "kimi",
+    label: "Kimi",
+    baseUrl: "https://api.moonshot.cn/v1",
+    defaultModel: "moonshot-v1-8k"
+  },
+  ollama: {
+    id: "ollama",
+    label: "Ollama",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    defaultModel: "qwen2.5:7b"
+  }
+};
+var LLMError = class extends Error {
+  code;
+  provider;
+  status;
+  retryable;
+  constructor(code, message, options) {
+    super(message);
+    this.name = "LLMError";
+    this.code = code;
+    this.provider = options?.provider;
+    this.status = options?.status;
+    this.retryable = options?.retryable ?? (code === "rate_limited" || code === "network" || code === "timeout");
+  }
+};
+function getProviderLabel(settings) {
+  if (settings.provider === "anthropic") {
+    return "Anthropic";
+  }
+  if (settings.preset && settings.preset !== "custom" && settings.preset in OPENAI_COMPAT_PRESETS) {
+    return OPENAI_COMPAT_PRESETS[settings.preset].label;
+  }
+  return "OpenAI Compatible";
+}
+function getDefaultAISettings(provider = "anthropic") {
+  if (provider === "anthropic") {
+    return {
+      provider: "anthropic",
+      model: ANTHROPIC_MODELS[0],
+      requestTimeoutMs: 3e4,
+      configured: false,
+      hasApiKey: false,
+      providerLabel: "Anthropic"
+    };
+  }
+  const preset = OPENAI_COMPAT_PRESETS.openai;
+  return {
+    provider: "openai-compatible",
+    model: preset.defaultModel,
+    baseUrl: preset.baseUrl,
+    preset: preset.id,
+    requestTimeoutMs: 3e4,
+    configured: false,
+    hasApiKey: false,
+    providerLabel: preset.label
+  };
+}
+function normalizeOpenAICompatibleConfig(preset, config) {
+  if (preset !== "minimax") {
+    return config;
+  }
+  return {
+    baseUrl: LEGACY_MINIMAX_BASE_URLS.includes(config.baseUrl) ? OPENAI_COMPAT_PRESETS.minimax.baseUrl : config.baseUrl,
+    model: config.model === LEGACY_MINIMAX_MODEL ? OPENAI_COMPAT_PRESETS.minimax.defaultModel : config.model
+  };
+}
+function mapHttpStatusToErrorCode(status, bodyText = "") {
+  const normalizedBody = bodyText.toLowerCase();
+  if (status === 401) return "unauthorized";
+  if (status === 403) return "forbidden";
+  if (status === 429) return "rate_limited";
+  if (status === 404 || normalizedBody.includes("model") && normalizedBody.includes("not found")) {
+    return "model_not_found";
+  }
+  if (status >= 400 && status < 500) return "invalid_request";
+  return "unknown";
+}
+function serializeLLMError(error) {
+  if (error instanceof LLMError) {
+    return {
+      code: error.code,
+      message: error.message,
+      provider: error.provider,
+      status: error.status,
+      retryable: error.retryable
+    };
+  }
+  if (error instanceof Error) {
+    return {
+      code: "unknown",
+      message: error.message,
+      retryable: false
+    };
+  }
+  return {
+    code: "unknown",
+    message: "Unknown error.",
+    retryable: false
+  };
+}
+
+// electron/aiConfig.ts
+var AI_CONFIG_PATH = () => path3.join(import_electron.app.getPath("userData"), "ai-settings.json");
+function ensureParentDir() {
+  fs2.mkdirSync(path3.dirname(AI_CONFIG_PATH()), { recursive: true });
+}
+function encryptApiKey(apiKey) {
+  if (!import_electron.safeStorage.isEncryptionAvailable()) {
+    throw new LLMError("unknown", "safeStorage is not available.");
+  }
+  return import_electron.safeStorage.encryptString(apiKey).toString("base64");
+}
+function decryptApiKey(apiKeyEncrypted) {
+  if (!import_electron.safeStorage.isEncryptionAvailable()) {
+    throw new LLMError("unknown", "safeStorage is not available.");
+  }
+  return import_electron.safeStorage.decryptString(Buffer.from(apiKeyEncrypted, "base64"));
+}
+function readStoredAISettings() {
+  try {
+    if (!fs2.existsSync(AI_CONFIG_PATH())) {
+      return null;
+    }
+    return JSON.parse(fs2.readFileSync(AI_CONFIG_PATH(), "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function getAISettingsSummary(provider) {
+  const stored = readStoredAISettings();
+  if (!stored) {
+    return getDefaultAISettings(provider);
+  }
+  if (stored.provider === "anthropic") {
+    return {
+      provider: "anthropic",
+      model: stored.model,
+      requestTimeoutMs: stored.requestTimeoutMs,
+      configured: true,
+      hasApiKey: Boolean(stored.apiKeyEncrypted),
+      providerLabel: "Anthropic",
+      updatedAt: stored.updatedAt
+    };
+  }
+  const normalized = normalizeOpenAICompatibleConfig(stored.preset, {
+    baseUrl: stored.baseUrl,
+    model: stored.model
+  });
+  return {
+    provider: "openai-compatible",
+    model: normalized.model,
+    baseUrl: normalized.baseUrl,
+    preset: stored.preset,
+    requestTimeoutMs: stored.requestTimeoutMs,
+    configured: true,
+    hasApiKey: Boolean(stored.apiKeyEncrypted),
+    providerLabel: getProviderLabel(stored),
+    updatedAt: stored.updatedAt
+  };
+}
+function saveAISettings(input) {
+  const existing = readStoredAISettings();
+  const apiKey = input.apiKey.trim();
+  const apiKeyEncrypted = apiKey.length > 0 ? encryptApiKey(apiKey) : existing && existing.provider === input.provider ? existing.apiKeyEncrypted : null;
+  if (!apiKeyEncrypted) {
+    throw new LLMError("missing_api_key", "API key is missing.", {
+      provider: input.provider
+    });
+  }
+  const common = {
+    model: input.model.trim(),
+    apiKeyEncrypted,
+    requestTimeoutMs: input.requestTimeoutMs ?? 3e4,
+    updatedAt: Date.now()
+  };
+  if (!common.model) {
+    throw new LLMError("invalid_request", "Model is required.", {
+      provider: input.provider
+    });
+  }
+  let stored;
+  if (input.provider === "anthropic") {
+    stored = {
+      provider: "anthropic",
+      ...common
+    };
+  } else {
+    const normalized = normalizeOpenAICompatibleConfig(input.preset, {
+      baseUrl: input.baseUrl.trim(),
+      model: common.model
+    });
+    const baseUrl = normalized.baseUrl;
+    if (!baseUrl) {
+      throw new LLMError("invalid_request", "Base URL is required.", {
+        provider: input.provider
+      });
+    }
+    stored = {
+      provider: "openai-compatible",
+      ...common,
+      model: normalized.model,
+      baseUrl,
+      preset: input.preset
+    };
+  }
+  ensureParentDir();
+  fs2.writeFileSync(AI_CONFIG_PATH(), JSON.stringify(stored, null, 2), "utf-8");
+  return getAISettingsSummary(stored.provider);
+}
+function getResolvedAISettings() {
+  const stored = readStoredAISettings();
+  if (!stored) {
+    throw new LLMError("missing_api_key", "AI settings are not configured.");
+  }
+  if (stored.provider === "anthropic") {
+    return {
+      provider: "anthropic",
+      model: stored.model,
+      apiKey: decryptApiKey(stored.apiKeyEncrypted),
+      requestTimeoutMs: stored.requestTimeoutMs
+    };
+  }
+  const normalized = normalizeOpenAICompatibleConfig(stored.preset, {
+    baseUrl: stored.baseUrl,
+    model: stored.model
+  });
+  return {
+    provider: "openai-compatible",
+    model: normalized.model,
+    apiKey: decryptApiKey(stored.apiKeyEncrypted),
+    baseUrl: normalized.baseUrl,
+    preset: stored.preset,
+    requestTimeoutMs: stored.requestTimeoutMs
+  };
+}
+
+// src/llm/anthropic.ts
+var ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
+var AnthropicAdapter = class {
+  settings;
+  constructor(settings) {
+    this.settings = settings;
+  }
+  async generateText(request) {
+    const response = await this.requestJson(request, false);
+    const content = response.content ?? [];
+    const text = content.filter((item) => item.type === "text").map((item) => item.text ?? "").join("");
+    const toolCalls = content.filter((item) => item.type === "tool_use" && item.id && item.name).map((item) => ({
+      id: item.id,
+      name: item.name,
+      input: item.input ?? {}
+    }));
+    return {
+      text,
+      toolCalls,
+      stopReason: response.stop_reason,
+      raw: response
+    };
+  }
+  async *streamText(request) {
+    const reader = await this.requestStream(request);
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let accumulatedText = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() ?? "";
+      for (const chunk of chunks) {
+        const lines = chunk.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).filter((line) => line.length > 0 && line !== "[DONE]");
+        for (const data of lines) {
+          const event = JSON.parse(data);
+          if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
+            accumulatedText += event.delta.text;
+            yield {
+              type: "text-delta",
+              text: event.delta.text
+            };
+          }
+        }
+      }
+    }
+    return {
+      text: accumulatedText,
+      toolCalls: []
+    };
+  }
+  async testConnection() {
+    await this.generateText({
+      model: this.settings.model,
+      maxTokens: 8,
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: "Reply with OK."
+        }
+      ]
+    });
+  }
+  buildBody(request, stream) {
+    return {
+      model: request.model,
+      max_tokens: request.maxTokens ?? 1024,
+      temperature: request.temperature ?? 0,
+      stream,
+      messages: request.messages.filter((message) => message.role !== "tool").map((message) => ({
+        role: message.role === "assistant" ? "assistant" : "user",
+        content: message.content
+      })),
+      tools: request.tools?.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.inputSchema ?? {
+          type: "object",
+          properties: {}
+        }
+      }))
+    };
+  }
+  async requestJson(request, stream) {
+    const response = await this.fetchMessages(request, stream);
+    const text = await response.text();
+    if (!response.ok) {
+      throw new LLMError(mapHttpStatusToErrorCode(response.status, text), this.buildHttpMessage(response.status, text), {
+        provider: "anthropic",
+        status: response.status
+      });
+    }
+    return JSON.parse(text);
+  }
+  async requestStream(request) {
+    const response = await this.fetchMessages(request, true);
+    const text = response.ok ? "" : await response.text();
+    if (!response.ok) {
+      throw new LLMError(mapHttpStatusToErrorCode(response.status, text), this.buildHttpMessage(response.status, text), {
+        provider: "anthropic",
+        status: response.status
+      });
+    }
+    if (!response.body) {
+      throw new LLMError("network", "Streaming response body is empty.", {
+        provider: "anthropic"
+      });
+    }
+    return response.body.getReader();
+  }
+  async fetchMessages(request, stream) {
+    const timeoutSignal = AbortSignal.timeout(request.signal ? this.settings.requestTimeoutMs : this.settings.requestTimeoutMs);
+    const signal = request.signal ? AbortSignal.any([request.signal, timeoutSignal]) : timeoutSignal;
+    try {
+      return await fetch(`${ANTHROPIC_BASE_URL}/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": this.settings.apiKey,
+          "anthropic-version": "2023-06-01"
+        },
+        body: JSON.stringify(this.buildBody(request, stream)),
+        signal
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new LLMError("timeout", "Request timed out.", {
+          provider: "anthropic"
+        });
+      }
+      throw new LLMError("network", "Network request failed.", {
+        provider: "anthropic"
+      });
+    }
+  }
+  buildHttpMessage(status, bodyText) {
+    const trimmedBody = bodyText.trim();
+    return trimmedBody ? `HTTP ${status}. ${trimmedBody}` : `HTTP ${status}. Request failed.`;
+  }
+};
+
+// src/llm/openaiCompat.ts
+var OpenAICompatibleAdapter = class {
+  settings;
+  constructor(settings) {
+    this.settings = settings;
+  }
+  async generateText(request) {
+    const response = await this.requestJson(request, false);
+    const choice = response.choices?.[0];
+    const toolCalls = choice?.message?.tool_calls?.map((toolCall) => ({
+      id: toolCall.id ?? crypto.randomUUID(),
+      name: toolCall.function?.name ?? "tool",
+      input: this.parseToolArguments(toolCall.function?.arguments)
+    })) ?? [];
+    return {
+      text: choice?.message?.content ?? "",
+      toolCalls,
+      stopReason: choice?.finish_reason,
+      raw: response
+    };
+  }
+  async *streamText(request) {
+    const reader = await this.requestStream(request);
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let accumulatedText = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() ?? "";
+      for (const chunk of chunks) {
+        const lines = chunk.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).filter((line) => line.length > 0 && line !== "[DONE]");
+        for (const data of lines) {
+          const event = JSON.parse(data);
+          const deltaText = event.choices?.[0]?.delta?.content;
+          if (deltaText) {
+            accumulatedText += deltaText;
+            yield {
+              type: "text-delta",
+              text: deltaText
+            };
+          }
+        }
+      }
+    }
+    return {
+      text: accumulatedText,
+      toolCalls: []
+    };
+  }
+  async testConnection() {
+    await this.generateText({
+      model: this.settings.model,
+      maxTokens: 8,
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: "Reply with OK."
+        }
+      ]
+    });
+  }
+  buildBody(request, stream) {
+    return {
+      model: request.model,
+      messages: request.messages.map((message) => ({
+        role: message.role,
+        content: message.content
+      })),
+      stream,
+      temperature: request.temperature ?? 0,
+      max_tokens: request.maxTokens ?? 1024,
+      tools: request.tools?.map((tool) => ({
+        type: "function",
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.inputSchema ?? {
+            type: "object",
+            properties: {}
+          }
+        }
+      }))
+    };
+  }
+  async requestJson(request, stream) {
+    const response = await this.fetchChatCompletions(request, stream);
+    const text = await response.text();
+    if (!response.ok) {
+      throw new LLMError(mapHttpStatusToErrorCode(response.status, text), this.buildHttpMessage(response.status, text), {
+        provider: "openai-compatible",
+        status: response.status
+      });
+    }
+    return JSON.parse(text);
+  }
+  async requestStream(request) {
+    const response = await this.fetchChatCompletions(request, true);
+    const text = response.ok ? "" : await response.text();
+    if (!response.ok) {
+      throw new LLMError(mapHttpStatusToErrorCode(response.status, text), this.buildHttpMessage(response.status, text), {
+        provider: "openai-compatible",
+        status: response.status
+      });
+    }
+    if (!response.body) {
+      throw new LLMError("network", "Streaming response body is empty.", {
+        provider: "openai-compatible"
+      });
+    }
+    return response.body.getReader();
+  }
+  async fetchChatCompletions(request, stream) {
+    const timeoutSignal = AbortSignal.timeout(this.settings.requestTimeoutMs);
+    const signal = request.signal ? AbortSignal.any([request.signal, timeoutSignal]) : timeoutSignal;
+    const baseUrl = this.settings.baseUrl.replace(/\/$/, "");
+    try {
+      return await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.settings.apiKey}`
+        },
+        body: JSON.stringify(this.buildBody(request, stream)),
+        signal
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new LLMError("timeout", "Request timed out.", {
+          provider: "openai-compatible"
+        });
+      }
+      throw new LLMError("network", "Network request failed.", {
+        provider: "openai-compatible"
+      });
+    }
+  }
+  buildHttpMessage(status, bodyText) {
+    const trimmedBody = bodyText.trim();
+    return trimmedBody ? `HTTP ${status}. ${trimmedBody}` : `HTTP ${status}. Request failed.`;
+  }
+  parseToolArguments(argumentsText) {
+    if (!argumentsText) {
+      return {};
+    }
+    try {
+      return JSON.parse(argumentsText);
+    } catch {
+      return {
+        raw: argumentsText
+      };
+    }
+  }
+};
+
+// src/llm/index.ts
+function getAdapter(settings) {
+  if (settings.provider === "anthropic") {
+    return new AnthropicAdapter(settings);
+  }
+  return new OpenAICompatibleAdapter(settings);
+}
+async function generateText(settings, request) {
+  return getAdapter(settings).generateText(request);
+}
+async function testConnection(settings) {
+  await getAdapter(settings).testConnection();
+}
+
 // electron/main.ts
 var mainWindow = null;
 var watchedFiles = /* @__PURE__ */ new Map();
@@ -415,11 +1010,11 @@ var recentWrites = /* @__PURE__ */ new Map();
 var imageCounter = 0;
 var SEARCHABLE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".markdown", ".mdx", ".txt"]);
 function writeFileAtomically(filePath, content) {
-  const dir = path3.dirname(filePath);
-  const tempFile = path3.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-  fs2.writeFileSync(tempFile, content, "utf-8");
+  const dir = path4.dirname(filePath);
+  const tempFile = path4.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  fs3.writeFileSync(tempFile, content, "utf-8");
   rememberRecentWrite(recentWrites, filePath);
-  fs2.renameSync(tempFile, filePath);
+  fs3.renameSync(tempFile, filePath);
 }
 function collectWorkspaceFiles(rootDir) {
   const files = [];
@@ -429,7 +1024,7 @@ function collectWorkspaceFiles(rootDir) {
     if (!currentDir) continue;
     let entries = [];
     try {
-      entries = fs2.readdirSync(currentDir, { withFileTypes: true });
+      entries = fs3.readdirSync(currentDir, { withFileTypes: true });
     } catch {
       continue;
     }
@@ -437,12 +1032,12 @@ function collectWorkspaceFiles(rootDir) {
       if (entry.name === ".git" || entry.name === "node_modules" || entry.name === "dist" || entry.name === "release") {
         continue;
       }
-      const fullPath = path3.join(currentDir, entry.name);
+      const fullPath = path4.join(currentDir, entry.name);
       if (entry.isDirectory()) {
         queue.push(fullPath);
         continue;
       }
-      if (!SEARCHABLE_EXTENSIONS.has(path3.extname(entry.name).toLowerCase())) {
+      if (!SEARCHABLE_EXTENSIONS.has(path4.extname(entry.name).toLowerCase())) {
         continue;
       }
       files.push(fullPath);
@@ -451,13 +1046,13 @@ function collectWorkspaceFiles(rootDir) {
   return files;
 }
 function relativeWorkspacePath(workspaceRoot, filePath) {
-  return path3.relative(workspaceRoot, filePath).replace(/\\/g, "/");
+  return path4.relative(workspaceRoot, filePath).replace(/\\/g, "/");
 }
 async function exportDocument(payload) {
-  const baseName = payload.currentFilePath ? path3.parse(payload.currentFilePath).name : payload.title.replace(/\.[^.]+$/, "") || "Untitled";
+  const baseName = payload.currentFilePath ? path4.parse(payload.currentFilePath).name : payload.title.replace(/\.[^.]+$/, "") || "Untitled";
   const extension = payload.type === "pdf" ? "pdf" : "html";
-  const defaultPath = payload.currentFilePath ? path3.join(path3.dirname(payload.currentFilePath), `${baseName}.${extension}`) : `${baseName}.${extension}`;
-  const selectedPath = await import_electron.dialog.showSaveDialog({
+  const defaultPath = payload.currentFilePath ? path4.join(path4.dirname(payload.currentFilePath), `${baseName}.${extension}`) : `${baseName}.${extension}`;
+  const selectedPath = await import_electron2.dialog.showSaveDialog({
     defaultPath,
     filters: [
       {
@@ -479,10 +1074,10 @@ async function exportDocument(payload) {
     const documentHtml = buildExportDocumentHtml(payload.title, bodyHtml, payload.theme, {
       forPrint: false
     });
-    fs2.writeFileSync(selectedPath.filePath, documentHtml, "utf-8");
+    fs3.writeFileSync(selectedPath.filePath, documentHtml, "utf-8");
     return { canceled: false, path: selectedPath.filePath };
   }
-  const printWindow = new import_electron.BrowserWindow({
+  const printWindow = new import_electron2.BrowserWindow({
     show: false,
     webPreferences: {
       sandbox: true
@@ -505,7 +1100,7 @@ async function exportDocument(payload) {
       "document.fonts && document.fonts.ready ? document.fonts.ready.then(() => true) : Promise.resolve(true)"
     );
     const pdfBuffer = await printWindow.webContents.printToPDF(getPdfPrintOptions(payload.pdf));
-    fs2.writeFileSync(selectedPath.filePath, pdfBuffer);
+    fs3.writeFileSync(selectedPath.filePath, pdfBuffer);
     return { canceled: false, path: selectedPath.filePath };
   } finally {
     if (!printWindow.isDestroyed()) {
@@ -514,15 +1109,15 @@ async function exportDocument(payload) {
   }
 }
 function createWindow() {
-  mainWindow = new import_electron.BrowserWindow({
+  mainWindow = new import_electron2.BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     frame: false,
-    icon: path3.join(__dirname, "typola.ico"),
+    icon: path4.join(__dirname, "typola.ico"),
     webPreferences: {
-      preload: path3.join(__dirname, "preload.js"),
+      preload: path4.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -531,30 +1126,61 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:1420");
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path3.join(__dirname, "../dist/index.html"));
+    mainWindow.loadFile(path4.join(__dirname, "../dist/index.html"));
   }
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+  mainWindow.on("maximize", () => {
+    mainWindow?.webContents.send("maximized-change", true);
+  });
+  mainWindow.on("unmaximize", () => {
+    mainWindow?.webContents.send("maximized-change", false);
+  });
 }
-import_electron.ipcMain.handle("read_file", async (_, filePath) => {
-  return fs2.readFileSync(filePath, "utf-8");
+function buildAIActionMessages(action, text) {
+  const trimmedText = text.trim();
+  if (!trimmedText) {
+    throw new LLMError("invalid_request", "Selected text is empty.");
+  }
+  const baseSystem = "You are a precise writing assistant inside Typola. Return only the final answer text. Do not add explanations, prefixes, or markdown fences.";
+  const prompts = {
+    explain: `Explain the following text in simpler terms while preserving its meaning.
+
+${trimmedText}`,
+    rewrite: `Rewrite the following text to make it clearer and more polished. Keep the original language unless the text itself requests another language.
+
+${trimmedText}`,
+    summarize: `Condense the following text. Keep the key facts and remove repetition.
+
+${trimmedText}`,
+    translate: `Translate the following text into the other language between English and Simplified Chinese. If the source text is mainly Chinese, translate it to English. Otherwise translate it to Simplified Chinese. Preserve names, formatting, and technical terms when needed.
+
+${trimmedText}`
+  };
+  return [
+    { role: "system", content: baseSystem },
+    { role: "user", content: prompts[action] }
+  ];
+}
+import_electron2.ipcMain.handle("read_file", async (_, filePath) => {
+  return fs3.readFileSync(filePath, "utf-8");
 });
-import_electron.ipcMain.handle("write_file", async (_, filePath, content) => {
+import_electron2.ipcMain.handle("write_file", async (_, filePath, content) => {
   writeFileAtomically(filePath, content);
 });
-import_electron.ipcMain.handle("pick_folder", async () => {
-  const result = await import_electron.dialog.showOpenDialog({
+import_electron2.ipcMain.handle("pick_folder", async () => {
+  const result = await import_electron2.dialog.showOpenDialog({
     properties: ["openDirectory"]
   });
   return result.canceled ? null : result.filePaths[0];
 });
 function hasMarkdownFiles(dirPath) {
   try {
-    const entries = fs2.readdirSync(dirPath, { withFileTypes: true });
+    const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue;
-      if (entry.isDirectory() && hasMarkdownFiles(path3.join(dirPath, entry.name))) return true;
+      if (entry.isDirectory() && hasMarkdownFiles(path4.join(dirPath, entry.name))) return true;
       if (entry.name.endsWith(".md")) return true;
     }
   } catch {
@@ -564,11 +1190,11 @@ function hasMarkdownFiles(dirPath) {
 function listDirRecursive(dirPath) {
   return new Promise((resolve2) => {
     try {
-      const entries = fs2.readdirSync(dirPath, { withFileTypes: true });
+      const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
       const result = [];
       for (const entry of entries) {
         if (entry.name.startsWith(".")) continue;
-        const fullPath = path3.join(dirPath, entry.name);
+        const fullPath = path4.join(dirPath, entry.name);
         const isDir = entry.isDirectory();
         if (isDir) {
           listDirRecursive(fullPath).then((children) => {
@@ -591,12 +1217,12 @@ function listDirRecursive(dirPath) {
     }
   });
 }
-import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
-  const entries = fs2.readdirSync(dirPath, { withFileTypes: true });
+import_electron2.ipcMain.handle("list_dir", async (_, dirPath) => {
+  const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
   const result = [];
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
-    const fullPath = path3.join(dirPath, entry.name);
+    const fullPath = path4.join(dirPath, entry.name);
     const isDir = entry.isDirectory();
     if (isDir) {
       const children = await listDirRecursive(fullPath);
@@ -612,35 +1238,35 @@ import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
     return a.name.localeCompare(b.name);
   });
 });
-import_electron.ipcMain.handle("create_file", async (_, filePath) => {
-  fs2.writeFileSync(filePath, "", "utf-8");
+import_electron2.ipcMain.handle("create_file", async (_, filePath) => {
+  fs3.writeFileSync(filePath, "", "utf-8");
 });
-import_electron.ipcMain.handle("delete_path", async (_, targetPath) => {
-  const stat = fs2.statSync(targetPath);
+import_electron2.ipcMain.handle("delete_path", async (_, targetPath) => {
+  const stat = fs3.statSync(targetPath);
   if (stat.isDirectory()) {
-    fs2.rmSync(targetPath, { recursive: true });
+    fs3.rmSync(targetPath, { recursive: true });
   } else {
-    fs2.unlinkSync(targetPath);
+    fs3.unlinkSync(targetPath);
   }
 });
-import_electron.ipcMain.handle("rename_path", async (_, oldPath, newPath) => {
-  fs2.renameSync(oldPath, newPath);
+import_electron2.ipcMain.handle("rename_path", async (_, oldPath, newPath) => {
+  fs3.renameSync(oldPath, newPath);
 });
-import_electron.ipcMain.handle("show_save_dialog", async (_, options) => {
-  const result = await import_electron.dialog.showSaveDialog({
+import_electron2.ipcMain.handle("show_save_dialog", async (_, options) => {
+  const result = await import_electron2.dialog.showSaveDialog({
     defaultPath: options.defaultPath,
     filters: options.filters || [{ name: "Markdown", extensions: ["md"] }]
   });
   return result.canceled ? null : result.filePath;
 });
-import_electron.ipcMain.handle("workspace_search", async (_, workspaceRoot, query, request) => {
+import_electron2.ipcMain.handle("workspace_search", async (_, workspaceRoot, query, request) => {
   const results = collectWorkspaceFiles(workspaceRoot).map((filePath) => {
     const relativePath = relativeWorkspacePath(workspaceRoot, filePath);
     if (!shouldSearchPath(relativePath, request.includeGlob, request.excludeGlob)) {
       return null;
     }
     try {
-      const content = fs2.readFileSync(filePath, "utf-8");
+      const content = fs3.readFileSync(filePath, "utf-8");
       const matches = searchText(content, query, request, 1);
       if (matches.length === 0) return null;
       return {
@@ -662,7 +1288,7 @@ import_electron.ipcMain.handle("workspace_search", async (_, workspaceRoot, quer
   }).filter((result) => result !== null).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
   return results;
 });
-import_electron.ipcMain.handle(
+import_electron2.ipcMain.handle(
   "preview_workspace_replace",
   async (_, workspaceRoot, query, replacementText, request) => {
     const skippedPaths = new Set(request.skipPaths ?? []);
@@ -675,7 +1301,7 @@ import_electron.ipcMain.handle(
         return null;
       }
       try {
-        const content = fs2.readFileSync(filePath, "utf-8");
+        const content = fs3.readFileSync(filePath, "utf-8");
         const preview = previewReplaceText(content, query, replacementText, request);
         if (preview.replacementCount === 0) {
           return null;
@@ -694,7 +1320,7 @@ import_electron.ipcMain.handle(
     return results;
   }
 );
-import_electron.ipcMain.handle(
+import_electron2.ipcMain.handle(
   "apply_workspace_replace",
   async (_, changes) => {
     for (const change of changes) {
@@ -703,43 +1329,136 @@ import_electron.ipcMain.handle(
     return { updated: changes.length };
   }
 );
-import_electron.ipcMain.handle("export_document", async (_, payload) => exportDocument(payload));
-import_electron.ipcMain.handle("save_image", async (_, workspaceRoot, data, ext) => {
-  const resourcesDir = path3.join(workspaceRoot, ".resources");
-  if (!fs2.existsSync(resourcesDir)) {
-    fs2.mkdirSync(resourcesDir, { recursive: true });
+import_electron2.ipcMain.handle("export_document", async (_, payload) => exportDocument(payload));
+import_electron2.ipcMain.handle("get_ai_settings", () => {
+  return getAISettingsSummary();
+});
+import_electron2.ipcMain.handle("save_ai_settings", (_, input) => {
+  return saveAISettings(input);
+});
+import_electron2.ipcMain.handle("test_ai_connection", async () => {
+  try {
+    const settings = getResolvedAISettings();
+    await testConnection(settings);
+    return {
+      ok: true,
+      data: {
+        providerLabel: getProviderLabel(settings),
+        model: settings.model
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: serializeLLMError(error)
+    };
+  }
+});
+import_electron2.ipcMain.handle("run_ai_action", async (_, request) => {
+  try {
+    const settings = getResolvedAISettings();
+    const response = await generateText(settings, {
+      model: settings.model,
+      temperature: request.action === "rewrite" ? 0.4 : 0.2,
+      maxTokens: 1024,
+      messages: buildAIActionMessages(request.action, request.text)
+    });
+    return {
+      ok: true,
+      data: {
+        text: response.text.trim(),
+        action: request.action,
+        providerLabel: getProviderLabel(settings),
+        model: settings.model
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: serializeLLMError(error)
+    };
+  }
+});
+import_electron2.ipcMain.handle("save_image", async (_, workspaceRoot, data, ext) => {
+  const resourcesDir = path4.join(workspaceRoot, ".resources");
+  if (!fs3.existsSync(resourcesDir)) {
+    fs3.mkdirSync(resourcesDir, { recursive: true });
   }
   const filename = `${Date.now()}-${(++imageCounter).toString(36).slice(-8)}.${ext}`;
-  const fullPath = path3.join(resourcesDir, filename);
+  const fullPath = path4.join(resourcesDir, filename);
   const buffer = Buffer.from(data);
-  fs2.writeFileSync(fullPath, buffer);
+  fs3.writeFileSync(fullPath, buffer);
   return `.resources/${filename}`;
 });
-import_electron.ipcMain.handle("get_image_url", async (_, relativePath) => {
+import_electron2.ipcMain.handle("get_image_url", async (_, relativePath) => {
   return "file:///" + relativePath.replace(/\\/g, "/");
 });
-import_electron.ipcMain.handle("window_minimize", () => {
+import_electron2.ipcMain.handle("window_minimize", () => {
   mainWindow?.minimize();
 });
-import_electron.ipcMain.handle("window_maximize", () => {
+import_electron2.ipcMain.handle("window_maximize", () => {
   mainWindow?.maximize();
 });
-import_electron.ipcMain.handle("window_unmaximize", () => {
+import_electron2.ipcMain.handle("window_unmaximize", () => {
   mainWindow?.unmaximize();
 });
-import_electron.ipcMain.handle("window_close", () => {
+import_electron2.ipcMain.handle("window_close", () => {
   mainWindow?.close();
 });
-import_electron.ipcMain.handle("window_is_maximized", () => {
+import_electron2.ipcMain.handle("window_is_maximized", () => {
   return mainWindow?.isMaximized() ?? false;
 });
-import_electron.ipcMain.handle("watch_file", async (_, filePath) => {
+var recentDataPath = path4.join(import_electron2.app.getPath("userData"), "recent.json");
+function loadRecentData() {
+  try {
+    if (fs3.existsSync(recentDataPath)) {
+      return JSON.parse(fs3.readFileSync(recentDataPath, "utf-8"));
+    }
+  } catch {
+  }
+  return { files: [], workspaces: [] };
+}
+function saveRecentData(data) {
+  fs3.writeFileSync(recentDataPath, JSON.stringify(data, null, 2));
+}
+import_electron2.ipcMain.handle("get_recent_files", () => {
+  return loadRecentData();
+});
+import_electron2.ipcMain.handle("add_recent_file", (_, filePath) => {
+  const data = loadRecentData();
+  const name = path4.basename(filePath);
+  data.files = [
+    { path: filePath, name, timestamp: Date.now() },
+    ...data.files.filter((f) => f.path !== filePath)
+  ].slice(0, 10);
+  saveRecentData(data);
+});
+import_electron2.ipcMain.handle("add_recent_workspace", (_, workspacePath) => {
+  const data = loadRecentData();
+  const name = path4.basename(workspacePath);
+  data.workspaces = [
+    { path: workspacePath, name, timestamp: Date.now() },
+    ...data.workspaces.filter((w) => w.path !== workspacePath)
+  ].slice(0, 5);
+  saveRecentData(data);
+});
+import_electron2.ipcMain.handle("clear_recent_files", () => {
+  const data = loadRecentData();
+  data.files = [];
+  saveRecentData(data);
+});
+import_electron2.ipcMain.handle("clear_recent_workspaces", () => {
+  const data = loadRecentData();
+  data.workspaces = [];
+  saveRecentData(data);
+});
+import_electron2.ipcMain.handle("watch_file", async (_, filePath) => {
   if (watchedFiles.has(filePath)) return;
   try {
-    const watcher = fs2.watch(path3.dirname(filePath), (_eventType, filename) => {
+    const watcher = fs3.watch(path4.dirname(filePath), (_eventType, filename) => {
       if (!matchesWatchedFile(filePath, filename)) return;
       if (shouldIgnoreWatchEvent(recentWrites, filePath)) return;
-      if (fs2.existsSync(filePath)) {
+      if (fs3.existsSync(filePath)) {
         mainWindow?.webContents.send("file-changed", { path: filePath });
       }
     });
@@ -748,23 +1467,23 @@ import_electron.ipcMain.handle("watch_file", async (_, filePath) => {
     console.error("Failed to watch file:", e);
   }
 });
-import_electron.ipcMain.handle("unwatch_file", async (_, filePath) => {
+import_electron2.ipcMain.handle("unwatch_file", async (_, filePath) => {
   const watcher = watchedFiles.get(filePath);
   if (watcher) {
     watcher.close();
     watchedFiles.delete(filePath);
   }
 });
-import_electron.app.whenReady().then(createWindow);
-import_electron.app.on("window-all-closed", () => {
+import_electron2.app.whenReady().then(createWindow);
+import_electron2.app.on("window-all-closed", () => {
   watchedFiles.forEach((watcher) => watcher.close());
   watchedFiles.clear();
   if (process.platform !== "darwin") {
-    import_electron.app.quit();
+    import_electron2.app.quit();
   }
 });
-import_electron.app.on("activate", () => {
-  if (import_electron.BrowserWindow.getAllWindows().length === 0) {
+import_electron2.app.on("activate", () => {
+  if (import_electron2.BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });

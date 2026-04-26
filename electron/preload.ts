@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { AIProviderSetupInput, AIRightClickRequest } from '../src/llm/types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // File operations
@@ -44,7 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     title: string;
     html: string;
     currentFilePath: string | null;
-    theme: 'light' | 'dark';
+    theme: string;
     pdf: {
       pageSize: 'A4' | 'Letter';
       margin: 'compact' | 'normal' | 'wide';
@@ -55,6 +56,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       imageMode: 'relative' | 'base64' | 'external';
     };
   }) => ipcRenderer.invoke('export_document', payload),
+  getAISettings: () => ipcRenderer.invoke('get_ai_settings'),
+  saveAISettings: (settings: AIProviderSetupInput) => ipcRenderer.invoke('save_ai_settings', settings),
+  testAIConnection: () => ipcRenderer.invoke('test_ai_connection'),
+  runAIAction: (request: AIRightClickRequest) => ipcRenderer.invoke('run_ai_action', request),
+  // Recent files/workspaces
+  getRecentFiles: () => ipcRenderer.invoke('get_recent_files'),
+  addRecentFile: (path: string) => ipcRenderer.invoke('add_recent_file', path),
+  addRecentWorkspace: (path: string) => ipcRenderer.invoke('add_recent_workspace', path),
+  clearRecentFiles: () => ipcRenderer.invoke('clear_recent_files'),
+  clearRecentWorkspaces: () => ipcRenderer.invoke('clear_recent_workspaces'),
   // Window controls
   windowMinimize: () => ipcRenderer.invoke('window_minimize'),
   windowMaximize: () => ipcRenderer.invoke('window_maximize'),

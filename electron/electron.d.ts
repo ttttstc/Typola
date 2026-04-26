@@ -1,3 +1,11 @@
+import type {
+  AIProviderSetupInput,
+  AISettingsSummary,
+  AIRightClickRequest,
+  AIRightClickResult,
+  LLMOperationResult,
+} from '../src/llm/types';
+
 export interface SearchOptions {
   caseSensitive: boolean;
   wholeWord: boolean;
@@ -39,7 +47,7 @@ export interface ExportPayload {
   title: string;
   html: string;
   currentFilePath: string | null;
-  theme: 'light' | 'dark';
+  theme: string;
   pdf: {
     pageSize: 'A4' | 'Letter';
     margin: 'compact' | 'normal' | 'wide';
@@ -56,6 +64,12 @@ export interface FileEntry {
   path: string;
   isDir: boolean;
   children?: FileEntry[];
+}
+
+export interface RecentEntry {
+  path: string;
+  name: string;
+  timestamp: number;
 }
 
 export interface ElectronAPI {
@@ -94,6 +108,15 @@ export interface ElectronAPI {
   exportDocument: (
     payload: ExportPayload
   ) => Promise<{ canceled: boolean; path?: string }>;
+  getAISettings: () => Promise<AISettingsSummary>;
+  saveAISettings: (settings: AIProviderSetupInput) => Promise<AISettingsSummary>;
+  testAIConnection: () => Promise<LLMOperationResult<{ providerLabel: string; model: string }>>;
+  runAIAction: (request: AIRightClickRequest) => Promise<LLMOperationResult<AIRightClickResult>>;
+  getRecentFiles: () => Promise<{ files: RecentEntry[]; workspaces: RecentEntry[] }>;
+  addRecentFile: (path: string) => Promise<void>;
+  addRecentWorkspace: (path: string) => Promise<void>;
+  clearRecentFiles: () => Promise<void>;
+  clearRecentWorkspaces: () => Promise<void>;
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
   windowUnmaximize: () => Promise<void>;

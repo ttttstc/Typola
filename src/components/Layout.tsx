@@ -7,6 +7,7 @@ import { Outline } from './Outline';
 import { StatusBar } from './StatusBar';
 import { TabBar } from './TabBar';
 import { Settings } from './Settings';
+import { AIResultBubble } from './AIResultBubble';
 import { useUIStore } from '../store/ui';
 
 export function Layout() {
@@ -139,6 +140,7 @@ export function Layout() {
         )}
       </div>
       <StatusBar />
+      <AIResultBubble />
       <Settings />
     </div>
   );

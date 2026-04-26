@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import i18n from '../i18n';
 
-export type SettingsTab = 'general' | 'editor' | 'appearance' | 'terminal' | 'shortcuts' | 'export';
+export type SettingsTab = 'general' | 'editor' | 'appearance' | 'terminal' | 'shortcuts' | 'export' | 'ai';
 
 export type Language = 'zh' | 'en';
 export type SidebarTab = 'files' | 'search';
@@ -26,8 +26,10 @@ interface ExportSettings {
   htmlImageMode: HtmlImageMode;
 }
 
+export type Theme = 'light' | 'dark' | 'sepia' | 'focus' | 'arc' | 'solarized-light' | 'solarized-dark';
+
 interface UIState {
-  theme: 'light' | 'dark';
+  theme: Theme;
   sidebarVisible: boolean;
   sidebarTab: SidebarTab;
   outlineVisible: boolean;
@@ -39,7 +41,7 @@ interface UIState {
   settingsActiveTab: SettingsTab;
   searchDefaults: SearchDefaults;
   exportSettings: ExportSettings;
-  setTheme: (theme: 'light' | 'dark') => void;
+  setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarTab: (tab: SidebarTab) => void;
@@ -56,6 +58,8 @@ interface UIState {
   setSearchDefaults: (patch: Partial<SearchDefaults>) => void;
   setExportSettings: (patch: Partial<ExportSettings>) => void;
 }
+
+const themes: Theme[] = ['light', 'dark', 'sepia', 'focus', 'arc', 'solarized-light', 'solarized-dark'];
 
 export const useUIStore = create<UIState>()(
   persist(
@@ -85,7 +89,11 @@ export const useUIStore = create<UIState>()(
         htmlImageMode: 'relative',
       },
       setTheme: (theme) => set({ theme }),
-      toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
+      toggleTheme: () => set((state) => {
+        const currentIndex = themes.indexOf(state.theme);
+        const nextIndex = (currentIndex + 1) % themes.length;
+        return { theme: themes[nextIndex] };
+      }),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       setSidebarTab: (tab) => set({ sidebarTab: tab }),
       setOutlineVisible: (visible) => set({ outlineVisible: visible }),

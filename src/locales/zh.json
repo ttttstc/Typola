@@ -9,6 +9,15 @@
     "yes": "是",
     "no": "否"
   },
+  "themes": {
+    "light": "亮色",
+    "dark": "暗色",
+    "sepia": "羊皮纸",
+    "focus": "聚焦",
+    "arc": "Arc",
+    "solarized-light": "Solarized 亮",
+    "solarized-dark": "Solarized 暗"
+  },
   "menu": {
     "file": "文件",
     "edit": "编辑",

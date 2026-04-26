@@ -9,6 +9,16 @@ import {
   rewriteHtmlImages,
 } from './export';
 import { SearchOptions, previewReplaceText, searchText, shouldSearchPath } from '../src/shared/search';
+import { getAISettingsSummary, getResolvedAISettings, saveAISettings } from './aiConfig';
+import { generateText, testConnection as testLLMConnection } from '../src/llm';
+import {
+  AIRightClickRequest,
+  AIRightClickAction,
+  AIProviderSetupInput,
+  serializeLLMError,
+  getProviderLabel,
+  LLMError,
+} from '../src/llm/types';
 
 let mainWindow: BrowserWindow | null = null;
 const watchedFiles = new Map<string, fs.FSWatcher>();
@@ -167,6 +177,36 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('maximized-change', true);
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('maximized-change', false);
+  });
+}
+
+function buildAIActionMessages(action: AIRightClickAction, text: string) {
+  const trimmedText = text.trim();
+  if (!trimmedText) {
+    throw new LLMError('invalid_request', 'Selected text is empty.');
+  }
+
+  const baseSystem =
+    'You are a precise writing assistant inside Typola. Return only the final answer text. Do not add explanations, prefixes, or markdown fences.';
+
+  const prompts: Record<AIRightClickAction, string> = {
+    explain: `Explain the following text in simpler terms while preserving its meaning.\n\n${trimmedText}`,
+    rewrite: `Rewrite the following text to make it clearer and more polished. Keep the original language unless the text itself requests another language.\n\n${trimmedText}`,
+    summarize: `Condense the following text. Keep the key facts and remove repetition.\n\n${trimmedText}`,
+    translate: `Translate the following text into the other language between English and Simplified Chinese. If the source text is mainly Chinese, translate it to English. Otherwise translate it to Simplified Chinese. Preserve names, formatting, and technical terms when needed.\n\n${trimmedText}`,
+  };
+
+  return [
+    { role: 'system' as const, content: baseSystem },
+    { role: 'user' as const, content: prompts[action] },
+  ];
 }
 
 ipcMain.handle('read_file', async (_, filePath: string) => {
@@ -372,6 +412,60 @@ ipcMain.handle(
 
 ipcMain.handle('export_document', async (_, payload: ExportPayload) => exportDocument(payload));
 
+ipcMain.handle('get_ai_settings', () => {
+  return getAISettingsSummary();
+});
+
+ipcMain.handle('save_ai_settings', (_, input: AIProviderSetupInput) => {
+  return saveAISettings(input);
+});
+
+ipcMain.handle('test_ai_connection', async () => {
+  try {
+    const settings = getResolvedAISettings();
+    await testLLMConnection(settings);
+    return {
+      ok: true,
+      data: {
+        providerLabel: getProviderLabel(settings),
+        model: settings.model,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: serializeLLMError(error),
+    };
+  }
+});
+
+ipcMain.handle('run_ai_action', async (_, request: AIRightClickRequest) => {
+  try {
+    const settings = getResolvedAISettings();
+    const response = await generateText(settings, {
+      model: settings.model,
+      temperature: request.action === 'rewrite' ? 0.4 : 0.2,
+      maxTokens: 1024,
+      messages: buildAIActionMessages(request.action, request.text),
+    });
+
+    return {
+      ok: true,
+      data: {
+        text: response.text.trim(),
+        action: request.action,
+        providerLabel: getProviderLabel(settings),
+        model: settings.model,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: serializeLLMError(error),
+    };
+  }
+});
+
 ipcMain.handle('save_image', async (_, workspaceRoot: string, data: number[], ext: string) => {
   const resourcesDir = path.join(workspaceRoot, '.resources');
   if (!fs.existsSync(resourcesDir)) {
@@ -406,6 +500,64 @@ ipcMain.handle('window_close', () => {
 
 ipcMain.handle('window_is_maximized', () => {
   return mainWindow?.isMaximized() ?? false;
+});
+
+// Recent files/workspaces handlers
+const recentDataPath = path.join(app.getPath('userData'), 'recent.json');
+
+interface RecentEntry {
+  path: string;
+  name: string;
+  timestamp: number;
+}
+
+function loadRecentData(): { files: RecentEntry[]; workspaces: RecentEntry[] } {
+  try {
+    if (fs.existsSync(recentDataPath)) {
+      return JSON.parse(fs.readFileSync(recentDataPath, 'utf-8'));
+    }
+  } catch {}
+  return { files: [], workspaces: [] };
+}
+
+function saveRecentData(data: { files: RecentEntry[]; workspaces: RecentEntry[] }) {
+  fs.writeFileSync(recentDataPath, JSON.stringify(data, null, 2));
+}
+
+ipcMain.handle('get_recent_files', () => {
+  return loadRecentData();
+});
+
+ipcMain.handle('add_recent_file', (_, filePath: string) => {
+  const data = loadRecentData();
+  const name = path.basename(filePath);
+  data.files = [
+    { path: filePath, name, timestamp: Date.now() },
+    ...data.files.filter((f) => f.path !== filePath),
+  ].slice(0, 10);
+  saveRecentData(data);
+});
+
+ipcMain.handle('add_recent_workspace', (_, workspacePath: string) => {
+  const data = loadRecentData();
+  const name = path.basename(workspacePath);
+  data.workspaces = [
+    { path: workspacePath, name, timestamp: Date.now() },
+    ...data.workspaces.filter((w) => w.path !== workspacePath),
+  ].slice(0, 5);
+  saveRecentData(data);
+});
+
+ipcMain.handle('clear_recent_files', () => {
+  const data = loadRecentData();
+  data.files = [];
+  saveRecentData(data);
+});
+
+ipcMain.handle('clear_recent_workspaces', () => {
+  const data = loadRecentData();
+  data.workspaces = [];
+  saveRecentData(data);
 });
 
 ipcMain.handle('watch_file', async (_, filePath: string) => {

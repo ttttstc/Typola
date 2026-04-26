@@ -9,6 +9,15 @@
     "yes": "Yes",
     "no": "No"
   },
+  "themes": {
+    "light": "Light",
+    "dark": "Dark",
+    "sepia": "Sepia",
+    "focus": "Focus",
+    "arc": "Arc",
+    "solarized-light": "Solarized Light",
+    "solarized-dark": "Solarized Dark"
+  },
   "menu": {
     "file": "File",
     "edit": "Edit",
@@ -83,7 +92,8 @@
     "saved": "Saved",
     "saving": "Saving...",
     "error": "Save failed",
-    "unsaved": "Unsaved"
+    "unsaved": "Unsaved",
+    "aiNotConfigured": "AI not configured"
   },
   "tabBar": {
     "fileModified": "File Modified",
@@ -114,6 +124,7 @@
     "common": "Common",
     "advanced": "Advanced",
     "general": "General",
+    "ai": "AI",
     "searchGroup": "Search",
     "defaultSearchDescription": "Use this option by default for new in-file and workspace searches.",
     "wholeWordDescription": "Match complete words only and skip partial hits inside longer strings.",
@@ -144,9 +155,33 @@
     "imageModeRelative": "Relative path",
     "imageModeBase64": "Embed as Base64",
     "imageModeExternal": "External / file URL",
+    "aiProvider": "Provider",
+    "aiConsoleLink": "Console",
+    "aiAnthropicConsoleDescription": "Open the Anthropic console to create or manage API keys.",
+    "aiApiKey": "API Key",
+    "aiModel": "Model",
+    "aiPreset": "Preset",
+    "aiPresetDescription": "Apply a preset endpoint before editing the base URL manually.",
+    "aiBaseUrl": "Base URL",
+    "aiTimeout": "Timeout (ms)",
+    "aiTimeoutDescription": "Timeout used for connection tests and right-click AI requests.",
+    "aiSaved": "AI settings saved.",
+    "aiSaveFailed": "Could not save AI settings.",
+    "aiTestConnection": "Test Connection",
+    "aiTesting": "Testing...",
+    "aiConnectionOk": "Connection succeeded",
+    "aiPendingAction": "After the connection test succeeds, Typola will continue the pending AI action automatically.",
+    "aiKeySavedHint": "A key is already saved. Leave this blank to keep the current key.",
+    "aiKeyRequiredHint": "Enter an API key before saving or testing.",
     "terminal": "Terminal",
     "shortcuts": "Shortcuts",
     "notImplemented": "Not implemented yet"
+  },
+  "aiContext": {
+    "explain": "Explain",
+    "rewrite": "Rewrite",
+    "summarize": "Condense",
+    "translate": "Translate"
   },
   "sidebar": {
     "files": "Files",

@@ -21,12 +21,12 @@ export interface ExportPayload {
   title: string;
   html: string;
   currentFilePath: string | null;
-  theme: 'light' | 'dark';
+  theme: string;
   pdf: PdfExportOptions;
   htmlOptions: HtmlExportOptions;
 }
 
-const THEME_VARIABLES = {
+const THEME_VARIABLES: Record<string, string> = {
   light: `
     :root {
       --color-paper: #fffdf8;
@@ -176,7 +176,7 @@ export function rewriteHtmlImages(
 export function buildExportDocumentHtml(
   title: string,
   bodyHtml: string,
-  theme: 'light' | 'dark',
+  theme: string,
   options: { forPrint: boolean; pageSize?: PdfPageSize; margin?: PdfMarginPreset }
 ) {
   const margin = getMarginValue(options.margin ?? 'normal');

@@ -18,6 +18,16 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   previewWorkspaceReplace: (workspaceRoot, query, replacementText, options) => import_electron.ipcRenderer.invoke("preview_workspace_replace", workspaceRoot, query, replacementText, options),
   applyWorkspaceReplace: (changes) => import_electron.ipcRenderer.invoke("apply_workspace_replace", changes),
   exportDocument: (payload) => import_electron.ipcRenderer.invoke("export_document", payload),
+  getAISettings: () => import_electron.ipcRenderer.invoke("get_ai_settings"),
+  saveAISettings: (settings) => import_electron.ipcRenderer.invoke("save_ai_settings", settings),
+  testAIConnection: () => import_electron.ipcRenderer.invoke("test_ai_connection"),
+  runAIAction: (request) => import_electron.ipcRenderer.invoke("run_ai_action", request),
+  // Recent files/workspaces
+  getRecentFiles: () => import_electron.ipcRenderer.invoke("get_recent_files"),
+  addRecentFile: (path) => import_electron.ipcRenderer.invoke("add_recent_file", path),
+  addRecentWorkspace: (path) => import_electron.ipcRenderer.invoke("add_recent_workspace", path),
+  clearRecentFiles: () => import_electron.ipcRenderer.invoke("clear_recent_files"),
+  clearRecentWorkspaces: () => import_electron.ipcRenderer.invoke("clear_recent_workspaces"),
   // Window controls
   windowMinimize: () => import_electron.ipcRenderer.invoke("window_minimize"),
   windowMaximize: () => import_electron.ipcRenderer.invoke("window_maximize"),
