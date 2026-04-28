@@ -56,6 +56,7 @@
     "electron-icon-builder": "^2.0.1",
     "esbuild": "^0.24.0",
     "jsdom": "^26.1.0",
+    "rcedit": "^5.0.2",
     "sharp": "^0.34.5",
     "typescript": "^5.4.0",
     "vite": "^5.4.0",
@@ -97,13 +98,14 @@
         "to": "typola.ico"
       }
     ],
+    "afterPack": "scripts/patchWindowsExecutable.cjs",
     "win": {
       "target": [
         {
           "target": "zip",
           "arch": [
             "x64"
-            ]
+          ]
         }
       ],
       "icon": "resources/typola.ico",
