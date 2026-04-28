@@ -79,7 +79,10 @@ describe('FileTree', () => {
       createFile: vi.fn(() => Promise.resolve()),
       deletePath: vi.fn(() => Promise.resolve()),
       exportDocument: vi.fn(() => Promise.resolve({ canceled: true })),
+      addRecentFile: vi.fn(() => Promise.resolve([])),
+      clearRecentFiles: vi.fn(() => Promise.resolve([])),
       getImageUrl: vi.fn(() => Promise.resolve('file:///test.png')),
+      getRecentFiles: vi.fn(() => Promise.resolve([])),
       listDir: vi.fn(() =>
         Promise.resolve([
           {
@@ -92,9 +95,13 @@ describe('FileTree', () => {
       onFileChanged: vi.fn(() => () => {}),
       onMaximizedChange: vi.fn(() => () => {}),
       onMenuAction: vi.fn(() => () => {}),
+      onOpenRecentFile: vi.fn(() => () => {}),
+      onRecentFilesChanged: vi.fn(() => () => {}),
+      notifyRendererReady: vi.fn(),
       onTerminalData: vi.fn(() => () => {}),
       onTerminalExit: vi.fn(() => () => {}),
       openExternal: vi.fn(() => Promise.resolve()),
+      pathExists: vi.fn(() => Promise.resolve(false)),
       pickFolder: vi.fn(() => Promise.resolve(null)),
       previewWorkspaceReplace: vi.fn(() => Promise.resolve([])),
       readClipboardText: vi.fn(() => Promise.resolve('')),

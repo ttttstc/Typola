@@ -186,8 +186,12 @@ describe('MilkdownEditor', () => {
     window.electronAPI = {
       readFile: readFileMock,
       writeFile: vi.fn(() => Promise.resolve()),
+      addRecentFile: vi.fn(() => Promise.resolve([])),
+      clearRecentFiles: vi.fn(() => Promise.resolve([])),
       pickFolder: vi.fn(() => Promise.resolve(null)),
+      getRecentFiles: vi.fn(() => Promise.resolve([])),
       listDir: vi.fn(() => Promise.resolve([])),
+      pathExists: vi.fn(() => Promise.resolve(false)),
       createFile: vi.fn(() => Promise.resolve()),
       deletePath: vi.fn(() => Promise.resolve()),
       renamePath: vi.fn(() => Promise.resolve()),
@@ -226,6 +230,9 @@ describe('MilkdownEditor', () => {
         };
       }),
       onMaximizedChange: vi.fn(() => () => {}),
+      onOpenRecentFile: vi.fn(() => () => {}),
+      onRecentFilesChanged: vi.fn(() => () => {}),
+      notifyRendererReady: vi.fn(),
       onTerminalData: vi.fn(() => () => {}),
       onTerminalExit: vi.fn(() => () => {}),
       onMenuAction: vi.fn(() => () => {}),

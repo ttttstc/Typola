@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pickFile: (options?: { filters?: { name: string; extensions: string[] }[] }) =>
     ipcRenderer.invoke('pick_file', options),
   listDir: (dirPath: string) => ipcRenderer.invoke('list_dir', dirPath),
+  pathExists: (targetPath: string) => ipcRenderer.invoke('path_exists', targetPath),
   createFile: (filePath: string) => ipcRenderer.invoke('create_file', filePath),
   deletePath: (targetPath: string) => ipcRenderer.invoke('delete_path', targetPath),
   renamePath: (oldPath: string, newPath: string) => ipcRenderer.invoke('rename_path', oldPath, newPath),
@@ -68,6 +69,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('open-recent-file', handler);
     return () => ipcRenderer.removeListener('open-recent-file', handler);
   },
+  notifyRendererReady: () => ipcRenderer.send('renderer_ready'),
   exportDocument: (payload: {
     type: 'pdf' | 'html';
     title: string;

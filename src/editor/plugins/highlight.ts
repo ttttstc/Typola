@@ -1,7 +1,8 @@
-import { createHighlighter, Highlighter } from 'shiki';
+import type { Highlighter } from 'shiki';
 import i18n from '../../i18n';
 
 let highlighter: Highlighter | null = null;
+let shikiModulePromise: Promise<typeof import('shiki')> | null = null;
 
 const SUPPORTED_LANGS = [
   'javascript',
@@ -22,6 +23,8 @@ type SupportedLang = typeof SUPPORTED_LANGS[number];
 
 async function getHighlighter(): Promise<Highlighter> {
   if (!highlighter) {
+    shikiModulePromise ??= import('shiki');
+    const { createHighlighter } = await shikiModulePromise;
     highlighter = await createHighlighter({
       themes: ['github-light', 'github-dark'],
       langs: [...SUPPORTED_LANGS],

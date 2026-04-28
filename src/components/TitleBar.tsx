@@ -1,7 +1,7 @@
 import { Minus, Square, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import icon32 from '../../resources/icons/32x32.png';
+import appIcon from '../../resources/icon.png';
 import { useUIStore } from '../store/ui';
 
 export function TitleBar() {
@@ -34,7 +34,7 @@ export function TitleBar() {
     <div className="titlebar-drag">
       <div className="titlebar-icon">
         <img
-          src={icon32}
+          src={appIcon}
           alt="Typola"
           style={{
             width: '16px',

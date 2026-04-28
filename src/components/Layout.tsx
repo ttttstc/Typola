@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { Suspense, lazy, useState, useCallback } from 'react';
 import { TitleBar } from './TitleBar';
 import { MenuBar } from './MenuBar';
 import { Sidebar } from './Sidebar';
@@ -6,9 +6,18 @@ import { Editor } from './Editor';
 import { Outline } from './Outline';
 import { StatusBar } from './StatusBar';
 import { TabBar } from './TabBar';
-import { Settings } from './Settings';
-import { TerminalPanel } from './TerminalPanel';
 import { useUIStore } from '../store/ui';
+import { useTerminalStore } from '../store/terminal';
+
+const LazySettings = lazy(async () => {
+  const module = await import('./Settings');
+  return { default: module.Settings };
+});
+
+const LazyTerminalPanel = lazy(async () => {
+  const module = await import('./TerminalPanel');
+  return { default: module.TerminalPanel };
+});
 
 export function Layout() {
   const sidebarVisible = useUIStore((s) => s.sidebarVisible);
@@ -17,6 +26,9 @@ export function Layout() {
   const outlineWidth = useUIStore((s) => s.outlineWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
   const setOutlineWidth = useUIStore((s) => s.setOutlineWidth);
+  const settingsOpen = useUIStore((s) => s.settingsOpen);
+  const terminalVisible = useUIStore((s) => s.terminalVisible);
+  const hasTerminalTabs = useTerminalStore((s) => s.tabs.length > 0);
 
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingOutline, setIsResizingOutline] = useState(false);
@@ -112,7 +124,11 @@ export function Layout() {
         >
           <TabBar />
           <Editor />
-          <TerminalPanel />
+          {(terminalVisible || hasTerminalTabs) ? (
+            <Suspense fallback={null}>
+              <LazyTerminalPanel />
+            </Suspense>
+          ) : null}
         </div>
         {outlineVisible && (
           <>
@@ -141,7 +157,11 @@ export function Layout() {
         )}
       </div>
       <StatusBar />
-      <Settings />
+      {settingsOpen ? (
+        <Suspense fallback={null}>
+          <LazySettings />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

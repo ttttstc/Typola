@@ -24,11 +24,65 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // electron/main.ts
 var import_electron = require("electron");
-var path3 = __toESM(require("path"));
-var fs3 = __toESM(require("fs"));
+var path6 = __toESM(require("path"));
+var fs5 = __toESM(require("fs"));
+
+// electron/fileTree.ts
+var fs = __toESM(require("fs/promises"));
+var path = __toESM(require("path"));
+var MARKDOWN_EXTENSIONS = /* @__PURE__ */ new Set([".md"]);
+var IGNORED_DIRECTORY_NAMES = /* @__PURE__ */ new Set([".git", "node_modules", "dist", "release"]);
+function shouldIgnoreDirectory(name) {
+  return name.startsWith(".") || IGNORED_DIRECTORY_NAMES.has(name.toLowerCase());
+}
+function shouldIncludeFile(name) {
+  return !name.startsWith(".") && MARKDOWN_EXTENSIONS.has(path.extname(name).toLowerCase());
+}
+function sortEntries(entries) {
+  return entries.sort((left, right) => {
+    if (left.isDir !== right.isDir) {
+      return left.isDir ? -1 : 1;
+    }
+    return left.name.localeCompare(right.name);
+  });
+}
+async function buildMarkdownFileTree(dirPath) {
+  let entries = [];
+  try {
+    entries = await fs.readdir(dirPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const result = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (shouldIgnoreDirectory(entry.name)) {
+        continue;
+      }
+      const children = await buildMarkdownFileTree(fullPath);
+      if (children.length > 0) {
+        result.push({ name: entry.name, path: fullPath, isDir: true, children });
+      }
+      continue;
+    }
+    if (shouldIncludeFile(entry.name)) {
+      result.push({ name: entry.name, path: fullPath, isDir: false });
+    }
+  }
+  return sortEntries(result);
+}
+async function pathExists(targetPath) {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // electron/fileWatch.ts
-var path = __toESM(require("path"));
+var path2 = __toESM(require("path"));
 var SELF_WRITE_GRACE_MS = 1500;
 function rememberRecentWrite(recentWrites2, filePath, now = Date.now()) {
   recentWrites2.set(filePath, now);
@@ -44,12 +98,82 @@ function shouldIgnoreWatchEvent(recentWrites2, filePath, now = Date.now(), grace
 }
 function matchesWatchedFile(filePath, filename) {
   if (!filename) return true;
-  return filename.toString() === path.basename(filePath);
+  return filename.toString() === path2.basename(filePath);
+}
+
+// electron/openTargets.ts
+var path3 = __toESM(require("path"));
+var OPENABLE_DOCUMENT_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".markdown", ".mdx", ".txt"]);
+function extractOpenDocumentPaths(argv, cwd = process.cwd()) {
+  const seen = /* @__PURE__ */ new Set();
+  const paths = [];
+  for (const rawArg of argv.slice(1)) {
+    const value = rawArg.trim();
+    if (!value || value === "." || value.startsWith("-")) {
+      continue;
+    }
+    const resolvedPath = path3.resolve(cwd, value);
+    if (!OPENABLE_DOCUMENT_EXTENSIONS.has(path3.extname(resolvedPath).toLowerCase())) {
+      continue;
+    }
+    const dedupeKey = process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    paths.push(resolvedPath);
+  }
+  return paths;
+}
+
+// electron/recentFiles.ts
+var fs2 = __toESM(require("fs"));
+var path4 = __toESM(require("path"));
+var MAX_RECENT = 10;
+var FILE_NAME = "recent-files.json";
+function getStoragePath(userDataDir) {
+  return path4.join(userDataDir, FILE_NAME);
+}
+function loadRecentFiles(userDataDir) {
+  try {
+    const raw = fs2.readFileSync(getStoragePath(userDataDir), "utf-8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item) => !!item && typeof item.path === "string" && typeof item.addedAt === "number"
+    ).slice(0, MAX_RECENT);
+  } catch {
+    return [];
+  }
+}
+function saveRecentFiles(userDataDir, entries) {
+  try {
+    fs2.writeFileSync(
+      getStoragePath(userDataDir),
+      JSON.stringify(entries.slice(0, MAX_RECENT), null, 2),
+      "utf-8"
+    );
+  } catch {
+  }
+}
+function addRecentFile(entries, filePath) {
+  const normalized = path4.normalize(filePath);
+  const filtered = entries.filter((entry) => path4.normalize(entry.path) !== normalized);
+  return [{ path: normalized, addedAt: Date.now() }, ...filtered].slice(0, MAX_RECENT);
+}
+function pruneMissingRecentFiles(entries) {
+  return entries.filter((entry) => {
+    try {
+      return fs2.existsSync(entry.path);
+    } catch {
+      return false;
+    }
+  });
 }
 
 // electron/export.ts
-var fs = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
+var fs3 = __toESM(require("fs"));
+var path5 = __toESM(require("path"));
 var THEME_VARIABLES = {
   light: `
     :root {
@@ -104,14 +228,14 @@ function resolveLocalImagePath(currentFilePath, source) {
   if (/^(https?:|data:|file:)/i.test(normalized)) {
     return null;
   }
-  const baseDir = path2.dirname(currentFilePath);
-  return path2.resolve(baseDir, normalized);
+  const baseDir = path5.dirname(currentFilePath);
+  return path5.resolve(baseDir, normalized);
 }
 function ensureDirectory(dirPath) {
-  fs.mkdirSync(dirPath, { recursive: true });
+  fs3.mkdirSync(dirPath, { recursive: true });
 }
 function imageMimeType(imagePath) {
-  const ext = path2.extname(imagePath).toLowerCase();
+  const ext = path5.extname(imagePath).toLowerCase();
   switch (ext) {
     case ".jpg":
     case ".jpeg":
@@ -132,36 +256,36 @@ function buildFileUrl(filePath) {
 function getRelativeImageTarget(source) {
   const normalized = normalizeImageSource(source);
   if (/^[a-zA-Z]:\//.test(normalized)) {
-    return path2.posix.join(".resources", path2.posix.basename(normalized));
+    return path5.posix.join(".resources", path5.posix.basename(normalized));
   }
   const withoutDot = normalized.replace(/^\.\//, "");
   const sanitized = withoutDot.replace(/^(\.\.\/)+/g, "");
-  return sanitized || path2.posix.join(".resources", path2.posix.basename(normalized));
+  return sanitized || path5.posix.join(".resources", path5.posix.basename(normalized));
 }
 function escapeHtml(value) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function rewriteHtmlImages(html, currentFilePath, outputPath, imageMode) {
   const imgRegex = /(<img\b[^>]*?\bsrc=")([^"]+)(")/gi;
-  const outputDir = path2.dirname(outputPath);
+  const outputDir = path5.dirname(outputPath);
   return html.replace(imgRegex, (_fullMatch, prefix, source, suffix) => {
     const normalizedSource = normalizeImageSource(source);
     const localImagePath = resolveLocalImagePath(currentFilePath, normalizedSource);
-    if (imageMode === "base64" && localImagePath && fs.existsSync(localImagePath)) {
+    if (imageMode === "base64" && localImagePath && fs3.existsSync(localImagePath)) {
       const mime = imageMimeType(localImagePath);
-      const encoded = fs.readFileSync(localImagePath).toString("base64");
+      const encoded = fs3.readFileSync(localImagePath).toString("base64");
       return `${prefix}data:${mime};base64,${encoded}${suffix}`;
     }
-    if (imageMode === "relative" && localImagePath && fs.existsSync(localImagePath)) {
+    if (imageMode === "relative" && localImagePath && fs3.existsSync(localImagePath)) {
       const relativeAssetPath = getRelativeImageTarget(normalizedSource);
-      const targetPath = path2.join(outputDir, relativeAssetPath);
-      ensureDirectory(path2.dirname(targetPath));
-      if (path2.resolve(localImagePath) !== path2.resolve(targetPath)) {
-        fs.copyFileSync(localImagePath, targetPath);
+      const targetPath = path5.join(outputDir, relativeAssetPath);
+      ensureDirectory(path5.dirname(targetPath));
+      if (path5.resolve(localImagePath) !== path5.resolve(targetPath)) {
+        fs3.copyFileSync(localImagePath, targetPath);
       }
       return `${prefix}${relativeAssetPath.replace(/\\/g, "/")}${suffix}`;
     }
-    if (imageMode === "external" && localImagePath && fs.existsSync(localImagePath)) {
+    if (imageMode === "external" && localImagePath && fs3.existsSync(localImagePath)) {
       return `${prefix}${buildFileUrl(localImagePath)}${suffix}`;
     }
     return `${prefix}${normalizedSource}${suffix}`;
@@ -448,6 +572,9 @@ var en_default = {
     newFile: "New File",
     openFile: "Open File",
     openFolder: "Open Project/Folder",
+    openRecent: "Open Recent",
+    noRecentFiles: "No Recent Files",
+    clearRecentFiles: "Clear Recent Files",
     save: "Save",
     saveAs: "Save As",
     exportPdf: "Export PDF",
@@ -534,7 +661,9 @@ var en_default = {
     saving: "Saving...",
     error: "Save failed",
     unsaved: "Unsaved",
-    characters: "{{count}} chars"
+    characters: "{{count}} chars",
+    words: "{{count}} words",
+    lines: "{{count}} lines"
   },
   outline: {
     title: "Outline",
@@ -742,6 +871,9 @@ var zh_default = {
     newFile: "\u65B0\u5EFA\u6587\u4EF6",
     openFile: "\u6253\u5F00\u6587\u4EF6",
     openFolder: "\u6253\u5F00\u9879\u76EE/\u6587\u4EF6\u5939",
+    openRecent: "\u6253\u5F00\u6700\u8FD1",
+    noRecentFiles: "\u65E0\u6700\u8FD1\u6587\u4EF6",
+    clearRecentFiles: "\u6E05\u7A7A\u6700\u8FD1\u6587\u4EF6",
     save: "\u4FDD\u5B58",
     saveAs: "\u53E6\u5B58\u4E3A",
     exportPdf: "\u5BFC\u51FA PDF",
@@ -828,7 +960,9 @@ var zh_default = {
     saving: "\u4FDD\u5B58\u4E2D...",
     error: "\u4FDD\u5B58\u5931\u8D25",
     unsaved: "\u672A\u4FDD\u5B58",
-    characters: "{{count}} \u5B57"
+    characters: "{{count}} \u5B57\u7B26",
+    words: "{{count}} \u8BCD",
+    lines: "{{count}} \u884C"
   },
   outline: {
     title: "\u5927\u7EB2",
@@ -1013,13 +1147,13 @@ var zh_default = {
 };
 
 // electron/terminal.ts
-var fs2 = __toESM(require("fs"));
+var fs4 = __toESM(require("fs"));
 var os = __toESM(require("os"));
 var import_node_pty = require("node-pty");
 var terminals = /* @__PURE__ */ new Map();
 var nextTerminalId = 1;
 function resolveTerminalCwd(cwd) {
-  if (cwd && fs2.existsSync(cwd)) {
+  if (cwd && fs4.existsSync(cwd)) {
     return cwd;
   }
   return os.homedir();
@@ -1114,6 +1248,72 @@ var watchedFiles = /* @__PURE__ */ new Map();
 var recentWrites = /* @__PURE__ */ new Map();
 var imageCounter = 0;
 var currentLanguage = resolveLanguage(import_electron.app.getLocale(), "en");
+var recentFiles = [];
+var rendererReady = false;
+var pendingOpenFilePaths = [];
+var singleInstanceLock = import_electron.app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  import_electron.app.quit();
+}
+function getUserDataDir() {
+  return import_electron.app.getPath("userData");
+}
+function notifyRecentFilesChanged() {
+  mainWindow?.webContents.send("recent-files-changed", recentFiles);
+}
+function registerRecentFile(filePath) {
+  if (!filePath) return;
+  recentFiles = addRecentFile(recentFiles, filePath);
+  saveRecentFiles(getUserDataDir(), recentFiles);
+  buildNativeMenu();
+  notifyRecentFilesChanged();
+}
+function clearRecentFiles() {
+  recentFiles = [];
+  saveRecentFiles(getUserDataDir(), recentFiles);
+  buildNativeMenu();
+  notifyRecentFilesChanged();
+}
+function focusMainWindow() {
+  if (!mainWindow) {
+    return;
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.focus();
+}
+function flushPendingOpenFiles() {
+  if (!mainWindow || !rendererReady || pendingOpenFilePaths.length === 0) {
+    return;
+  }
+  while (pendingOpenFilePaths.length > 0) {
+    const filePath = pendingOpenFilePaths.shift();
+    if (!filePath) {
+      continue;
+    }
+    mainWindow.webContents.send("open-recent-file", filePath);
+  }
+}
+async function queueOpenFile(filePath) {
+  const normalizedPath = path6.normalize(filePath);
+  if (!await pathExists(normalizedPath)) {
+    return;
+  }
+  registerRecentFile(normalizedPath);
+  if (!mainWindow || !rendererReady) {
+    if (!pendingOpenFilePaths.includes(normalizedPath)) {
+      pendingOpenFilePaths.push(normalizedPath);
+    }
+    return;
+  }
+  mainWindow.webContents.send("open-recent-file", normalizedPath);
+}
+function queueOpenFilesFromArgs(argv) {
+  extractOpenDocumentPaths(argv).forEach((filePath) => {
+    void queueOpenFile(filePath);
+  });
+}
 var SEARCHABLE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".markdown", ".mdx", ".txt"]);
 var translations = { en: en_default, zh: zh_default };
 function translate(language, key) {
@@ -1132,6 +1332,14 @@ function sendMenuAction(action) {
 }
 function buildNativeMenu() {
   const t = (key) => translate(currentLanguage, key);
+  const recentSubmenu = recentFiles.length === 0 ? [{ label: t("menu.noRecentFiles"), enabled: false }] : [
+    ...recentFiles.map((entry) => ({
+      label: entry.path,
+      click: () => mainWindow?.webContents.send("open-recent-file", entry.path)
+    })),
+    { type: "separator" },
+    { label: t("menu.clearRecentFiles"), click: () => clearRecentFiles() }
+  ];
   const template = [
     {
       label: t("menu.file"),
@@ -1139,6 +1347,7 @@ function buildNativeMenu() {
         { label: t("menu.newFile"), accelerator: "Ctrl+N", click: () => sendMenuAction("new-file") },
         { label: t("menu.openFile"), accelerator: "Ctrl+O", click: () => sendMenuAction("open-file") },
         { label: t("menu.openFolder"), accelerator: "Ctrl+Shift+O", click: () => sendMenuAction("open-folder") },
+        { label: t("menu.openRecent"), submenu: recentSubmenu },
         { type: "separator" },
         { label: t("menu.save"), accelerator: "Ctrl+S", click: () => sendMenuAction("save") },
         { label: t("menu.saveAs"), click: () => sendMenuAction("save-as") },
@@ -1239,11 +1448,11 @@ function buildNativeMenu() {
   import_electron.Menu.setApplicationMenu(import_electron.Menu.buildFromTemplate(template));
 }
 function writeFileAtomically(filePath, content) {
-  const dir = path3.dirname(filePath);
-  const tempFile = path3.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-  fs3.writeFileSync(tempFile, content, "utf-8");
+  const dir = path6.dirname(filePath);
+  const tempFile = path6.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  fs5.writeFileSync(tempFile, content, "utf-8");
   rememberRecentWrite(recentWrites, filePath);
-  fs3.renameSync(tempFile, filePath);
+  fs5.renameSync(tempFile, filePath);
 }
 function collectWorkspaceFiles(rootDir) {
   const files = [];
@@ -1253,7 +1462,7 @@ function collectWorkspaceFiles(rootDir) {
     if (!currentDir) continue;
     let entries = [];
     try {
-      entries = fs3.readdirSync(currentDir, { withFileTypes: true });
+      entries = fs5.readdirSync(currentDir, { withFileTypes: true });
     } catch {
       continue;
     }
@@ -1261,12 +1470,12 @@ function collectWorkspaceFiles(rootDir) {
       if (entry.name === ".git" || entry.name === "node_modules" || entry.name === "dist" || entry.name === "release") {
         continue;
       }
-      const fullPath = path3.join(currentDir, entry.name);
+      const fullPath = path6.join(currentDir, entry.name);
       if (entry.isDirectory()) {
         queue.push(fullPath);
         continue;
       }
-      if (!SEARCHABLE_EXTENSIONS.has(path3.extname(entry.name).toLowerCase())) {
+      if (!SEARCHABLE_EXTENSIONS.has(path6.extname(entry.name).toLowerCase())) {
         continue;
       }
       files.push(fullPath);
@@ -1275,12 +1484,12 @@ function collectWorkspaceFiles(rootDir) {
   return files;
 }
 function relativeWorkspacePath(workspaceRoot, filePath) {
-  return path3.relative(workspaceRoot, filePath).replace(/\\/g, "/");
+  return path6.relative(workspaceRoot, filePath).replace(/\\/g, "/");
 }
 async function exportDocument(payload) {
-  const baseName = payload.currentFilePath ? path3.parse(payload.currentFilePath).name : payload.title.replace(/\.[^.]+$/, "") || translate(currentLanguage, "fileTree.untitled");
+  const baseName = payload.currentFilePath ? path6.parse(payload.currentFilePath).name : payload.title.replace(/\.[^.]+$/, "") || translate(currentLanguage, "fileTree.untitled");
   const extension = payload.type === "pdf" ? "pdf" : "html";
-  const defaultPath = payload.currentFilePath ? path3.join(path3.dirname(payload.currentFilePath), `${baseName}.${extension}`) : `${baseName}.${extension}`;
+  const defaultPath = payload.currentFilePath ? path6.join(path6.dirname(payload.currentFilePath), `${baseName}.${extension}`) : `${baseName}.${extension}`;
   const selectedPath = await import_electron.dialog.showSaveDialog({
     defaultPath,
     filters: [
@@ -1303,7 +1512,7 @@ async function exportDocument(payload) {
     const documentHtml = buildExportDocumentHtml(payload.title, bodyHtml, payload.theme, {
       forPrint: false
     });
-    fs3.writeFileSync(selectedPath.filePath, documentHtml, "utf-8");
+    fs5.writeFileSync(selectedPath.filePath, documentHtml, "utf-8");
     return { canceled: false, path: selectedPath.filePath };
   }
   const printWindow = new import_electron.BrowserWindow({
@@ -1329,7 +1538,7 @@ async function exportDocument(payload) {
       "document.fonts && document.fonts.ready ? document.fonts.ready.then(() => true) : Promise.resolve(true)"
     );
     const pdfBuffer = await printWindow.webContents.printToPDF(getPdfPrintOptions(payload.pdf));
-    fs3.writeFileSync(selectedPath.filePath, pdfBuffer);
+    fs5.writeFileSync(selectedPath.filePath, pdfBuffer);
     return { canceled: false, path: selectedPath.filePath };
   } finally {
     if (!printWindow.isDestroyed()) {
@@ -1339,15 +1548,16 @@ async function exportDocument(payload) {
 }
 function createWindow() {
   buildNativeMenu();
+  rendererReady = false;
   mainWindow = new import_electron.BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     frame: false,
-    icon: path3.join(__dirname, "typola.ico"),
+    icon: path6.join(__dirname, "typola.ico"),
     webPreferences: {
-      preload: path3.join(__dirname, "preload.js"),
+      preload: path6.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -1356,7 +1566,7 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:1420");
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path3.join(__dirname, "../dist/index.html"));
+    mainWindow.loadFile(path6.join(__dirname, "../dist/index.html"));
   }
   mainWindow.on("maximize", () => {
     mainWindow?.webContents.send("maximized-change", true);
@@ -1369,11 +1579,12 @@ function createWindow() {
   });
   mainWindow.on("closed", () => {
     killAllTerminals();
+    rendererReady = false;
     mainWindow = null;
   });
 }
 import_electron.ipcMain.handle("read_file", async (_, filePath) => {
-  return fs3.readFileSync(filePath, "utf-8");
+  return fs5.readFileSync(filePath, "utf-8");
 });
 import_electron.ipcMain.handle("write_file", async (_, filePath, content) => {
   writeFileAtomically(filePath, content);
@@ -1397,82 +1608,22 @@ import_electron.ipcMain.handle(
     return result.canceled ? null : result.filePaths[0];
   }
 );
-function hasMarkdownFiles(dirPath) {
-  try {
-    const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) continue;
-      if (entry.isDirectory() && hasMarkdownFiles(path3.join(dirPath, entry.name))) return true;
-      if (entry.name.endsWith(".md")) return true;
-    }
-  } catch {
-  }
-  return false;
-}
-function listDirRecursive(dirPath) {
-  return new Promise((resolve2) => {
-    try {
-      const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
-      const result = [];
-      for (const entry of entries) {
-        if (entry.name.startsWith(".")) continue;
-        const fullPath = path3.join(dirPath, entry.name);
-        const isDir = entry.isDirectory();
-        if (isDir) {
-          listDirRecursive(fullPath).then((children) => {
-            if (children.length > 0 || hasMarkdownFiles(fullPath)) {
-              result.push({ name: entry.name, path: fullPath, isDir: true, children });
-            }
-          });
-        } else if (entry.name.endsWith(".md")) {
-          result.push({ name: entry.name, path: fullPath, isDir: false });
-        }
-      }
-      setTimeout(() => {
-        resolve2(result.sort((a, b) => {
-          if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        }));
-      }, 0);
-    } catch {
-      resolve2([]);
-    }
-  });
-}
 import_electron.ipcMain.handle("list_dir", async (_, dirPath) => {
-  const entries = fs3.readdirSync(dirPath, { withFileTypes: true });
-  const result = [];
-  for (const entry of entries) {
-    if (entry.name.startsWith(".")) continue;
-    const fullPath = path3.join(dirPath, entry.name);
-    const isDir = entry.isDirectory();
-    if (isDir) {
-      const children = await listDirRecursive(fullPath);
-      if (children.length > 0 || hasMarkdownFiles(fullPath)) {
-        result.push({ name: entry.name, path: fullPath, isDir: true, children });
-      }
-    } else if (entry.name.endsWith(".md")) {
-      result.push({ name: entry.name, path: fullPath, isDir: false });
-    }
-  }
-  return result.sort((a, b) => {
-    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  return buildMarkdownFileTree(dirPath);
 });
 import_electron.ipcMain.handle("create_file", async (_, filePath) => {
-  fs3.writeFileSync(filePath, "", "utf-8");
+  fs5.writeFileSync(filePath, "", "utf-8");
 });
 import_electron.ipcMain.handle("delete_path", async (_, targetPath) => {
-  const stat = fs3.statSync(targetPath);
+  const stat = fs5.statSync(targetPath);
   if (stat.isDirectory()) {
-    fs3.rmSync(targetPath, { recursive: true });
+    fs5.rmSync(targetPath, { recursive: true });
   } else {
-    fs3.unlinkSync(targetPath);
+    fs5.unlinkSync(targetPath);
   }
 });
 import_electron.ipcMain.handle("rename_path", async (_, oldPath, newPath) => {
-  fs3.renameSync(oldPath, newPath);
+  fs5.renameSync(oldPath, newPath);
 });
 import_electron.ipcMain.handle("show_save_dialog", async (_, options) => {
   const result = await import_electron.dialog.showSaveDialog({
@@ -1481,6 +1632,7 @@ import_electron.ipcMain.handle("show_save_dialog", async (_, options) => {
   });
   return result.canceled ? null : result.filePath;
 });
+import_electron.ipcMain.handle("path_exists", async (_, targetPath) => pathExists(targetPath));
 import_electron.ipcMain.handle("set_language_preference", async (_, language) => {
   currentLanguage = resolveLanguage(language, currentLanguage);
   buildNativeMenu();
@@ -1518,7 +1670,7 @@ import_electron.ipcMain.handle("workspace_search", async (_, workspaceRoot, quer
       return null;
     }
     try {
-      const content = fs3.readFileSync(filePath, "utf-8");
+      const content = fs5.readFileSync(filePath, "utf-8");
       const matches = searchText(content, query, request, 1);
       if (matches.length === 0) return null;
       return {
@@ -1553,7 +1705,7 @@ import_electron.ipcMain.handle(
         return null;
       }
       try {
-        const content = fs3.readFileSync(filePath, "utf-8");
+        const content = fs5.readFileSync(filePath, "utf-8");
         const preview = previewReplaceText(content, query, replacementText, request);
         if (preview.replacementCount === 0) {
           return null;
@@ -1582,15 +1734,28 @@ import_electron.ipcMain.handle(
   }
 );
 import_electron.ipcMain.handle("export_document", async (_, payload) => exportDocument(payload));
+import_electron.ipcMain.handle("get_recent_files", async () => recentFiles);
+import_electron.ipcMain.handle("add_recent_file", async (_, filePath) => {
+  registerRecentFile(filePath);
+  return recentFiles;
+});
+import_electron.ipcMain.handle("clear_recent_files", async () => {
+  clearRecentFiles();
+  return recentFiles;
+});
+import_electron.ipcMain.on("renderer_ready", () => {
+  rendererReady = true;
+  flushPendingOpenFiles();
+});
 import_electron.ipcMain.handle("save_image", async (_, workspaceRoot, data, ext) => {
-  const resourcesDir = path3.join(workspaceRoot, ".resources");
-  if (!fs3.existsSync(resourcesDir)) {
-    fs3.mkdirSync(resourcesDir, { recursive: true });
+  const resourcesDir = path6.join(workspaceRoot, ".resources");
+  if (!fs5.existsSync(resourcesDir)) {
+    fs5.mkdirSync(resourcesDir, { recursive: true });
   }
   const filename = `${Date.now()}-${(++imageCounter).toString(36).slice(-8)}.${ext}`;
-  const fullPath = path3.join(resourcesDir, filename);
+  const fullPath = path6.join(resourcesDir, filename);
   const buffer = Buffer.from(data);
-  fs3.writeFileSync(fullPath, buffer);
+  fs5.writeFileSync(fullPath, buffer);
   return `.resources/${filename}`;
 });
 import_electron.ipcMain.handle("get_image_url", async (_, relativePath) => {
@@ -1625,10 +1790,10 @@ import_electron.ipcMain.handle("window_toggle_maximize", () => {
 import_electron.ipcMain.handle("watch_file", async (_, filePath) => {
   if (watchedFiles.has(filePath)) return;
   try {
-    const watcher = fs3.watch(path3.dirname(filePath), (_eventType, filename) => {
+    const watcher = fs5.watch(path6.dirname(filePath), (_eventType, filename) => {
       if (!matchesWatchedFile(filePath, filename)) return;
       if (shouldIgnoreWatchEvent(recentWrites, filePath)) return;
-      if (fs3.existsSync(filePath)) {
+      if (fs5.existsSync(filePath)) {
         mainWindow?.webContents.send("file-changed", { path: filePath });
       }
     });
@@ -1644,10 +1809,24 @@ import_electron.ipcMain.handle("unwatch_file", async (_, filePath) => {
     watchedFiles.delete(filePath);
   }
 });
-import_electron.app.whenReady().then(() => {
-  buildNativeMenu();
-  createWindow();
-});
+if (singleInstanceLock) {
+  import_electron.app.on("second-instance", (_event, commandLine) => {
+    focusMainWindow();
+    queueOpenFilesFromArgs(commandLine);
+  });
+  import_electron.app.on("open-file", (event, filePath) => {
+    event.preventDefault();
+    focusMainWindow();
+    void queueOpenFile(filePath);
+  });
+  import_electron.app.whenReady().then(() => {
+    recentFiles = pruneMissingRecentFiles(loadRecentFiles(getUserDataDir()));
+    saveRecentFiles(getUserDataDir(), recentFiles);
+    buildNativeMenu();
+    createWindow();
+    queueOpenFilesFromArgs(process.argv);
+  });
+}
 import_electron.app.on("window-all-closed", () => {
   watchedFiles.forEach((watcher) => watcher.close());
   watchedFiles.clear();

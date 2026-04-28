@@ -615,6 +615,7 @@ export function FileTree() {
   }, [refreshRoot, renameTarget, renameValue, t, workspaceRoots]);
 
   const handleFileClick = (path: string) => {
+    void window.electronAPI.addRecentFile(path);
     useEditorStore.getState().addOpenFile(path);
   };
 
@@ -624,18 +625,18 @@ export function FileTree() {
     let fileName = baseName + '.md';
     let counter = 1;
     while (true) {
-      try {
-        const testPath = `${dirPath}/${fileName}`;
-        await window.electronAPI.readFile(testPath);
-        counter++;
-        fileName = `${baseName}-${counter}.md`;
-      } catch {
+      const testPath = `${dirPath}/${fileName}`;
+      if (!(await window.electronAPI.pathExists(testPath))) {
         break;
       }
+
+      counter++;
+      fileName = `${baseName}-${counter}.md`;
     }
     try {
       const newPath = `${dirPath}/${fileName}`;
       await window.electronAPI.createFile(newPath);
+      await window.electronAPI.addRecentFile(newPath);
       if (owningRoot) {
         await refreshRoot(owningRoot.path);
       }

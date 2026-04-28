@@ -9,6 +9,7 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   pickFolder: () => import_electron.ipcRenderer.invoke("pick_folder"),
   pickFile: (options) => import_electron.ipcRenderer.invoke("pick_file", options),
   listDir: (dirPath) => import_electron.ipcRenderer.invoke("list_dir", dirPath),
+  pathExists: (targetPath) => import_electron.ipcRenderer.invoke("path_exists", targetPath),
   createFile: (filePath) => import_electron.ipcRenderer.invoke("create_file", filePath),
   deletePath: (targetPath) => import_electron.ipcRenderer.invoke("delete_path", targetPath),
   renamePath: (oldPath, newPath) => import_electron.ipcRenderer.invoke("rename_path", oldPath, newPath),
@@ -18,6 +19,20 @@ import_electron.contextBridge.exposeInMainWorld("electronAPI", {
   workspaceSearch: (workspaceRoot, query, options) => import_electron.ipcRenderer.invoke("workspace_search", workspaceRoot, query, options),
   previewWorkspaceReplace: (workspaceRoot, query, replacementText, options) => import_electron.ipcRenderer.invoke("preview_workspace_replace", workspaceRoot, query, replacementText, options),
   applyWorkspaceReplace: (changes) => import_electron.ipcRenderer.invoke("apply_workspace_replace", changes),
+  getRecentFiles: () => import_electron.ipcRenderer.invoke("get_recent_files"),
+  addRecentFile: (filePath) => import_electron.ipcRenderer.invoke("add_recent_file", filePath),
+  clearRecentFiles: () => import_electron.ipcRenderer.invoke("clear_recent_files"),
+  onRecentFilesChanged: (callback) => {
+    const handler = (_, entries) => callback(entries);
+    import_electron.ipcRenderer.on("recent-files-changed", handler);
+    return () => import_electron.ipcRenderer.removeListener("recent-files-changed", handler);
+  },
+  onOpenRecentFile: (callback) => {
+    const handler = (_, filePath) => callback(filePath);
+    import_electron.ipcRenderer.on("open-recent-file", handler);
+    return () => import_electron.ipcRenderer.removeListener("open-recent-file", handler);
+  },
+  notifyRendererReady: () => import_electron.ipcRenderer.send("renderer_ready"),
   exportDocument: (payload) => import_electron.ipcRenderer.invoke("export_document", payload),
   setLanguagePreference: (language) => import_electron.ipcRenderer.invoke("set_language_preference", language),
   termCreate: (request) => import_electron.ipcRenderer.invoke("term_create", request),

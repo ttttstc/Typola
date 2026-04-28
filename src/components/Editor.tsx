@@ -183,6 +183,7 @@ export function MilkdownEditor() {
 
       setSaveStatus('saving');
       await window.electronAPI.writeFile(targetPath, content);
+      await window.electronAPI.addRecentFile(targetPath);
 
       if (wasDraft || targetPath !== currentFile) {
         updateFilePath(currentFile, targetPath);
@@ -195,7 +196,7 @@ export function MilkdownEditor() {
       useEditorStore.getState().setLoadedContent(content, targetPath);
       useEditorStore.getState().setSaveStatus('saved');
 
-      if (workspaceRoot) {
+      if (workspaceRoot && (wasDraft || targetPath !== currentFile)) {
         const entries = await window.electronAPI.listDir(workspaceRoot);
         setFileTree(entries);
       }
@@ -210,11 +211,37 @@ export function MilkdownEditor() {
 
   useEffect(() => {
     let cancelled = false;
+    let idleCallbackId: number | null = null;
+    let timeoutId: number | null = null;
 
     const syncCurrentFile = async () => {
       if (!containerRef.current) return;
 
       if (!currentFile) {
+        if (!editorRef.current && typeof window.requestIdleCallback === 'function') {
+          idleCallbackId = window.requestIdleCallback(() => {
+            if (cancelled) {
+              return;
+            }
+
+            replaceEditorContent('');
+            setSaveStatus('saved');
+          });
+          return;
+        }
+
+        if (!editorRef.current) {
+          timeoutId = window.setTimeout(() => {
+            if (cancelled) {
+              return;
+            }
+
+            replaceEditorContent('');
+            setSaveStatus('saved');
+          }, 0);
+          return;
+        }
+
         replaceEditorContent('');
         setSaveStatus('saved');
         return;
@@ -247,6 +274,12 @@ export function MilkdownEditor() {
 
     return () => {
       cancelled = true;
+      if (idleCallbackId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [currentFile, replaceEditorContent, setSaveStatus]);
 
