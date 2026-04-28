@@ -217,6 +217,7 @@ export function MenuBar() {
   }, []);
 
   const openRecentFile = (filePath: string) => {
+    void window.electronAPI.addRecentFile(filePath);
     useEditorStore.getState().addOpenFile(filePath);
   };
 
@@ -238,6 +239,7 @@ export function MenuBar() {
     const content = editorState.getFileContent(sourcePath);
     const wasDraft = editorState.isDraftFile(sourcePath);
     await window.electronAPI.writeFile(targetPath, content);
+    await window.electronAPI.addRecentFile(targetPath);
 
     if (wasDraft || sourcePath !== targetPath) {
       updateFilePath(sourcePath, targetPath);
@@ -249,7 +251,7 @@ export function MenuBar() {
 
     useEditorStore.getState().setLoadedContent(content, targetPath);
 
-    if (workspaceRoot) {
+    if (workspaceRoot && (wasDraft || sourcePath !== targetPath)) {
       const entries = await window.electronAPI.listDir(workspaceRoot);
       setFileTree(entries);
     }
@@ -264,6 +266,7 @@ export function MenuBar() {
         ],
       });
       if (selected) {
+        void window.electronAPI.addRecentFile(selected);
         useEditorStore.getState().addOpenFile(selected);
       }
     } catch (err) {
@@ -296,18 +299,18 @@ export function MenuBar() {
       let fileName = baseName + '.md';
       let counter = 1;
       while (true) {
-        try {
-          const testPath = `${workspaceRoot}/${fileName}`;
-          await window.electronAPI.readFile(testPath);
-          counter++;
-          fileName = `${baseName}-${counter}.md`;
-        } catch {
+        const testPath = `${workspaceRoot}/${fileName}`;
+        if (!(await window.electronAPI.pathExists(testPath))) {
           break;
         }
+
+        counter++;
+        fileName = `${baseName}-${counter}.md`;
       }
       const newPath = `${workspaceRoot}/${fileName}`;
       try {
         await window.electronAPI.createFile(newPath);
+        await window.electronAPI.addRecentFile(newPath);
         useEditorStore.getState().addOpenFile(newPath, { isDraft: true });
         const entries = await window.electronAPI.listDir(workspaceRoot);
         setFileTree(entries);
@@ -645,8 +648,9 @@ export function MenuBar() {
 
   useEffect(() => {
     const cleanup = window.electronAPI.onOpenRecentFile((filePath) => {
-      useEditorStore.getState().addOpenFile(filePath);
+      openRecentFile(filePath);
     });
+    window.electronAPI.notifyRendererReady();
     return () => cleanup();
   }, []);
 

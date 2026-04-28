@@ -102,7 +102,9 @@ describe('MenuBar terminal entry', () => {
       clearRecentFiles: vi.fn(() => Promise.resolve([])),
       onRecentFilesChanged: vi.fn(() => () => {}),
       onOpenRecentFile: vi.fn(() => () => {}),
+      notifyRendererReady: vi.fn(),
       listDir: vi.fn(() => Promise.resolve([])),
+      pathExists: vi.fn(() => Promise.resolve(false)),
       onFileChanged: vi.fn(() => () => {}),
       onMaximizedChange: vi.fn(() => () => {}),
       onMenuAction: vi.fn(() => () => {}),
@@ -167,6 +169,22 @@ describe('MenuBar terminal entry', () => {
       rows: 24,
     });
     expect(useTerminalStore.getState().tabs).toHaveLength(1);
+  });
+
+  it('signals renderer readiness after registering the open-file listener', () => {
+    const onOpenRecentFile = vi.fn(() => () => {});
+    const notifyRendererReady = vi.fn();
+
+    window.electronAPI.onOpenRecentFile = onOpenRecentFile;
+    window.electronAPI.notifyRendererReady = notifyRendererReady;
+
+    render(<MenuBar />);
+
+    expect(onOpenRecentFile).toHaveBeenCalledTimes(1);
+    expect(notifyRendererReady).toHaveBeenCalledTimes(1);
+    expect(notifyRendererReady.mock.invocationCallOrder[0]).toBeGreaterThan(
+      onOpenRecentFile.mock.invocationCallOrder[0]
+    );
   });
 
   it('shows table actions from the editor context menu even without a text selection', async () => {

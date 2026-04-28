@@ -66,15 +66,30 @@
     "appId": "com.typola.app",
     "productName": "Typola",
     "copyright": "Copyright © 2026 Typola",
+    "compression": "normal",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
     "asarUnpack": [
-      "**/node_modules/node-pty/**/*"
+      "**/node_modules/node-pty/prebuilds/win32-x64/**/*"
     ],
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!**/*.pdb",
+      "!**/node_modules/node-pty/src{,/**/*}",
+      "!**/node_modules/node-pty/scripts{,/**/*}",
+      "!**/node_modules/node-pty/deps{,/**/*}",
+      "!**/node_modules/node-pty/third_party{,/**/*}",
+      "!**/node_modules/node-pty/prebuilds/darwin-arm64{,/**/*}",
+      "!**/node_modules/node-pty/prebuilds/darwin-x64{,/**/*}",
+      "!**/node_modules/node-pty/prebuilds/win32-arm64{,/**/*}",
+      "!**/node_modules/node-pty/lib/**/*.test.*",
+      "!**/node_modules/node-pty/node_modules/node-addon-api{,/**/*}",
+      "!**/node_modules/node-pty/*.md",
+      "!**/node_modules/node-pty/*.txt",
+      "!**/node_modules/node-pty/vcbuild.bat"
     ],
     "extraResources": [
       {
@@ -88,17 +103,12 @@
           "target": "zip",
           "arch": [
             "x64"
-          ]
+            ]
         }
       ],
       "icon": "resources/typola.ico",
-      "sign": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "resources/typola.ico",
-      "uninstallerIcon": "resources/typola.ico"
+      "sign": false,
+      "signAndEditExecutable": false
     },
     "portable": {
       "artifactName": "Typola-portable-${version}.exe"

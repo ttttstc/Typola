@@ -1,7 +1,9 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { buildMarkdownFileTree, pathExists } from './fileTree';
 import { matchesWatchedFile, rememberRecentWrite, shouldIgnoreWatchEvent } from './fileWatch';
+import { extractOpenDocumentPaths } from './openTargets';
 import {
   addRecentFile,
   loadRecentFiles,
@@ -36,6 +38,13 @@ const recentWrites = new Map<string, number>();
 let imageCounter = 0;
 let currentLanguage: AppLanguage = resolveLanguage(app.getLocale(), 'en');
 let recentFiles: RecentEntry[] = [];
+let rendererReady = false;
+const pendingOpenFilePaths: string[] = [];
+const singleInstanceLock = app.requestSingleInstanceLock();
+
+if (!singleInstanceLock) {
+  app.quit();
+}
 
 function getUserDataDir() {
   return app.getPath('userData');
@@ -58,6 +67,57 @@ function clearRecentFiles() {
   saveRecentFiles(getUserDataDir(), recentFiles);
   buildNativeMenu();
   notifyRecentFilesChanged();
+}
+
+function focusMainWindow() {
+  if (!mainWindow) {
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
+  mainWindow.focus();
+}
+
+function flushPendingOpenFiles() {
+  if (!mainWindow || !rendererReady || pendingOpenFilePaths.length === 0) {
+    return;
+  }
+
+  while (pendingOpenFilePaths.length > 0) {
+    const filePath = pendingOpenFilePaths.shift();
+    if (!filePath) {
+      continue;
+    }
+
+    mainWindow.webContents.send('open-recent-file', filePath);
+  }
+}
+
+async function queueOpenFile(filePath: string) {
+  const normalizedPath = path.normalize(filePath);
+  if (!(await pathExists(normalizedPath))) {
+    return;
+  }
+
+  registerRecentFile(normalizedPath);
+
+  if (!mainWindow || !rendererReady) {
+    if (!pendingOpenFilePaths.includes(normalizedPath)) {
+      pendingOpenFilePaths.push(normalizedPath);
+    }
+    return;
+  }
+
+  mainWindow.webContents.send('open-recent-file', normalizedPath);
+}
+
+function queueOpenFilesFromArgs(argv: string[], workingDirectory?: string) {
+  extractOpenDocumentPaths(argv, workingDirectory || process.cwd()).forEach((filePath) => {
+    void queueOpenFile(filePath);
+  });
 }
 
 const SEARCHABLE_EXTENSIONS = new Set(['.md', '.markdown', '.mdx', '.txt']);
@@ -331,6 +391,7 @@ async function exportDocument(payload: ExportPayload) {
 
 function createWindow() {
   buildNativeMenu();
+  rendererReady = false;
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -369,14 +430,13 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     killAllTerminals();
+    rendererReady = false;
     mainWindow = null;
   });
 }
 
 ipcMain.handle('read_file', async (_, filePath: string) => {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  registerRecentFile(filePath);
-  return content;
+  return fs.readFileSync(filePath, 'utf-8');
 });
 
 ipcMain.handle('write_file', async (_, filePath: string, content: string) => {
@@ -404,76 +464,8 @@ ipcMain.handle(
   }
 );
 
-function hasMarkdownFiles(dirPath: string): boolean {
-  try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue;
-      if (entry.isDirectory() && hasMarkdownFiles(path.join(dirPath, entry.name))) return true;
-      if (entry.name.endsWith('.md')) return true;
-    }
-  } catch {}
-  return false;
-}
-
-interface FileEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-  children?: FileEntry[];
-}
-
-function listDirRecursive(dirPath: string): Promise<FileEntry[]> {
-  return new Promise((resolve) => {
-    try {
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      const result: FileEntry[] = [];
-      for (const entry of entries) {
-        if (entry.name.startsWith('.')) continue;
-        const fullPath = path.join(dirPath, entry.name);
-        const isDir = entry.isDirectory();
-        if (isDir) {
-          listDirRecursive(fullPath).then((children) => {
-            if (children.length > 0 || hasMarkdownFiles(fullPath)) {
-              result.push({ name: entry.name, path: fullPath, isDir: true, children });
-            }
-          });
-        } else if (entry.name.endsWith('.md')) {
-          result.push({ name: entry.name, path: fullPath, isDir: false });
-        }
-      }
-      setTimeout(() => {
-        resolve(result.sort((a, b) => {
-          if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        }));
-      }, 0);
-    } catch {
-      resolve([]);
-    }
-  });
-}
-
 ipcMain.handle('list_dir', async (_, dirPath: string) => {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const result: FileEntry[] = [];
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue;
-    const fullPath = path.join(dirPath, entry.name);
-    const isDir = entry.isDirectory();
-    if (isDir) {
-      const children = await listDirRecursive(fullPath);
-      if (children.length > 0 || hasMarkdownFiles(fullPath)) {
-        result.push({ name: entry.name, path: fullPath, isDir: true, children });
-      }
-    } else if (entry.name.endsWith('.md')) {
-      result.push({ name: entry.name, path: fullPath, isDir: false });
-    }
-  }
-  return result.sort((a, b) => {
-    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  return buildMarkdownFileTree(dirPath);
 });
 
 ipcMain.handle('create_file', async (_, filePath: string) => {
@@ -500,6 +492,8 @@ ipcMain.handle('show_save_dialog', async (_, options: { defaultPath?: string; fi
   });
   return result.canceled ? null : result.filePath;
 });
+
+ipcMain.handle('path_exists', async (_, targetPath: string) => pathExists(targetPath));
 
 ipcMain.handle('set_language_preference', async (_, language: string) => {
   currentLanguage = resolveLanguage(language, currentLanguage);
@@ -644,6 +638,11 @@ ipcMain.handle('clear_recent_files', async () => {
   return recentFiles;
 });
 
+ipcMain.on('renderer_ready', () => {
+  rendererReady = true;
+  flushPendingOpenFiles();
+});
+
 ipcMain.handle('save_image', async (_, workspaceRoot: string, data: number[], ext: string) => {
   const resourcesDir = path.join(workspaceRoot, '.resources');
   if (!fs.existsSync(resourcesDir)) {
@@ -719,12 +718,26 @@ ipcMain.handle('unwatch_file', async (_, filePath: string) => {
   }
 });
 
-app.whenReady().then(() => {
-  recentFiles = pruneMissingRecentFiles(loadRecentFiles(getUserDataDir()));
-  saveRecentFiles(getUserDataDir(), recentFiles);
-  buildNativeMenu();
-  createWindow();
-});
+if (singleInstanceLock) {
+  app.on('second-instance', (_event, commandLine, workingDirectory) => {
+    focusMainWindow();
+    queueOpenFilesFromArgs(commandLine, workingDirectory);
+  });
+
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault();
+    focusMainWindow();
+    void queueOpenFile(filePath);
+  });
+
+  app.whenReady().then(() => {
+    recentFiles = pruneMissingRecentFiles(loadRecentFiles(getUserDataDir()));
+    saveRecentFiles(getUserDataDir(), recentFiles);
+    buildNativeMenu();
+    createWindow();
+    queueOpenFilesFromArgs(process.argv);
+  });
+}
 
 app.on('window-all-closed', () => {
   watchedFiles.forEach((watcher) => watcher.close());

@@ -128,6 +128,7 @@ export function TabBar() {
 
           try {
             await window.electronAPI.writeFile(targetPath, fileContent);
+            await window.electronAPI.addRecentFile(targetPath);
             if (wasDraft || targetPath !== file.path) {
               editorState.updateFilePath(file.path, targetPath);
               pathToClose = targetPath;

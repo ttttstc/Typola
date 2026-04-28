@@ -69,6 +69,7 @@ interface ElectronAPI {
     filters?: { name: string; extensions: string[] }[];
   }) => Promise<string | null>;
   listDir: (dirPath: string) => Promise<FileEntry[]>;
+  pathExists: (targetPath: string) => Promise<boolean>;
   createFile: (filePath: string) => Promise<void>;
   deletePath: (targetPath: string) => Promise<void>;
   renamePath: (oldPath: string, newPath: string) => Promise<void>;
@@ -107,6 +108,7 @@ interface ElectronAPI {
     callback: (entries: Array<{ path: string; addedAt: number }>) => void
   ) => () => void;
   onOpenRecentFile: (callback: (filePath: string) => void) => () => void;
+  notifyRendererReady: () => void;
   setLanguagePreference: (language: 'zh' | 'en') => Promise<'zh' | 'en'>;
   termCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>;
   termWrite: (request: TerminalWriteRequest) => Promise<void>;
