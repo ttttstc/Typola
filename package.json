@@ -105,7 +105,7 @@
           "target": "zip",
           "arch": [
             "x64"
-          ]
+            ]
         }
       ],
       "icon": "resources/typola.ico",
