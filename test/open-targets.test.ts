@@ -29,4 +29,17 @@ describe('extractOpenDocumentPaths', () => {
       path.resolve(cwd, 'plain.txt'),
     ]);
   });
+
+  it('resolves relative paths against the provided second-instance working directory', () => {
+    const firstInstanceCwd = path.resolve('workspace', 'Typola');
+    const secondInstanceCwd = path.resolve('workspace', 'notes-app');
+
+    const result = extractOpenDocumentPaths(
+      ['Typola.exe', 'notes/todo.md'],
+      secondInstanceCwd
+    );
+
+    expect(result).toEqual([path.resolve(secondInstanceCwd, 'notes', 'todo.md')]);
+    expect(result).not.toEqual([path.resolve(firstInstanceCwd, 'notes', 'todo.md')]);
+  });
 });

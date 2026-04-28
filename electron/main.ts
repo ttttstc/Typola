@@ -114,8 +114,8 @@ async function queueOpenFile(filePath: string) {
   mainWindow.webContents.send('open-recent-file', normalizedPath);
 }
 
-function queueOpenFilesFromArgs(argv: string[]) {
-  extractOpenDocumentPaths(argv).forEach((filePath) => {
+function queueOpenFilesFromArgs(argv: string[], workingDirectory?: string) {
+  extractOpenDocumentPaths(argv, workingDirectory || process.cwd()).forEach((filePath) => {
     void queueOpenFile(filePath);
   });
 }
@@ -719,9 +719,9 @@ ipcMain.handle('unwatch_file', async (_, filePath: string) => {
 });
 
 if (singleInstanceLock) {
-  app.on('second-instance', (_event, commandLine) => {
+  app.on('second-instance', (_event, commandLine, workingDirectory) => {
     focusMainWindow();
-    queueOpenFilesFromArgs(commandLine);
+    queueOpenFilesFromArgs(commandLine, workingDirectory);
   });
 
   app.on('open-file', (event, filePath) => {
