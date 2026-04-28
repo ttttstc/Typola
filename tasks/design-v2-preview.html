@@ -1,0 +1,1874 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Typola × LLM Wiki — V2 设计预览</title>
+<style>
+/* ===== Typola Design Tokens (同步自 src/styles/tokens.css) ===== */
+:root {
+  --color-ink: #0B0B0B;
+  --color-paper: #FFFFFF;
+  --color-line-strong: #0B0B0B;
+  --color-line-soft: #E6E6E6;
+  --color-surface-sunken: #F7F7F7;
+  --color-muted: #6B6B6B;
+  --color-focus: #0B0B0B;
+  --color-accent: #3B82F6;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --sidebar-width: 260px;
+  --outline-width: 240px;
+  --titlebar-height: 32px;
+  --statusbar-height: 24px;
+  --menubar-height: 30px;
+  --font-sans: "Noto Sans", "Anthropic Sans", Arial, sans-serif;
+  --font-mono: "Anthropic Mono", "JetBrains Mono", Consolas, monospace;
+}
+[data-theme="dark"] {
+  --color-ink: #F2F2F2;
+  --color-paper: #0B0B0B;
+  --color-line-strong: #F2F2F2;
+  --color-line-soft: #242424;
+  --color-surface-sunken: #141414;
+  --color-muted: #9A9A9A;
+  --color-focus: #F2F2F2;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; }
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--color-ink);
+  background: var(--color-surface-sunken);
+  line-height: 1.6;
+}
+
+/* ===== 顶部工具栏（预览页自用） ===== */
+.preview-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--color-paper);
+  border-bottom: 1px solid var(--color-line-soft);
+}
+.preview-topbar h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-right: auto;
+}
+.preview-topbar .meta {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-right: auto;
+  margin-left: -8px;
+}
+.preview-topbar a {
+  font-size: 12px;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.preview-topbar a:hover { text-decoration: underline; }
+.theme-btn {
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* ===== 章节导航（浮动目录） ===== */
+.toc {
+  position: fixed;
+  top: 80px;
+  left: 16px;
+  width: 220px;
+  padding: 12px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+.toc h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.toc a {
+  display: block;
+  padding: 4px 6px;
+  color: var(--color-ink);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+.toc a:hover { background: var(--color-surface-sunken); }
+
+/* ===== 主要内容区 ===== */
+.content {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 24px 80px;
+}
+.section {
+  margin-bottom: 48px;
+}
+.section > .section-head {
+  margin-bottom: 16px;
+}
+.section-head h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.section-head p {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.section-head .tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-line-soft);
+  border-radius: 999px;
+  margin-right: 6px;
+  color: var(--color-muted);
+}
+.section-head .tag.m1 { border-color: #0E8A16; color: #0E8A16; }
+.section-head .tag.m2 { border-color: #1D76DB; color: #1D76DB; }
+.section-head .tag.m3 { border-color: #5319E7; color: #5319E7; }
+.section-head .tag.m4 { border-color: #3B82F6; color: #3B82F6; }
+.section-head .tag.m5 { border-color: #D93F0B; color: #D93F0B; }
+.section-head .tag.m55 { border-color: #C9A000; color: #C9A000; }
+
+/* ===== Typola 窗口模拟 ===== */
+.typola-window {
+  width: 100%;
+  height: 660px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+}
+.typola-window.tall { height: 760px; }
+
+.titlebar {
+  height: var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-line-soft);
+  background: var(--color-paper);
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.titlebar .title-center { font-weight: 500; color: var(--color-ink); }
+.titlebar .title-ctrl {
+  display: flex;
+  gap: 6px;
+}
+.titlebar .title-ctrl span {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--color-line-soft);
+}
+.menubar {
+  height: var(--menubar-height);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-line-soft);
+  background: var(--color-paper);
+  font-size: 13px;
+}
+.menubar .mi { color: var(--color-ink); padding: 2px 4px; cursor: pointer; }
+.menubar .mi:hover { background: var(--color-surface-sunken); border-radius: var(--radius-sm); }
+.menubar .spacer { margin-left: auto; }
+
+.menubar .ask-bookkeeper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+.menubar .ask-bookkeeper:hover { background: var(--color-surface-sunken); }
+.menubar .provider-badge {
+  font-size: 11px;
+  color: var(--color-muted);
+  padding: 3px 8px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-line-soft);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-paper);
+}
+.sidebar .tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--color-line-soft);
+  overflow-x: auto;
+}
+.sidebar .tab {
+  padding: 6px 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.sidebar .tab.active { background: var(--color-surface-sunken); color: var(--color-ink); font-weight: 500; }
+.sidebar .tab-new {
+  color: var(--color-accent);
+  border: 1px dashed var(--color-accent);
+}
+.sidebar-body {
+  flex: 1;
+  padding: 8px 4px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.editor-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-paper);
+}
+.tabbar {
+  height: 32px;
+  border-bottom: 1px solid var(--color-line-soft);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--color-muted);
+  gap: 12px;
+}
+.editor-canvas {
+  flex: 1;
+  padding: 40px 80px;
+  overflow-y: auto;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.editor-canvas h1 { font-size: 28px; font-weight: 700; margin-bottom: 16px; }
+.editor-canvas h2 { font-size: 22px; font-weight: 600; margin: 24px 0 12px; }
+.editor-canvas p { margin-bottom: 12px; color: var(--color-ink); }
+.editor-canvas .wikilink { color: var(--color-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.editor-canvas .frontmatter {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--color-surface-sunken);
+  border-left: 3px solid var(--color-line-soft);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  color: var(--color-muted);
+}
+.editor-canvas .selected-text {
+  background: rgba(59,130,246,0.15);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+.editor-canvas .confidence {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.editor-canvas .confidence.extracted { background: #E8F5E9; color: #1B5E20; border: 1px solid #A5D6A7; }
+.editor-canvas .confidence.inferred { background: #FFF3E0; color: #E65100; border: 1px solid #FFCC80; }
+
+.outline {
+  width: var(--outline-width);
+  flex-shrink: 0;
+  border-left: 1px solid var(--color-line-soft);
+  padding: 12px;
+  font-size: 12px;
+  color: var(--color-muted);
+  background: var(--color-paper);
+}
+.outline h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.outline ul { list-style: none; }
+.outline li { padding: 3px 6px; border-radius: var(--radius-sm); }
+.outline li:hover { background: var(--color-surface-sunken); color: var(--color-ink); }
+
+.statusbar {
+  height: var(--statusbar-height);
+  border-top: 1px solid var(--color-line-soft);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--color-muted);
+  background: var(--color-paper);
+}
+.statusbar .spacer { flex: 1; }
+
+/* ===== 书记员侧边内容 ===== */
+.bk-tree { padding: 4px 0; }
+.bk-tree .tree-node {
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.bk-tree .tree-node.indent-1 { padding-left: 24px; }
+.bk-tree .tree-node.indent-2 { padding-left: 40px; }
+.bk-tree .tree-node:hover { background: var(--color-surface-sunken); }
+.bk-tree .tree-node.active { background: var(--color-surface-sunken); color: var(--color-ink); font-weight: 500; }
+.bk-tree .count { color: var(--color-muted); font-size: 11px; margin-left: auto; }
+.bk-tree .section-label {
+  padding: 10px 12px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.bk-card {
+  margin: 12px 8px;
+  padding: 14px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+.bk-card h5 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.bk-card .kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  color: var(--color-muted);
+}
+.bk-card .kv strong { color: var(--color-ink); font-weight: 500; }
+.bk-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+}
+.bk-btn.ghost {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-soft);
+}
+
+/* ===== 进度条 ===== */
+.progress-bar {
+  height: 4px;
+  background: var(--color-line-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  width: 62%;
+}
+
+/* ===== Chat 面板 ===== */
+.chat-panel {
+  width: 380px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--color-line-soft);
+  background: var(--color-paper);
+  display: flex;
+  flex-direction: column;
+}
+.chat-head {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-line-soft);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.chat-head .title { font-weight: 600; }
+.chat-head .model {
+  margin-left: auto;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+}
+.chat-head .new-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.chat-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-line-soft);
+  overflow-x: auto;
+  font-size: 11px;
+}
+.chat-tabs .tab {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chat-tabs .tab.active { background: var(--color-surface-sunken); color: var(--color-ink); }
+.chat-body { flex: 1; padding: 12px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
+.msg {
+  margin-bottom: 16px;
+}
+.msg .role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  margin-bottom: 4px;
+}
+.msg.user .bubble {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  display: inline-block;
+}
+.msg.ai .bubble {
+  background: var(--color-surface-sunken);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+}
+.msg.ai .bubble .wikilink { color: var(--color-accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.msg.ai .tools {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+}
+.msg.ai .tools .tlabel {
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-bottom: 4px;
+  font-family: var(--font-sans);
+}
+.msg.ai .actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.msg.ai .actions button {
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--color-paper);
+}
+.chat-ref {
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-line-soft);
+  font-size: 11px;
+  color: var(--color-muted);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.chat-ref .chip {
+  padding: 2px 8px;
+  background: var(--color-surface-sunken);
+  border-radius: 999px;
+  border: 1px solid var(--color-line-soft);
+}
+.chat-input {
+  padding: 10px 12px;
+  border-top: 1px solid var(--color-line-soft);
+}
+.chat-input textarea {
+  width: 100%;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+  height: 58px;
+  color: var(--color-ink);
+  background: var(--color-paper);
+}
+.chat-input .row {
+  margin-top: 6px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.chat-input .row .send {
+  margin-left: auto;
+  padding: 4px 12px;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ===== 模态窗口（配 Key） ===== */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+[data-theme="dark"] .modal-backdrop { background: rgba(0,0,0,0.5); }
+.modal {
+  background: var(--color-paper);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 560px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  border: 1px solid var(--color-line-soft);
+}
+.modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.modal .modal-sub { font-size: 12px; color: var(--color-muted); margin-bottom: 18px; }
+.provider-cards { display: flex; gap: 12px; }
+.provider-card {
+  flex: 1;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.provider-card:hover { border-color: var(--color-ink); }
+.provider-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.provider-card p { font-size: 11px; color: var(--color-muted); line-height: 1.5; }
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.modal-footer a { color: var(--color-muted); text-decoration: none; }
+.modal-footer a:hover { color: var(--color-ink); }
+.modal-footer .modal-link { margin-right: 12px; }
+.modal-footer button {
+  padding: 6px 14px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
+.form-row { margin-bottom: 14px; }
+.form-row label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+.form-row input, .form-row select {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 12px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: inherit;
+}
+.form-row .hint { font-size: 11px; color: var(--color-muted); margin-top: 4px; }
+.preset-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.preset-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  cursor: pointer;
+  color: var(--color-ink);
+}
+.preset-btn:hover { background: var(--color-surface-sunken); }
+.preset-btn.highlighted {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.link-inline { color: var(--color-accent); cursor: pointer; font-size: 12px; text-decoration: underline; }
+.modal .back-link { font-size: 12px; color: var(--color-muted); cursor: pointer; margin-bottom: 10px; display: inline-block; }
+
+/* ===== 右键菜单 ===== */
+.context-menu {
+  position: absolute;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 180px;
+  z-index: 20;
+}
+.context-menu .mi {
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink);
+}
+.context-menu .mi:hover { background: var(--color-surface-sunken); }
+.context-menu .divider { height: 1px; background: var(--color-line-soft); margin: 4px 0; }
+.context-menu .mi.ai { color: var(--color-accent); }
+
+/* ===== AI 气泡 ===== */
+.ai-popover {
+  position: absolute;
+  width: 420px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 15;
+}
+.ai-popover .head {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+.ai-popover .content-body {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+.ai-popover .btn-row { display: flex; gap: 6px; }
+.ai-popover .btn-row button {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+.ai-popover .btn-row button.primary {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-color: var(--color-ink);
+}
+
+/* ===== 图谱视图 ===== */
+.graph-canvas {
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(59,130,246,0.06), transparent 40%),
+    radial-gradient(circle at 70% 60%, rgba(211,63,11,0.05), transparent 40%),
+    var(--color-paper);
+  position: relative;
+  overflow: hidden;
+}
+.graph-canvas .node {
+  position: absolute;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-accent);
+  border: 2px solid var(--color-paper);
+  cursor: pointer;
+}
+.graph-canvas .node.entity { background: #3B82F6; }
+.graph-canvas .node.concept { background: #10B981; }
+.graph-canvas .node.topic { background: #F59E0B; }
+.graph-canvas .node.source { background: #6B6B6B; width: 8px; height: 8px; }
+.graph-canvas .node.lg { width: 18px; height: 18px; }
+.graph-canvas .edge {
+  position: absolute;
+  background: var(--color-line-soft);
+  height: 1px;
+  transform-origin: left center;
+}
+.graph-canvas .node-label {
+  position: absolute;
+  font-size: 10px;
+  color: var(--color-muted);
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  white-space: nowrap;
+  background: var(--color-paper);
+  padding: 0 3px;
+}
+.graph-legend {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  padding: 8px 12px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  display: flex;
+  gap: 12px;
+}
+.graph-legend .dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ===== 审批弹窗 ===== */
+.approval-modal {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 340px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  z-index: 25;
+}
+.approval-modal h5 { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.approval-modal .path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-bottom: 10px;
+  padding: 4px 8px;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-sm);
+}
+.approval-modal .diff-block {
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.approval-modal .diff-block .add { color: #166534; background: #DCFCE7; }
+.approval-modal .btn-row { display: flex; gap: 6px; }
+.approval-modal .btn-row button {
+  padding: 5px 10px;
+  font-size: 11px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+.approval-modal .btn-row .primary {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-color: var(--color-ink);
+}
+
+/* ===== 健康检查面板 ===== */
+.lint-list .lint-item {
+  padding: 12px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.lint-list .lint-item .sev {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 6px;
+  font-weight: 600;
+}
+.lint-list .lint-item .sev.conflict { background: #FEE2E2; color: #991B1B; }
+.lint-list .lint-item .sev.orphan { background: #FEF3C7; color: #92400E; }
+.lint-list .lint-item .sev.broken { background: #DBEAFE; color: #1E40AF; }
+.lint-list .lint-item .lint-body { margin: 6px 0; color: var(--color-muted); }
+.lint-list .lint-item .lint-body code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  background: var(--color-surface-sunken);
+  border-radius: 3px;
+}
+.lint-list .lint-item .act-row { display: flex; gap: 6px; margin-top: 8px; }
+.lint-list .lint-item .act-row button {
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+/* ===== Milestone 链接卡 ===== */
+.milestone-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+.milestone-card {
+  padding: 12px 14px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+.milestone-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.milestone-card p { color: var(--color-muted); font-size: 11px; margin-bottom: 6px; line-height: 1.5; }
+.milestone-card a { font-size: 11px; color: var(--color-accent); text-decoration: none; }
+.milestone-card a:hover { text-decoration: underline; }
+.milestone-card .dur { font-size: 11px; color: var(--color-muted); }
+
+/* ===== 响应：小屏隐藏 TOC ===== */
+@media (max-width: 1200px) {
+  .toc { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- =============== 顶部预览工具栏 =============== -->
+<div class="preview-topbar">
+  <h1>Typola × LLM Wiki 集成设计 V2</h1>
+  <span class="meta">PR #34 · 设计预览（基于当前 Typola UI 叠加新设计）</span>
+  <a href="https://github.com/ttttstc/Typola/pull/34" target="_blank">查看 PR</a>
+  <a href="design-v2.md" target="_blank">完整文档</a>
+  <button class="theme-btn" onclick="toggleTheme()">切换主题</button>
+</div>
+
+<!-- =============== 浮动目录 =============== -->
+<nav class="toc">
+  <h3>目录</h3>
+  <a href="#overview">0 · 概览</a>
+  <a href="#sec-m1">M1 · 配 Key 流程</a>
+  <a href="#sec-m1-ai">M1 · 右键 AI 菜单</a>
+  <a href="#sec-m3">M3 · 编译进度</a>
+  <a href="#sec-m3-page">M3 · Wiki 页样貌</a>
+  <a href="#sec-m4">M4 · 书记员面板</a>
+  <a href="#sec-m4-graph">M4 · 关联图视图</a>
+  <a href="#sec-m5">M5 · Chat + Agent</a>
+  <a href="#sec-m5-approval">M5 · 审批 UI</a>
+  <a href="#sec-m55">M5.5 · 健康检查</a>
+</nav>
+
+<!-- =============== 内容 =============== -->
+<div class="content">
+
+  <!-- ========== 0 · 概览 ========== -->
+  <section class="section" id="overview">
+    <div class="section-head">
+      <h2>0 · 设计总览</h2>
+      <p>定位：Typola 是一个 Markdown 编辑器，它会帮你整理你写过的东西。LLM 在产品里扮演"书记员"角色（Karpathy 原旨），不是"智能助手"。</p>
+    </div>
+    <div class="milestone-grid">
+      <div class="milestone-card">
+        <h4>M1 · LLM 基础 + 配 Key + 右键 AI</h4>
+        <p>Provider 抽象 + 配 Key 流程 + 4 个右键 AI 动作（解释/改写/精简/翻译）</p>
+        <span class="dur">约 1 周</span><br>
+        <a href="https://github.com/ttttstc/Typola/issues/28" target="_blank">#28 →</a>
+      </div>
+      <div class="milestone-card">
+        <h4>M2 · BM25 索引 + 搜索 API</h4>
+        <p>纯 BM25 全文索引（无向量），index.md 生成，供 M3/M5 调用</p>
+        <span class="dur">约 1 周</span><br>
+        <a href="https://github.com/ttttstc/Typola/issues/29" target="_blank">#29 →</a>
+      </div>
+      <div class="milestone-card">
+        <h4>M3 · 两步编译 + 置信度</h4>
+        <p>Ingest 核心能力，分析+生成，EXTRACTED/INFERRED 置信度标注</p>
+        <span class="dur">约 2 周</span><br>
+        <a href="https://github.com/ttttstc/Typola/issues/30" target="_blank">#30 →</a>
+      </div>
+      <div class="milestone-card">
+        <h4>M4 · 书记员面板 + 图子视图</h4>
+        <p>Activity Bar 新增"书记员"Tab，Wiki 导航树 + 关联图（副视图）</p>
+        <span class="dur">约 1 周</span><br>
+        <a href="https://github.com/ttttstc/Typola/issues/31" target="_blank">#31 →</a>
+      </div>
+      <div class="milestone-card">
+        <h4>M5 · Chat + Tool Use Agent</h4>
+        <p>右侧 Chat 面板 + 工具循环 + 审批 UI + Query 结晶化</p>
+        <span class="dur">约 3 周</span><br>
+        <a href="https://github.com/ttttstc/Typola/issues/32" target="_blank">#32 →</a>
+      </div>
+      <div class="milestone-card">
+        <h4>M5.5 · Lint Pass 健康检查</h4>
+        <p>Karpathy 第三大操作：矛盾/孤立/断链/缺失索引的系统自检</p>
+        <span class="dur">约 0.5 周</span><br>
+        <a href="https://github.com/ttttstc/Typola/issues/33" target="_blank">#33 →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M1 · 配 Key 流程（主窗口 + Provider 选择模态） ========== -->
+  <section class="section" id="sec-m1">
+    <div class="section-head">
+      <span class="tag m1">M1</span>
+      <h2>配 Key 流程 · Provider 选择</h2>
+      <p>触发时机：用户第一次点"AI 改写/解释/精简/翻译"时弹出。不在启动时强制。</p>
+    </div>
+    <div class="typola-window">
+      <!-- Titlebar -->
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">untitled.md — Typola</div>
+        <div></div>
+      </div>
+      <!-- Menubar -->
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span><span class="mi">帮助</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ 未配置</span>
+      </div>
+      <div class="main">
+        <!-- Sidebar -->
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab active">📁 文件</div>
+            <div class="tab">🔍 搜索</div>
+          </div>
+          <div class="sidebar-body">
+            <div style="padding:6px 12px;color:var(--color-muted);font-size:11px;">工作区</div>
+            <div style="padding:4px 12px;">📄 untitled.md</div>
+            <div style="padding:4px 12px;color:var(--color-muted);">📄 notes.md</div>
+          </div>
+        </div>
+        <!-- Editor -->
+        <div class="editor-container">
+          <div class="tabbar"><span>untitled.md</span></div>
+          <div class="editor-canvas" style="filter: blur(0.5px) brightness(0.98);">
+            <h1>编辑器文档</h1>
+            <p>用户正在编辑...点击右键 AI 菜单触发配 Key 流程。</p>
+          </div>
+        </div>
+        <!-- Outline -->
+        <div class="outline">
+          <h4>大纲</h4>
+          <ul><li>编辑器文档</li></ul>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>已保存</span>
+        <span class="spacer"></span>
+        <span>中文 · UTF-8</span>
+      </div>
+
+      <!-- 配 Key 模态：Provider 选择 -->
+      <div class="modal-backdrop">
+        <div class="modal">
+          <h3>连接 AI 服务</h3>
+          <p class="modal-sub">Typola 的 AI 功能需要你自备 API Key。选择一类服务继续：</p>
+          <div class="provider-cards">
+            <div class="provider-card">
+              <h4>Anthropic (Claude)</h4>
+              <p>官方 Anthropic API 直连</p>
+            </div>
+            <div class="provider-card">
+              <h4>OpenAI 兼容</h4>
+              <p>OpenAI · DeepSeek · MiniMax · GLM · Kimi · Ollama · 自定义</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <div>
+              <a href="#" class="modal-link">了解差异</a>
+              <a href="#" class="modal-link">什么是 API Key</a>
+            </div>
+            <button>以后再配</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M1 · 配 Key · OpenAI 兼容配置页 ========== -->
+  <section class="section">
+    <div class="section-head">
+      <span class="tag m1">M1</span>
+      <h2>配 Key 流程 · OpenAI 兼容配置页（含国产预设）</h2>
+      <p>预设按钮一键填好 Base URL 和默认模型。M1 首批接入：OpenAI / DeepSeek / MiniMax / GLM / Kimi / Ollama / 自定义。</p>
+    </div>
+    <div class="typola-window">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+      </div>
+      <div class="main" style="background:var(--color-surface-sunken);"></div>
+      <div class="statusbar"><span class="spacer"></span></div>
+
+      <div class="modal-backdrop">
+        <div class="modal">
+          <span class="back-link">← 返回</span>
+          <h3>OpenAI 兼容</h3>
+          <p class="modal-sub">快速填入预设：</p>
+          <div class="preset-row">
+            <button class="preset-btn">OpenAI</button>
+            <button class="preset-btn">DeepSeek</button>
+            <button class="preset-btn highlighted">MiniMax</button>
+            <button class="preset-btn">GLM</button>
+            <button class="preset-btn">Kimi</button>
+            <button class="preset-btn">Ollama</button>
+            <button class="preset-btn">自定义</button>
+          </div>
+          <div class="form-row">
+            <label>BASE URL</label>
+            <input type="text" value="https://api.minimax.chat/v1">
+          </div>
+          <div class="form-row">
+            <label>API KEY</label>
+            <input type="password" value="sk-xxxxxxxxxxxxxxxxxxxxxxxx">
+            <div class="hint">密钥使用 Electron safeStorage 加密存储在 userData。</div>
+          </div>
+          <div class="form-row">
+            <label>模型</label>
+            <select><option>MiniMax-Text-01</option></select>
+          </div>
+          <div class="modal-footer">
+            <div></div>
+            <div>
+              <button style="margin-right:6px;">取消</button>
+              <button style="background:var(--color-ink);color:var(--color-paper);border-color:var(--color-ink);">测试连接</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M1 · 右键 AI 菜单 + 结果气泡 ========== -->
+  <section class="section" id="sec-m1-ai">
+    <div class="section-head">
+      <span class="tag m1">M1</span>
+      <h2>右键 AI 菜单 + 结果气泡</h2>
+      <p>选中文字 → 右键菜单含 4 项 AI 动作。结果以气泡浮层展示（应用 / 插入下方 / 丢弃）。</p>
+    </div>
+    <div class="typola-window">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">research-notes.md — Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ Claude</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab active">📁 文件</div>
+            <div class="tab">🔍 搜索</div>
+          </div>
+          <div class="sidebar-body">
+            <div style="padding:6px 12px;color:var(--color-muted);font-size:11px;">工作区</div>
+            <div style="padding:4px 12px;">📄 research-notes.md</div>
+            <div style="padding:4px 12px;color:var(--color-muted);">📄 rlhf-summary.md</div>
+            <div style="padding:4px 12px;color:var(--color-muted);">📄 dpo-notes.md</div>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="tabbar"><span>research-notes.md</span></div>
+          <div class="editor-canvas">
+            <h1>Research Notes</h1>
+            <p>
+              <span class="selected-text">RLHF 是一种通过人类偏好数据训练奖励模型，
+              然后用强化学习优化策略网络的方法。它在对齐大语言模型方面效果显著。</span>
+            </p>
+            <p>后续段落...</p>
+
+            <!-- 右键菜单 -->
+            <div class="context-menu" style="left:140px; top:210px;">
+              <div class="mi">剪切</div>
+              <div class="mi">复制</div>
+              <div class="mi">粘贴</div>
+              <div class="divider"></div>
+              <div class="mi ai">✨ 让 AI 解释</div>
+              <div class="mi ai">✨ 让 AI 改写</div>
+              <div class="mi ai">✨ 让 AI 精简</div>
+              <div class="mi ai">✨ 让 AI 翻译</div>
+            </div>
+
+            <!-- 结果气泡 -->
+            <div class="ai-popover" style="left:80px; top:380px;">
+              <div class="head">
+                <span>✨ AI 改写 · Claude</span>
+                <span style="color:var(--color-accent);">流式中...</span>
+              </div>
+              <div class="content-body">
+                RLHF（基于人类反馈的强化学习）通过收集人类偏好数据训练奖励模型，
+                再使用强化学习算法（如 PPO）优化语言模型的策略，是当前大模型对齐的主流方法。
+              </div>
+              <div class="btn-row">
+                <button class="primary">应用</button>
+                <button>插入下方</button>
+                <button>丢弃</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="outline">
+          <h4>大纲</h4>
+          <ul><li>Research Notes</li></ul>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>已保存</span>
+        <span class="spacer"></span>
+        <span>选中 48 字</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M3 · 编译进度 ========== -->
+  <section class="section" id="sec-m3">
+    <div class="section-head">
+      <span class="tag m3">M3</span>
+      <h2>Wiki 编译进度视图</h2>
+      <p>两步链式：分析阶段 → 生成阶段。实时显示发现的实体/概念数，累计 token 用量。编译中可继续写作。</p>
+    </div>
+    <div class="typola-window">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">Research Workspace — Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ Claude</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab">📁 文件</div>
+            <div class="tab">🔍 搜索</div>
+            <div class="tab active tab-new">📋 书记员</div>
+          </div>
+          <div class="sidebar-body">
+            <div class="bk-card">
+              <h5>📋 整理进行中...</h5>
+              <div style="font-size:11px;color:var(--color-muted);margin-bottom:4px;">第 1/2 步 · 分析</div>
+              <div class="progress-bar"><div class="progress-fill"></div></div>
+              <div style="font-size:11px;color:var(--color-muted);margin-bottom:8px;">62 / 87 篇</div>
+              <div class="kv"><span>实体</span><strong>34</strong></div>
+              <div class="kv"><span>概念</span><strong>21</strong></div>
+              <div class="kv"><span>主题</span><strong>8</strong></div>
+              <div class="kv"><span>已用时</span><strong>1分 42秒</strong></div>
+              <div class="kv"><span>累计 token</span><strong>12,840</strong></div>
+              <button class="bk-btn ghost">暂停</button>
+              <div style="font-size:11px;color:var(--color-muted);margin-top:8px;line-height:1.4;">
+                💡 你可以继续在右边编辑，书记员在后台工作
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="tabbar"><span>research-notes.md</span></div>
+          <div class="editor-canvas">
+            <h1>Research Notes</h1>
+            <p>用户在编辑器里继续写作，编译不阻塞。书记员面板显示实时进度。</p>
+            <h2>RLHF vs DPO</h2>
+            <p>两种主流的对齐方法...</p>
+          </div>
+        </div>
+        <div class="outline">
+          <h4>大纲</h4>
+          <ul>
+            <li>Research Notes</li>
+            <li style="padding-left:12px;">RLHF vs DPO</li>
+          </ul>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>已保存</span>
+        <span class="spacer"></span>
+        <span style="color:var(--color-accent);">📋 书记员工作中</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M3 · Wiki 页样貌 ========== -->
+  <section class="section" id="sec-m3-page">
+    <div class="section-head">
+      <span class="tag m3">M3</span>
+      <h2>Wiki 页样貌（带置信度标注）</h2>
+      <p>每条断言带 [EXTRACTED]（原文提取）或 [INFERRED]（LLM 推断）标签 + 来源链接。反向引用区放在底部。</p>
+    </div>
+    <div class="typola-window">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">wiki/entities/Andrej-Karpathy.md — Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ Claude</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab">📁 文件</div>
+            <div class="tab active tab-new">📋 书记员</div>
+          </div>
+          <div class="sidebar-body">
+            <div class="bk-tree">
+              <div class="section-label">Wiki 导航</div>
+              <div class="tree-node">📑 index.md</div>
+              <div class="tree-node">🌟 overview.md</div>
+              <div class="tree-node">👤 entities<span class="count">43</span></div>
+              <div class="tree-node indent-1 active">Andrej Karpathy</div>
+              <div class="tree-node indent-1">Geoffrey Hinton</div>
+              <div class="tree-node indent-1">Ilya Sutskever</div>
+              <div class="tree-node">💡 concepts<span class="count">28</span></div>
+              <div class="tree-node">🏷️ topics<span class="count">12</span></div>
+              <div class="tree-node">📎 sources<span class="count">87</span></div>
+              <div class="tree-node">🔎 queries<span class="count">3</span></div>
+              <div class="section-label">工具</div>
+              <div class="tree-node">🕸️ 关联图</div>
+              <div class="tree-node">🩺 健康检查</div>
+              <div class="tree-node">💬 对话历史</div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="tabbar"><span>wiki/entities/Andrej-Karpathy.md</span></div>
+          <div class="editor-canvas">
+            <div class="frontmatter">
+              ---<br>
+              type: entity<br>
+              name: Andrej Karpathy<br>
+              generated_at: 2026-04-24T10:32:00Z<br>
+              sources: [2024-09-ai-notes.md, karpathy-talks.md]<br>
+              ---
+            </div>
+            <h1>Andrej Karpathy</h1>
+            <h2>核心观点</h2>
+            <p>
+              <span class="confidence extracted">EXTRACTED</span>
+              提出 <strong>LLM Wiki 方法论</strong>：用 LLM 增量维护一份 markdown wiki。
+              来源：<span class="wikilink">[[2024-09-ai-notes]]</span>
+            </p>
+            <p>
+              <span class="confidence inferred">INFERRED</span>
+              关注 <strong>Software 2.0</strong> 范式，认为神经网络是新的编程范式。
+              综合自：<span class="wikilink">[[karpathy-talks]]</span>
+              <span class="wikilink">[[ml-paradigm-shift]]</span>
+            </p>
+            <h2>相关</h2>
+            <p>
+              概念：<span class="wikilink">[[RLHF]]</span>
+              <span class="wikilink">[[Chain of Thought]]</span><br>
+              主题：<span class="wikilink">[[AI 教育]]</span>
+            </p>
+            <h2>提到 TA 的笔记（反向引用）</h2>
+            <p>
+              <span class="wikilink">[[2024-09-ai-notes]]</span><br>
+              <span class="wikilink">[[karpathy-talks-summary]]</span><br>
+              <span class="wikilink">[[llm-wiki-gist]]</span>
+            </p>
+          </div>
+        </div>
+        <div class="outline">
+          <h4>大纲</h4>
+          <ul>
+            <li>Andrej Karpathy</li>
+            <li style="padding-left:12px;">核心观点</li>
+            <li style="padding-left:12px;">相关</li>
+            <li style="padding-left:12px;">提到 TA 的笔记</li>
+          </ul>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>wiki 文件 · 只读模式可切换</span>
+        <span class="spacer"></span>
+        <span>由 AI 书记员生成</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M4 · 书记员面板完整视图 ========== -->
+  <section class="section" id="sec-m4">
+    <div class="section-head">
+      <span class="tag m4">M4</span>
+      <h2>书记员面板完整视图</h2>
+      <p>Activity Bar 新增 📋 "书记员" Tab，包含：Wiki 导航树 + 增量提示 + 工具区（关联图/健康检查/对话历史）。</p>
+    </div>
+    <div class="typola-window tall">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">research-notes.md — Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ Claude</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab">📁 文件</div>
+            <div class="tab">🔍 搜索</div>
+            <div class="tab active tab-new">📋 书记员</div>
+          </div>
+          <div class="sidebar-body">
+            <!-- 增量提示卡 -->
+            <div class="bk-card">
+              <h5>📝 5 篇新笔记、2 篇修改过</h5>
+              <div style="font-size:11px;color:var(--color-muted);margin-bottom:8px;">还没整理到 Wiki</div>
+              <button class="bk-btn">让书记员更新</button>
+            </div>
+            <!-- Wiki 导航 -->
+            <div class="bk-tree">
+              <div class="section-label">Wiki 导航</div>
+              <div class="tree-node active">📑 index.md</div>
+              <div class="tree-node">🌟 overview.md</div>
+              <div class="tree-node">👤 entities<span class="count">43</span></div>
+              <div class="tree-node">💡 concepts<span class="count">28</span></div>
+              <div class="tree-node indent-1">RLHF</div>
+              <div class="tree-node indent-1">DPO</div>
+              <div class="tree-node indent-1">Chain of Thought</div>
+              <div class="tree-node">🏷️ topics<span class="count">12</span></div>
+              <div class="tree-node">📎 sources<span class="count">87</span></div>
+              <div class="tree-node">🔎 queries<span class="count">3</span></div>
+              <div class="section-label">工具</div>
+              <div class="tree-node">🕸️ 关联图</div>
+              <div class="tree-node">🩺 健康检查 <span class="count" style="color:#D93F0B;">3</span></div>
+              <div class="tree-node">💬 对话历史<span class="count">12</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="tabbar"><span>wiki/index.md</span></div>
+          <div class="editor-canvas">
+            <h1>Wiki Index</h1>
+            <p>由 AI 书记员自动生成。点击任一链接跳转到对应页面。</p>
+            <h2>👤 Entities（43）</h2>
+            <p>
+              <span class="wikilink">[[Andrej Karpathy]]</span> ·
+              <span class="wikilink">[[Geoffrey Hinton]]</span> ·
+              <span class="wikilink">[[Ilya Sutskever]]</span> · ...
+            </p>
+            <h2>💡 Concepts（28）</h2>
+            <p>
+              <span class="wikilink">[[RLHF]]</span> ·
+              <span class="wikilink">[[DPO]]</span> ·
+              <span class="wikilink">[[Chain of Thought]]</span> · ...
+            </p>
+            <h2>🏷️ Topics（12）</h2>
+            <p>
+              <span class="wikilink">[[AI 对齐]]</span> ·
+              <span class="wikilink">[[大模型训练]]</span> · ...
+            </p>
+          </div>
+        </div>
+        <div class="outline">
+          <h4>大纲</h4>
+          <ul>
+            <li>Wiki Index</li>
+            <li style="padding-left:12px;">Entities</li>
+            <li style="padding-left:12px;">Concepts</li>
+            <li style="padding-left:12px;">Topics</li>
+          </ul>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>已保存</span>
+        <span class="spacer"></span>
+        <span>📋 书记员就绪</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M4 · 关联图子视图 ========== -->
+  <section class="section" id="sec-m4-graph">
+    <div class="section-head">
+      <span class="tag m4">M4</span>
+      <h2>关联图子视图（副产品）</h2>
+      <p>cytoscape 轻量渲染。节点按类型染色（实体蓝 / 概念绿 / 主题橙 / 源灰）。双击节点在编辑器打开 md。图谱是副视图，不是主入口。</p>
+    </div>
+    <div class="typola-window">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">关联图 — Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ Claude</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab">📁 文件</div>
+            <div class="tab active tab-new">📋 书记员</div>
+          </div>
+          <div class="sidebar-body">
+            <div class="bk-tree">
+              <div class="section-label">Wiki 导航</div>
+              <div class="tree-node">📑 index.md</div>
+              <div class="tree-node">👤 entities<span class="count">43</span></div>
+              <div class="tree-node">💡 concepts<span class="count">28</span></div>
+              <div class="section-label">工具</div>
+              <div class="tree-node active">🕸️ 关联图</div>
+              <div class="tree-node">🩺 健康检查</div>
+              <div class="tree-node">💬 对话历史</div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="tabbar"><span>🕸️ 关联图</span></div>
+          <div class="graph-canvas">
+            <!-- 边 -->
+            <div class="edge" style="left:30%;top:40%;width:160px;transform:rotate(15deg);"></div>
+            <div class="edge" style="left:30%;top:40%;width:200px;transform:rotate(-25deg);"></div>
+            <div class="edge" style="left:50%;top:35%;width:140px;transform:rotate(55deg);"></div>
+            <div class="edge" style="left:50%;top:35%;width:180px;transform:rotate(95deg);"></div>
+            <div class="edge" style="left:65%;top:55%;width:120px;transform:rotate(-45deg);"></div>
+            <div class="edge" style="left:40%;top:65%;width:130px;transform:rotate(-80deg);"></div>
+            <div class="edge" style="left:70%;top:70%;width:100px;transform:rotate(180deg);"></div>
+            <div class="edge" style="left:25%;top:55%;width:140px;transform:rotate(40deg);"></div>
+
+            <!-- 节点 -->
+            <div class="node lg entity" style="left:30%;top:40%;"></div>
+            <span class="node-label" style="left:30%;top:40%;">Karpathy</span>
+
+            <div class="node concept" style="left:50%;top:35%;"></div>
+            <span class="node-label" style="left:50%;top:35%;">RLHF</span>
+
+            <div class="node concept lg" style="left:65%;top:55%;"></div>
+            <span class="node-label" style="left:65%;top:55%;">DPO</span>
+
+            <div class="node entity" style="left:25%;top:55%;"></div>
+            <span class="node-label" style="left:25%;top:55%;">Hinton</span>
+
+            <div class="node topic lg" style="left:40%;top:65%;"></div>
+            <span class="node-label" style="left:40%;top:65%;">AI 对齐</span>
+
+            <div class="node concept" style="left:70%;top:70%;"></div>
+            <span class="node-label" style="left:70%;top:70%;">CoT</span>
+
+            <div class="node source" style="left:55%;top:80%;"></div>
+            <div class="node source" style="left:62%;top:75%;"></div>
+            <div class="node source" style="left:80%;top:45%;"></div>
+            <div class="node source" style="left:20%;top:70%;"></div>
+            <div class="node source" style="left:15%;top:35%;"></div>
+
+            <div class="graph-legend">
+              <span><span class="dot" style="background:#3B82F6;"></span>实体</span>
+              <span><span class="dot" style="background:#10B981;"></span>概念</span>
+              <span><span class="dot" style="background:#F59E0B;"></span>主题</span>
+              <span><span class="dot" style="background:#6B6B6B;"></span>源</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>84 节点 · 142 边</span>
+        <span class="spacer"></span>
+        <span>双击节点在编辑器打开</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M5 · Chat 面板 + Tool Use Agent ========== -->
+  <section class="section" id="sec-m5">
+    <div class="section-head">
+      <span class="tag m5">M5</span>
+      <h2>Chat 面板 + Tool Use Agent + Thinking log</h2>
+      <p>右侧 Chat 面板是问答唯一入口（三种触发：🔍 按钮 / 💬 图标 / Ctrl+\ 快捷键）。Thinking log 显示 Agent 每步工具调用。每条回复可结晶化为 wiki 页。</p>
+    </div>
+    <div class="typola-window tall">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">research-notes.md — Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ Claude</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab">📁 文件</div>
+            <div class="tab active tab-new">📋 书记员</div>
+          </div>
+          <div class="sidebar-body">
+            <div class="bk-tree">
+              <div class="section-label">Wiki 导航</div>
+              <div class="tree-node">📑 index.md</div>
+              <div class="tree-node">👤 entities<span class="count">43</span></div>
+              <div class="tree-node active">💡 concepts<span class="count">28</span></div>
+              <div class="section-label">工具</div>
+              <div class="tree-node">🕸️ 关联图</div>
+              <div class="tree-node">💬 对话历史</div>
+            </div>
+          </div>
+        </div>
+        <!-- 编辑器 -->
+        <div class="editor-container">
+          <div class="tabbar"><span>research-notes.md</span></div>
+          <div class="editor-canvas" style="padding:32px 48px;">
+            <h1>Research Notes</h1>
+            <p>用户编辑中。右侧 Chat 面板同步展开，随时可问书记员。</p>
+            <h2>RLHF vs DPO</h2>
+            <p>用户想对比两者，在 Chat 里提问 → Agent 调用 search_wiki + read_file → 基于真实笔记回答。</p>
+          </div>
+        </div>
+        <!-- Chat 面板 -->
+        <div class="chat-panel">
+          <div class="chat-head">
+            <span class="title">💬 书记员</span>
+            <span class="model">Claude</span>
+            <span class="new-btn">+ 新对话</span>
+          </div>
+          <div class="chat-tabs">
+            <span class="tab active">RLHF vs DPO</span>
+            <span class="tab">对齐研究综述</span>
+            <span class="tab">笔记整理</span>
+          </div>
+          <div class="chat-body">
+            <div class="msg user">
+              <div class="role">你</div>
+              <div class="bubble">RLHF 和 DPO 的区别是什么？基于我的笔记回答。</div>
+            </div>
+            <div class="msg ai">
+              <div class="role">书记员</div>
+              <div class="bubble">
+                根据你的笔记整理：<br><br>
+                <strong>RLHF</strong> 需要训练独立的奖励模型（reward model），然后通过 PPO 等强化学习算法优化策略网络。<br><br>
+                <strong>DPO</strong> 则跳过奖励模型，直接在偏好对（preference pair）上进行监督学习，大幅简化训练流程。
+              </div>
+              <div class="tools">
+                <div class="tlabel">🔧 AI 的步骤（可折叠）</div>
+                1. search_wiki("RLHF DPO") → 5 命中<br>
+                2. read_file(wiki/concepts/RLHF.md)<br>
+                3. read_file(wiki/concepts/DPO.md)<br>
+                4. 合成回答 · 3.2s · 1,847 token
+              </div>
+              <div style="margin-top:8px;font-size:11px;color:var(--color-muted);">
+                📎 引自：<span style="color:var(--color-accent);">[[RLHF]]</span>
+                <span style="color:var(--color-accent);">[[DPO]]</span>
+                <span style="color:var(--color-accent);">[[2024-10-alignment-notes]]</span>
+              </div>
+              <div class="actions">
+                <button>💾 保存到 Wiki</button>
+                <button>📝 插入到当前文件</button>
+                <button>⟳ 重新生成</button>
+              </div>
+            </div>
+          </div>
+          <div class="chat-ref">
+            <span>📚 已引用：</span>
+            <span class="chip">[[RLHF]]</span>
+            <span class="chip">[[DPO]]</span>
+            <span class="chip">@当前文件</span>
+          </div>
+          <div class="chat-input">
+            <textarea placeholder="输入问题，或 @ 引用文件 / wiki 页 / 当前选中..."></textarea>
+            <div class="row">
+              <span>@ 引用</span> · <span>📄 当前文件</span> · <span>🕸️ Wiki</span>
+              <span class="send">发送 ↵</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>已保存</span>
+        <span class="spacer"></span>
+        <span>💬 Chat 面板已打开</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M5 · 审批 UI ========== -->
+  <section class="section" id="sec-m5-approval">
+    <div class="section-head">
+      <span class="tag m5">M5</span>
+      <h2>写操作审批 UI</h2>
+      <p>Agent 要写文件时必须弹审批（除非用户主动选"此会话全部允许"）。显示目标路径、diff、来源任务。所有 run 记入 audit log。</p>
+    </div>
+    <div class="typola-window">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+        <span class="provider-badge">✨ Claude</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab active tab-new">📋 书记员</div>
+          </div>
+          <div class="sidebar-body">
+            <div class="bk-tree">
+              <div class="tree-node">📑 index.md</div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="tabbar"><span>wiki/concepts/RLHF.md</span></div>
+          <div class="editor-canvas">
+            <h1>RLHF</h1>
+            <p>概念页正文...</p>
+          </div>
+        </div>
+        <div class="chat-panel" style="width:360px;">
+          <div class="chat-head">
+            <span class="title">💬 书记员</span>
+            <span class="model">Claude</span>
+          </div>
+          <div class="chat-body">
+            <div class="msg user">
+              <div class="role">你</div>
+              <div class="bubble">把这次讨论保存为 wiki 页。</div>
+            </div>
+            <div class="msg ai">
+              <div class="role">书记员</div>
+              <div class="bubble">好的，我会创建 <code>wiki/queries/rlhf-vs-dpo.md</code>...</div>
+              <div class="tools">
+                <div class="tlabel">🔧 AI 的步骤</div>
+                1. 生成标题 "RLHF vs DPO"<br>
+                2. create_wiki_page(queries, rlhf-vs-dpo) <span style="color:#D93F0B;">[等待审批]</span>
+              </div>
+            </div>
+          </div>
+          <div class="chat-input">
+            <textarea placeholder="..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>审批待处理 · 1 项</span>
+        <span class="spacer"></span>
+      </div>
+
+      <!-- 审批弹窗 -->
+      <div class="approval-modal">
+        <h5>⚠️ 书记员请求写入文件</h5>
+        <div class="path">wiki/queries/rlhf-vs-dpo.md</div>
+        <div class="diff-block">
+          <div class="add">+ # RLHF vs DPO</div>
+          <div class="add">+ </div>
+          <div class="add">+ 根据笔记整理：RLHF 需要训练...</div>
+          <div class="add">+ DPO 则跳过奖励模型...</div>
+          <div class="add">+ </div>
+          <div class="add">+ ## 来源</div>
+          <div class="add">+ - [[RLHF]]</div>
+          <div class="add">+ - [[DPO]]</div>
+        </div>
+        <div style="font-size:11px;color:var(--color-muted);margin-bottom:8px;">
+          触发任务：Query 结晶化<br>
+          会话：RLHF vs DPO
+        </div>
+        <div class="btn-row">
+          <button class="primary">批准</button>
+          <button>拒绝</button>
+          <button>此会话全部允许</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== M5.5 · 健康检查 ========== -->
+  <section class="section" id="sec-m55">
+    <div class="section-head">
+      <span class="tag m55">M5.5</span>
+      <h2>Lint Pass 健康检查</h2>
+      <p>对齐 Karpathy 第三大操作。扫描矛盾 / 孤立页 / 断链 / 缺失索引，每项可"让 AI 修 / 自己改 / 忽略"。</p>
+    </div>
+    <div class="typola-window">
+      <div class="titlebar">
+        <div class="title-ctrl"><span></span><span></span><span></span></div>
+        <div class="title-center">健康检查 — Typola</div>
+        <div></div>
+      </div>
+      <div class="menubar">
+        <span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span>
+        <span class="spacer"></span>
+        <span class="ask-bookkeeper">🔍 问书记员</span>
+      </div>
+      <div class="main">
+        <div class="sidebar">
+          <div class="tabs">
+            <div class="tab active tab-new">📋 书记员</div>
+          </div>
+          <div class="sidebar-body">
+            <div class="bk-tree">
+              <div class="section-label">工具</div>
+              <div class="tree-node">🕸️ 关联图</div>
+              <div class="tree-node active">🩺 健康检查</div>
+              <div class="tree-node">💬 对话历史</div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="tabbar"><span>🩺 健康检查</span></div>
+          <div class="editor-canvas" style="padding:24px 40px;max-width:none;">
+            <h1 style="font-size:20px;">健康检查 · 发现 13 项</h1>
+            <p style="color:var(--color-muted);font-size:12px;">最近扫描：刚刚 · 耗时 1 分 42 秒</p>
+            <div class="lint-list" style="margin-top:20px;">
+              <div class="lint-item">
+                <span class="sev conflict">矛盾</span>
+                <strong>RLHF 与 2025-01-new-alignment 互相矛盾</strong>
+                <div class="lint-body">
+                  <code>wiki/concepts/RLHF.md</code> 说："PPO 是事实标准"<br>
+                  <code>2025-01-new-alignment.md</code> 说："PPO 已被弃用"
+                </div>
+                <div class="act-row">
+                  <button>让 AI 整合</button>
+                  <button>我自己改</button>
+                  <button>标记为演化记录</button>
+                </div>
+              </div>
+
+              <div class="lint-item">
+                <span class="sev orphan">孤立</span>
+                <strong>5 个孤立页（无链入）</strong>
+                <div class="lint-body">
+                  <code>wiki/entities/Geoffrey-Hinton.md</code> · 没有任何页面链接到它。
+                </div>
+                <div class="act-row">
+                  <button>让 AI 补全反向引用</button>
+                  <button>打开文件</button>
+                  <button>忽略</button>
+                </div>
+              </div>
+
+              <div class="lint-item">
+                <span class="sev broken">断链</span>
+                <strong>8 个断链</strong>
+                <div class="lint-body">
+                  <code>wiki/concepts/DPO.md:42</code> 引用了不存在的 <code>[[IPO]]</code>
+                </div>
+                <div class="act-row">
+                  <button>让 AI 修复</button>
+                  <button>定位到行</button>
+                  <button>忽略</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span>13 项待处理 · 3 矛盾 · 5 孤立 · 8 断链</span>
+        <span class="spacer"></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
