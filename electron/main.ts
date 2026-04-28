@@ -392,6 +392,9 @@ async function exportDocument(payload: ExportPayload) {
 function createWindow() {
   buildNativeMenu();
   rendererReady = false;
+  const windowIcon = app.isPackaged
+    ? path.join(process.resourcesPath, 'typola.ico')
+    : path.join(__dirname, '../resources/typola.ico');
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -399,7 +402,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
-    icon: path.join(__dirname, 'typola.ico'),
+    icon: windowIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

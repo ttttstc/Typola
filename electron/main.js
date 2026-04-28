@@ -1549,13 +1549,14 @@ async function exportDocument(payload) {
 function createWindow() {
   buildNativeMenu();
   rendererReady = false;
+  const windowIcon = import_electron.app.isPackaged ? path6.join(process.resourcesPath, "typola.ico") : path6.join(__dirname, "../resources/typola.ico");
   mainWindow = new import_electron.BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     frame: false,
-    icon: path6.join(__dirname, "typola.ico"),
+    icon: windowIcon,
     webPreferences: {
       preload: path6.join(__dirname, "preload.js"),
       contextIsolation: true,
