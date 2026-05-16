@@ -697,7 +697,7 @@ export function MenuBar() {
                   position: 'absolute',
                   top: '100%',
                   left: 0,
-                  marginTop: '2px',
+                  marginTop: 0,
                   background: 'var(--color-paper)',
                   border: '1px solid var(--color-line-soft)',
                   borderRadius: 'var(--radius-md)',

@@ -63,6 +63,7 @@
 }
 
 .ProseMirror pre {
+  position: relative;
   background: var(--color-surface-sunken);
   border-radius: var(--radius-md);
   padding: 16px;

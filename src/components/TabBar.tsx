@@ -35,7 +35,8 @@ function ConfirmDialog({ title, message, onDiscard, onSave, onCancel }: ConfirmD
           background: 'var(--color-paper)',
           borderRadius: 'var(--radius-lg)',
           padding: '24px',
-          width: '360px',
+          width: 'min(360px, calc(100vw - 32px))',
+          maxWidth: '360px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
         }}
         onClick={(e) => e.stopPropagation()}

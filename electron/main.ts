@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { buildMarkdownFileTree, pathExists } from './fileTree';
@@ -6,8 +6,8 @@ import { matchesWatchedFile, rememberRecentWrite, shouldIgnoreWatchEvent } from 
 import { extractOpenDocumentPaths } from './openTargets';
 import {
   addRecentFile,
-  loadRecentFiles,
-  pruneMissingRecentFiles,
+  loadRecentFilesAsync,
+  pruneMissingRecentFilesAsync,
   saveRecentFiles,
   type RecentEntry,
 } from './recentFiles';
@@ -19,10 +19,7 @@ import {
 } from './export';
 import { SearchOptions, previewReplaceText, searchText, shouldSearchPath } from '../src/shared/search';
 import { resolveLanguage, type AppLanguage } from '../src/shared/language';
-import type { NativeMenuAction } from '../src/shared/menu';
 import type { TerminalCreateRequest, TerminalResizeRequest, TerminalWriteRequest } from '../src/shared/terminal';
-import en from '../src/locales/en.json';
-import zh from '../src/locales/zh.json';
 import {
   clearTerminal,
   createTerminal,
@@ -58,14 +55,12 @@ function registerRecentFile(filePath: string) {
   if (!filePath) return;
   recentFiles = addRecentFile(recentFiles, filePath);
   saveRecentFiles(getUserDataDir(), recentFiles);
-  buildNativeMenu();
   notifyRecentFilesChanged();
 }
 
 function clearRecentFiles() {
   recentFiles = [];
   saveRecentFiles(getUserDataDir(), recentFiles);
-  buildNativeMenu();
   notifyRecentFilesChanged();
 }
 
@@ -121,7 +116,6 @@ function queueOpenFilesFromArgs(argv: string[], workingDirectory?: string) {
 }
 
 const SEARCHABLE_EXTENSIONS = new Set(['.md', '.markdown', '.mdx', '.txt']);
-const translations = { en, zh } as const;
 
 interface WorkspaceSearchRequest extends SearchOptions {
   includeGlob: string;
@@ -129,145 +123,10 @@ interface WorkspaceSearchRequest extends SearchOptions {
   skipPaths?: string[];
 }
 
-function translate(language: AppLanguage, key: string) {
-  const segments = key.split('.');
-  let value: unknown = translations[language];
-
-  for (const segment of segments) {
-    if (!value || typeof value !== 'object') {
-      return key;
-    }
-
-    value = (value as Record<string, unknown>)[segment];
-  }
-
-  return typeof value === 'string' ? value : key;
-}
-
-function sendMenuAction(action: NativeMenuAction) {
-  mainWindow?.webContents.send('menu-action', action);
-}
-
-function buildNativeMenu() {
-  const t = (key: string) => translate(currentLanguage, key);
-  const recentSubmenu: MenuItemConstructorOptions[] = recentFiles.length === 0
-    ? [{ label: t('menu.noRecentFiles'), enabled: false }]
-    : [
-        ...recentFiles.map<MenuItemConstructorOptions>((entry) => ({
-          label: entry.path,
-          click: () => mainWindow?.webContents.send('open-recent-file', entry.path),
-        })),
-        { type: 'separator' as const },
-        { label: t('menu.clearRecentFiles'), click: () => clearRecentFiles() },
-      ];
-
-  const template: MenuItemConstructorOptions[] = [
-    {
-      label: t('menu.file'),
-      submenu: [
-        { label: t('menu.newFile'), accelerator: 'Ctrl+N', click: () => sendMenuAction('new-file') },
-        { label: t('menu.openFile'), accelerator: 'Ctrl+O', click: () => sendMenuAction('open-file') },
-        { label: t('menu.openFolder'), accelerator: 'Ctrl+Shift+O', click: () => sendMenuAction('open-folder') },
-        { label: t('menu.openRecent'), submenu: recentSubmenu },
-        { type: 'separator' },
-        { label: t('menu.save'), accelerator: 'Ctrl+S', click: () => sendMenuAction('save') },
-        { label: t('menu.saveAs'), click: () => sendMenuAction('save-as') },
-        { type: 'separator' },
-        { label: t('menu.exportPdf'), click: () => sendMenuAction('export-pdf') },
-        { label: t('menu.exportHtml'), click: () => sendMenuAction('export-html') },
-        { type: 'separator' },
-        { label: t('menu.exit'), role: 'quit' },
-      ],
-    },
-    {
-      label: t('menu.edit'),
-      submenu: [
-        { label: t('menu.undo'), accelerator: 'Ctrl+Z', click: () => sendMenuAction('undo') },
-        { label: t('menu.redo'), accelerator: 'Ctrl+Shift+Z', click: () => sendMenuAction('redo') },
-        { label: t('menu.find'), accelerator: 'Ctrl+F', click: () => sendMenuAction('find-in-file') },
-        {
-          label: t('menu.findInWorkspace'),
-          accelerator: 'Ctrl+Shift+F',
-          click: () => sendMenuAction('find-in-workspace'),
-        },
-        { type: 'separator' },
-        { label: t('menu.selectAll'), accelerator: 'Ctrl+A', click: () => sendMenuAction('select-all') },
-      ],
-    },
-    {
-      label: t('menu.paragraph'),
-      submenu: [
-        { label: t('menu.heading1'), accelerator: 'Ctrl+1', click: () => sendMenuAction('heading-1') },
-        { label: t('menu.heading2'), accelerator: 'Ctrl+2', click: () => sendMenuAction('heading-2') },
-        { label: t('menu.heading3'), accelerator: 'Ctrl+3', click: () => sendMenuAction('heading-3') },
-        { label: t('menu.body'), accelerator: 'Ctrl+0', click: () => sendMenuAction('body') },
-        { type: 'separator' },
-        { label: t('menu.orderedList'), click: () => sendMenuAction('ordered-list') },
-        { label: t('menu.unorderedList'), click: () => sendMenuAction('unordered-list') },
-        { label: t('menu.quote'), click: () => sendMenuAction('blockquote') },
-      ],
-    },
-    {
-      label: t('menu.format'),
-      submenu: [
-        { label: t('menu.bold'), accelerator: 'Ctrl+B', click: () => sendMenuAction('bold') },
-        { label: t('menu.italic'), accelerator: 'Ctrl+I', click: () => sendMenuAction('italic') },
-        {
-          label: t('menu.strikethrough'),
-          accelerator: 'Ctrl+Shift+S',
-          click: () => sendMenuAction('strikethrough'),
-        },
-        { label: t('menu.inlineCode'), click: () => sendMenuAction('inline-code') },
-        { type: 'separator' },
-        { label: t('menu.link'), accelerator: 'Ctrl+K', click: () => sendMenuAction('link') },
-      ],
-    },
-    {
-      label: t('menu.view'),
-      submenu: [
-        { label: t('menu.sidebar'), accelerator: 'Ctrl+\\', click: () => sendMenuAction('toggle-sidebar') },
-        {
-          label: t('menu.outline'),
-          accelerator: 'Ctrl+Shift+\\',
-          click: () => sendMenuAction('toggle-outline'),
-        },
-        {
-          label: t('menu.terminal'),
-          accelerator: 'Ctrl+`',
-          click: () => sendMenuAction('toggle-terminal'),
-        },
-        {
-          label: t('menu.newTerminal'),
-          accelerator: 'Ctrl+Shift+`',
-          click: () => sendMenuAction('new-terminal'),
-        },
-        { type: 'separator' },
-        { label: t('menu.zoomIn'), click: () => sendMenuAction('zoom-in') },
-        { label: t('menu.zoomOut'), click: () => sendMenuAction('zoom-out') },
-        { type: 'separator' },
-        {
-          label: t('shortcuts.toggleTheme'),
-          accelerator: 'Ctrl+Shift+D',
-          click: () => sendMenuAction('toggle-theme'),
-        },
-      ],
-    },
-    {
-      label: t('menu.settings'),
-      submenu: [
-        { label: t('menu.settings'), accelerator: 'Ctrl+,', click: () => sendMenuAction('open-settings') },
-        { label: t('menu.exportSettings'), click: () => sendMenuAction('open-export-settings') },
-        { label: t('menu.shortcuts'), click: () => sendMenuAction('open-shortcuts') },
-        { type: 'separator' },
-        {
-          label: currentLanguage === 'zh' ? t('menu.switchToEnglish') : t('menu.switchToChinese'),
-          click: () => sendMenuAction('toggle-language'),
-        },
-      ],
-    },
-  ];
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+function fallbackTranslate(key: string) {
+  if (key === 'common.markdown') return 'Markdown';
+  if (key === 'fileTree.untitled') return 'Untitled';
+  return key;
 }
 
 function writeFileAtomically(filePath: string, content: string) {
@@ -322,7 +181,7 @@ function relativeWorkspacePath(workspaceRoot: string, filePath: string) {
 async function exportDocument(payload: ExportPayload) {
   const baseName = payload.currentFilePath
     ? path.parse(payload.currentFilePath).name
-    : payload.title.replace(/\.[^.]+$/, '') || translate(currentLanguage, 'fileTree.untitled');
+    : payload.title.replace(/\.[^.]+$/, '') || fallbackTranslate('fileTree.untitled');
   const extension = payload.type === 'pdf' ? 'pdf' : 'html';
   const defaultPath = payload.currentFilePath
     ? path.join(path.dirname(payload.currentFilePath), `${baseName}.${extension}`)
@@ -390,7 +249,10 @@ async function exportDocument(payload: ExportPayload) {
 }
 
 function createWindow() {
-  buildNativeMenu();
+  // Drop Electron's native application menu — renderer ships its own MenuBar.
+  // Leaving the native menu installed renders a second bar above the frameless
+  // window on Windows, doubling the menu visually.
+  Menu.setApplicationMenu(null);
   rendererReady = false;
   const windowIcon = app.isPackaged
     ? path.join(process.resourcesPath, 'typola.ico')
@@ -402,12 +264,18 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
+    show: false,
+    backgroundColor: '#ffffff',
     icon: windowIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
   });
 
   if (process.env.NODE_ENV === 'development') {
@@ -491,7 +359,7 @@ ipcMain.handle('rename_path', async (_, oldPath: string, newPath: string) => {
 ipcMain.handle('show_save_dialog', async (_, options: { defaultPath?: string; filters?: { name: string; extensions: string[] }[] }) => {
   const result = await dialog.showSaveDialog({
     defaultPath: options.defaultPath,
-    filters: options.filters || [{ name: translate(currentLanguage, 'common.markdown'), extensions: ['md'] }],
+    filters: options.filters || [{ name: fallbackTranslate('common.markdown'), extensions: ['md'] }],
   });
   return result.canceled ? null : result.filePath;
 });
@@ -500,7 +368,6 @@ ipcMain.handle('path_exists', async (_, targetPath: string) => pathExists(target
 
 ipcMain.handle('set_language_preference', async (_, language: string) => {
   currentLanguage = resolveLanguage(language, currentLanguage);
-  buildNativeMenu();
   return currentLanguage;
 });
 
@@ -734,11 +601,22 @@ if (singleInstanceLock) {
   });
 
   app.whenReady().then(() => {
-    recentFiles = pruneMissingRecentFiles(loadRecentFiles(getUserDataDir()));
-    saveRecentFiles(getUserDataDir(), recentFiles);
-    buildNativeMenu();
+    // Window first — recent files load asynchronously so they don't block
+    // first paint. The native menu has been dropped; renderer owns the UI.
     createWindow();
     queueOpenFilesFromArgs(process.argv);
+
+    void (async () => {
+      try {
+        const loaded = await loadRecentFilesAsync(getUserDataDir());
+        const pruned = await pruneMissingRecentFilesAsync(loaded);
+        recentFiles = pruned;
+        saveRecentFiles(getUserDataDir(), recentFiles);
+        notifyRecentFilesChanged();
+      } catch (error) {
+        console.error('Failed to load recent files:', error);
+      }
+    })();
   });
 }
 

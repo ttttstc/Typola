@@ -27,9 +27,17 @@ export function StatusBar() {
         borderTop: '1px solid var(--color-line-soft)',
         fontSize: '12px',
         color: 'var(--color-muted)',
+        gap: '12px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          flexShrink: 0,
+        }}
+      >
         <span>{t('statusBar.words', { count: stats.words })}</span>
         <span>{t('statusBar.characters', { count: stats.characters })}</span>
         <span>{t('statusBar.lines', { count: stats.lines })}</span>
@@ -41,7 +49,19 @@ export function StatusBar() {
         </span>
       </div>
       {relativePath && (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+        <span
+          title={relativePath}
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '11px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
+            direction: 'rtl',
+            textAlign: 'right',
+          }}
+        >
           {relativePath}
         </span>
       )}
