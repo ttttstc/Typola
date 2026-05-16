@@ -134,9 +134,9 @@ var FILE_NAME = "recent-files.json";
 function getStoragePath(userDataDir) {
   return path4.join(userDataDir, FILE_NAME);
 }
-function loadRecentFiles(userDataDir) {
+async function loadRecentFilesAsync(userDataDir) {
   try {
-    const raw = fs2.readFileSync(getStoragePath(userDataDir), "utf-8");
+    const raw = await fs2.promises.readFile(getStoragePath(userDataDir), "utf-8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
@@ -161,14 +161,18 @@ function addRecentFile(entries, filePath) {
   const filtered = entries.filter((entry) => path4.normalize(entry.path) !== normalized);
   return [{ path: normalized, addedAt: Date.now() }, ...filtered].slice(0, MAX_RECENT);
 }
-function pruneMissingRecentFiles(entries) {
-  return entries.filter((entry) => {
-    try {
-      return fs2.existsSync(entry.path);
-    } catch {
-      return false;
-    }
-  });
+async function pruneMissingRecentFilesAsync(entries) {
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      try {
+        await fs2.promises.access(entry.path, fs2.constants.F_OK);
+        return entry;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return results.filter((entry) => entry !== null);
 }
 
 // electron/export.ts
@@ -548,604 +552,6 @@ function resolveLanguage(language, fallback = "en") {
   return normalizeLanguage(language) ?? fallback;
 }
 
-// src/locales/en.json
-var en_default = {
-  common: {
-    cancel: "Cancel",
-    confirm: "Confirm",
-    close: "Close",
-    save: "Save",
-    discard: "Discard",
-    delete: "Delete",
-    rename: "Rename",
-    markdown: "Markdown",
-    yes: "Yes",
-    no: "No"
-  },
-  menu: {
-    file: "File",
-    edit: "Edit",
-    paragraph: "Paragraph",
-    format: "Format",
-    view: "View",
-    settings: "Settings",
-    newFile: "New File",
-    openFile: "Open File",
-    openFolder: "Open Project/Folder",
-    openRecent: "Open Recent",
-    noRecentFiles: "No Recent Files",
-    clearRecentFiles: "Clear Recent Files",
-    save: "Save",
-    saveAs: "Save As",
-    exportPdf: "Export PDF",
-    exportHtml: "Export HTML",
-    find: "Find",
-    findInWorkspace: "Find in Workspace",
-    exportSettings: "Export Settings",
-    exportDefaultName: "Exported Document.md",
-    exit: "Exit",
-    undo: "Undo",
-    redo: "Redo",
-    selectAll: "Select All",
-    shortcuts: "Shortcuts",
-    heading1: "Heading 1",
-    heading2: "Heading 2",
-    heading3: "Heading 3",
-    body: "Body",
-    orderedList: "Ordered List",
-    unorderedList: "Unordered List",
-    quote: "Quote",
-    bold: "Bold",
-    italic: "Italic",
-    strikethrough: "Strikethrough",
-    inlineCode: "Inline Code",
-    link: "Link",
-    sidebar: "Sidebar",
-    outline: "Outline",
-    terminal: "Terminal",
-    newTerminal: "New Terminal",
-    zoomIn: "Zoom In",
-    zoomOut: "Zoom Out",
-    currentFontSize: "Current Font Size",
-    lightMode: "Light Mode",
-    darkMode: "Dark Mode",
-    toggleLanguage: "Toggle language",
-    switchToEnglish: "Switch to English",
-    switchToChinese: "Switch to Chinese"
-  },
-  editor: {
-    enterLinkUrl: "Enter link URL:",
-    enterLinkText: "Enter link text:",
-    enterImageUrl: "Enter image URL:",
-    externalChangeConfirm: "This file changed outside Typola. Keep your local edits and overwrite the file on disk?",
-    copyCode: "Copy",
-    mermaidSyntaxError: "Mermaid syntax error"
-  },
-  slashMenu: {
-    filterPlaceholder: "Type to filter...",
-    noMatch: "No match",
-    heading1: "Heading 1",
-    heading2: "Heading 2",
-    heading3: "Heading 3",
-    quote: "Quote",
-    divider: "Divider",
-    bulletList: "Bullet List",
-    orderedList: "Ordered List",
-    todoList: "Todo List",
-    table: "Table",
-    codeBlock: "Code Block",
-    image: "Image",
-    link: "Link",
-    mermaid: "Mermaid Diagram",
-    tableTemplate: "| Column 1 | Column 2 |\n| --- | --- |\n| Content | Content |\n"
-  },
-  fileTree: {
-    files: "Files",
-    openWorkspace: "Open Workspace",
-    loading: "Loading...",
-    confirmDelete: 'Are you sure you want to delete "{{name}}"? This action cannot be undone.',
-    renamePrompt: 'Enter a new name for "{{name}}":',
-    renameHint: "Press Enter to confirm or Esc to cancel.",
-    renameEmpty: "Name cannot be empty.",
-    renameInvalid: "Names cannot include / or \\.",
-    renameConflict: '"{{name}}" already exists. Choose a different name.',
-    renameFailed: "Rename failed. Please try again.",
-    untitled: "Untitled",
-    addProject: "Add Project",
-    removeProject: "Remove Project",
-    noProjects: 'No projects yet. Click "Add Project" above to start.',
-    confirmRemoveProject: 'Remove project "{{name}}" from the workspace? Files on disk are not deleted.'
-  },
-  statusBar: {
-    saved: "Saved",
-    saving: "Saving...",
-    error: "Save failed",
-    unsaved: "Unsaved",
-    characters: "{{count}} chars",
-    words: "{{count}} words",
-    lines: "{{count}} lines"
-  },
-  outline: {
-    title: "Outline",
-    empty: "No headings"
-  },
-  tabBar: {
-    fileModified: "File Modified",
-    modified: "Modified",
-    fileModifiedMessage: '"{{name}}" has been modified. Do you want to save?'
-  },
-  shortcuts: {
-    title: "Keyboard Shortcuts",
-    save: "Save",
-    newFile: "New File",
-    findInFile: "Find in File",
-    findInWorkspace: "Find in Workspace",
-    toggleSidebar: "Toggle Sidebar",
-    toggleOutline: "Toggle Outline",
-    toggleTerminal: "Toggle Terminal",
-    newTerminal: "New Terminal",
-    toggleTheme: "Toggle Theme",
-    bold: "Bold",
-    italic: "Italic",
-    strikethrough: "Strikethrough",
-    inlineCode: "Inline Code",
-    link: "Link",
-    body: "Body",
-    heading1: "Heading 1",
-    heading2: "Heading 2",
-    heading3: "Heading 3",
-    openSettings: "Open Settings"
-  },
-  terminal: {
-    title: "Terminal",
-    empty: "No terminal session yet.",
-    newTab: "New Terminal",
-    hidePanel: "Hide terminal panel",
-    closeTab: "Close {{name}}",
-    copy: "Copy",
-    paste: "Paste",
-    selectAll: "Select All",
-    clear: "Clear",
-    processExited: "Process exited with code {{code}}",
-    confirmMultilinePaste: "Paste multiple lines into the terminal?",
-    shellPath: "Shell Path",
-    shellPathDescription: "Leave empty to auto-detect the default shell for the current platform.",
-    fontFamily: "Font Family",
-    fontFamilyDescription: "Controls the monospace font used by the integrated terminal.",
-    fontSize: "Font Size",
-    fontSizeDescription: "Choose the default terminal font size.",
-    cursorStyle: "Cursor Style",
-    cursorStyleDescription: "Pick how the caret is rendered inside the terminal.",
-    cursorBlock: "Block",
-    cursorBar: "Bar",
-    cursorUnderline: "Underline",
-    cursorBlink: "Blinking Cursor",
-    cursorBlinkDescription: "Animate the caret when the terminal has focus.",
-    shortcutPreset: "Copy/Paste Shortcut Style",
-    shortcutPresetDescription: "Use Windows-style or Linux-style terminal shortcuts.",
-    shortcutPresetWindows: "Windows",
-    shortcutPresetLinux: "Linux",
-    confirmMultilinePasteDescription: "Ask before sending pasted text that spans multiple lines.",
-    autoShellWindows: "Auto (powershell.exe)",
-    autoShellPosix: "Auto ($SHELL / /bin/bash)"
-  },
-  settings: {
-    common: "Common",
-    advanced: "Advanced",
-    general: "General",
-    searchGroup: "Search",
-    defaultSearchDescription: "Use this option by default for new in-file and workspace searches.",
-    wholeWordDescription: "Match complete words only and skip partial hits inside longer strings.",
-    regexDescription: "Interpret search input as a regular expression by default.",
-    includeGlob: "Include Glob",
-    includeGlobDescription: "Separate multiple patterns with commas to limit the search scope.",
-    excludeGlob: "Exclude Glob",
-    excludeGlobDescription: "Files matching these patterns are skipped during workspace search.",
-    enableByDefault: "Enable by default",
-    editor: "Editor",
-    appearance: "Appearance",
-    export: "Export",
-    exportPdf: "PDF Export",
-    exportHtml: "HTML Export",
-    pageSize: "Page Size",
-    pageSizeDescription: "Choose the default paper size for PDF export.",
-    margin: "Margin",
-    marginDescription: "Control the default PDF page margins.",
-    marginCompact: "Compact",
-    marginNormal: "Normal",
-    marginWide: "Wide",
-    printBackground: "Print Background",
-    printBackgroundDescription: "Keep background colors for code blocks, tables, and other elements.",
-    headerFooter: "Header and Footer",
-    headerFooterDescription: "Show browser-style header and footer metadata in PDFs.",
-    imageMode: "Image Handling",
-    imageModeDescription: "Choose how HTML export stores image resources.",
-    imageModeRelative: "Relative path",
-    imageModeBase64: "Embed as Base64",
-    imageModeExternal: "External / file URL",
-    terminal: "Terminal",
-    shortcuts: "Shortcuts",
-    notImplemented: "Not implemented yet"
-  },
-  sidebar: {
-    files: "Files",
-    search: "Search",
-    terminal: "Terminal"
-  },
-  search: {
-    workspaceTitle: "Workspace Search",
-    searchPlaceholder: "Search",
-    replacePlaceholder: "Replace with",
-    includePlaceholder: "Include glob, e.g. **/*.md",
-    excludePlaceholder: "Exclude glob, e.g. **/node_modules/**",
-    caseSensitive: "Case sensitive",
-    wholeWord: "Whole word",
-    regex: "Regex",
-    searching: "Searching...",
-    searchAction: "Search",
-    preparingReplace: "Preparing preview...",
-    previewReplace: "Preview Replace",
-    resultSummary: "{{files}} files, {{matches}} matches",
-    emptySearch: "Type to search across the current workspace.",
-    openWorkspaceFirst: "Open a workspace before running a global search.",
-    previewSummary: "{{files}} files will change, {{count}} replacements total",
-    applyReplace: "Apply Replace",
-    lineLabel: "Line {{line}}",
-    noResults: "No results",
-    confirmWorkspaceReplace: "Replace all {{count}} matches?",
-    inlineSummary: "{{current}} / {{total}}",
-    inlineHint: "Enter for next, Shift+Enter for previous, Esc to close",
-    replaceCurrent: "Replace",
-    replaceAll: "Replace All"
-  },
-  contextMenu: {
-    body: "Body",
-    heading1: "Heading 1",
-    heading2: "Heading 2",
-    heading3: "Heading 3",
-    heading4: "Heading 4",
-    heading5: "Heading 5",
-    heading6: "Heading 6"
-  },
-  table: {
-    insertLineBreak: "Insert Line Break",
-    exitTable: "Exit Table",
-    insertRowAbove: "Insert Row Above",
-    insertRowBelow: "Insert Row Below",
-    insertColumnLeft: "Insert Column Left",
-    insertColumnRight: "Insert Column Right",
-    alignLeft: "Align Column Left",
-    alignCenter: "Align Column Center",
-    alignRight: "Align Column Right",
-    deleteRow: "Delete Row",
-    deleteColumn: "Delete Column",
-    deleteTable: "Delete Table"
-  },
-  floatingToolbar: {
-    paragraphFormat: "Format",
-    bold: "Bold (Ctrl+B)",
-    italic: "Italic (Ctrl+I)",
-    strikethrough: "Strikethrough",
-    inlineCode: "Inline Code",
-    link: "Link (Ctrl+K)",
-    body: "Body",
-    heading1: "Heading 1",
-    heading2: "Heading 2",
-    heading3: "Heading 3",
-    heading4: "Heading 4",
-    heading5: "Heading 5",
-    heading6: "Heading 6"
-  },
-  titleBar: {
-    switchThemeTo: "Switch to {{theme}} theme (Ctrl+Shift+D)",
-    lightTheme: "light",
-    darkTheme: "dark",
-    minimize: "Minimize",
-    maximize: "Maximize",
-    restore: "Restore",
-    close: "Close"
-  }
-};
-
-// src/locales/zh.json
-var zh_default = {
-  common: {
-    cancel: "\u53D6\u6D88",
-    confirm: "\u786E\u8BA4",
-    close: "\u5173\u95ED",
-    save: "\u4FDD\u5B58",
-    discard: "\u4E22\u5F03",
-    delete: "\u5220\u9664",
-    rename: "\u91CD\u547D\u540D",
-    markdown: "Markdown",
-    yes: "\u662F",
-    no: "\u5426"
-  },
-  menu: {
-    file: "\u6587\u4EF6",
-    edit: "\u7F16\u8F91",
-    paragraph: "\u6BB5\u843D",
-    format: "\u683C\u5F0F",
-    view: "\u89C6\u56FE",
-    settings: "\u8BBE\u7F6E",
-    newFile: "\u65B0\u5EFA\u6587\u4EF6",
-    openFile: "\u6253\u5F00\u6587\u4EF6",
-    openFolder: "\u6253\u5F00\u9879\u76EE/\u6587\u4EF6\u5939",
-    openRecent: "\u6253\u5F00\u6700\u8FD1",
-    noRecentFiles: "\u65E0\u6700\u8FD1\u6587\u4EF6",
-    clearRecentFiles: "\u6E05\u7A7A\u6700\u8FD1\u6587\u4EF6",
-    save: "\u4FDD\u5B58",
-    saveAs: "\u53E6\u5B58\u4E3A",
-    exportPdf: "\u5BFC\u51FA PDF",
-    exportHtml: "\u5BFC\u51FA HTML",
-    find: "\u67E5\u627E",
-    findInWorkspace: "\u5728\u5DE5\u4F5C\u533A\u4E2D\u67E5\u627E",
-    exportSettings: "\u5BFC\u51FA\u8BBE\u7F6E",
-    exportDefaultName: "\u5BFC\u51FA\u6587\u6863.md",
-    exit: "\u9000\u51FA",
-    undo: "\u64A4\u9500",
-    redo: "\u91CD\u505A",
-    selectAll: "\u5168\u9009",
-    shortcuts: "\u5FEB\u6377\u952E\u8BBE\u7F6E",
-    heading1: "\u6807\u9898 1",
-    heading2: "\u6807\u9898 2",
-    heading3: "\u6807\u9898 3",
-    body: "\u6B63\u6587",
-    orderedList: "\u6709\u5E8F\u5217\u8868",
-    unorderedList: "\u65E0\u5E8F\u5217\u8868",
-    quote: "\u5F15\u7528",
-    bold: "\u7C97\u4F53",
-    italic: "\u659C\u4F53",
-    strikethrough: "\u5220\u9664\u7EBF",
-    inlineCode: "\u884C\u5185\u4EE3\u7801",
-    link: "\u94FE\u63A5",
-    sidebar: "\u4FA7\u8FB9\u680F",
-    outline: "\u5927\u7EB2",
-    terminal: "\u7EC8\u7AEF",
-    newTerminal: "\u65B0\u5EFA\u7EC8\u7AEF",
-    zoomIn: "\u653E\u5927\u5B57\u4F53",
-    zoomOut: "\u7F29\u5C0F\u5B57\u4F53",
-    currentFontSize: "\u5F53\u524D\u5B57\u53F7",
-    lightMode: "\u4EAE\u8272\u6A21\u5F0F",
-    darkMode: "\u6697\u8272\u6A21\u5F0F",
-    toggleLanguage: "\u5207\u6362\u8BED\u8A00",
-    switchToEnglish: "\u5207\u6362\u5230\u82F1\u6587",
-    switchToChinese: "\u5207\u6362\u5230\u4E2D\u6587"
-  },
-  editor: {
-    enterLinkUrl: "\u8F93\u5165\u94FE\u63A5\u5730\u5740:",
-    enterLinkText: "\u8F93\u5165\u94FE\u63A5\u6587\u672C:",
-    enterImageUrl: "\u8F93\u5165\u56FE\u7247\u5730\u5740:",
-    externalChangeConfirm: "\u6587\u4EF6\u5DF2\u88AB\u5916\u90E8\u4FEE\u6539\u3002\u662F\u5426\u4FDD\u7559\u5F53\u524D\u4FEE\u6539\u5E76\u8986\u76D6\u78C1\u76D8\u5185\u5BB9\uFF1F",
-    copyCode: "\u590D\u5236",
-    mermaidSyntaxError: "Mermaid \u8BED\u6CD5\u9519\u8BEF"
-  },
-  slashMenu: {
-    filterPlaceholder: "\u8F93\u5165\u4EE5\u8FC7\u6EE4...",
-    noMatch: "\u65E0\u5339\u914D\u9879",
-    heading1: "\u6807\u9898 1",
-    heading2: "\u6807\u9898 2",
-    heading3: "\u6807\u9898 3",
-    quote: "\u5F15\u7528",
-    divider: "\u5206\u5272\u7EBF",
-    bulletList: "\u65E0\u5E8F\u5217\u8868",
-    orderedList: "\u6709\u5E8F\u5217\u8868",
-    todoList: "\u5F85\u529E\u6E05\u5355",
-    table: "\u8868\u683C",
-    codeBlock: "\u4EE3\u7801\u5757",
-    image: "\u56FE\u7247",
-    link: "\u94FE\u63A5",
-    mermaid: "Mermaid \u56FE\u8868",
-    tableTemplate: "| \u5217 1 | \u5217 2 |\n| --- | --- |\n| \u5185\u5BB9 | \u5185\u5BB9 |\n"
-  },
-  fileTree: {
-    files: "\u6587\u4EF6",
-    openWorkspace: "\u6253\u5F00\u5DE5\u4F5C\u533A",
-    loading: "\u52A0\u8F7D\u4E2D...",
-    confirmDelete: '\u786E\u5B9A\u8981\u5220\u9664 "{{name}}" \u5417\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002',
-    renamePrompt: '\u8BF7\u8F93\u5165 "{{name}}" \u7684\u65B0\u540D\u79F0\uFF1A',
-    renameHint: "\u6309 Enter \u786E\u8BA4\uFF0CEsc \u53D6\u6D88\u3002",
-    renameEmpty: "\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A\u3002",
-    renameInvalid: "\u540D\u79F0\u4E0D\u80FD\u5305\u542B / \u6216 \\\\\u3002",
-    renameConflict: '"{{name}}" \u5DF2\u5B58\u5728\uFF0C\u8BF7\u6362\u4E00\u4E2A\u540D\u79F0\u3002',
-    renameFailed: "\u91CD\u547D\u540D\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002",
-    untitled: "\u672A\u547D\u540D",
-    addProject: "\u6DFB\u52A0\u9879\u76EE",
-    removeProject: "\u79FB\u9664\u9879\u76EE",
-    noProjects: "\u8FD8\u6CA1\u6709\u9879\u76EE\uFF0C\u70B9\u51FB\u4E0A\u65B9\u201C\u6DFB\u52A0\u9879\u76EE\u201D\u5F00\u59CB\u3002",
-    confirmRemoveProject: '\u786E\u5B9A\u8981\u4ECE\u5DE5\u4F5C\u533A\u79FB\u9664\u9879\u76EE "{{name}}" \u5417\uFF1F\u78C1\u76D8\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002'
-  },
-  statusBar: {
-    saved: "\u5DF2\u4FDD\u5B58",
-    saving: "\u4FDD\u5B58\u4E2D...",
-    error: "\u4FDD\u5B58\u5931\u8D25",
-    unsaved: "\u672A\u4FDD\u5B58",
-    characters: "{{count}} \u5B57\u7B26",
-    words: "{{count}} \u8BCD",
-    lines: "{{count}} \u884C"
-  },
-  outline: {
-    title: "\u5927\u7EB2",
-    empty: "\u65E0\u6807\u9898"
-  },
-  tabBar: {
-    fileModified: "\u6587\u4EF6\u5DF2\u4FEE\u6539",
-    modified: "\u5DF2\u4FEE\u6539",
-    fileModifiedMessage: '"{{name}}" \u5DF2\u88AB\u4FEE\u6539\uFF0C\u662F\u5426\u4FDD\u5B58\uFF1F'
-  },
-  shortcuts: {
-    title: "\u5FEB\u6377\u952E\u8BBE\u7F6E",
-    save: "\u4FDD\u5B58",
-    newFile: "\u65B0\u5EFA\u6587\u4EF6",
-    findInFile: "\u5F53\u524D\u6587\u4EF6\u67E5\u627E",
-    findInWorkspace: "\u5DE5\u4F5C\u533A\u67E5\u627E",
-    toggleSidebar: "\u5207\u6362\u4FA7\u8FB9\u680F",
-    toggleOutline: "\u5207\u6362\u5927\u7EB2",
-    toggleTerminal: "\u5207\u6362\u7EC8\u7AEF",
-    newTerminal: "\u65B0\u5EFA\u7EC8\u7AEF",
-    toggleTheme: "\u5207\u6362\u4E3B\u9898",
-    bold: "\u7C97\u4F53",
-    italic: "\u659C\u4F53",
-    strikethrough: "\u5220\u9664\u7EBF",
-    inlineCode: "\u884C\u5185\u4EE3\u7801",
-    link: "\u94FE\u63A5",
-    body: "\u6B63\u6587",
-    heading1: "\u6807\u98981",
-    heading2: "\u6807\u98982",
-    heading3: "\u6807\u98983",
-    openSettings: "\u6253\u5F00\u8BBE\u7F6E"
-  },
-  terminal: {
-    title: "\u7EC8\u7AEF",
-    empty: "\u8FD8\u6CA1\u6709\u7EC8\u7AEF\u4F1A\u8BDD\u3002",
-    newTab: "\u65B0\u5EFA\u7EC8\u7AEF",
-    hidePanel: "\u9690\u85CF\u7EC8\u7AEF\u9762\u677F",
-    closeTab: "\u5173\u95ED {{name}}",
-    copy: "\u590D\u5236",
-    paste: "\u7C98\u8D34",
-    selectAll: "\u5168\u9009",
-    clear: "\u6E05\u5C4F",
-    processExited: "\u8FDB\u7A0B\u5DF2\u9000\u51FA\uFF0C\u9000\u51FA\u7801 {{code}}",
-    confirmMultilinePaste: "\u8981\u5C06\u591A\u884C\u5185\u5BB9\u7C98\u8D34\u5230\u7EC8\u7AEF\u5417\uFF1F",
-    shellPath: "Shell \u8DEF\u5F84",
-    shellPathDescription: "\u7559\u7A7A\u5219\u81EA\u52A8\u68C0\u6D4B\u5F53\u524D\u5E73\u53F0\u7684\u9ED8\u8BA4 shell\u3002",
-    fontFamily: "\u5B57\u4F53",
-    fontFamilyDescription: "\u63A7\u5236\u96C6\u6210\u7EC8\u7AEF\u4F7F\u7528\u7684\u7B49\u5BBD\u5B57\u4F53\u3002",
-    fontSize: "\u5B57\u53F7",
-    fontSizeDescription: "\u8BBE\u7F6E\u7EC8\u7AEF\u9ED8\u8BA4\u5B57\u53F7\u3002",
-    cursorStyle: "\u5149\u6807\u6837\u5F0F",
-    cursorStyleDescription: "\u9009\u62E9\u7EC8\u7AEF\u4E2D\u7684\u5149\u6807\u663E\u793A\u65B9\u5F0F\u3002",
-    cursorBlock: "\u5757\u72B6",
-    cursorBar: "\u7AD6\u7EBF",
-    cursorUnderline: "\u4E0B\u5212\u7EBF",
-    cursorBlink: "\u5149\u6807\u95EA\u70C1",
-    cursorBlinkDescription: "\u7EC8\u7AEF\u805A\u7126\u65F6\u8BA9\u5149\u6807\u95EA\u70C1\u3002",
-    shortcutPreset: "\u590D\u5236\u7C98\u8D34\u5FEB\u6377\u952E\u98CE\u683C",
-    shortcutPresetDescription: "\u5728 Windows \u98CE\u683C\u548C Linux \u98CE\u683C\u7EC8\u7AEF\u5FEB\u6377\u952E\u4E4B\u95F4\u5207\u6362\u3002",
-    shortcutPresetWindows: "Windows",
-    shortcutPresetLinux: "Linux",
-    confirmMultilinePasteDescription: "\u591A\u884C\u6587\u672C\u7C98\u8D34\u5230\u7EC8\u7AEF\u524D\u5148\u786E\u8BA4\u3002",
-    autoShellWindows: "\u81EA\u52A8 (powershell.exe)",
-    autoShellPosix: "\u81EA\u52A8 ($SHELL / /bin/bash)"
-  },
-  settings: {
-    common: "\u5E38\u7528",
-    advanced: "\u9AD8\u7EA7",
-    general: "\u901A\u7528",
-    searchGroup: "\u641C\u7D22",
-    defaultSearchDescription: "\u65B0\u6253\u5F00\u7684\u6587\u4EF6\u5185\u641C\u7D22\u548C\u5DE5\u4F5C\u533A\u641C\u7D22\u9ED8\u8BA4\u4F7F\u7528\u8FD9\u4E2A\u9009\u9879\u3002",
-    wholeWordDescription: "\u53EA\u5339\u914D\u5B8C\u6574\u5355\u8BCD\uFF0C\u907F\u514D\u547D\u4E2D\u8FC7\u957F\u5B57\u7B26\u4E32\u4E2D\u7684\u7247\u6BB5\u3002",
-    regexDescription: "\u9ED8\u8BA4\u6309\u6B63\u5219\u8868\u8FBE\u5F0F\u89E3\u6790\u641C\u7D22\u5185\u5BB9\u3002",
-    includeGlob: "\u5305\u542B Glob",
-    includeGlobDescription: "\u591A\u4E2A\u6A21\u5F0F\u53EF\u7528\u9017\u53F7\u5206\u9694\uFF0C\u9ED8\u8BA4\u9650\u5236\u641C\u7D22\u8303\u56F4\u3002",
-    excludeGlob: "\u6392\u9664 Glob",
-    excludeGlobDescription: "\u5339\u914D\u8FD9\u4E9B\u6A21\u5F0F\u7684\u6587\u4EF6\u4F1A\u4ECE\u5DE5\u4F5C\u533A\u641C\u7D22\u4E2D\u6392\u9664\u3002",
-    enableByDefault: "\u9ED8\u8BA4\u542F\u7528",
-    editor: "\u7F16\u8F91\u5668",
-    appearance: "\u5916\u89C2",
-    export: "\u5BFC\u51FA",
-    exportPdf: "PDF \u5BFC\u51FA",
-    exportHtml: "HTML \u5BFC\u51FA",
-    pageSize: "\u9875\u9762\u5C3A\u5BF8",
-    pageSizeDescription: "\u8BBE\u7F6E\u5BFC\u51FA PDF \u65F6\u7684\u7EB8\u5F20\u5C3A\u5BF8\u3002",
-    margin: "\u8FB9\u8DDD",
-    marginDescription: "\u63A7\u5236 PDF \u9875\u8FB9\u8DDD\u7684\u9ED8\u8BA4\u5927\u5C0F\u3002",
-    marginCompact: "\u7D27\u51D1",
-    marginNormal: "\u6807\u51C6",
-    marginWide: "\u5BBD\u677E",
-    printBackground: "\u6253\u5370\u80CC\u666F",
-    printBackgroundDescription: "\u4FDD\u7559\u4EE3\u7801\u5757\u3001\u8868\u683C\u7B49\u533A\u57DF\u7684\u80CC\u666F\u8272\u3002",
-    headerFooter: "\u9875\u7709\u9875\u811A",
-    headerFooterDescription: "\u5728 PDF \u4E2D\u663E\u793A\u6D4F\u89C8\u5668\u9875\u7709\u9875\u811A\u4FE1\u606F\u3002",
-    imageMode: "\u56FE\u7247\u5904\u7406\u65B9\u5F0F",
-    imageModeDescription: "\u8BBE\u7F6E HTML \u5BFC\u51FA\u65F6\u56FE\u7247\u8D44\u6E90\u7684\u4FDD\u5B58\u65B9\u5F0F\u3002",
-    imageModeRelative: "\u76F8\u5BF9\u8DEF\u5F84",
-    imageModeBase64: "\u5D4C\u5165 Base64",
-    imageModeExternal: "\u5916\u94FE / \u6587\u4EF6 URL",
-    terminal: "\u7EC8\u7AEF",
-    shortcuts: "\u5FEB\u6377\u952E",
-    notImplemented: "\u6682\u672A\u5B9E\u73B0"
-  },
-  sidebar: {
-    files: "\u6587\u4EF6",
-    search: "\u641C\u7D22",
-    terminal: "\u7EC8\u7AEF"
-  },
-  search: {
-    workspaceTitle: "\u5DE5\u4F5C\u533A\u641C\u7D22",
-    searchPlaceholder: "\u641C\u7D22",
-    replacePlaceholder: "\u66FF\u6362\u4E3A",
-    includePlaceholder: "\u5305\u542B Glob\uFF0C\u4F8B\u5982 **/*.md",
-    excludePlaceholder: "\u6392\u9664 Glob\uFF0C\u4F8B\u5982 **/node_modules/**",
-    caseSensitive: "\u533A\u5206\u5927\u5C0F\u5199",
-    wholeWord: "\u5168\u8BCD\u5339\u914D",
-    regex: "\u6B63\u5219",
-    searching: "\u641C\u7D22\u4E2D...",
-    searchAction: "\u5F00\u59CB\u641C\u7D22",
-    preparingReplace: "\u751F\u6210\u9884\u89C8...",
-    previewReplace: "\u9884\u89C8\u66FF\u6362",
-    resultSummary: "{{files}} \u4E2A\u6587\u4EF6\uFF0C{{matches}} \u5904\u5339\u914D",
-    emptySearch: "\u8F93\u5165\u5185\u5BB9\u540E\u5373\u53EF\u5728\u5F53\u524D\u5DE5\u4F5C\u533A\u4E2D\u641C\u7D22\u3002",
-    openWorkspaceFirst: "\u5148\u6253\u5F00\u4E00\u4E2A\u5DE5\u4F5C\u533A\uFF0C\u624D\u80FD\u8FDB\u884C\u5168\u5C40\u641C\u7D22\u3002",
-    previewSummary: "{{files}} \u4E2A\u6587\u4EF6\u5C06\u66F4\u65B0\uFF0C\u5171 {{count}} \u5904\u66FF\u6362",
-    applyReplace: "\u5E94\u7528\u66FF\u6362",
-    lineLabel: "\u7B2C {{line}} \u884C",
-    noResults: "\u6CA1\u6709\u5339\u914D\u7ED3\u679C",
-    confirmWorkspaceReplace: "\u786E\u8BA4\u66FF\u6362\u5168\u90E8 {{count}} \u5904\u5339\u914D\u5417\uFF1F",
-    inlineSummary: "{{current}} / {{total}}",
-    inlineHint: "Enter \u4E0B\u4E00\u4E2A\uFF0CShift+Enter \u4E0A\u4E00\u4E2A\uFF0CEsc \u5173\u95ED",
-    replaceCurrent: "\u66FF\u6362\u5F53\u524D",
-    replaceAll: "\u5168\u90E8\u66FF\u6362"
-  },
-  contextMenu: {
-    body: "\u6B63\u6587",
-    heading1: "\u6807\u9898 1",
-    heading2: "\u6807\u9898 2",
-    heading3: "\u6807\u9898 3",
-    heading4: "\u6807\u9898 4",
-    heading5: "\u6807\u9898 5",
-    heading6: "\u6807\u9898 6"
-  },
-  table: {
-    insertLineBreak: "\u5355\u5143\u683C\u5185\u6362\u884C",
-    exitTable: "\u8DF3\u51FA\u8868\u683C",
-    insertRowAbove: "\u5728\u4E0A\u65B9\u63D2\u5165\u884C",
-    insertRowBelow: "\u5728\u4E0B\u65B9\u63D2\u5165\u884C",
-    insertColumnLeft: "\u5728\u5DE6\u4FA7\u63D2\u5165\u5217",
-    insertColumnRight: "\u5728\u53F3\u4FA7\u63D2\u5165\u5217",
-    alignLeft: "\u5DE6\u5BF9\u9F50\u5217",
-    alignCenter: "\u5C45\u4E2D\u5BF9\u9F50\u5217",
-    alignRight: "\u53F3\u5BF9\u9F50\u5217",
-    deleteRow: "\u5220\u9664\u5F53\u524D\u884C",
-    deleteColumn: "\u5220\u9664\u5F53\u524D\u5217",
-    deleteTable: "\u5220\u9664\u8868\u683C"
-  },
-  floatingToolbar: {
-    paragraphFormat: "\u6BB5\u843D\u683C\u5F0F",
-    bold: "\u7C97\u4F53 (Ctrl+B)",
-    italic: "\u659C\u4F53 (Ctrl+I)",
-    strikethrough: "\u5220\u9664\u7EBF",
-    inlineCode: "\u884C\u5185\u4EE3\u7801",
-    link: "\u94FE\u63A5 (Ctrl+K)",
-    body: "\u6B63\u6587",
-    heading1: "\u6807\u9898 1",
-    heading2: "\u6807\u9898 2",
-    heading3: "\u6807\u9898 3",
-    heading4: "\u6807\u9898 4",
-    heading5: "\u6807\u9898 5",
-    heading6: "\u6807\u9898 6"
-  },
-  titleBar: {
-    switchThemeTo: "\u5207\u6362\u5230{{theme}}\u4E3B\u9898 (Ctrl+Shift+D)",
-    lightTheme: "\u4EAE\u8272",
-    darkTheme: "\u6697\u8272",
-    minimize: "\u6700\u5C0F\u5316",
-    maximize: "\u6700\u5927\u5316",
-    restore: "\u8FD8\u539F",
-    close: "\u5173\u95ED"
-  }
-};
-
 // electron/terminal.ts
 var fs4 = __toESM(require("fs"));
 var os = __toESM(require("os"));
@@ -1265,13 +671,11 @@ function registerRecentFile(filePath) {
   if (!filePath) return;
   recentFiles = addRecentFile(recentFiles, filePath);
   saveRecentFiles(getUserDataDir(), recentFiles);
-  buildNativeMenu();
   notifyRecentFilesChanged();
 }
 function clearRecentFiles() {
   recentFiles = [];
   saveRecentFiles(getUserDataDir(), recentFiles);
-  buildNativeMenu();
   notifyRecentFilesChanged();
 }
 function focusMainWindow() {
@@ -1315,137 +719,10 @@ function queueOpenFilesFromArgs(argv, workingDirectory) {
   });
 }
 var SEARCHABLE_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".markdown", ".mdx", ".txt"]);
-var translations = { en: en_default, zh: zh_default };
-function translate(language, key) {
-  const segments = key.split(".");
-  let value = translations[language];
-  for (const segment of segments) {
-    if (!value || typeof value !== "object") {
-      return key;
-    }
-    value = value[segment];
-  }
-  return typeof value === "string" ? value : key;
-}
-function sendMenuAction(action) {
-  mainWindow?.webContents.send("menu-action", action);
-}
-function buildNativeMenu() {
-  const t = (key) => translate(currentLanguage, key);
-  const recentSubmenu = recentFiles.length === 0 ? [{ label: t("menu.noRecentFiles"), enabled: false }] : [
-    ...recentFiles.map((entry) => ({
-      label: entry.path,
-      click: () => mainWindow?.webContents.send("open-recent-file", entry.path)
-    })),
-    { type: "separator" },
-    { label: t("menu.clearRecentFiles"), click: () => clearRecentFiles() }
-  ];
-  const template = [
-    {
-      label: t("menu.file"),
-      submenu: [
-        { label: t("menu.newFile"), accelerator: "Ctrl+N", click: () => sendMenuAction("new-file") },
-        { label: t("menu.openFile"), accelerator: "Ctrl+O", click: () => sendMenuAction("open-file") },
-        { label: t("menu.openFolder"), accelerator: "Ctrl+Shift+O", click: () => sendMenuAction("open-folder") },
-        { label: t("menu.openRecent"), submenu: recentSubmenu },
-        { type: "separator" },
-        { label: t("menu.save"), accelerator: "Ctrl+S", click: () => sendMenuAction("save") },
-        { label: t("menu.saveAs"), click: () => sendMenuAction("save-as") },
-        { type: "separator" },
-        { label: t("menu.exportPdf"), click: () => sendMenuAction("export-pdf") },
-        { label: t("menu.exportHtml"), click: () => sendMenuAction("export-html") },
-        { type: "separator" },
-        { label: t("menu.exit"), role: "quit" }
-      ]
-    },
-    {
-      label: t("menu.edit"),
-      submenu: [
-        { label: t("menu.undo"), accelerator: "Ctrl+Z", click: () => sendMenuAction("undo") },
-        { label: t("menu.redo"), accelerator: "Ctrl+Shift+Z", click: () => sendMenuAction("redo") },
-        { label: t("menu.find"), accelerator: "Ctrl+F", click: () => sendMenuAction("find-in-file") },
-        {
-          label: t("menu.findInWorkspace"),
-          accelerator: "Ctrl+Shift+F",
-          click: () => sendMenuAction("find-in-workspace")
-        },
-        { type: "separator" },
-        { label: t("menu.selectAll"), accelerator: "Ctrl+A", click: () => sendMenuAction("select-all") }
-      ]
-    },
-    {
-      label: t("menu.paragraph"),
-      submenu: [
-        { label: t("menu.heading1"), accelerator: "Ctrl+1", click: () => sendMenuAction("heading-1") },
-        { label: t("menu.heading2"), accelerator: "Ctrl+2", click: () => sendMenuAction("heading-2") },
-        { label: t("menu.heading3"), accelerator: "Ctrl+3", click: () => sendMenuAction("heading-3") },
-        { label: t("menu.body"), accelerator: "Ctrl+0", click: () => sendMenuAction("body") },
-        { type: "separator" },
-        { label: t("menu.orderedList"), click: () => sendMenuAction("ordered-list") },
-        { label: t("menu.unorderedList"), click: () => sendMenuAction("unordered-list") },
-        { label: t("menu.quote"), click: () => sendMenuAction("blockquote") }
-      ]
-    },
-    {
-      label: t("menu.format"),
-      submenu: [
-        { label: t("menu.bold"), accelerator: "Ctrl+B", click: () => sendMenuAction("bold") },
-        { label: t("menu.italic"), accelerator: "Ctrl+I", click: () => sendMenuAction("italic") },
-        {
-          label: t("menu.strikethrough"),
-          accelerator: "Ctrl+Shift+S",
-          click: () => sendMenuAction("strikethrough")
-        },
-        { label: t("menu.inlineCode"), click: () => sendMenuAction("inline-code") },
-        { type: "separator" },
-        { label: t("menu.link"), accelerator: "Ctrl+K", click: () => sendMenuAction("link") }
-      ]
-    },
-    {
-      label: t("menu.view"),
-      submenu: [
-        { label: t("menu.sidebar"), accelerator: "Ctrl+\\", click: () => sendMenuAction("toggle-sidebar") },
-        {
-          label: t("menu.outline"),
-          accelerator: "Ctrl+Shift+\\",
-          click: () => sendMenuAction("toggle-outline")
-        },
-        {
-          label: t("menu.terminal"),
-          accelerator: "Ctrl+`",
-          click: () => sendMenuAction("toggle-terminal")
-        },
-        {
-          label: t("menu.newTerminal"),
-          accelerator: "Ctrl+Shift+`",
-          click: () => sendMenuAction("new-terminal")
-        },
-        { type: "separator" },
-        { label: t("menu.zoomIn"), click: () => sendMenuAction("zoom-in") },
-        { label: t("menu.zoomOut"), click: () => sendMenuAction("zoom-out") },
-        { type: "separator" },
-        {
-          label: t("shortcuts.toggleTheme"),
-          accelerator: "Ctrl+Shift+D",
-          click: () => sendMenuAction("toggle-theme")
-        }
-      ]
-    },
-    {
-      label: t("menu.settings"),
-      submenu: [
-        { label: t("menu.settings"), accelerator: "Ctrl+,", click: () => sendMenuAction("open-settings") },
-        { label: t("menu.exportSettings"), click: () => sendMenuAction("open-export-settings") },
-        { label: t("menu.shortcuts"), click: () => sendMenuAction("open-shortcuts") },
-        { type: "separator" },
-        {
-          label: currentLanguage === "zh" ? t("menu.switchToEnglish") : t("menu.switchToChinese"),
-          click: () => sendMenuAction("toggle-language")
-        }
-      ]
-    }
-  ];
-  import_electron.Menu.setApplicationMenu(import_electron.Menu.buildFromTemplate(template));
+function fallbackTranslate(key) {
+  if (key === "common.markdown") return "Markdown";
+  if (key === "fileTree.untitled") return "Untitled";
+  return key;
 }
 function writeFileAtomically(filePath, content) {
   const dir = path6.dirname(filePath);
@@ -1487,7 +764,7 @@ function relativeWorkspacePath(workspaceRoot, filePath) {
   return path6.relative(workspaceRoot, filePath).replace(/\\/g, "/");
 }
 async function exportDocument(payload) {
-  const baseName = payload.currentFilePath ? path6.parse(payload.currentFilePath).name : payload.title.replace(/\.[^.]+$/, "") || translate(currentLanguage, "fileTree.untitled");
+  const baseName = payload.currentFilePath ? path6.parse(payload.currentFilePath).name : payload.title.replace(/\.[^.]+$/, "") || fallbackTranslate("fileTree.untitled");
   const extension = payload.type === "pdf" ? "pdf" : "html";
   const defaultPath = payload.currentFilePath ? path6.join(path6.dirname(payload.currentFilePath), `${baseName}.${extension}`) : `${baseName}.${extension}`;
   const selectedPath = await import_electron.dialog.showSaveDialog({
@@ -1547,7 +824,7 @@ async function exportDocument(payload) {
   }
 }
 function createWindow() {
-  buildNativeMenu();
+  import_electron.Menu.setApplicationMenu(null);
   rendererReady = false;
   const windowIcon = import_electron.app.isPackaged ? path6.join(process.resourcesPath, "typola.ico") : path6.join(__dirname, "../resources/typola.ico");
   mainWindow = new import_electron.BrowserWindow({
@@ -1556,12 +833,17 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
+    show: false,
+    backgroundColor: "#ffffff",
     icon: windowIcon,
     webPreferences: {
       preload: path6.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false
     }
+  });
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
   });
   if (process.env.NODE_ENV === "development") {
     mainWindow.loadURL("http://localhost:1420");
@@ -1629,14 +911,13 @@ import_electron.ipcMain.handle("rename_path", async (_, oldPath, newPath) => {
 import_electron.ipcMain.handle("show_save_dialog", async (_, options) => {
   const result = await import_electron.dialog.showSaveDialog({
     defaultPath: options.defaultPath,
-    filters: options.filters || [{ name: translate(currentLanguage, "common.markdown"), extensions: ["md"] }]
+    filters: options.filters || [{ name: fallbackTranslate("common.markdown"), extensions: ["md"] }]
   });
   return result.canceled ? null : result.filePath;
 });
 import_electron.ipcMain.handle("path_exists", async (_, targetPath) => pathExists(targetPath));
 import_electron.ipcMain.handle("set_language_preference", async (_, language) => {
   currentLanguage = resolveLanguage(language, currentLanguage);
-  buildNativeMenu();
   return currentLanguage;
 });
 import_electron.ipcMain.handle("term_create", async (_, request) => {
@@ -1821,11 +1102,19 @@ if (singleInstanceLock) {
     void queueOpenFile(filePath);
   });
   import_electron.app.whenReady().then(() => {
-    recentFiles = pruneMissingRecentFiles(loadRecentFiles(getUserDataDir()));
-    saveRecentFiles(getUserDataDir(), recentFiles);
-    buildNativeMenu();
     createWindow();
     queueOpenFilesFromArgs(process.argv);
+    void (async () => {
+      try {
+        const loaded = await loadRecentFilesAsync(getUserDataDir());
+        const pruned = await pruneMissingRecentFilesAsync(loaded);
+        recentFiles = pruned;
+        saveRecentFiles(getUserDataDir(), recentFiles);
+        notifyRecentFilesChanged();
+      } catch (error) {
+        console.error("Failed to load recent files:", error);
+      }
+    })();
   });
 }
 import_electron.app.on("window-all-closed", () => {

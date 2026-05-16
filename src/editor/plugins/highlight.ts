@@ -1,9 +1,12 @@
-import type { Highlighter } from 'shiki';
+import type { HighlighterCore } from 'shiki/core';
 import i18n from '../../i18n';
 
-let highlighter: Highlighter | null = null;
-let shikiModulePromise: Promise<typeof import('shiki')> | null = null;
+let highlighter: HighlighterCore | null = null;
+let highlighterPromise: Promise<HighlighterCore> | null = null;
 
+// Static list — must match the dynamic-import switch below. Adding a lang means
+// adding both the entry here AND a case in `loadLang`, so Rollup can statically
+// resolve each chunk.
 const SUPPORTED_LANGS = [
   'javascript',
   'typescript',
@@ -19,18 +22,59 @@ const SUPPORTED_LANGS = [
   'sql',
 ] as const;
 
-type SupportedLang = typeof SUPPORTED_LANGS[number];
+type SupportedLang = (typeof SUPPORTED_LANGS)[number];
 
-async function getHighlighter(): Promise<Highlighter> {
-  if (!highlighter) {
-    shikiModulePromise ??= import('shiki');
-    const { createHighlighter } = await shikiModulePromise;
-    highlighter = await createHighlighter({
-      themes: ['github-light', 'github-dark'],
-      langs: [...SUPPORTED_LANGS],
-    });
+async function loadLang(lang: SupportedLang) {
+  switch (lang) {
+    case 'javascript':
+      return (await import('@shikijs/langs/javascript')).default;
+    case 'typescript':
+      return (await import('@shikijs/langs/typescript')).default;
+    case 'python':
+      return (await import('@shikijs/langs/python')).default;
+    case 'bash':
+      return (await import('@shikijs/langs/bash')).default;
+    case 'json':
+      return (await import('@shikijs/langs/json')).default;
+    case 'markdown':
+      return (await import('@shikijs/langs/markdown')).default;
+    case 'rust':
+      return (await import('@shikijs/langs/rust')).default;
+    case 'go':
+      return (await import('@shikijs/langs/go')).default;
+    case 'java':
+      return (await import('@shikijs/langs/java')).default;
+    case 'css':
+      return (await import('@shikijs/langs/css')).default;
+    case 'html':
+      return (await import('@shikijs/langs/html')).default;
+    case 'sql':
+      return (await import('@shikijs/langs/sql')).default;
   }
-  return highlighter;
+}
+
+async function createHighlighterInstance(): Promise<HighlighterCore> {
+  const [{ createHighlighterCore }, { createOnigurumaEngine }, light, dark, ...langs] = await Promise.all([
+    import('shiki/core'),
+    import('shiki/engine/oniguruma'),
+    import('@shikijs/themes/github-light').then((m) => m.default),
+    import('@shikijs/themes/github-dark').then((m) => m.default),
+    ...SUPPORTED_LANGS.map((lang) => loadLang(lang)),
+  ]);
+  return createHighlighterCore({
+    themes: [light, dark],
+    langs,
+    engine: createOnigurumaEngine(import('shiki/wasm')),
+  });
+}
+
+async function getHighlighter(): Promise<HighlighterCore> {
+  if (highlighter) return highlighter;
+  highlighterPromise ??= createHighlighterInstance().then((hl) => {
+    highlighter = hl;
+    return hl;
+  });
+  return highlighterPromise;
 }
 
 export async function highlightCode(code: string, lang: string, isDark: boolean): Promise<string> {

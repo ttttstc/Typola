@@ -1,9 +1,7 @@
 import { Suspense, lazy, useState, useCallback } from 'react';
 import { TitleBar } from './TitleBar';
 import { MenuBar } from './MenuBar';
-import { Sidebar } from './Sidebar';
 import { Editor } from './Editor';
-import { Outline } from './Outline';
 import { StatusBar } from './StatusBar';
 import { TabBar } from './TabBar';
 import { useUIStore } from '../store/ui';
@@ -17,6 +15,19 @@ const LazySettings = lazy(async () => {
 const LazyTerminalPanel = lazy(async () => {
   const module = await import('./TerminalPanel');
   return { default: module.TerminalPanel };
+});
+
+// Sidebar and Outline are mounted only when visible — load them on demand so
+// the initial bundle doesn't carry FileTree / SearchPanel / heading-parsing
+// code until the user opens the corresponding panel.
+const LazySidebar = lazy(async () => {
+  const module = await import('./Sidebar');
+  return { default: module.Sidebar };
+});
+
+const LazyOutline = lazy(async () => {
+  const module = await import('./Outline');
+  return { default: module.Outline };
 });
 
 export function Layout() {
@@ -98,7 +109,9 @@ export function Layout() {
                 flexShrink: 0,
               }}
             >
-              <Sidebar />
+              <Suspense fallback={null}>
+                <LazySidebar />
+              </Suspense>
             </div>
             <div
               onMouseDown={startResizeSidebar}
@@ -151,7 +164,9 @@ export function Layout() {
                 flexShrink: 0,
               }}
             >
-              <Outline />
+              <Suspense fallback={null}>
+                <LazyOutline />
+              </Suspense>
             </div>
           </>
         )}
