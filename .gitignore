@@ -1,42 +1,47 @@
-# Dependencies
-node_modules/
-
-# Build outputs
-dist/
-src-tauri/target/
-*.exe
-*.dll
-WebView2Loader.dll
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
 # Logs
+logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Environment
-.env
-.env.local
-.env.*.local
+node_modules
+/dist
+dist-ssr
+release*/
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # Tauri
-src-tauri/gen/
+src-tauri/target/
+*.key
 
-# Electron build
-electron/*.js
-release/
+# Claude Code
+.worktrees/
+.claude/*
 
-# Claude
-.claude/
+# Test artifacts
+test-results/
 
-# Temp files
-未命名*.md
+# Astro website
+website/.astro/
+website/dist/
+
+# Local AI working context
+docs/DECISIONS.md
+docs/TASKS.md
+
+# Playwright MCP verification artifacts
+.playwright-mcp/

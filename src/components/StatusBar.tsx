@@ -1,50 +1,87 @@
-import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useEditorStore } from '../store/editor';
-import { useWorkspaceStore } from '../store/workspace';
-import { computeDocStats } from '../shared/docStats';
+import { useEffect, useRef, useState } from 'react';
+import { writeText } from '../services/clipboardService';
 
-export function StatusBar() {
-  const { t } = useTranslation();
-  const { currentFile, content, isDirty, saveStatus } = useEditorStore();
-  const workspaceRoot = useWorkspaceStore((s) => s.workspaceRoot);
+type StatusBarProps = {
+  filePath: string;
+  dirty: boolean;
+  message?: string;
+};
 
-  const stats = useMemo(() => computeDocStats(content), [content]);
+type CopyOutcome = 'copied' | 'failed';
+type CopyMarker = { path: string; outcome: CopyOutcome } | null;
 
-  const relativePath = currentFile && workspaceRoot
-    ? currentFile.replace(workspaceRoot, '').replace(/^[\\/]/, '')
-    : null;
+const COPY_FEEDBACK_RESET_MS = 1200;
+
+export function StatusBar({ filePath, dirty, message }: StatusBarProps) {
+  const hasPath = filePath.length > 0;
+  const [copyMarker, setCopyMarker] = useState<CopyMarker>(null);
+  const resetTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const scheduleFeedbackReset = () => {
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current);
+    }
+    resetTimerRef.current = window.setTimeout(() => {
+      setCopyMarker(null);
+      resetTimerRef.current = null;
+    }, COPY_FEEDBACK_RESET_MS);
+  };
+
+  const handleDoubleClick = () => {
+    if (!hasPath) return;
+    void writeText(filePath)
+      .then(() => {
+        setCopyMarker({ path: filePath, outcome: 'copied' });
+      })
+      .catch(() => {
+        setCopyMarker({ path: filePath, outcome: 'failed' });
+      })
+      .finally(() => {
+        scheduleFeedbackReset();
+      });
+  };
+
+  const copyState: 'idle' | CopyOutcome =
+    copyMarker && copyMarker.path === filePath && hasPath
+      ? copyMarker.outcome
+      : 'idle';
 
   return (
-    <div
-      style={{
-        height: 'var(--statusbar-height)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 12px',
-        background: 'var(--color-paper)',
-        borderTop: '1px solid var(--color-line-soft)',
-        fontSize: '12px',
-        color: 'var(--color-muted)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <span>{t('statusBar.words', { count: stats.words })}</span>
-        <span>{t('statusBar.characters', { count: stats.characters })}</span>
-        <span>{t('statusBar.lines', { count: stats.lines })}</span>
-        <span>
-          {isDirty && t('statusBar.unsaved')}
-          {!isDirty && saveStatus === 'saved' && t('statusBar.saved')}
-          {!isDirty && saveStatus === 'saving' && t('statusBar.saving')}
-          {saveStatus === 'error' && t('statusBar.error')}
-        </span>
-      </div>
-      {relativePath && (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
-          {relativePath}
+    <div className="status-bar">
+      <span
+        className="status-path"
+        data-copy-state={copyState}
+        onDoubleClick={hasPath ? handleDoubleClick : undefined}
+        title={hasPath ? '双击复制完整路径' : undefined}
+        style={
+          hasPath ? { cursor: 'text', userSelect: 'text' } : undefined
+        }
+      >
+        {hasPath ? filePath : '未打开文件'}
+      </span>
+      {copyState !== 'idle' && (
+        <span
+          className="status-copy-feedback"
+          data-copy-state={copyState}
+          style={{
+            color: copyState === 'copied' ? 'var(--success)' : 'var(--danger)',
+            fontWeight: 500,
+          }}
+        >
+          {copyState === 'copied' ? '已复制' : '复制失败'}
         </span>
       )}
+      {dirty && <span className="status-dirty">未保存</span>}
+      {message && <span className="status-message" role="status">{message}</span>}
     </div>
   );
 }
