@@ -12,6 +12,7 @@ lerna-debug.log*
 
 # Local environment files
 *.local
+release*/
 
 # Desktop build artifacts and signing keys
 src-tauri/target/
@@ -35,3 +36,10 @@ src-tauri/target/
 docs/DECISIONS.md
 docs/TASKS.md
 test-results/
+
+# Claude local state
+.claude/*
+
+# Historical website build artifacts
+website/.astro/
+website/dist/
