@@ -1,830 +1,399 @@
+import { Clipboard, Copy, Eraser, Maximize2, Plus, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, X } from 'lucide-react';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { Terminal } from '@xterm/xterm';
+import { Terminal as XTerm } from '@xterm/xterm';
+import '@xterm/xterm/css/xterm.css';
+import { useSettings } from '../hooks/useSettings';
 import {
-  closeTerminalTab,
-  markTerminalExited,
-  openNewTerminalTab,
-  useTerminalStore,
-} from '../store/terminal';
-import { useUIStore } from '../store/ui';
-import {
-  clampTerminalHeight,
-  isTerminalCopyShortcut,
-  isTerminalPasteShortcut,
-} from '../shared/terminal';
-import { getTerminalTheme, type AppTheme } from '../shared/terminal-theme';
+  clearTerminal,
+  createTerminal,
+  directoryFromPath,
+  killTerminal,
+  onTerminalData,
+  onTerminalExit,
+  resizeTerminal,
+  writeTerminal,
+  type TerminalCreateResult,
+} from '../services/terminalService';
 
-interface TerminalRuntime {
-  terminal: Terminal;
-  fitAddon: FitAddon;
-}
-
-interface ContextMenuState {
-  tabId: string;
-  x: number;
-  y: number;
-}
-
-function isLinkSafe(url: string) {
-  return /^https?:\/\//i.test(url);
-}
-
-function TabStatusPill({ status }: { status: 'connecting' | 'running' | 'exited' }) {
-  const colors: Record<'connecting' | 'running' | 'exited', string> = {
-    connecting: 'var(--color-muted)',
-    running: 'var(--color-accent)',
-    exited: '#d95c5c',
-  };
-
-  return (
-    <span
-      style={{
-        width: '7px',
-        height: '7px',
-        borderRadius: '999px',
-        background: colors[status],
-        flexShrink: 0,
-      }}
-    />
-  );
-}
-
-interface TerminalSessionViewProps {
-  tabId: string;
-  termId: number | null;
-  shellPath: string;
-  theme: AppTheme;
-  active: boolean;
+type TerminalPanelProps = {
   visible: boolean;
-  fontFamily: string;
-  fontSize: number;
-  cursorStyle: 'block' | 'bar' | 'underline';
-  cursorBlink: boolean;
-  shortcutPreset: 'windows' | 'linux';
-  confirmMultilinePaste: boolean;
-  registerRuntime: (tabId: string, runtime: TerminalRuntime | null) => void;
-  onOpenContextMenu: (tabId: string, event: ReactMouseEvent<HTMLDivElement>) => void;
+  height: number;
+  currentFilePath?: string;
+  createRequest: number;
+  onHeightChange: (height: number) => void;
+  onHide: () => void;
+};
+
+type TerminalTab = {
+  localId: string;
+  termId?: number;
+  title: string;
+  cwd?: string;
+  status: 'connecting' | 'ready' | 'exited' | 'error';
+  error?: string;
+};
+
+type TerminalRuntime = {
+  terminal: XTerm;
+  fitAddon: FitAddon;
+  opened: boolean;
+  termId?: number;
+};
+
+const MIN_HEIGHT = 180;
+const MAX_HEIGHT = 520;
+
+function createLocalId(): string {
+  return `terminal-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function TerminalSessionView({
-  tabId,
-  termId,
-  shellPath,
-  theme,
-  active,
+function clampHeight(value: number): number {
+  return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, value));
+}
+
+export function TerminalPanel({
   visible,
-  fontFamily,
-  fontSize,
-  cursorStyle,
-  cursorBlink,
-  shortcutPreset,
-  confirmMultilinePaste,
-  registerRuntime,
-  onOpenContextMenu,
-}: TerminalSessionViewProps) {
-  const { t } = useTranslation();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const latestRef = useRef({
-    termId,
-    shortcutPreset,
-    confirmMultilinePaste,
-    shellPath,
-  });
+  height,
+  currentFilePath,
+  createRequest,
+  onHeightChange,
+  onHide,
+}: TerminalPanelProps) {
+  const settings = useSettings();
+  const [tabs, setTabs] = useState<TerminalTab[]>([]);
+  const [activeLocalId, setActiveLocalId] = useState<string | null>(null);
+  const runtimesRef = useRef(new Map<string, TerminalRuntime>());
+  const termIdToLocalIdRef = useRef(new Map<number, string>());
+  const terminalSettingsRef = useRef(settings);
+  const lastCreateRequestRef = useRef(0);
 
   useEffect(() => {
-    latestRef.current = {
-      termId,
-      shortcutPreset,
-      confirmMultilinePaste,
-      shellPath,
-    };
-  }, [confirmMultilinePaste, shellPath, shortcutPreset, termId]);
+    terminalSettingsRef.current = settings;
+  }, [settings]);
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return;
-    }
-
-    const terminal = new Terminal({
-      allowTransparency: true,
-      cursorBlink,
-      cursorStyle,
-      fontFamily,
-      fontSize,
-      scrollback: 5000,
-      theme: getTerminalTheme(theme),
-    });
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon((event, url) => {
-      if (!(event.ctrlKey || event.metaKey) || !isLinkSafe(url)) {
-        return;
+  const fitRuntime = useCallback((runtime: TerminalRuntime) => {
+    try {
+      runtime.fitAddon.fit();
+      if (runtime.termId) {
+        void resizeTerminal(runtime.termId, runtime.terminal.cols, runtime.terminal.rows);
       }
+    } catch (error) {
+      console.warn('Failed to fit terminal:', error);
+    }
+  }, []);
 
-      void window.electronAPI.openExternal(url);
+  const attachTerminal = useCallback((localId: string, node: HTMLDivElement | null) => {
+    if (!node) return;
+    const runtime = runtimesRef.current.get(localId);
+    if (!runtime || runtime.opened) return;
+
+    runtime.terminal.open(node);
+    runtime.opened = true;
+    fitRuntime(runtime);
+    runtime.terminal.focus();
+  }, [fitRuntime]);
+
+  const openNewTab = useCallback(() => {
+    const localId = createLocalId();
+    const tabNumber = tabs.length + 1;
+    const fitAddon = new FitAddon();
+    const terminal = new XTerm({
+      convertEol: true,
+      cursorBlink: settings.terminalCursorBlink,
+      cursorStyle: settings.terminalCursorStyle,
+      fontFamily: settings.terminalFontFamily,
+      fontSize: settings.terminalFontSize,
+      scrollback: 5000,
+      theme: settings.theme === 'dark'
+        ? { background: '#1f1d1a', foreground: '#f2ece3', cursor: '#f0b06d' }
+        : { background: '#fffdfa', foreground: '#2c2924', cursor: '#9f5137' },
     });
 
     terminal.loadAddon(fitAddon);
-    terminal.loadAddon(webLinksAddon);
-    terminal.open(container);
+    terminal.loadAddon(new WebLinksAddon((_event, uri) => {
+      window.open(uri, '_blank', 'noopener,noreferrer');
+    }));
     terminal.onData((data) => {
-      const currentTermId = latestRef.current.termId;
-      if (currentTermId == null) {
-        return;
-      }
-
-      void window.electronAPI.termWrite({ termId: currentTermId, data });
+      const runtime = runtimesRef.current.get(localId);
+      if (runtime?.termId) void writeTerminal(runtime.termId, data);
     });
-    terminal.onResize(({ cols, rows }) => {
-      const currentTermId = latestRef.current.termId;
-      if (currentTermId == null) {
-        return;
-      }
+    terminal.writeln('Starting terminal...');
 
-      void window.electronAPI.termResize({ termId: currentTermId, cols, rows });
-    });
-    terminal.attachCustomKeyEventHandler((event) => {
-      if (event.type !== 'keydown') {
-        return true;
-      }
+    runtimesRef.current.set(localId, { terminal, fitAddon, opened: false });
+    setTabs((current) => [
+      ...current,
+      {
+        localId,
+        title: `terminal ${tabNumber}`,
+        status: 'connecting',
+      },
+    ]);
+    setActiveLocalId(localId);
 
-      if (isTerminalCopyShortcut(event, latestRef.current.shortcutPreset)) {
-        if (terminal.hasSelection()) {
-          void window.electronAPI.writeClipboardText(terminal.getSelection());
-          terminal.clearSelection();
-        } else if (latestRef.current.termId != null) {
-          void window.electronAPI.termWrite({ termId: latestRef.current.termId, data: '\u0003' });
-        }
-
-        event.preventDefault();
-        return false;
-      }
-
-      if (isTerminalPasteShortcut(event, latestRef.current.shortcutPreset)) {
-        event.preventDefault();
-        void (async () => {
-          const currentTermId = latestRef.current.termId;
-          if (currentTermId == null) {
-            return;
-          }
-
-          const text = await window.electronAPI.readClipboardText();
-          if (!text) {
-            return;
-          }
-
-          if (latestRef.current.confirmMultilinePaste && /[\r\n]/.test(text)) {
-            const confirmed = window.confirm(t('terminal.confirmMultilinePaste'));
-            if (!confirmed) {
-              return;
+    void createTerminal({
+      cwd: directoryFromPath(currentFilePath),
+      shell: settings.terminalShellPath.trim() || undefined,
+      cols: terminal.cols,
+      rows: terminal.rows,
+    })
+      .then((result: TerminalCreateResult) => {
+        const runtime = runtimesRef.current.get(localId);
+        if (!runtime) return;
+        runtime.termId = result.termId;
+        termIdToLocalIdRef.current.set(result.termId, localId);
+        setTabs((current) => current.map((tab) => (
+          tab.localId === localId
+            ? {
+              ...tab,
+              termId: result.termId,
+              title: result.processName || tab.title,
+              cwd: result.cwd,
+              status: 'ready',
             }
-          }
+            : tab
+        )));
+        fitRuntime(runtime);
+      })
+      .catch((error) => {
+        const runtime = runtimesRef.current.get(localId);
+        runtime?.terminal.writeln(`\r\nFailed to start terminal: ${String(error)}`);
+        setTabs((current) => current.map((tab) => (
+          tab.localId === localId
+            ? { ...tab, status: 'error', error: String(error) }
+            : tab
+        )));
+      });
+  }, [
+    currentFilePath,
+    fitRuntime,
+    settings.terminalCursorBlink,
+    settings.terminalCursorStyle,
+    settings.terminalFontFamily,
+    settings.terminalFontSize,
+    settings.terminalShellPath,
+    settings.theme,
+    tabs.length,
+  ]);
 
-          terminal.focus();
-          terminal.paste(text);
-        })();
-        return false;
+  const closeTab = useCallback((localId: string) => {
+    const runtime = runtimesRef.current.get(localId);
+    if (runtime?.termId) {
+      void killTerminal(runtime.termId).catch((error) => console.warn('Failed to kill terminal:', error));
+      termIdToLocalIdRef.current.delete(runtime.termId);
+    }
+    runtime?.terminal.dispose();
+    runtimesRef.current.delete(localId);
+    setTabs((current) => {
+      const index = current.findIndex((tab) => tab.localId === localId);
+      const next = current.filter((tab) => tab.localId !== localId);
+      if (activeLocalId === localId) {
+        setActiveLocalId(next[Math.max(0, index - 1)]?.localId ?? next[0]?.localId ?? null);
       }
-
-      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        terminal.clear();
-        if (latestRef.current.termId != null) {
-          void window.electronAPI.termClear(latestRef.current.termId);
-          void window.electronAPI.termWrite({
-            termId: latestRef.current.termId,
-            data: /(^|[\\/])cmd(\.exe)?$/i.test(latestRef.current.shellPath) ? 'cls\r' : 'clear\r',
-          });
-        }
-        return false;
-      }
-
-      return true;
+      return next;
     });
+  }, [activeLocalId]);
 
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-    registerRuntime(tabId, { terminal, fitAddon });
+  const activeTab = tabs.find((tab) => tab.localId === activeLocalId);
 
-    requestAnimationFrame(() => {
-      fitAddon.fit();
-    });
+  const getActiveRuntime = useCallback(() => (
+    activeLocalId ? runtimesRef.current.get(activeLocalId) : undefined
+  ), [activeLocalId]);
 
-    return () => {
-      registerRuntime(tabId, null);
-      fitAddon.dispose();
-      terminal.dispose();
-      terminalRef.current = null;
-      fitAddonRef.current = null;
+  const handleClear = useCallback(() => {
+    const activeRuntime = getActiveRuntime();
+    if (!activeRuntime) return;
+    activeRuntime.terminal.clear();
+    if (activeRuntime.termId) void clearTerminal(activeRuntime.termId);
+  }, [getActiveRuntime]);
+
+  const handleCopy = useCallback(() => {
+    const activeRuntime = getActiveRuntime();
+    const selection = activeRuntime?.terminal.getSelection();
+    if (selection) void navigator.clipboard?.writeText(selection);
+  }, [getActiveRuntime]);
+
+  const handlePaste = useCallback(async () => {
+    const activeRuntime = getActiveRuntime();
+    if (!activeRuntime?.termId || !navigator.clipboard) return;
+    const text = await navigator.clipboard.readText();
+    if (!text) return;
+    if (
+      terminalSettingsRef.current.terminalConfirmMultilinePaste
+      && text.includes('\n')
+      && !window.confirm('要粘贴多行内容到终端吗？')
+    ) {
+      return;
+    }
+    await writeTerminal(activeRuntime.termId, text);
+  }, [getActiveRuntime]);
+
+  const handleSelectAll = useCallback(() => {
+    const activeRuntime = getActiveRuntime();
+    activeRuntime?.terminal.selectAll();
+  }, [getActiveRuntime]);
+
+  const handleResizePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = height;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      onHeightChange(clampHeight(startHeight - (moveEvent.clientY - startY)));
     };
-  }, [registerRuntime, t, tabId]);
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  }, [height, onHeightChange]);
 
   useEffect(() => {
-    const terminal = terminalRef.current;
-    if (!terminal) {
-      return;
-    }
-
-    terminal.options.fontFamily = fontFamily;
-    terminal.options.fontSize = fontSize;
-    terminal.options.cursorStyle = cursorStyle;
-    terminal.options.cursorBlink = cursorBlink;
-  }, [cursorBlink, cursorStyle, fontFamily, fontSize]);
+    if (!visible) return;
+    if (tabs.length === 0) openNewTab();
+    window.setTimeout(() => {
+      const runtime = activeLocalId ? runtimesRef.current.get(activeLocalId) : undefined;
+      if (runtime) fitRuntime(runtime);
+    }, 0);
+  }, [activeLocalId, fitRuntime, openNewTab, tabs.length, visible]);
 
   useEffect(() => {
-    const terminal = terminalRef.current;
-    if (!terminal) {
-      return;
-    }
-
-    terminal.options.theme = getTerminalTheme(theme);
-    terminal.refresh(0, Math.max(terminal.rows - 1, 0));
-  }, [theme]);
+    if (!visible || createRequest === lastCreateRequestRef.current) return;
+    lastCreateRequestRef.current = createRequest;
+    openNewTab();
+  }, [createRequest, openNewTab, visible]);
 
   useEffect(() => {
-    if (!active || !visible) {
-      return;
-    }
+    const handleResize = () => {
+      const runtime = activeLocalId ? runtimesRef.current.get(activeLocalId) : undefined;
+      if (runtime) fitRuntime(runtime);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [activeLocalId, fitRuntime]);
 
+  useEffect(() => {
+    let unlistenData: (() => void) | undefined;
+    let unlistenExit: (() => void) | undefined;
     let cancelled = false;
 
-    const refitTerminal = () => {
-      requestAnimationFrame(() => {
-        if (cancelled) {
-          return;
-        }
+    void onTerminalData((payload) => {
+      const localId = termIdToLocalIdRef.current.get(payload.termId);
+      if (!localId) return;
+      runtimesRef.current.get(localId)?.terminal.write(payload.data);
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else unlistenData = unlisten;
+    });
 
-        fitAddonRef.current?.fit();
-        terminalRef.current?.focus();
-      });
-    };
-
-    refitTerminal();
-
-    if ('fonts' in document) {
-      void Promise.allSettled([
-        document.fonts.ready,
-        document.fonts.load(`${fontSize}px ${fontFamily}`),
-      ]).then(() => {
-        if (!cancelled) {
-          refitTerminal();
-        }
-      });
-    }
+    void onTerminalExit((payload) => {
+      const localId = termIdToLocalIdRef.current.get(payload.termId);
+      if (!localId) return;
+      const runtime = runtimesRef.current.get(localId);
+      runtime?.terminal.writeln(`\r\n[process exited${payload.exitCode == null ? '' : ` with code ${payload.exitCode}`}]`);
+      setTabs((current) => current.map((tab) => (
+        tab.localId === localId ? { ...tab, status: 'exited' } : tab
+      )));
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else unlistenExit = unlisten;
+    });
 
     return () => {
       cancelled = true;
+      unlistenData?.();
+      unlistenExit?.();
     };
-  }, [active, visible, fontFamily, fontSize]);
-
-  useEffect(() => {
-    if (termId == null) {
-      return;
-    }
-
-    const cleanupData = window.electronAPI.onTerminalData(termId, (data) => {
-      terminalRef.current?.write(data);
-    });
-    const cleanupExit = window.electronAPI.onTerminalExit(termId, (data) => {
-      terminalRef.current?.writeln(
-        `\r\n[${t('terminal.processExited', { code: data.exitCode })}]`
-      );
-      markTerminalExited(termId, data.exitCode);
-    });
-
-    return () => {
-      cleanupData();
-      cleanupExit();
-    };
-  }, [termId, t]);
-
-  return (
-    <div
-      onContextMenu={(event) => onOpenContextMenu(tabId, event)}
-      style={{
-        display: active ? 'block' : 'none',
-        height: '100%',
-        padding: '8px 10px 10px',
-      }}
-    >
-      <div
-        ref={containerRef}
-        aria-label={shellPath || 'terminal'}
-        style={{
-          height: '100%',
-          borderRadius: 'var(--radius-md)',
-          background: 'var(--color-surface-sunken)',
-          overflow: 'hidden',
-        }}
-      />
-    </div>
-  );
-}
-
-export function TerminalPanel() {
-  const { t } = useTranslation();
-  const tabs = useTerminalStore((state) => state.tabs);
-  const activeTabId = useTerminalStore((state) => state.activeTabId);
-  const setActiveTab = useTerminalStore((state) => state.setActiveTab);
-  const renameTab = useTerminalStore((state) => state.renameTab);
-  const theme = useUIStore((state) => state.theme);
-  const terminalVisible = useUIStore((state) => state.terminalVisible);
-  const terminalHeight = useUIStore((state) => state.terminalHeight);
-  const setTerminalHeight = useUIStore((state) => state.setTerminalHeight);
-  const setTerminalVisible = useUIStore((state) => state.setTerminalVisible);
-  const terminalSettings = useUIStore((state) => state.terminalSettings);
-  const [isResizing, setIsResizing] = useState(false);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState('');
-  const runtimesRef = useRef(new Map<string, TerminalRuntime>());
-  const resizeOriginRef = useRef({ y: 0, height: terminalHeight });
-
-  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
-
-  const registerRuntime = useCallback((tabId: string, runtime: TerminalRuntime | null) => {
-    if (!runtime) {
-      runtimesRef.current.delete(tabId);
-      return;
-    }
-
-    runtimesRef.current.set(tabId, runtime);
   }, []);
 
-  const fitActiveTerminal = useCallback(() => {
-    if (!terminalVisible || !activeTabId) {
-      return;
+  useEffect(() => () => {
+    for (const runtime of runtimesRef.current.values()) {
+      if (runtime.termId) void killTerminal(runtime.termId);
+      runtime.terminal.dispose();
     }
-
-    const runtime = runtimesRef.current.get(activeTabId);
-    if (!runtime) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      runtime.fitAddon.fit();
-      runtime.terminal.focus();
-    });
-  }, [activeTabId, terminalVisible]);
-
-  useEffect(() => {
-    const handleWindowResize = () => {
-      fitActiveTerminal();
-    };
-
-    window.addEventListener('resize', handleWindowResize);
-    return () => window.removeEventListener('resize', handleWindowResize);
-  }, [fitActiveTerminal]);
-
-  useEffect(() => {
-    fitActiveTerminal();
-  }, [activeTabId, fitActiveTerminal, terminalHeight, terminalVisible]);
-
-  useEffect(() => {
-    if (!isResizing) {
-      return;
-    }
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const delta = resizeOriginRef.current.y - event.clientY;
-      setTerminalHeight(clampTerminalHeight(resizeOriginRef.current.height + delta, window.innerHeight));
-    };
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing, setTerminalHeight]);
-
-  useEffect(() => {
-    if (!contextMenu) {
-      return;
-    }
-
-    const handleClick = () => setContextMenu(null);
-    setTimeout(() => document.addEventListener('click', handleClick), 0);
-    return () => document.removeEventListener('click', handleClick);
-  }, [contextMenu]);
-
-  const getRuntime = useCallback((tabId: string) => {
-    return runtimesRef.current.get(tabId) ?? null;
+    runtimesRef.current.clear();
+    termIdToLocalIdRef.current.clear();
   }, []);
 
-  const handleCopy = useCallback(async (tabId: string) => {
-    const runtime = getRuntime(tabId);
-    if (!runtime || !runtime.terminal.hasSelection()) {
-      return false;
-    }
-
-    await window.electronAPI.writeClipboardText(runtime.terminal.getSelection());
-    runtime.terminal.clearSelection();
-    return true;
-  }, [getRuntime]);
-
-  const handlePaste = useCallback(async (tabId: string) => {
-    const runtime = getRuntime(tabId);
-    if (!runtime) {
-      return;
-    }
-
-    const text = await window.electronAPI.readClipboardText();
-    if (!text) {
-      return;
-    }
-
-    if (terminalSettings.confirmMultilinePaste && /[\r\n]/.test(text)) {
-      const confirmed = window.confirm(t('terminal.confirmMultilinePaste'));
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    runtime.terminal.focus();
-    runtime.terminal.paste(text);
-  }, [getRuntime, t, terminalSettings.confirmMultilinePaste]);
-
-  const handleSelectAll = useCallback((tabId: string) => {
-    getRuntime(tabId)?.terminal.selectAll();
-  }, [getRuntime]);
-
-  const handleClear = useCallback(async (tabId: string) => {
-    const runtime = getRuntime(tabId);
-    const tab = tabs.find((item) => item.id === tabId);
-    if (!runtime || !tab) {
-      return;
-    }
-
-    runtime.terminal.clear();
-    if (tab.termId != null) {
-      await window.electronAPI.termClear(tab.termId);
-      await window.electronAPI.termWrite({
-        termId: tab.termId,
-        data: /(^|[\\/])cmd(\.exe)?$/i.test(tab.shellPath) ? 'cls\r' : 'clear\r',
-      });
-    }
-  }, [getRuntime, tabs]);
-
-  const beginResize = (event: ReactMouseEvent<HTMLDivElement>) => {
-    resizeOriginRef.current = {
-      y: event.clientY,
-      height: terminalHeight,
-    };
-    setIsResizing(true);
-    document.body.style.cursor = 'ns-resize';
-    document.body.style.userSelect = 'none';
-  };
-
-  const startRename = (tabId: string, currentTitle: string) => {
-    setRenamingTabId(tabId);
-    setRenameDraft(currentTitle);
-  };
-
-  const commitRename = () => {
-    if (!renamingTabId) {
-      return;
-    }
-
-    renameTab(renamingTabId, renameDraft);
-    setRenamingTabId(null);
-    setRenameDraft('');
-  };
-
-  const activeTabTitle = activeTab?.title ?? t('terminal.title');
+  if (!visible) return null;
 
   return (
-    <div
-      style={{
-        height: terminalVisible ? `${terminalHeight}px` : '0px',
-        overflow: 'hidden',
-        borderTop: terminalVisible ? '1px solid var(--color-line-soft)' : 'none',
-        background: 'var(--color-paper)',
-        transition: isResizing ? 'none' : 'height 120ms ease',
-        flexShrink: 0,
-      }}
-    >
+    <section className="terminal-panel" style={{ height }} aria-label="终端">
       <div
-        onMouseDown={beginResize}
-        style={{
-          height: '6px',
-          cursor: 'ns-resize',
-          background: terminalVisible ? 'var(--color-paper)' : 'transparent',
-        }}
+        className="terminal-resizer"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-valuemin={MIN_HEIGHT}
+        aria-valuemax={MAX_HEIGHT}
+        aria-valuenow={height}
+        onPointerDown={handleResizePointerDown}
+        onDoubleClick={() => onHeightChange(300)}
       />
-
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: terminalVisible ? `calc(${terminalHeight}px - 6px)` : '0px',
-        }}
-      >
-        <div
-          style={{
-            height: '38px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '0 10px',
-            borderBottom: '1px solid var(--color-line-soft)',
-            background: 'var(--color-surface-sunken)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              flex: 1,
-              minWidth: 0,
-              overflowX: 'auto',
-            }}
-          >
-            {tabs.map((tab) => {
-              const isActive = tab.id === activeTabId;
-              const isRenaming = tab.id === renamingTabId;
-              return (
-                <div
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  onDoubleClick={() => startRename(tab.id, tab.title)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    minWidth: '0',
-                    maxWidth: '220px',
-                    padding: '0 10px',
-                    height: '28px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: isActive ? 'var(--color-paper)' : 'transparent',
-                    border: isActive ? '1px solid var(--color-line-soft)' : '1px solid transparent',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                >
-                  <TabStatusPill status={tab.status} />
-                  {isRenaming ? (
-                    <input
-                      autoFocus
-                      value={renameDraft}
-                      onChange={(event) => setRenameDraft(event.target.value)}
-                      onBlur={commitRename}
-                      onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
-                        if (event.key === 'Enter') {
-                          commitRename();
-                        }
-                        if (event.key === 'Escape') {
-                          setRenamingTabId(null);
-                          setRenameDraft('');
-                        }
-                      }}
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        border: 'none',
-                        outline: 'none',
-                        background: 'transparent',
-                        color: 'var(--color-ink)',
-                        fontSize: '12px',
-                      }}
-                    />
-                  ) : (
-                    <span
-                      title={tab.title}
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        fontSize: '12px',
-                        color: 'var(--color-ink)',
-                      }}
-                    >
-                      {tab.title}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    aria-label={t('terminal.closeTab', { name: tab.title })}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void closeTerminalTab(tab.id);
-                    }}
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      border: 'none',
-                      borderRadius: '999px',
-                      background: 'transparent',
-                      color: 'var(--color-muted)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <button
-            type="button"
-            aria-label={t('terminal.newTab')}
-            onClick={() => {
-              void openNewTerminalTab();
-            }}
-            style={{
-              width: '28px',
-              height: '28px',
-              border: '1px solid var(--color-line-soft)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-paper)',
-              color: 'var(--color-ink)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            <Plus size={14} />
-          </button>
-          <button
-            type="button"
-            aria-label={t('terminal.hidePanel', { name: activeTabTitle })}
-            onClick={() => setTerminalVisible(false)}
-            style={{
-              width: '28px',
-              height: '28px',
-              border: '1px solid var(--color-line-soft)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-paper)',
-              color: 'var(--color-ink)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-          {tabs.length === 0 ? (
+      <div className="terminal-header">
+        <div className="terminal-tabs" role="tablist" aria-label="终端标签">
+          {tabs.map((tab) => (
             <div
-              style={{
-                height: '100%',
-                display: 'grid',
-                placeItems: 'center',
-                color: 'var(--color-muted)',
-              }}
+              key={tab.localId}
+              role="tab"
+              className={`terminal-tab ${tab.localId === activeLocalId ? 'active' : ''} ${tab.status}`}
+              title={tab.cwd ?? tab.error ?? tab.title}
             >
-              <div style={{ display: 'grid', gap: '12px', justifyItems: 'center' }}>
-                <div style={{ fontSize: '14px' }}>{t('terminal.empty')}</div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void openNewTerminalTab();
-                  }}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--color-line-soft)',
-                    background: 'var(--color-paper)',
-                    color: 'var(--color-ink)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                  }}
-                >
-                  {t('terminal.newTab')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            tabs.map((tab) => (
-              <TerminalSessionView
-                key={tab.id}
-                tabId={tab.id}
-                termId={tab.termId}
-                shellPath={tab.shellPath}
-                theme={theme}
-                active={tab.id === activeTabId}
-                visible={terminalVisible}
-                fontFamily={terminalSettings.fontFamily}
-                fontSize={terminalSettings.fontSize}
-                cursorStyle={terminalSettings.cursorStyle}
-                cursorBlink={terminalSettings.cursorBlink}
-                shortcutPreset={terminalSettings.shortcutPreset}
-                confirmMultilinePaste={terminalSettings.confirmMultilinePaste}
-                registerRuntime={registerRuntime}
-                onOpenContextMenu={(nextTabId, event) => {
-                  event.preventDefault();
-                  setActiveTab(nextTabId);
-                  setContextMenu({
-                    tabId: nextTabId,
-                    x: event.clientX,
-                    y: event.clientY,
-                  });
+              <button type="button" className="terminal-tab-main" onClick={() => setActiveLocalId(tab.localId)}>
+                <span>{tab.title}</span>
+              </button>
+              <button
+                type="button"
+                className="terminal-tab-close"
+                aria-label={`关闭 ${tab.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  closeTab(tab.localId);
                 }}
-              />
-            ))
-          )}
-
-          {contextMenu && (
-            <div
-              style={{
-                position: 'fixed',
-                left: contextMenu.x,
-                top: contextMenu.y,
-                minWidth: '160px',
-                padding: '4px 0',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-line-soft)',
-                background: 'var(--color-paper)',
-                boxShadow: '0 10px 24px rgba(0,0,0,0.16)',
-                zIndex: 3200,
-              }}
-            >
-              {[
-                {
-                  key: 'copy',
-                  label: t('terminal.copy'),
-                  disabled: !getRuntime(contextMenu.tabId)?.terminal.hasSelection(),
-                  action: () => void handleCopy(contextMenu.tabId),
-                },
-                {
-                  key: 'paste',
-                  label: t('terminal.paste'),
-                  action: () => void handlePaste(contextMenu.tabId),
-                },
-                {
-                  key: 'select-all',
-                  label: t('terminal.selectAll'),
-                  action: () => handleSelectAll(contextMenu.tabId),
-                },
-                {
-                  key: 'clear',
-                  label: t('terminal.clear'),
-                  action: () => void handleClear(contextMenu.tabId),
-                },
-                {
-                  key: 'close',
-                  label: t('terminal.closeTab', {
-                    name:
-                      tabs.find((tab) => tab.id === contextMenu.tabId)?.title ??
-                      t('terminal.title'),
-                  }),
-                  action: () => void closeTerminalTab(contextMenu.tabId),
-                },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  disabled={item.disabled}
-                  onClick={() => {
-                    item.action();
-                    setContextMenu(null);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: 'none',
-                    background: 'transparent',
-                    textAlign: 'left',
-                    cursor: item.disabled ? 'not-allowed' : 'pointer',
-                    color: item.disabled ? 'var(--color-muted)' : 'var(--color-ink)',
-                    fontSize: '13px',
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
+              >
+                <X size={12} />
+              </button>
             </div>
-          )}
+          ))}
+        </div>
+        <div className="terminal-actions">
+          <button type="button" onClick={openNewTab} title="新建终端">
+            <Plus size={15} />
+          </button>
+          <button type="button" onClick={handleCopy} title="复制选中内容" disabled={!activeTab}>
+            <Copy size={15} />
+          </button>
+          <button type="button" onClick={handlePaste} title="粘贴" disabled={!activeTab}>
+            <Clipboard size={15} />
+          </button>
+          <button type="button" onClick={handleSelectAll} title="全选" disabled={!activeTab}>
+            <Maximize2 size={15} />
+          </button>
+          <button type="button" onClick={handleClear} title="清屏" disabled={!activeTab}>
+            <Eraser size={15} />
+          </button>
+          <button type="button" onClick={onHide} title="隐藏终端">
+            <Square size={14} />
+          </button>
         </div>
       </div>
-    </div>
+      <div className="terminal-body">
+        {tabs.length === 0 && (
+          <div className="terminal-empty">
+            <button type="button" onClick={openNewTab}>打开终端</button>
+          </div>
+        )}
+        {tabs.map((tab) => (
+          <div
+            key={tab.localId}
+            className={`terminal-session ${tab.localId === activeLocalId ? 'active' : ''}`}
+            ref={(node) => attachTerminal(tab.localId, node)}
+          />
+        ))}
+      </div>
+      {activeTab?.cwd && <div className="terminal-cwd">{activeTab.cwd}</div>}
+    </section>
   );
 }

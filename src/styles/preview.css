@@ -1,0 +1,259 @@
+.preview-shell {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg);
+}
+
+.preview-content {
+  max-width: var(--preview-width, 680px);
+  margin: 0 auto;
+  padding: 10px 40px 12px;
+  line-height: var(--preview-line-height, 1.7);
+  font-size: var(--preview-font-size, 15px);
+  font-family: var(--preview-font-family, var(--font-body));
+  color: var(--fg);
+}
+
+.html-table-preview-content {
+  width: 100%;
+  max-width: min(1120px, calc(100% - 72px));
+  padding: 10px 28px 12px;
+}
+
+/* Override Vditor defaults with legal-document-friendly styles */
+.preview-content h1,
+.preview-content h2,
+.preview-content h3,
+.preview-content h4,
+.preview-content h5,
+.preview-content h6 {
+  font-family: var(--preview-heading-font-family, var(--preview-font-family, var(--font-reading))) !important;
+  letter-spacing: 0;
+  color: var(--fg);
+}
+
+/* Per-script font cascade so Chinese and Latin stay in sync with the
+   preview-side selectors. Direct child selectors carry equal specificity to
+   Vditor's `.vditor-reset *` rules, and Vditor's CSS is loaded after
+   preview.css via dynamic import, so we append `!important` to win the
+   cascade. This keeps font changes reactive to settings updates without
+   forcing Vditor to re-parse the Markdown source. */
+.preview-content > p,
+.preview-content > ul,
+.preview-content > ol,
+.preview-content > blockquote,
+.preview-content > pre,
+.preview-content > table,
+.preview-content > dl,
+.preview-content > figure,
+.preview-content > details,
+.preview-content > section,
+.preview-content > article,
+.preview-content > aside,
+.preview-content > header,
+.preview-content > footer,
+.preview-content > main,
+.preview-content > nav {
+  font-family:
+    var(--preview-latin-font-family, -apple-system),
+    var(--preview-chinese-font-family, var(--font-reading)),
+    var(--preview-font-family, var(--font-body)) !important;
+}
+
+.preview-content li,
+.preview-content li > p,
+.preview-content td,
+.preview-content th,
+.preview-content blockquote > p,
+.preview-content dd,
+.preview-content dt {
+  font-family:
+    var(--preview-latin-font-family, -apple-system),
+    var(--preview-chinese-font-family, var(--font-reading)),
+    var(--preview-font-family, var(--font-body)) !important;
+}
+
+.preview-content h1 {
+  font-size: 28px;
+  margin: 0 0 20px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.preview-content h2 {
+  font-size: 22px;
+  margin: 32px 0 14px;
+  font-weight: 580;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.preview-content h3 {
+  font-size: 18px;
+  margin: 24px 0 10px;
+  font-weight: 560;
+}
+
+.preview-content h4 {
+  font-size: 16px;
+  margin: 20px 0 8px;
+  font-weight: 540;
+}
+
+.preview-content h5,
+.preview-content h6 {
+  font-size: 15px;
+  margin: 18px 0 8px;
+  font-weight: 520;
+}
+
+.preview-content p {
+  margin: 8px 0;
+}
+
+.preview-content p:empty {
+  min-height: 1em;
+}
+
+.preview-content [align='left'] {
+  text-align: left !important;
+}
+
+.preview-content [align='center'] {
+  text-align: center !important;
+}
+
+.preview-content [align='right'] {
+  text-align: right !important;
+}
+
+.preview-content [align='justify'] {
+  text-align: justify !important;
+}
+
+.preview-content [valign='top'] {
+  vertical-align: top !important;
+}
+
+.preview-content [valign='middle'] {
+  vertical-align: middle !important;
+}
+
+.preview-content [valign='bottom'] {
+  vertical-align: bottom !important;
+}
+
+.preview-content blockquote {
+  margin: 12px 0;
+  padding: 8px 0 8px 16px;
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+  font-style: italic;
+}
+
+.preview-content code {
+  background: var(--border);
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.preview-content pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 16px;
+  border-radius: 3px;
+  overflow-x: auto;
+  margin: 12px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.preview-content pre code {
+  background: none;
+  padding: 0;
+  color: var(--fg);
+}
+
+/* Tables - compact legal-document layout, overriding Vditor nowrap defaults */
+.preview-content.vditor-reset table,
+.preview-content table {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  border-collapse: collapse;
+  table-layout: fixed !important;
+  margin: 16px 0;
+  font-size: 14px;
+  word-break: normal !important;
+}
+
+.preview-content.vditor-reset th,
+.preview-content.vditor-reset td,
+.preview-content th,
+.preview-content td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  vertical-align: top;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
+.preview-content.vditor-reset td *,
+.preview-content.vditor-reset th * {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.preview-content th {
+  background: var(--surface);
+  text-align: center;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.preview-content td[colspan] {
+  background: var(--surface);
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.preview-content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid oklch(58% 0.16 35 / 0.3);
+}
+
+.preview-content a:hover {
+  border-bottom-color: var(--accent);
+}
+
+.preview-content img {
+  max-width: 100%;
+}
+
+.preview-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+}
+
+.preview-content ul, .preview-content ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+/* Vditor chart/formula containers */
+.preview-content .vditor-wysiwyg__preview {
+  overflow: auto;
+}

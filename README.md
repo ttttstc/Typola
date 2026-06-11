@@ -1,84 +1,61 @@
-<div align="center">
-
-<img width="256" height="256" alt="icon" src="https://github.com/user-attachments/assets/b8388747-5cde-4fd1-bc42-e016335a112b" />
-
 # Typola
 
-An AI Powered and efficient Markdown editor for Windows.
+Typola is a lightweight desktop Markdown editor.
 
-  <a href="https://github.com/ttttstc/Typola/releases"><img src="https://img.shields.io/github/v/tag/ttttstc/Typola?label=version&style=flat-square" alt="Version"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
+It focuses on a clean writing surface, dependable Markdown rendering, Word/HTML export previews, and an integrated terminal for local workflows.
 
-[中文](./README_zh.md) | English
+## Features
 
-</div>
+- Open and save `.md`, `.markdown`, `.html`, `.htm`, and read-only `.docx` files.
+- Typora-like WYSIWYG Markdown editing powered by Vditor, with CodeMirror source mode fallback.
+- Floating table of contents with click-to-jump navigation.
+- Word paper preview and `.docx` export.
+- HTML preview/export with rich-text clipboard output for external editors.
+- Theme, font, encoding, language, preview width, and auto-save settings.
+- Integrated terminal panel with tabs, resize, copy, paste, clear, and selectable shell.
+- Windows and macOS desktop builds via Tauri.
 
+## Development
 
----
+Prerequisites:
 
-## Writing Experience
+- Node.js and npm
+- Rust stable toolchain
+- Tauri platform prerequisites for Windows/macOS
 
-- **WYSIWYG** — Write Markdown without learning syntax, like Notion
-- **Slash commands** — Type `/` to quickly insert headings, lists, tables, code blocks, diagrams
-- **Selection formatting** — Select text to show formatting toolbar (bold, italic, strikethrough, etc.)
-- **Right-click menu** — Set heading levels quickly via right-click
-- **Auto-save** — Never worry about saving again
-- **External change detection** — Automatically detects external modifications
-
----
-
-## Highlights
-
-- **Mermaid diagrams** — Insert diagrams, double-click to edit, live preview
-- **Code highlighting** — Automatically recognizes and highlights code with language labels, copy support
-- **Integrated terminal** — Run `git`, `claude`, `aider`, and other CLI tools without leaving the workspace
-- **Light/Dark theme** — One-click toggle for different lighting conditions
-- **File tree** — Clear view of workspace, support create/delete/rename
-- **Outline view** — Navigate large documents with ease
-- **Multiple tabs** — Switch between files seamlessly
-
----
-
-## Keyboard Shortcuts
-
-| Action | Shortcut |
-|--------|----------|
-| New file | `Ctrl+N` |
-| Save / Save As | `Ctrl+S` / `Ctrl+Shift+S` |
-| Toggle sidebar | `Ctrl+\` |
-| Toggle outline | `Ctrl+Shift+\` |
-| Toggle terminal / New terminal | `` Ctrl+` `` / `` Ctrl+Shift+` `` |
-| Toggle theme | `Ctrl+Shift+D` |
-| H1 / H2 / H3 | `Ctrl+1` / `Ctrl+2` / `Ctrl+3` |
-| Body text | `Ctrl+0` |
-| Bold / Italic / Strikethrough | `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+S` |
-| Link | `Ctrl+K` |
-
----
-
-## Download
-
-**Windows 10/11**
-
-| Version | Download |
-|---------|----------|
-| Portable | [下载最新版本](https://github.com/ttttstc/Typola/releases/latest) |
-
-Extract and run `Typola.exe` directly.
-
----
-
-## Build from Source
+Install dependencies:
 
 ```bash
 npm install
-npm run electron:build
 ```
 
-Built files are in the `release/` directory.
+Run the desktop app in development:
 
----
+```bash
+npm run tauri dev
+```
+
+Run frontend-only development:
+
+```bash
+npm run dev
+```
+
+Useful checks:
+
+```bash
+npm test
+npm run typecheck
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+Build a local desktop bundle:
+
+```bash
+npm run tauri:build:local
+```
 
 ## License
 
-MIT
+Typola is licensed under the Apache License 2.0.
