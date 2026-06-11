@@ -275,7 +275,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   /* Main content must keep a readable line length even when a right panel
      is open. The variable is reused by the right-panel clamp below to make
      sure the panel never claims more width than the viewport allows. */
-  --main-min-width: 480px;
+  --main-min-width: 620px;
   --main-resizer-gap: 9px;
 }
 
@@ -341,13 +341,13 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex-shrink: 1;
 }
 
-/* Below 850px (480 main + 9 resizer + 360 right panel = 849) the right
-   panel cannot co-exist with the 480px main editor floor. WordPaperPreviewPane
+/* Below 990px (620 main + 9 resizer + 360 right panel = 989) the right
+   panel cannot co-exist with the 620px main editor floor. WordPaperPreviewPane
    auto-closes itself in this range (see its useEffect) and the CSS clamp
    below uses the viewport width to make sure that any in-flight render
-   still respects the 480px main area instead of overflowing into a
+   still respects the 620px main area instead of overflowing into a
    clipped, unusable side panel. */
-@media (max-width: 860px) {
+@media (max-width: 990px) {
   .right-panel-open .word-preview-panel,
   .right-panel-open .wechat-preview-panel,
   .word-preview-open .word-preview-panel,
@@ -874,7 +874,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .wysiwyg-editor-pane .vditor-ir,
 .wysiwyg-editor-pane .vditor-wysiwyg {
   height: 100%;
-  padding: 10px clamp(24px, 7vw, 104px);
+  padding: 10px clamp(14px, 2.2vw, 32px);
   background: var(--bg);
   color: var(--fg);
   font-family: var(--reading-font-family, var(--font-reading));
