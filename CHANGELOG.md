@@ -4,9 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
+
 ### Changed
 
-- 主 WYSIWYG 编辑区改为宽版排版：Vditor 正文容器不再居中限宽，左右恢复为 80px 留白；右侧预览打开时左侧主编辑区最低宽度提升到 620px，优先保证阅读和编辑宽度。
+- 重写 README 为中英文双语文档，补充 Typola 的核心能力、安装方式、基础使用、打包命令、技术栈和产品优势说明。
+- 主 WYSIWYG 编辑区改为宽版排版：Vditor 正文容器不再居中限宽，左右留白提升到 120px；右侧预览面板默认宽度提升到 520px、最小宽度提升到 400px，优先保证阅读和编辑宽度。
 - 底部状态栏新增"状态栏路径"设置项（外观页），可选"完整路径 / 仅文件名 / 首尾保留（推荐）"三种展示策略；默认"首尾保留"模式下，长路径会自动 ellipsis 收缩到 ≤60 字符且始终保留文件名，不会再撑开状态栏。完整路径仍可通过 `title` 提示或双击复制。
 - 状态栏高度固定为 22px；状态栏文案、复制反馈与"未保存"标记同步加 `flex-shrink: 0` 避免被长路径挤压。
 - 设置页移除独立的"快捷键"Tab；快捷键信息直接合并到 Toolbar 等可交互元素的 `title` 中，覆盖打开 / 保存 / 另存为 / 源码 / Word 预览 / HTML 预览 / 设置 7 个核心按钮（`Cmd+O` / `Cmd+S` / `Cmd+Shift+S` / `Cmd+Alt+S` / `Cmd+Alt+P` / `Cmd+Alt+M` / `Cmd+,`），中 / 英 / 日三语同步。设置页导航现为通用 / 编辑器 / 预览 / 外观 / Word 导出 / HTML 导出 / 授权 / 关于 共 8 个 Tab。

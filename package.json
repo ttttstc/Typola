@@ -13,6 +13,8 @@
     "preview": "vite preview --config config/vite.config.ts",
     "tauri": "tauri",
     "tauri:build:local": "tauri build --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":false}}\"",
+    "portable:package": "node scripts/build-portable.mjs",
+    "tauri:build:portable": "npm run tauri:build:local && npm run portable:package",
     "tauri:build:update": "tauri build --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":true}}\"",
     "updater:manifest": "node scripts/create-updater-manifest.mjs"
   },

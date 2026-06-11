@@ -1,5 +1,8 @@
-# Logs
-logs
+# Dependencies and build outputs
+node_modules/
+dist/
+dist-ssr/
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,41 +10,36 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-/dist
-dist-ssr
-release*/
+# Local environment files
 *.local
+release*/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Tauri
+# Desktop build artifacts and signing keys
 src-tauri/target/
 *.key
 
-# Claude Code
+# Editor and OS metadata
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.sln
+*.suo
+*.ntvs*
+*.njsproj
+*.sw?
+
+# Local tooling state
+.claude/
+.playwright-mcp/
 .worktrees/
-.claude/*
-
-# Test artifacts
-test-results/
-
-# Astro website
-website/.astro/
-website/dist/
-
-# Local AI working context
 docs/DECISIONS.md
 docs/TASKS.md
+test-results/
 
-# Playwright MCP verification artifacts
-.playwright-mcp/
+# Claude local state
+.claude/*
+
+# Historical website build artifacts
+website/.astro/
+website/dist/

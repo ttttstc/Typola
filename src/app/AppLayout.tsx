@@ -159,7 +159,7 @@ export function AppLayout() {
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
-  const [rightPanelWidth, setRightPanelWidth] = useState(460);
+  const [rightPanelWidth, setRightPanelWidth] = useState(520);
   const [resizing, setResizing] = useState(false);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
@@ -306,7 +306,7 @@ export function AppLayout() {
       const rect = container.getBoundingClientRect();
       const maxWidth = Math.min(760, Math.round(rect.width * 0.62));
       const nextWidth = rect.right - clientX;
-      setRightPanelWidth(Math.min(maxWidth, Math.max(360, nextWidth)));
+      setRightPanelWidth(Math.min(maxWidth, Math.max(400, nextWidth)));
     };
 
     updateWidth(event.clientX);
@@ -839,12 +839,12 @@ export function AppLayout() {
             role="separator"
             aria-label={t('rightPanelResizeLabel')}
             aria-orientation="vertical"
-            aria-valuemin={360}
+            aria-valuemin={400}
             aria-valuemax={760}
             aria-valuenow={Math.round(rightPanelWidth)}
             title={t('rightPanelResizeTitle')}
             onPointerDown={handleRightPanelResizerPointerDown}
-            onDoubleClick={() => setRightPanelWidth(460)}
+            onDoubleClick={() => setRightPanelWidth(520)}
           />
         )}
         {rightPanel}

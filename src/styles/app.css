@@ -308,18 +308,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 /* Right panel width: keep the user-resized `right-panel-width` when the
    viewport is wide, but clamp it to never squeeze the main editor below
-   `--main-min-width`. We also bound it between the resizer's 360px floor and
+   `--main-min-width`. We also bound it between the resizer's 400px floor and
    the user-resized cap so the panel doesn't disappear at narrow viewports. */
 .right-panel-open .word-preview-panel,
 .right-panel-open .wechat-preview-panel,
 .word-preview-open .word-preview-panel,
 .wechat-preview-open .wechat-preview-panel {
   flex: 0 0 clamp(
-    360px,
-    var(--right-panel-width, 460px),
+    400px,
+    var(--right-panel-width, 520px),
     calc(100% - var(--main-min-width) - var(--main-resizer-gap))
   );
-  min-width: 360px;
+  min-width: 400px;
 }
 
 /* Explicit layout class for the HTML reading view. The pane is the main
@@ -341,18 +341,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex-shrink: 1;
 }
 
-/* Below 990px (620 main + 9 resizer + 360 right panel = 989) the right
+/* Below 1030px (620 main + 9 resizer + 400 right panel = 1029) the right
    panel cannot co-exist with the 620px main editor floor. WordPaperPreviewPane
    auto-closes itself in this range (see its useEffect) and the CSS clamp
    below uses the viewport width to make sure that any in-flight render
    still respects the 620px main area instead of overflowing into a
    clipped, unusable side panel. */
-@media (max-width: 990px) {
+@media (max-width: 1030px) {
   .right-panel-open .word-preview-panel,
   .right-panel-open .wechat-preview-panel,
   .word-preview-open .word-preview-panel,
   .wechat-preview-open .wechat-preview-panel {
-    flex-basis: clamp(360px, var(--right-panel-width, 460px), calc(100vw - var(--main-min-width) - var(--main-resizer-gap)));
+    flex-basis: clamp(400px, var(--right-panel-width, 520px), calc(100vw - var(--main-min-width) - var(--main-resizer-gap)));
   }
 }
 
@@ -874,7 +874,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .wysiwyg-editor-pane .vditor-ir,
 .wysiwyg-editor-pane .vditor-wysiwyg {
   height: 100%;
-  padding: 10px 80px;
+  padding: 10px 120px;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--reading-font-family, var(--font-reading));

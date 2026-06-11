@@ -413,7 +413,7 @@ export function WordPaperPreviewPane({
   const deferredSource = useDeferredValue(debouncedSource);
 
   /* ISS-150: auto-collapse the Word preview panel when the viewport is too
-     narrow to host both the 620px main editor and the 360px right panel
+     narrow to host both the 620px main editor and the 400px right panel
      together. The CSS layout (`.right-panel-open .editor-pane { min-width:
      620px }` and the right-panel `clamp()`) makes sure the main editor never
      gets squeezed below the readable line length, but if the right panel is
@@ -421,7 +421,7 @@ export function WordPaperPreviewPane({
      close this side panel — the user can still reopen it once the window
      grows back. */
   useEffect(() => {
-    const MIN_VIEWPORT = 990;
+    const MIN_VIEWPORT = 1030;
     const handleResize = () => {
       if (window.innerWidth < MIN_VIEWPORT) {
         onClose();
