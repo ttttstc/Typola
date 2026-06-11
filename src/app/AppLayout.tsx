@@ -159,7 +159,7 @@ export function AppLayout() {
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
-  const [rightPanelWidth, setRightPanelWidth] = useState(460);
+  const [rightPanelWidth, setRightPanelWidth] = useState(520);
   const [resizing, setResizing] = useState(false);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
