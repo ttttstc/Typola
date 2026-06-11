@@ -28,7 +28,10 @@ export function scheduleDelayedAutoUpdateCheck({
     if (cancelled || hasStarted()) return;
 
     markStarted();
-    void checkForAppUpdate().then((result) => {
+    const pendingCheck = checkForAppUpdate();
+    if (!pendingCheck) return;
+
+    void pendingCheck.then((result) => {
       if (!cancelled && result.status === 'available') {
         onUpdateAvailable(result);
       }

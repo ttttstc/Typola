@@ -106,7 +106,12 @@ export async function saveFileAs(file: OpenedFile): Promise<OpenedFile> {
 
   if (!path) return file;
 
-  await writeTextFile(path, file.content);
+  if (isTauriRuntime()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('write_opened_document', { path, content: file.content });
+  } else {
+    await writeTextFile(path, file.content);
+  }
   const name = fileNameFromPath(path);
 
   return { ...file, path, name, dirty: false, lastSavedContent: file.content };

@@ -22,10 +22,28 @@ describe('Tauri capabilities', () => {
 
     const csp = config.app?.security?.csp ?? '';
 
-    expect(csp).toContain("script-src 'self' 'unsafe-eval' 'unsafe-inline'");
+    expect(csp).toContain("script-src 'self' 'unsafe-eval'");
+    expect(csp).not.toContain("script-src 'self' 'unsafe-eval' 'unsafe-inline'");
     expect(csp).toContain("img-src 'self' data: file:");
     expect(csp).toContain("frame-src 'self' data: blob:");
     expect(csp).toContain("connect-src 'self'");
+  });
+
+  it('keeps filesystem access scoped to user document locations and dialog-granted paths', () => {
+    const capability = JSON.parse(
+      readFileSync(join(process.cwd(), 'src-tauri/capabilities/default.json'), 'utf8'),
+    ) as { permissions?: Array<string | { identifier?: string; allow?: string[] }> };
+
+    const permissions = capability.permissions ?? [];
+    expect(permissions).not.toContain('fs:default');
+    expect(permissions).toEqual(expect.arrayContaining([
+      'fs:allow-read-file',
+      'fs:allow-write-file',
+    ]));
+    expect(permissions).toContainEqual(expect.objectContaining({
+      identifier: 'fs:scope',
+      allow: expect.arrayContaining(['$DOCUMENT/**', '$DOWNLOAD/**', '$DESKTOP/**']),
+    }));
   });
 
   it('declares desktop file associations for documents Typola can open directly', () => {

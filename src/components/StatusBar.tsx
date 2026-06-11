@@ -4,6 +4,7 @@ import { writeText } from '../services/clipboardService';
 type StatusBarProps = {
   filePath: string;
   dirty: boolean;
+  message?: string;
 };
 
 type CopyOutcome = 'copied' | 'failed';
@@ -11,7 +12,7 @@ type CopyMarker = { path: string; outcome: CopyOutcome } | null;
 
 const COPY_FEEDBACK_RESET_MS = 1200;
 
-export function StatusBar({ filePath, dirty }: StatusBarProps) {
+export function StatusBar({ filePath, dirty, message }: StatusBarProps) {
   const hasPath = filePath.length > 0;
   const [copyMarker, setCopyMarker] = useState<CopyMarker>(null);
   const resetTimerRef = useRef<number | null>(null);
@@ -80,6 +81,7 @@ export function StatusBar({ filePath, dirty }: StatusBarProps) {
         </span>
       )}
       {dirty && <span className="status-dirty">未保存</span>}
+      {message && <span className="status-message" role="status">{message}</span>}
     </div>
   );
 }

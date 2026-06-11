@@ -4,6 +4,7 @@ import type { OpenedFile, TocItem } from '../types/document';
 import { createEmptyFile } from '../types/document';
 import {
   getExportPresetConfig,
+  clearLastOpenedPath,
   getLastOpenedPath,
   resolvePreviewFontFamily,
   resolvePreviewHeadingFontFamily,
@@ -129,6 +130,15 @@ function toUpdateErrorMessage(error: unknown): string {
   return '更新安装失败';
 }
 
+function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"], .cm-editor, .vditor'));
+}
+
+function sameDocumentPath(a: string, b: string): boolean {
+  return a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
+}
+
 export function AppLayout() {
   const settings = useSettings();
   const isTauriRuntime = '__TAURI_INTERNALS__' in window;
@@ -137,6 +147,10 @@ export function AppLayout() {
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<OpenedFile>(createEmptyFile());
+  const defaultEncodingRef = useRef(settings.defaultEncoding);
+  const autoSaveFailureRef = useRef({ key: '', count: 0, suspended: false });
+  const lastSelfWriteRef = useRef({ path: '', at: 0 });
   const [file, setFile] = useState<OpenedFile>(createEmptyFile());
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
@@ -153,6 +167,16 @@ export function AppLayout() {
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
+  const [autoSaveError, setAutoSaveError] = useState('');
+  const [diskChangeMessage, setDiskChangeMessage] = useState('');
+
+  useEffect(() => {
+    fileRef.current = file;
+  }, [file]);
+
+  useEffect(() => {
+    defaultEncodingRef.current = settings.defaultEncoding;
+  }, [settings.defaultEncoding]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -166,40 +190,47 @@ export function AppLayout() {
     void preloadSettingsPage();
   }, []);
 
-  const handleOpen = useCallback(async () => {
-    const { openFile } = await import('../services/fileService');
-    const opened = await openFile(settings.defaultEncoding);
-    if (opened) {
-      setFile(opened);
-      setToc(extractToc(opened.content));
-      if (opened.path) setLastOpenedPath(opened.path);
-      setHtmlPresentationVisible(false);
-      if (opened.fileType === 'docx') {
-        setRightPanelMode('none');
-      } else {
-        setEditorMode('wysiwyg');
-      }
-    }
-  }, [settings.defaultEncoding]);
+  const confirmDiscardDirtyFile = useCallback(() => {
+    const current = fileRef.current;
+    if (!current.dirty) return true;
+    return window.confirm(`"${current.name}" 有未保存的修改，确定放弃并打开其他文件吗？`);
+  }, []);
 
-  const handleOpenPath = useCallback(async (path: string) => {
-    const { openPath } = await import('../services/fileService');
-    const opened = await openPath(path, settings.defaultEncoding);
+  const applyOpenedFile = useCallback((opened: OpenedFile, path?: string) => {
     setFile(opened);
     setToc(opened.fileType === 'docx' ? [] : extractToc(opened.content));
-    setLastOpenedPath(path);
+    if (opened.path || path) setLastOpenedPath(opened.path ?? path ?? '');
+    setDiskChangeMessage('');
     setHtmlPresentationVisible(false);
     if (opened.fileType === 'docx') {
       setRightPanelMode('none');
     } else {
       setEditorMode('wysiwyg');
     }
-  }, [settings.defaultEncoding]);
+  }, []);
+
+  const handleOpen = useCallback(async () => {
+    if (!confirmDiscardDirtyFile()) return;
+    const { openFile } = await import('../services/fileService');
+    const opened = await openFile(defaultEncodingRef.current);
+    if (opened) applyOpenedFile(opened);
+  }, [applyOpenedFile, confirmDiscardDirtyFile]);
+
+  const handleOpenPath = useCallback(async (path: string) => {
+    if (!confirmDiscardDirtyFile()) return;
+    const { openPath } = await import('../services/fileService');
+    const opened = await openPath(path, defaultEncodingRef.current);
+    applyOpenedFile(opened, path);
+  }, [applyOpenedFile, confirmDiscardDirtyFile]);
 
   const handleSave = useCallback(async () => {
     if (file.fileType === 'docx') return;
     const { saveFile } = await import('../services/fileService');
     const updated = await saveFile(file);
+    lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+    setAutoSaveError('');
+    setDiskChangeMessage('');
     setFile(updated);
     if (updated.path) setLastOpenedPath(updated.path);
   }, [file]);
@@ -208,6 +239,10 @@ export function AppLayout() {
     if (file.fileType === 'docx') return;
     const { saveFileAs } = await import('../services/fileService');
     const updated = await saveFileAs(file);
+    lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+    setAutoSaveError('');
+    setDiskChangeMessage('');
     setFile(updated);
     if (updated.path) setLastOpenedPath(updated.path);
   }, [file]);
@@ -223,6 +258,8 @@ export function AppLayout() {
   }, [file]);
 
   const handleContentChange = useCallback((value: string) => {
+    setAutoSaveError('');
+    setDiskChangeMessage('');
     setFile(prev => ({
       ...prev,
       content: value,
@@ -326,6 +363,7 @@ export function AppLayout() {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
+      if (isEditableShortcutTarget(e.target)) return;
       if (e.key === 'o' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleOpen(); return; }
       if (e.key === 's' && e.shiftKey && !e.altKey) { e.preventDefault(); handleSaveAs(); return; }
       if (e.key === 's' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleSave(); return; }
@@ -462,6 +500,7 @@ export function AppLayout() {
       const reopen = () => {
         void handleOpenPath(lastPath).catch((e) => {
           console.warn('Failed to reopen last file:', e);
+          clearLastOpenedPath();
         });
       };
 
@@ -495,14 +534,87 @@ export function AppLayout() {
 
   useEffect(() => {
     if (!settings.autoSave || !file.path || !file.dirty || file.fileType === 'docx') return;
+    const saveKey = `${file.path}\n${file.content}`;
+    const failure = autoSaveFailureRef.current;
+    if (failure.key === saveKey && failure.suspended) return;
+
     const timeout = window.setTimeout(() => {
       void import('../services/fileService')
         .then(({ saveFile }) => saveFile(file))
-        .then((updated) => setFile(updated))
-        .catch((e) => console.error('Auto-save failed:', e));
+        .then((updated) => {
+          lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+          autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+          setAutoSaveError('');
+          setDiskChangeMessage('');
+          setFile(updated);
+        })
+        .catch((e) => {
+          const current = autoSaveFailureRef.current;
+          const count = current.key === saveKey ? current.count + 1 : 1;
+          const suspended = count >= 3;
+          autoSaveFailureRef.current = { key: saveKey, count, suspended };
+          setAutoSaveError(suspended
+            ? '自动保存失败，已暂停本次内容的自动重试，请手动保存或继续编辑后再试。'
+            : `自动保存失败（${count}/3），稍后将自动重试。`);
+          console.error('Auto-save failed:', e);
+        });
     }, 800);
     return () => window.clearTimeout(timeout);
   }, [file, settings.autoSave]);
+
+  useEffect(() => {
+    if (!isTauriRuntime || !file.path) return;
+    const watchedPath = file.path;
+    let cancelled = false;
+
+    void import('../services/documentWatchService')
+      .then(({ watchOpenedDocument, unwatchOpenedDocument }) => {
+        if (cancelled) return undefined;
+        void watchOpenedDocument(watchedPath).catch((error) => console.warn('Failed to watch document:', error));
+        return () => {
+          void unwatchOpenedDocument(watchedPath).catch((error) => console.warn('Failed to unwatch document:', error));
+        };
+      })
+      .then((cleanup) => {
+        if (cancelled) cleanup?.();
+      });
+
+    return () => {
+      cancelled = true;
+      void import('../services/documentWatchService')
+        .then(({ unwatchOpenedDocument }) => unwatchOpenedDocument(watchedPath))
+        .catch((error) => console.warn('Failed to unwatch document:', error));
+    };
+  }, [file.path, isTauriRuntime]);
+
+  useEffect(() => {
+    if (!isTauriRuntime) return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    void import('../services/documentWatchService')
+      .then(({ onFileChanged }) => onFileChanged((payload) => {
+        const current = fileRef.current;
+        if (!current.path || !sameDocumentPath(current.path, payload.path)) return;
+
+        const lastSelfWrite = lastSelfWriteRef.current;
+        if (sameDocumentPath(lastSelfWrite.path, payload.path) && Date.now() - lastSelfWrite.at < 1500) {
+          return;
+        }
+
+        setDiskChangeMessage('磁盘文件已在外部变更，请保存前确认是否需要重新打开。');
+      }))
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch((error) => console.warn('Failed to bind document watcher:', error));
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [isTauriRuntime]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -747,7 +859,7 @@ export function AppLayout() {
           onHide={() => setTerminalVisible(false)}
         />
       </Suspense>
-      <StatusBar filePath={file.path} dirty={file.dirty} />
+      <StatusBar filePath={file.path} dirty={file.dirty} message={autoSaveError || diskChangeMessage} />
       {settingsVisible && (
         <Suspense fallback={<SettingsPageFallback />}>
           <SettingsPage

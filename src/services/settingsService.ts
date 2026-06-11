@@ -255,6 +255,9 @@ const defaults: AppSettings = {
   zoomLevel: 100,
 };
 
+let settingsSnapshot: AppSettings | null = null;
+let settingsSnapshotRaw: string | null = null;
+
 function readStoredSettings(): Partial<AppSettings> {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return {};
@@ -311,6 +314,15 @@ function normalizeCustomFontName(value: unknown): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80);
+}
+
+function persistSettings(settings: AppSettings): AppSettings {
+  const raw = JSON.stringify(settings);
+  localStorage.setItem(STORAGE_KEY, raw);
+  settingsSnapshot = settings;
+  settingsSnapshotRaw = raw;
+  emitSettingsChanged(settings);
+  return settings;
 }
 
 function normalizeTerminalFontFamily(value: unknown): string {
@@ -665,7 +677,7 @@ function migrateLegacySettings(stored: Partial<AppSettings>): Partial<AppSetting
     }
 
     if (changed) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...defaults, ...next }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     }
   } catch {
     // 迁移失败不影响正常使用
@@ -674,7 +686,7 @@ function migrateLegacySettings(stored: Partial<AppSettings>): Partial<AppSetting
   if (next.fontDefaultsVersion !== FONT_DEFAULTS_VERSION) {
     Object.assign(next, migratePreviewFontSettings(next));
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...defaults, ...next }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
       // 迁移失败不影响正常使用
     }
@@ -712,7 +724,7 @@ export function getSettings(): AppSettings {
     );
     const license = normalizeLicenseState(stored.license);
 
-    return {
+    const normalized = {
       ...defaults,
       ...stored,
       locale: normalizeLocale(stored.locale),
@@ -740,13 +752,20 @@ export function getSettings(): AppSettings {
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
     };
+    settingsSnapshot = normalized;
+    settingsSnapshotRaw = localStorage.getItem(STORAGE_KEY);
+    return normalized;
   } catch {
-    return { ...defaults };
+    const fallback = { ...defaults };
+    settingsSnapshot = fallback;
+    settingsSnapshotRaw = null;
+    return fallback;
   }
 }
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
-  const current = getSettings();
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const current = settingsSnapshot && raw === settingsSnapshotRaw ? settingsSnapshot : getSettings();
   const customExportPresets = normalizeCustomExportPresets(patch.customExportPresets ?? current.customExportPresets);
   const disabledExportPresetIds = normalizeDisabledExportPresetIds(
     patch.disabledExportPresetIds ?? current.disabledExportPresetIds,
@@ -811,9 +830,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
       patch.terminalConfirmMultilinePaste ?? current.terminalConfirmMultilinePaste
     ) !== false,
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-  emitSettingsChanged(merged);
-  return merged;
+  return persistSettings(merged);
 }
 
 export function getLastOpenedPath(): string | null {

@@ -67,11 +67,22 @@ export function TerminalPanel({
   const runtimesRef = useRef(new Map<string, TerminalRuntime>());
   const termIdToLocalIdRef = useRef(new Map<number, string>());
   const terminalSettingsRef = useRef(settings);
+  const terminalOutputDecoderRef = useRef(new TextDecoder('utf-8'));
   const lastCreateRequestRef = useRef(0);
 
   useEffect(() => {
     terminalSettingsRef.current = settings;
   }, [settings]);
+
+  useEffect(() => {
+    const encoding = settings.defaultEncoding === 'UTF-8' ? 'utf-8' : settings.defaultEncoding.toLowerCase();
+    terminalOutputDecoderRef.current = new TextDecoder(encoding);
+  }, [settings.defaultEncoding]);
+
+  const decodeTerminalData = useCallback((data: number[] | Uint8Array) => {
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+    return terminalOutputDecoderRef.current.decode(bytes, { stream: true });
+  }, []);
 
   const fitRuntime = useCallback((runtime: TerminalRuntime) => {
     try {
@@ -283,7 +294,7 @@ export function TerminalPanel({
     void onTerminalData((payload) => {
       const localId = termIdToLocalIdRef.current.get(payload.termId);
       if (!localId) return;
-      runtimesRef.current.get(localId)?.terminal.write(payload.data);
+      runtimesRef.current.get(localId)?.terminal.write(decodeTerminalData(payload.data));
     }).then((unlisten) => {
       if (cancelled) unlisten();
       else unlistenData = unlisten;
@@ -307,7 +318,7 @@ export function TerminalPanel({
       unlistenData?.();
       unlistenExit?.();
     };
-  }, []);
+  }, [decodeTerminalData]);
 
   useEffect(() => () => {
     for (const runtime of runtimesRef.current.values()) {

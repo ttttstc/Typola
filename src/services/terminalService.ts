@@ -30,7 +30,7 @@ export type TerminalCreateResult = {
 
 export type TerminalDataPayload = {
   termId: number;
-  data: string;
+  data: number[] | Uint8Array;
 };
 
 export type TerminalExitPayload = {

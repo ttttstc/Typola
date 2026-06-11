@@ -127,6 +127,18 @@ describe('settingsService', () => {
     });
   });
 
+  it('serializes rapid partial settings updates against the latest in-memory snapshot', () => {
+    updateSettings({ editorFontSize: 16 });
+    updateSettings({ terminalFontSize: 15 });
+    updateSettings({ locale: 'en-US' });
+
+    expect(getSettings()).toMatchObject({
+      editorFontSize: 16,
+      terminalFontSize: 15,
+      locale: 'en-US',
+    });
+  });
+
   it('normalizes unsupported locales back to Chinese while accepting English and Japanese', () => {
     updateSettings({ locale: 'en-US' });
     expect(getSettings().locale).toBe('en-US');

@@ -23,6 +23,14 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 PR 审查发现的高严重度安全与数据风险：Tauri CSP 移除 `script-src` 的 `unsafe-inline`，文件系统能力移除 `fs:default` 并限制到常用用户文档目录 / 对话框授权路径，另存为统一走 Rust 写入校验；打开、拖入或系统传入新文件前会提示未保存内容，避免静默丢失。
+- 修复全局快捷键在 Vditor、CodeMirror、输入框等编辑焦点中抢占按键的问题；编辑区内按键会交回编辑器处理。
+- 修复终端输出在 Windows PTY 下可能因 Rust 端 `from_utf8_lossy` 提前替换字节而乱码的问题：`terminal_data` 改为传输原始字节，前端按当前默认编码流式解码；终端清屏命令现在会真正向 PTY 写入清屏控制序列。
+- 修复设置服务连续快速写入可能基于过期快照合并的问题：`updateSettings` 增加进程内最新快照与统一持久化入口，旧设置迁移不再全量展开 defaults 覆盖当前字段。
+- 修复自动保存失败时无提示并持续无限重试的问题：连续 3 次失败后暂停当前内容的自动重试，在状态栏提示，用户继续编辑或手动保存后恢复。
+- 新增当前文件外部变更监听：桌面端通过 Rust `notify` 监听已打开文件，外部编辑会在状态栏提示；保存后的 1.5 秒内同路径变更视为自写事件并忽略，避免误报。
+- 新增单实例文件打开转发：Windows / Linux 第二次启动 Typola 并传入文档路径时，会复用已有窗口并通过 `opened-paths` 打开文件，避免同一文档被多个进程分叉编辑。
+- 修复重新打开上次文件失败后路径永远保留的问题；失败一次后会清理过期 `lastOpenedPath`，下次启动不再反复尝试同一路径。
 - 修复 Markdown 文件中通过 `![](./path.webp)` 引用的本地相对路径图片（WebP / PNG / JPG / GIF 等）无法在 Vditor 编辑区、Word 纸张预览、HTML 导出预览中正常渲染的问题：新增 `localImageResolver` 服务，在 Vditor 渲染完成后自动将 `<img src="./relative">` 解析为 Tauri asset 协议 URL（`https://asset.localhost/...`），与已有的 `htmlPresentationService` 共用路径解析逻辑。`.webp` 与 `.png` / `.jpg` 表现一致。
 
 - 修复 Vditor WYSIWYG（即时渲染）模式中输入 `**foo**` 后 `**` 字符仍以蓝色 marker 持续可见、加粗看上去未生效的问题：`WysiwygEditorPane` 监听 `keydown` 钩子并在停顿 220ms 后强制清除 IR 节点的 `vditor-ir__node--expand` class，与 Vditor 自身 `blurEvent` 行为对齐；编辑过程中不打断用户，持续键入时 marker 仍可见，停顿后自动折叠。

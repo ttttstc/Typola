@@ -4,12 +4,13 @@ use std::{
   ffi::OsStr,
   io::{Read, Write},
   path::{Path, PathBuf},
-  sync::Mutex,
+  sync::{Arc, Mutex},
   thread,
 };
 
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 use tauri::Emitter;
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tauri::Emitter as _;
@@ -18,6 +19,8 @@ use tauri::Manager;
 struct OpenedPaths(Mutex<Vec<String>>);
 #[derive(Default)]
 struct TerminalStore(Mutex<TerminalRegistry>);
+#[derive(Default)]
+struct DocumentWatcherStore(Mutex<HashMap<String, RecommendedWatcher>>);
 
 #[derive(Default)]
 struct TerminalRegistry {
@@ -26,8 +29,8 @@ struct TerminalRegistry {
 }
 
 struct TerminalSession {
-  master: Box<dyn MasterPty + Send>,
-  writer: Box<dyn Write + Send>,
+  master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
+  writer: Arc<Mutex<Box<dyn Write + Send>>>,
   killer: Box<dyn ChildKiller + Send + Sync>,
 }
 
@@ -68,7 +71,7 @@ struct TerminalCreateResult {
 #[serde(rename_all = "camelCase")]
 struct TerminalDataPayload {
   term_id: u32,
-  data: String,
+  data: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -77,6 +80,12 @@ struct TerminalExitPayload {
   term_id: u32,
   exit_code: Option<i32>,
   signal: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct FileChangedPayload {
+  path: String,
 }
 
 #[tauri::command]
@@ -104,6 +113,63 @@ fn write_opened_document(path: String, content: String) -> Result<(), String> {
   }
 
   std::fs::write(&path, content).map_err(|error| format!("failed to write document: {error}"))
+}
+
+#[tauri::command]
+fn watch_opened_document(
+  app: tauri::AppHandle,
+  state: tauri::State<'_, DocumentWatcherStore>,
+  path: String,
+) -> Result<(), String> {
+  let path = PathBuf::from(path);
+  if !is_openable_document_path(&path) {
+    return Err("unsupported document type".into());
+  }
+
+  let watch_key = watch_path_key(&path);
+  let mut watchers = state.0.lock().map_err(|_| "document watcher store poisoned".to_string())?;
+  if watchers.contains_key(&watch_key) {
+    return Ok(());
+  }
+
+  let emit_app = app.clone();
+  let emit_path = watch_key.clone();
+  let watched_path = path.clone();
+  let mut watcher = RecommendedWatcher::new(
+    move |result: notify::Result<Event>| {
+      let Ok(event) = result else {
+        return;
+      };
+      if !is_document_change_event(&event.kind) {
+        return;
+      }
+      if !event.paths.is_empty()
+        && !event.paths.iter().any(|candidate| watch_path_key(candidate) == emit_path)
+      {
+        return;
+      }
+      let _ = emit_app.emit("file-changed", FileChangedPayload { path: emit_path.clone() });
+    },
+    Config::default(),
+  )
+  .map_err(|error| format!("failed to create document watcher: {error}"))?;
+
+  watcher
+    .watch(&watched_path, RecursiveMode::NonRecursive)
+    .map_err(|error| format!("failed to watch document: {error}"))?;
+  watchers.insert(watch_key, watcher);
+  Ok(())
+}
+
+#[tauri::command]
+fn unwatch_opened_document(
+  state: tauri::State<'_, DocumentWatcherStore>,
+  path: String,
+) -> Result<(), String> {
+  let watch_key = watch_path_key(Path::new(&path));
+  let mut watchers = state.0.lock().map_err(|_| "document watcher store poisoned".to_string())?;
+  watchers.remove(&watch_key);
+  Ok(())
 }
 
 #[tauri::command]
@@ -154,8 +220,8 @@ fn terminal_create(
     registry.next_id = registry.next_id.saturating_add(1).max(1);
     let term_id = registry.next_id;
     registry.sessions.insert(term_id, TerminalSession {
-      master: pair.master,
-      writer,
+      master: Arc::new(Mutex::new(pair.master)),
+      writer: Arc::new(Mutex::new(writer)),
       killer,
     });
     term_id
@@ -168,7 +234,7 @@ fn terminal_create(
       match reader.read(&mut buffer) {
         Ok(0) => break,
         Ok(count) => {
-          let data = String::from_utf8_lossy(&buffer[..count]).to_string();
+          let data = buffer[..count].to_vec();
           let _ = data_app.emit(
             "terminal_data",
             TerminalDataPayload { term_id, data },
@@ -206,16 +272,19 @@ fn terminal_write(
   state: tauri::State<'_, TerminalStore>,
   request: TerminalWriteRequest,
 ) -> Result<(), String> {
-  let mut registry = state.0.lock().map_err(|_| "terminal store poisoned".to_string())?;
-  let session = registry
-    .sessions
-    .get_mut(&request.term_id)
-    .ok_or_else(|| "terminal session not found".to_string())?;
+  let writer = {
+    let registry = state.0.lock().map_err(|_| "terminal store poisoned".to_string())?;
+    registry
+      .sessions
+      .get(&request.term_id)
+      .map(|session| Arc::clone(&session.writer))
+      .ok_or_else(|| "terminal session not found".to_string())?
+  };
 
-  session
-    .writer
+  let mut writer = writer.lock().map_err(|_| "terminal writer poisoned".to_string())?;
+  writer
     .write_all(request.data.as_bytes())
-    .and_then(|_| session.writer.flush())
+    .and_then(|_| writer.flush())
     .map_err(|error| format!("failed to write terminal input: {error}"))
 }
 
@@ -224,39 +293,60 @@ fn terminal_resize(
   state: tauri::State<'_, TerminalStore>,
   request: TerminalResizeRequest,
 ) -> Result<(), String> {
-  let mut registry = state.0.lock().map_err(|_| "terminal store poisoned".to_string())?;
-  let session = registry
-    .sessions
-    .get_mut(&request.term_id)
-    .ok_or_else(|| "terminal session not found".to_string())?;
+  let master = {
+    let registry = state.0.lock().map_err(|_| "terminal store poisoned".to_string())?;
+    registry
+      .sessions
+      .get(&request.term_id)
+      .map(|session| Arc::clone(&session.master))
+      .ok_or_else(|| "terminal session not found".to_string())?
+  };
 
-  session
-    .master
+  let resize_result = master
+    .lock()
+    .map_err(|_| "terminal pty poisoned".to_string())?
     .resize(PtySize {
       rows: request.rows.max(4),
       cols: request.cols.max(20),
       pixel_width: 0,
       pixel_height: 0,
-    })
-    .map_err(|error| format!("failed to resize terminal: {error}"))
+    });
+
+  resize_result.map_err(|error| format!("failed to resize terminal: {error}"))
 }
 
 #[tauri::command]
 fn terminal_kill(state: tauri::State<'_, TerminalStore>, term_id: u32) -> Result<(), String> {
-  let mut registry = state.0.lock().map_err(|_| "terminal store poisoned".to_string())?;
-  let Some(mut session) = registry.sessions.remove(&term_id) else {
-    return Ok(());
+  let session = {
+    let mut registry = state.0.lock().map_err(|_| "terminal store poisoned".to_string())?;
+    registry.sessions.remove(&term_id)
+  };
+  if let Some(mut session) = session {
+    session
+      .killer
+      .kill()
+      .map_err(|error| format!("failed to kill terminal: {error}"))?;
   };
 
-  session
-    .killer
-    .kill()
-    .map_err(|error| format!("failed to kill terminal: {error}"))
+  Ok(())
 }
 
 #[tauri::command]
-fn terminal_clear(_state: tauri::State<'_, TerminalStore>, _term_id: u32) -> Result<(), String> {
-  Ok(())
+fn terminal_clear(state: tauri::State<'_, TerminalStore>, term_id: u32) -> Result<(), String> {
+  let writer = {
+    let registry = state.0.lock().map_err(|_| "terminal store poisoned".to_string())?;
+    registry
+      .sessions
+      .get(&term_id)
+      .map(|session| Arc::clone(&session.writer))
+      .ok_or_else(|| "terminal session not found".to_string())?
+  };
+
+  let mut writer = writer.lock().map_err(|_| "terminal writer poisoned".to_string())?;
+  writer
+    .write_all(b"\x1b[3J\x1b[2J\x1b[H")
+    .and_then(|_| writer.flush())
+    .map_err(|error| format!("failed to clear terminal: {error}"))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -264,6 +354,28 @@ pub fn run() {
   tauri::Builder::default()
     .manage(OpenedPaths(Mutex::new(collect_initial_open_paths())))
     .manage(TerminalStore::default())
+    .manage(DocumentWatcherStore::default())
+    .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+      let paths = opened_paths_from_args(args, &cwd);
+      if paths.is_empty() {
+        return;
+      }
+
+      app
+        .state::<OpenedPaths>()
+        .0
+        .lock()
+        .unwrap()
+        .extend(paths.clone());
+
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+      }
+
+      let _ = app.emit("opened-paths", paths);
+    }))
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_process::init())
@@ -272,6 +384,8 @@ pub fn run() {
       pending_opened_paths,
       read_opened_document,
       write_opened_document,
+      watch_opened_document,
+      unwatch_opened_document,
       terminal_create,
       terminal_write,
       terminal_resize,
@@ -323,6 +437,21 @@ fn collect_initial_open_paths() -> Vec<String> {
     .collect()
 }
 
+fn opened_paths_from_args(args: Vec<String>, cwd: &str) -> Vec<String> {
+  args
+    .into_iter()
+    .filter_map(|arg| {
+      let path = PathBuf::from(&arg);
+      let path = if path.is_absolute() {
+        path
+      } else {
+        PathBuf::from(cwd).join(path)
+      };
+      openable_path_to_string(path)
+    })
+    .collect()
+}
+
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 fn opened_paths_from_urls(urls: Vec<tauri::Url>) -> Vec<String> {
   urls
@@ -343,6 +472,18 @@ fn openable_path_to_string(path: PathBuf) -> Option<String> {
   }
 
   path.into_os_string().into_string().ok()
+}
+
+fn watch_path_key(path: &Path) -> String {
+  path
+    .canonicalize()
+    .unwrap_or_else(|_| path.to_path_buf())
+    .to_string_lossy()
+    .to_string()
+}
+
+fn is_document_change_event(kind: &EventKind) -> bool {
+  matches!(kind, EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_))
 }
 
 fn is_openable_document_path(path: &Path) -> bool {
@@ -501,5 +642,23 @@ mod tests {
     let shell = resolve_terminal_shell(Some("custom-shell")).unwrap();
 
     assert_eq!(shell, "custom-shell");
+  }
+
+  #[test]
+  fn opened_paths_from_args_filters_supported_documents() {
+    let cwd = std::env::temp_dir();
+    let paths = opened_paths_from_args(
+      vec![
+        "typola.exe".into(),
+        "notes.md".into(),
+        "secret.txt".into(),
+        cwd.join("page.html").to_string_lossy().to_string(),
+      ],
+      cwd.to_string_lossy().as_ref(),
+    );
+
+    assert_eq!(paths.len(), 2);
+    assert!(paths.iter().any(|path| path.ends_with("notes.md")));
+    assert!(paths.iter().any(|path| path.ends_with("page.html")));
   }
 }
