@@ -874,7 +874,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .wysiwyg-editor-pane .vditor-ir,
 .wysiwyg-editor-pane .vditor-wysiwyg {
   height: 100%;
-  padding: 10px 12px;
+  padding: 10px 80px;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--reading-font-family, var(--font-reading));
@@ -895,7 +895,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   margin: 0 !important;
   padding: 0 !important;
   box-sizing: border-box;
-  overflow: visible;
+  overflow: auto;
 }
 
 .wysiwyg-editor-pane .vditor-reset p,
