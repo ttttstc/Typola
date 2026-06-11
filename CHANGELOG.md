@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
+
 ### Changed
 
 - 主 WYSIWYG 编辑区改为宽版排版：Vditor 正文容器不再居中限宽，左右留白提升到 120px；右侧预览面板默认宽度提升到 520px、最小宽度提升到 400px，优先保证阅读和编辑宽度。

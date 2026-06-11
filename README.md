@@ -56,6 +56,18 @@ Build a local desktop bundle:
 npm run tauri:build:local
 ```
 
+Build a local portable package:
+
+```bash
+npm run tauri:build:portable
+```
+
+Packaging outputs:
+
+- Windows installer: `src-tauri/target/release/bundle/msi/*.msi` and `src-tauri/target/release/bundle/nsis/*-setup.exe`
+- Windows portable: `src-tauri/target/release/bundle/portable/*_windows-x64_portable.zip`
+- macOS portable: `src-tauri/target/<target-triple>/release/bundle/portable/*_macos-*_portable.zip`
+
 ## License
 
 Typola is licensed under the Apache License 2.0.

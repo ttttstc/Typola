@@ -42,3 +42,10 @@ The terminal is implemented with Tauri commands plus event streaming:
 - Auto-save exists as a setting but defaults to off.
 - Custom Word and HTML export presets are open by default with an 8-slot cap.
 - Legal-industry-only UX, beta authorization UI, and complex-table original-view workflows are not part of the rewritten product.
+
+## Packaging
+
+- Installer builds continue to use `tauri build` and produce Windows `MSI` plus `NSIS` setup packages from `src-tauri/target/release/bundle/`.
+- Portable builds are produced by `scripts/build-portable.mjs`.
+- On Windows, the portable packager copies `typola.exe` plus a small runtime note into a staging folder and emits `bundle/portable/*_windows-x64_portable.zip`.
+- On macOS, the portable packager zips the generated `.app` bundle into `bundle/portable/*_macos-*_portable.zip`.
