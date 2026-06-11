@@ -874,7 +874,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .wysiwyg-editor-pane .vditor-ir,
 .wysiwyg-editor-pane .vditor-wysiwyg {
   height: 100%;
-  padding: 10px clamp(14px, 2.2vw, 32px);
+  padding: 10px 12px;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--reading-font-family, var(--font-reading));
@@ -884,6 +884,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .wysiwyg-editor-pane .vditor-reset {
   font-family: var(--reading-font-family, var(--font-reading));
+}
+
+.wysiwyg-editor-pane .vditor-ir > .vditor-reset,
+.wysiwyg-editor-pane .vditor-wysiwyg > .vditor-reset,
+.wysiwyg-editor-pane .vditor-ir > pre.vditor-reset,
+.wysiwyg-editor-pane .vditor-wysiwyg > pre.vditor-reset {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .wysiwyg-editor-pane .vditor-reset p,
