@@ -92,10 +92,10 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  background: var(--bg);
 }
 
 /* ===== Title Bar (Toolbar) ===== */
-/* Transparent background — blends into content area */
 
 .app-toolbar {
   position: relative;
@@ -103,7 +103,7 @@ html, body, #root {
   align-items: center;
   height: 44px;
   padding: 0 14px 0 18px;
-  background: transparent;
+  background: var(--bg);
   border-bottom: none;
   flex-shrink: 0;
   -webkit-user-select: none;
@@ -235,8 +235,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   min-width: 0;
   max-width: 100%;
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 13px;
+  color: color-mix(in oklch, var(--fg) 72%, var(--muted));
   white-space: nowrap;
   overflow: hidden;
   opacity: 0;
@@ -308,18 +308,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 /* Right panel width: keep the user-resized `right-panel-width` when the
    viewport is wide, but clamp it to never squeeze the main editor below
-   `--main-min-width`. We also bound it between the resizer's 400px floor and
-   the user-resized cap so the panel doesn't disappear at narrow viewports. */
+   `--main-min-width`. By default the right panel takes one third of the
+   available width, leaving the editor and preview at a 2:1 ratio. */
 .right-panel-open .word-preview-panel,
 .right-panel-open .wechat-preview-panel,
 .word-preview-open .word-preview-panel,
 .wechat-preview-open .wechat-preview-panel {
   flex: 0 0 clamp(
-    400px,
-    var(--right-panel-width, 520px),
+    320px,
+    var(--right-panel-width, calc((100% - var(--main-resizer-gap)) / 3)),
     calc(100% - var(--main-min-width) - var(--main-resizer-gap))
   );
-  min-width: 400px;
+  min-width: 320px;
 }
 
 /* Explicit layout class for the HTML reading view. The pane is the main
@@ -341,18 +341,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex-shrink: 1;
 }
 
-/* Below 1030px (620 main + 9 resizer + 400 right panel = 1029) the right
+/* Below 950px (620 main + 9 resizer + 320 right panel = 949) the right
    panel cannot co-exist with the 620px main editor floor. WordPaperPreviewPane
    auto-closes itself in this range (see its useEffect) and the CSS clamp
    below uses the viewport width to make sure that any in-flight render
    still respects the 620px main area instead of overflowing into a
    clipped, unusable side panel. */
-@media (max-width: 1030px) {
+@media (max-width: 950px) {
   .right-panel-open .word-preview-panel,
   .right-panel-open .wechat-preview-panel,
   .word-preview-open .word-preview-panel,
   .wechat-preview-open .wechat-preview-panel {
-    flex-basis: clamp(400px, var(--right-panel-width, 520px), calc(100vw - var(--main-min-width) - var(--main-resizer-gap)));
+    flex-basis: clamp(320px, var(--right-panel-width, calc((100vw - var(--main-resizer-gap)) / 3)), calc(100vw - var(--main-min-width) - var(--main-resizer-gap)));
   }
 }
 
@@ -1896,6 +1896,233 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .status-dirty {
   color: var(--accent);
   font-weight: 500;
+}
+
+.status-message,
+.status-stats,
+.status-copy-feedback {
+  flex-shrink: 0;
+}
+
+.status-stats {
+  margin-left: auto;
+  color: color-mix(in oklch, var(--muted) 78%, transparent);
+}
+
+/* ===== Find / Quick Open / Edit Assist ===== */
+
+.find-panel {
+  position: fixed;
+  top: 54px;
+  right: 18px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: min(760px, calc(100vw - 36px));
+  padding: 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  box-shadow: 0 10px 28px var(--paper-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.find-input,
+.quick-open-input,
+.edit-assist-section input {
+  height: 30px;
+  min-width: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 0 9px;
+}
+
+.find-input {
+  flex: 1 1 180px;
+  width: 180px;
+}
+
+.find-count {
+  min-width: 46px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+.find-panel button,
+.edit-assist-panel button {
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: var(--control-bg);
+  color: var(--fg);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.find-panel button:hover,
+.edit-assist-panel button:hover {
+  background: var(--control-hover-bg);
+  border-color: var(--border-hover);
+}
+
+.find-panel button.active {
+  color: var(--accent);
+  background: var(--control-active-bg);
+  border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+
+.find-panel button:disabled,
+.edit-assist-panel button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.quick-open-overlay,
+.edit-assist-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  background: color-mix(in oklch, var(--overlay-bg) 64%, transparent);
+}
+
+.quick-open-overlay {
+  align-items: flex-start;
+  padding-top: 74px;
+}
+
+.quick-open-panel {
+  width: min(640px, calc(100vw - 48px));
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 18px 48px var(--shadow-soft);
+  backdrop-filter: blur(16px);
+}
+
+.quick-open-input {
+  width: calc(100% - 20px);
+  margin: 10px;
+  height: 38px;
+  font-size: 15px;
+}
+
+.quick-open-list {
+  max-height: min(420px, calc(100vh - 170px));
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+
+.quick-open-item {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-open-item.active,
+.quick-open-item:hover {
+  border-color: var(--border-soft);
+  background: var(--control-hover-bg);
+}
+
+.quick-open-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quick-open-path,
+.quick-open-empty {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-open-empty {
+  padding: 18px 12px 24px;
+  text-align: center;
+}
+
+.edit-assist-overlay {
+  align-items: center;
+  padding: 24px;
+}
+
+.edit-assist-panel {
+  width: min(520px, calc(100vw - 48px));
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  box-shadow: 0 18px 48px var(--shadow-soft);
+  padding: 14px;
+  backdrop-filter: blur(16px);
+}
+
+.edit-assist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edit-assist-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.edit-assist-section label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.edit-assist-grid {
+  grid-template-columns: 86px 86px auto;
+  justify-content: start;
+}
+
+@media (max-width: 720px) {
+  .find-panel {
+    left: 12px;
+    right: 12px;
+    flex-wrap: wrap;
+  }
+
+  .find-input {
+    flex: 1 1 180px;
+  }
+
+  .edit-assist-section,
+  .edit-assist-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== Settings Overlay & Modal ===== */

@@ -7,6 +7,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/app/AppLayout.tsx` owns the document lifecycle, editor mode, preview panels, update flow, and terminal panel visibility.
 - `src/components/WysiwygEditorPane.tsx` wraps Vditor IR mode for WYSIWYG Markdown editing.
 - `src/components/EditorPane.tsx` provides CodeMirror source editing.
+- `src/components/FindReplacePanel.tsx`, `QuickOpenPanel.tsx`, and `EditAssistPanel.tsx` provide on-demand editing utilities. Their matching, recent-file, statistics, and snippet logic lives in small service modules so the main editor path stays light.
 - `src/components/WordPaperPreviewPane.tsx` and `src/services/word/*` provide Word-style preview and `.docx` export.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
@@ -22,6 +23,14 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `tauri-plugin-single-instance` forwards secondary process argv paths to the running window through the existing `opened-paths` event.
 - The active file is watched by Rust `notify` through `watch_opened_document` / `unwatch_opened_document`. External changes emit `file-changed`; the frontend suppresses events that arrive within 1.5s of a known self-write.
 - If reopen-last-file fails, the stale path is cleared so the next launch does not retry a permanently missing document.
+- Recently opened files are stored as lightweight local metadata in `localStorage` and filtered in memory for `Cmd/Ctrl+P`; Typola does not scan the filesystem or workspace during quick open.
+- Pasted clipboard images are written through the Rust `write_attachment_file` command into a sibling `assets/` directory for the current document, returning a relative Markdown image path to the editor.
+
+## Editing Utilities
+
+- File search uses `documentSearchService` with debounced panel input. It supports plain text, regex, case-sensitive, and whole-word matching, with a hard match cap to keep very large documents responsive.
+- Document statistics use `documentStatsService` on a debounced copy of the current document, so typing does not synchronously recompute counts.
+- Source mode exposes precise CodeMirror insert and reveal operations through an editor command handle. WYSIWYG mode uses Vditor's insertion API and browser text find as a best-effort navigation path.
 
 ## Terminal
 

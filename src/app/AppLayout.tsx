@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { OpenedFile, TocItem } from '../types/document';
 import { createEmptyFile } from '../types/document';
@@ -25,7 +25,16 @@ import { translate } from '../services/i18n';
 import { Toolbar, type EditorMode } from '../components/Toolbar';
 import { StatusBar } from '../components/StatusBar';
 import { FloatingToc } from '../components/FloatingToc';
+import { FindReplacePanel } from '../components/FindReplacePanel';
+import { QuickOpenPanel } from '../components/QuickOpenPanel';
+import { EditAssistPanel } from '../components/EditAssistPanel';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
+import type { EditorCommandHandle } from '../types/editorCommands';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { calculateDocumentStats } from '../services/documentStatsService';
+import { addRecentFile, getRecentFiles, removeRecentFile, type RecentFile } from '../services/recentFilesService';
+import { createImageMarkdown, createLinkMarkdown, createTableMarkdown } from '../services/editAssistService';
+import type { SearchMatch } from '../services/documentSearchService';
 
 const EditorPane = lazy(() =>
   import('../components/EditorPane').then((module) => ({ default: module.EditorPane })),
@@ -87,6 +96,17 @@ type UpdateInstallState =
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
+const RIGHT_PANEL_MIN_WIDTH = 320;
+const RIGHT_PANEL_MAX_WIDTH = 760;
+const RIGHT_PANEL_RESIZER_GAP = 9;
+
+function imageExtensionFromMime(type: string): string {
+  if (type === 'image/jpeg') return 'jpg';
+  if (type === 'image/webp') return 'webp';
+  if (type === 'image/gif') return 'gif';
+  return 'png';
+}
+
 function SettingsPageFallback() {
   return (
     <div className="settings-overlay settings-overlay--loading" aria-hidden="true">
@@ -147,6 +167,7 @@ export function AppLayout() {
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const editorCommandRef = useRef<EditorCommandHandle | null>(null);
   const fileRef = useRef<OpenedFile>(createEmptyFile());
   const defaultEncodingRef = useRef(settings.defaultEncoding);
   const autoSaveFailureRef = useRef({ key: '', count: 0, suspended: false });
@@ -156,10 +177,15 @@ export function AppLayout() {
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
   const [activeTocIndex, setActiveTocIndex] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [findVisible, setFindVisible] = useState(false);
+  const [findFocusTarget, setFindFocusTarget] = useState<'find' | 'replace'>('find');
+  const [quickOpenVisible, setQuickOpenVisible] = useState(false);
+  const [editAssistVisible, setEditAssistVisible] = useState(false);
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
-  const [rightPanelWidth, setRightPanelWidth] = useState(520);
+  const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [resizing, setResizing] = useState(false);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
@@ -169,6 +195,12 @@ export function AppLayout() {
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
+  const [transientMessage, setTransientMessage] = useState('');
+  const debouncedStatsSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 260);
+  const documentStats = useMemo(
+    () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
+    [debouncedStatsSource, file.fileType],
+  );
 
   useEffect(() => {
     fileRef.current = file;
@@ -177,6 +209,18 @@ export function AppLayout() {
   useEffect(() => {
     defaultEncodingRef.current = settings.defaultEncoding;
   }, [settings.defaultEncoding]);
+
+  useEffect(() => {
+    const refreshRecentFiles = () => setRecentFiles(getRecentFiles());
+    window.addEventListener('typola-recent-files-changed', refreshRecentFiles);
+    return () => window.removeEventListener('typola-recent-files-changed', refreshRecentFiles);
+  }, []);
+
+  useEffect(() => {
+    if (!transientMessage) return;
+    const timeout = window.setTimeout(() => setTransientMessage(''), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [transientMessage]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -199,9 +243,15 @@ export function AppLayout() {
   const applyOpenedFile = useCallback((opened: OpenedFile, path?: string) => {
     setFile(opened);
     setToc(opened.fileType === 'docx' ? [] : extractToc(opened.content));
-    if (opened.path || path) setLastOpenedPath(opened.path ?? path ?? '');
+    const openedPath = opened.path || path || '';
+    if (openedPath) {
+      setLastOpenedPath(openedPath);
+      addRecentFile(openedPath, opened.name);
+    }
     setDiskChangeMessage('');
+    setTransientMessage('');
     setHtmlPresentationVisible(false);
+    setFindVisible(false);
     if (opened.fileType === 'docx') {
       setRightPanelMode('none');
     } else {
@@ -219,8 +269,14 @@ export function AppLayout() {
   const handleOpenPath = useCallback(async (path: string) => {
     if (!confirmDiscardDirtyFile()) return;
     const { openPath } = await import('../services/fileService');
-    const opened = await openPath(path, defaultEncodingRef.current);
-    applyOpenedFile(opened, path);
+    try {
+      const opened = await openPath(path, defaultEncodingRef.current);
+      applyOpenedFile(opened, path);
+    } catch (error) {
+      removeRecentFile(path);
+      setTransientMessage('打开失败，已从最近文件移除。');
+      throw error;
+    }
   }, [applyOpenedFile, confirmDiscardDirtyFile]);
 
   const handleSave = useCallback(async () => {
@@ -260,12 +316,44 @@ export function AppLayout() {
   const handleContentChange = useCallback((value: string) => {
     setAutoSaveError('');
     setDiskChangeMessage('');
+    setTransientMessage('');
     setFile(prev => ({
       ...prev,
       content: value,
       dirty: value !== prev.lastSavedContent,
     }));
     setToc(extractToc(value));
+  }, []);
+
+  const replaceCurrentContent = useCallback((value: string) => {
+    handleContentChange(value);
+    editorCommandRef.current?.focus();
+  }, [handleContentChange]);
+
+  const handleSearchNavigate = useCallback((match: SearchMatch, query: string, backwards = false) => {
+    if (editorMode === 'source') {
+      editorCommandRef.current?.revealRange(match.index, match.index + match.length);
+      return;
+    }
+    editorCommandRef.current?.revealText(query || match.text, backwards);
+  }, [editorMode]);
+
+  const insertMarkdown = useCallback((markdown: string) => {
+    if (fileRef.current.fileType === 'docx') return;
+    editorCommandRef.current?.insertText(markdown);
+  }, []);
+
+  const openFindPanel = useCallback((focusTarget: 'find' | 'replace') => {
+    setFindFocusTarget(focusTarget);
+    setFindVisible(true);
+  }, []);
+
+  const getDefaultRightPanelWidth = useCallback(() => {
+    const containerWidth = mainContentRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+    return Math.min(
+      RIGHT_PANEL_MAX_WIDTH,
+      Math.max(RIGHT_PANEL_MIN_WIDTH, Math.round((containerWidth - RIGHT_PANEL_RESIZER_GAP) / 3)),
+    );
   }, []);
 
   const handleToggleEditorMode = useCallback(() => {
@@ -277,14 +365,22 @@ export function AppLayout() {
   const handleToggleWordPreview = useCallback(() => {
     if (file.fileType === 'docx') return;
     setHtmlPresentationVisible(false);
-    setRightPanelMode((mode) => mode === 'word' ? 'none' : 'word');
-  }, [file.fileType]);
+    setRightPanelMode((mode) => {
+      if (mode === 'word') return 'none';
+      setRightPanelWidth(getDefaultRightPanelWidth());
+      return 'word';
+    });
+  }, [file.fileType, getDefaultRightPanelWidth]);
 
   const handleToggleWechatPreview = useCallback(() => {
     if (file.fileType === 'docx') return;
     setHtmlPresentationVisible(false);
-    setRightPanelMode((mode) => mode === 'wechat' ? 'none' : 'wechat');
-  }, [file.fileType]);
+    setRightPanelMode((mode) => {
+      if (mode === 'wechat') return 'none';
+      setRightPanelWidth(getDefaultRightPanelWidth());
+      return 'wechat';
+    });
+  }, [file.fileType, getDefaultRightPanelWidth]);
 
   const handleToggleTerminal = useCallback(() => {
     setTerminalVisible((visible) => !visible);
@@ -295,6 +391,59 @@ export function AppLayout() {
     setTerminalCreateRequest((request) => request + 1);
   }, []);
 
+  const handleQuickOpenPath = useCallback((path: string) => {
+    setQuickOpenVisible(false);
+    void handleOpenPath(path).catch((error) => {
+      console.warn('Failed to quick open recent file:', error);
+    });
+  }, [handleOpenPath]);
+
+  const handlePasteImage = useCallback(async (event: ClipboardEvent) => {
+    if (fileRef.current.fileType === 'docx') return;
+    if (!fileRef.current.path) {
+      const hasImage = Array.from(event.clipboardData?.items ?? []).some((item) => item.type.startsWith('image/'));
+      if (hasImage) setTransientMessage('请先保存文档，再粘贴图片。');
+      return;
+    }
+
+    const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    const blob = imageItem.getAsFile();
+    if (!blob) return;
+
+    event.preventDefault();
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const extension = imageExtensionFromMime(blob.type);
+      const fileName = `pasted-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
+      const data = Array.from(new Uint8Array(await blob.arrayBuffer()));
+      const relativePath = await invoke<string>('write_attachment_file', {
+        request: {
+          documentPath: fileRef.current.path,
+          fileName,
+          data,
+        },
+      });
+      insertMarkdown(createImageMarkdown('图片', relativePath));
+      setTransientMessage('图片已保存到 assets。');
+    } catch (error) {
+      console.warn('Failed to paste image:', error);
+      setTransientMessage('图片粘贴失败。');
+    }
+  }, [insertMarkdown]);
+
+  useEffect(() => {
+    if (rightPanelMode === 'none') return;
+
+    const handleResize = () => {
+      setRightPanelWidth(getDefaultRightPanelWidth());
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [getDefaultRightPanelWidth, rightPanelMode]);
+
   const handleRightPanelResizerPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const container = mainContentRef.current;
     if (!container) return;
@@ -304,9 +453,9 @@ export function AppLayout() {
 
     const updateWidth = (clientX: number) => {
       const rect = container.getBoundingClientRect();
-      const maxWidth = Math.min(760, Math.round(rect.width * 0.62));
+      const maxWidth = Math.min(RIGHT_PANEL_MAX_WIDTH, Math.round(rect.width * 0.5));
       const nextWidth = rect.right - clientX;
-      setRightPanelWidth(Math.min(maxWidth, Math.max(400, nextWidth)));
+      setRightPanelWidth(Math.min(maxWidth, Math.max(RIGHT_PANEL_MIN_WIDTH, nextWidth)));
     };
 
     updateWidth(event.clientX);
@@ -363,6 +512,21 @@ export function AppLayout() {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
+      if (e.key === 'f' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        openFindPanel('find');
+        return;
+      }
+      if (e.key === 'h' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        openFindPanel('replace');
+        return;
+      }
+      if (e.key === 'p' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setQuickOpenVisible(true);
+        return;
+      }
       if (isEditableShortcutTarget(e.target)) return;
       if (e.key === 'o' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleOpen(); return; }
       if (e.key === 's' && e.shiftKey && !e.altKey) { e.preventDefault(); handleSaveAs(); return; }
@@ -373,6 +537,7 @@ export function AppLayout() {
       if (e.key === 'm' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleWechatPreview(); return; }
       if (e.code === 'Backquote' && e.shiftKey && !e.altKey) { e.preventDefault(); handleCreateTerminal(); return; }
       if (e.code === 'Backquote' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleToggleTerminal(); return; }
+      if (e.key === 'i' && e.shiftKey && !e.altKey) { e.preventDefault(); setEditAssistVisible(true); return; }
       if (e.key === ',' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         void preloadSettingsPage();
@@ -391,6 +556,7 @@ export function AppLayout() {
     handleToggleWechatPreview,
     handleToggleTerminal,
     handleCreateTerminal,
+    openFindPanel,
   ]);
 
   useEffect(() => {
@@ -411,6 +577,11 @@ export function AppLayout() {
       window.removeEventListener('drop', handler);
     };
   }, [handleOpenPath]);
+
+  useEffect(() => {
+    window.addEventListener('paste', handlePasteImage);
+    return () => window.removeEventListener('paste', handlePasteImage);
+  }, [handlePasteImage]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -735,6 +906,7 @@ export function AppLayout() {
   ) : editorMode === 'source' ? (
     <Suspense fallback={<div className="editor-pane lazy-pane"><span>源码编辑器加载中</span></div>}>
       <EditorPane
+        ref={editorCommandRef}
         source={file.content}
         onChange={handleContentChange}
         headingScrollRequest={sourceHeadingScrollRequest}
@@ -750,7 +922,12 @@ export function AppLayout() {
     </Suspense>
   ) : (
     <Suspense fallback={<div className="wysiwyg-editor-pane lazy-pane"><span>所见即所得编辑器加载中</span></div>}>
-      <WysiwygEditorPane source={file.content} onChange={handleContentChange} filePath={file.path} />
+      <WysiwygEditorPane
+        ref={editorCommandRef}
+        source={file.content}
+        onChange={handleContentChange}
+        filePath={file.path}
+      />
     </Suspense>
   );
 
@@ -806,6 +983,7 @@ export function AppLayout() {
         onOpen={handleOpen}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
+        onOpenEditAssist={() => setEditAssistVisible(true)}
         onOpenSettings={() => {
           void preloadSettingsPage();
           setSettingsVisible(true);
@@ -839,12 +1017,12 @@ export function AppLayout() {
             role="separator"
             aria-label={t('rightPanelResizeLabel')}
             aria-orientation="vertical"
-            aria-valuemin={400}
+            aria-valuemin={320}
             aria-valuemax={760}
             aria-valuenow={Math.round(rightPanelWidth)}
             title={t('rightPanelResizeTitle')}
             onPointerDown={handleRightPanelResizerPointerDown}
-            onDoubleClick={() => setRightPanelWidth(520)}
+            onDoubleClick={() => setRightPanelWidth(getDefaultRightPanelWidth())}
           />
         )}
         {rightPanel}
@@ -859,7 +1037,35 @@ export function AppLayout() {
           onHide={() => setTerminalVisible(false)}
         />
       </Suspense>
-      <StatusBar filePath={file.path} dirty={file.dirty} message={autoSaveError || diskChangeMessage} />
+      <StatusBar
+        filePath={file.path}
+        dirty={file.dirty}
+        message={autoSaveError || diskChangeMessage || transientMessage}
+        stats={documentStats}
+      />
+      <FindReplacePanel
+        visible={findVisible}
+        focusTarget={findFocusTarget}
+        source={file.content}
+        readOnly={isDocx}
+        onClose={() => setFindVisible(false)}
+        onReplaceSource={replaceCurrentContent}
+        onNavigate={handleSearchNavigate}
+      />
+      <QuickOpenPanel
+        visible={quickOpenVisible}
+        files={recentFiles}
+        onClose={() => setQuickOpenVisible(false)}
+        onOpen={handleQuickOpenPath}
+      />
+      <EditAssistPanel
+        visible={editAssistVisible}
+        readOnly={isDocx}
+        onClose={() => setEditAssistVisible(false)}
+        onInsertLink={(label, url) => insertMarkdown(createLinkMarkdown(label, url))}
+        onInsertImage={(alt, path) => insertMarkdown(createImageMarkdown(alt, path))}
+        onInsertTable={(rows, columns) => insertMarkdown(`\n${createTableMarkdown(rows, columns)}\n`)}
+      />
       {settingsVisible && (
         <Suspense fallback={<SettingsPageFallback />}>
           <SettingsPage

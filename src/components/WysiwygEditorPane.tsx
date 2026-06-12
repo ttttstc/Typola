@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import { resolveLocalImages } from '../services/localImageResolver';
+import type { EditorCommandHandle } from '../types/editorCommands';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -26,7 +27,22 @@ function collapseExpandedMarkers(editor: import('vditor').default | null): void 
   });
 }
 
-export function WysiwygEditorPane({ source, onChange, filePath }: WysiwygEditorPaneProps) {
+type WindowWithFind = Window & {
+  find?: (
+    text: string,
+    caseSensitive?: boolean,
+    backwards?: boolean,
+    wrapAround?: boolean,
+    wholeWord?: boolean,
+    searchInFrames?: boolean,
+    showDialog?: boolean,
+  ) => boolean;
+};
+
+export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
+  { source, onChange, filePath },
+  ref,
+) {
   const settings = useSettings();
   const t = useCallback(
     (key: Parameters<typeof translate>[1]) => translate(settings.locale, key),
@@ -151,9 +167,31 @@ export function WysiwygEditorPane({ source, onChange, filePath }: WysiwygEditorP
     });
   }, [source]);
 
+  useImperativeHandle(ref, () => ({
+    focus() {
+      editorRef.current?.focus();
+    },
+    insertText(text: string) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      editor.insertValue(text, true);
+      onChange(editor.getValue());
+    },
+    revealRange() {
+      editorRef.current?.focus();
+    },
+    revealText(text: string, backwards = false) {
+      editorRef.current?.focus();
+      const find = (window as WindowWithFind).find;
+      if (!text || typeof find !== 'function') return;
+      find(text, false, backwards, true, false, false, false);
+    },
+  }), [onChange]);
+
   return (
     <div className="wysiwyg-editor-pane" aria-label="即时渲染编辑器">
       <div ref={hostRef} className="wysiwyg-editor-host" />
     </div>
   );
-}
+});
