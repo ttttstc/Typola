@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { useSettings } from '../hooks/useSettings';
+import type { EditorCommandHandle } from '../types/editorCommands';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -29,7 +30,10 @@ function findHeadingPosition(source: string, targetIndex: number): number | null
   return null;
 }
 
-export function EditorPane({ source, onChange, headingScrollRequest }: EditorPaneProps) {
+export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(function EditorPane(
+  { source, onChange, headingScrollRequest },
+  ref,
+) {
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
@@ -80,6 +84,32 @@ export function EditorPane({ source, onChange, headingScrollRequest }: EditorPan
     });
   }, [editorView, headingScrollRequest, source]);
 
+  useImperativeHandle(ref, () => ({
+    focus() {
+      editorView?.focus();
+    },
+    insertText(text: string) {
+      if (!editorView) return;
+      const selection = editorView.state.selection.main;
+      editorView.dispatch({
+        changes: { from: selection.from, to: selection.to, insert: text },
+        selection: { anchor: selection.from + text.length },
+      });
+      editorView.focus();
+    },
+    revealRange(from: number, to: number) {
+      if (!editorView) return;
+      editorView.dispatch({
+        effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
+        selection: { anchor: from, head: to },
+      });
+      editorView.focus();
+    },
+    revealText() {
+      editorView?.focus();
+    },
+  }), [editorView]);
+
   return (
     <div className="editor-pane">
       <CodeMirror
@@ -98,4 +128,4 @@ export function EditorPane({ source, onChange, headingScrollRequest }: EditorPan
       />
     </div>
   );
-}
+});

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { writeText } from '../services/clipboardService';
+import type { DocumentStats } from '../services/documentStatsService';
 
 type StatusBarProps = {
   filePath: string;
   dirty: boolean;
   message?: string;
+  stats?: DocumentStats;
 };
 
 type CopyOutcome = 'copied' | 'failed';
@@ -12,7 +14,7 @@ type CopyMarker = { path: string; outcome: CopyOutcome } | null;
 
 const COPY_FEEDBACK_RESET_MS = 1200;
 
-export function StatusBar({ filePath, dirty, message }: StatusBarProps) {
+export function StatusBar({ filePath, dirty, message, stats }: StatusBarProps) {
   const hasPath = filePath.length > 0;
   const [copyMarker, setCopyMarker] = useState<CopyMarker>(null);
   const resetTimerRef = useRef<number | null>(null);
@@ -82,6 +84,11 @@ export function StatusBar({ filePath, dirty, message }: StatusBarProps) {
       )}
       {dirty && <span className="status-dirty">未保存</span>}
       {message && <span className="status-message" role="status">{message}</span>}
+      {stats && (
+        <span className="status-stats" title={`字符 ${stats.characters} · 段落 ${stats.paragraphs}`}>
+          {stats.words} 词 · {stats.readingMinutes} 分钟
+        </span>
+      )}
     </div>
   );
 }

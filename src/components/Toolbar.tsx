@@ -7,6 +7,7 @@ import {
   Save,
   SaveAll,
   SlidersHorizontal,
+  WandSparkles,
   Terminal,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -36,6 +37,7 @@ type ToolbarProps = {
   onOpen: () => void;
   onSave: () => void;
   onSaveAs: () => void;
+  onOpenEditAssist: () => void;
   onOpenSettings: () => void;
   onPreloadSettings?: () => void;
   updateStatus?: UpdateToolbarStatus;
@@ -45,7 +47,7 @@ type ToolbarProps = {
 export function Toolbar({
   dirty, fileName,
   editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
-  onToggleTerminal, onOpen, onSave, onSaveAs, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  onToggleTerminal, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -155,6 +157,15 @@ export function Toolbar({
             aria-label={t('toolbarTerminalLabel')}
           >
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+          <button
+            onClick={onOpenEditAssist}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+            title="编辑辅助"
+            aria-label="编辑辅助"
+          >
+            <WandSparkles size={iconSize} strokeWidth={strokeWidth} />
           </button>
         </div>
         <div className="toolbar-group toolbar-navigation-actions" aria-label={t('toolbarNavGroup')}>
