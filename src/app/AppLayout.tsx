@@ -323,6 +323,10 @@ export function AppLayout() {
     if (opened) applyOpenedFile(opened);
   }, [applyOpenedFile]);
 
+  const handleNewFile = useCallback(() => {
+    applyOpenedFile(createEmptyFile());
+  }, [applyOpenedFile]);
+
   const handleOpenPath = useCallback(async (path: string) => {
     const { openPath } = await import('../services/fileService');
     try {
@@ -750,6 +754,7 @@ export function AppLayout() {
       if (e.key === 's' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleSave(); return; }
       if (isEditableShortcutTarget(e.target)) return;
       if (e.key === 'o' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleOpen(); return; }
+      if (e.key === 'n' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleNewFile(); return; }
       if (e.key === 'e' && e.shiftKey && !e.altKey) { e.preventDefault(); handleExportWord(); return; }
       if (e.key === 's' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleEditorMode(); return; }
       if (e.key === 'p' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleWordPreview(); return; }
@@ -767,6 +772,7 @@ export function AppLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [
     handleOpen,
+    handleNewFile,
     handleSave,
     handleSaveAs,
     handleExportWord,
@@ -1238,6 +1244,7 @@ export function AppLayout() {
         onToggleWordPreview={handleToggleWordPreview}
         onToggleWechatPreview={handleToggleWechatPreview}
         onToggleTerminal={handleToggleTerminal}
+        onNew={handleNewFile}
         onOpen={handleOpen}
         onSave={handleSave}
         onSaveAs={handleSaveAs}

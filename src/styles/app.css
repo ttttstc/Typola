@@ -3930,3 +3930,88 @@ html[data-theme='dark'] .terminal-session {
   padding: 0;
   margin-left: 16px;
 }
+
+/* ===== Vditor IR Code Block (single-view + editing indicator) ===== */
+
+/* Vditor IR 默认会同时渲染源码 pre(.vditor-ir__marker--pre)和高亮预览 pre
+   (.vditor-ir__preview),导致代码块出现两段一样的内容。隐藏预览 pre,
+   只保留可编辑源码,避免视觉重复。 */
+.vditor-ir [data-type="code-block"] > pre.vditor-ir__preview {
+  display: none !important;
+}
+
+/* 代码块容器:始终有轻边框,聚焦时显性突出 */
+.vditor-ir [data-type="code-block"] {
+  position: relative;
+  margin: 12px 0;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 90%, var(--bg));
+  border: 1px solid var(--border-soft);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.vditor-ir [data-type="code-block"]:focus-within {
+  border-color: color-mix(in oklch, var(--accent) 58%, transparent);
+  background: color-mix(in oklch, var(--accent) 6%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 14%, transparent);
+}
+
+/* 源码 pre 紧贴容器边框,边距清爽 */
+.vditor-ir [data-type="code-block"] > pre.vditor-ir__marker--pre {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* ===== Toolbar custom tooltip ===== */
+
+.app-toolbar button[data-tooltip] {
+  position: relative;
+}
+
+.app-toolbar button[data-tooltip]::after,
+.app-toolbar button[data-tooltip]::before {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -2px);
+  transition: opacity 120ms ease 350ms, transform 120ms ease 350ms;
+  z-index: 200;
+}
+
+.app-toolbar button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--fg) 92%, transparent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--shadow-soft) 60%, transparent);
+}
+
+.app-toolbar button[data-tooltip]::before {
+  content: '';
+  top: calc(100% + 1px);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid color-mix(in oklch, var(--fg) 92%, transparent);
+}
+
+.app-toolbar button[data-tooltip]:hover:not(:disabled)::after,
+.app-toolbar button[data-tooltip]:hover:not(:disabled)::before,
+.app-toolbar button[data-tooltip]:focus-visible::after,
+.app-toolbar button[data-tooltip]:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.app-toolbar button[data-tooltip]:disabled::after,
+.app-toolbar button[data-tooltip]:disabled::before {
+  display: none;
+}
