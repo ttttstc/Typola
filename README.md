@@ -9,11 +9,18 @@ English documentation is available below: [English](#typola-english).
 - 所见即所得 Markdown 编辑：基于 Vditor IR 模式，写作时保留 Markdown 的可控性，阅读时接近排版后的成稿效果。
 - 源码模式：基于 CodeMirror 6，适合处理复杂 Markdown、HTML 片段、表格和精确修改。
 - 文件打开与保存：支持 `.md`、`.markdown`、`.html`、`.htm`，并支持只读预览 `.docx`。
+- 多文件 tab：从文件树、最近文件、系统打开或拖拽打开多个文档时自动建立 tab，未保存 tab 文件名前显示 `*`，只打开单文件时自动隐藏 tab 栏。
+- 左侧文件树：按需打开一个工作目录，支持展开/折叠子目录，从文件树直接打开支持的文档，未保存文件会有 `*` 标记。
 - Word 纸张预览：右侧按需打开 A4 纸张预览，支持多页展示和 `.docx` 导出。
 - HTML 预览与导出：支持文章级 HTML 预览、导出 HTML，并可复制富文本 HTML 到外部编辑器。
+- 编辑器与预览同步滚动：编辑器滚动时右侧 Word / HTML 预览按比例单向同步，零额外重渲染。
 - 浮动大纲：自动提取标题，支持轻量悬浮查看、固定到侧栏和点击跳转。
+- 查找替换与快速打开：`Cmd/Ctrl+F` 与 `Cmd/Ctrl+H` 一个面板同时覆盖查找与替换，支持大小写 / 全词 / 正则；`Cmd/Ctrl+P` 按文件名或路径片段快速过滤打开最近文件。
+- 编辑辅助：一键插入链接 / 图片 / Markdown 表格；粘贴剪贴板图片会异步保存到当前文档同级 `assets/` 并插入相对路径。
+- 文档统计：状态栏延迟计算词数、字符数、段落数和预计阅读时间，输入时不阻塞。
 - 集成终端：底部多标签终端，支持复制、粘贴、清屏、链接打开、自定义 shell 和文件所在目录启动。
 - 本地图片解析：Markdown 中的相对路径图片可在编辑区、预览和导出链路中正常显示。
+- 数据安全：tab 关闭与窗口关闭命中未保存改动时弹出「保存 / 不保存 / 取消」三按钮确认；外部文件变更监听会在状态栏提示。
 - 设置与主题：支持主题、字体、编码、语言、自动保存、自动更新检查、Word/HTML 预设等配置。
 - 桌面原生能力：支持系统文件关联、拖拽打开、单实例打开转发、外部文件变更提示和自动更新。
 
@@ -69,6 +76,10 @@ Windows 仍需要系统中可用的 Microsoft Edge WebView2 Runtime。现代 Win
 - `Cmd/Ctrl + O`：打开文件
 - `Cmd/Ctrl + S`：保存
 - `Cmd/Ctrl + Shift + S`：另存为
+- `Cmd/Ctrl + F`：查找
+- `Cmd/Ctrl + H`：替换
+- `Cmd/Ctrl + P`：快速打开
+- `Cmd/Ctrl + Shift + I`：编辑辅助
 - `Cmd/Ctrl + Alt + S`：切换源码模式
 - `Cmd/Ctrl + Alt + P`：切换 Word 预览
 - `Cmd/Ctrl + Alt + M`：切换 HTML 预览
@@ -169,11 +180,18 @@ Typola is a lightweight, focused, cross-platform desktop Markdown editor. It is 
 - WYSIWYG Markdown editing: powered by Vditor IR mode, balancing Markdown control with a clean reading-like surface.
 - Source mode: powered by CodeMirror 6 for precise Markdown, HTML, and table edits.
 - File open and save: supports `.md`, `.markdown`, `.html`, `.htm`, and read-only `.docx` preview.
+- Multi-file tabs: opening multiple documents from the file tree, recents, OS file association, or drag-and-drop creates lightweight tabs; dirty tabs show a leading `*`, and the tab bar hides automatically when only one file is open.
+- Left workspace file tree: open a directory, lazily expand subfolders, and open supported documents straight from the tree; dirty files are marked with `*`.
 - Word paper preview: open an A4-style preview panel on demand, inspect multi-page output, and export `.docx`.
 - HTML preview and export: preview article-style HTML, export full HTML, and copy rich HTML for external editors.
+- Editor-to-preview scroll sync: editor scroll position drives Word / HTML preview by ratio (one-way, rAF-throttled, no extra re-render).
 - Floating outline: extract headings automatically, expand the outline on hover, pin it as a sidebar, and jump to sections.
+- Find/replace and quick open: `Cmd/Ctrl+F` and `Cmd/Ctrl+H` share one panel with case / whole-word / regex options; `Cmd/Ctrl+P` filters recents by filename or path fragment.
+- Editing utilities: insert links / images / Markdown tables in one click; pasted clipboard images are saved to a sibling `assets/` folder and inserted as a relative path.
+- Document statistics: the status bar reports word count, characters, paragraphs, and estimated reading time on debounced updates so typing stays fluid.
 - Integrated terminal: multi-tab bottom terminal with copy, paste, clear, link opening, custom shell, and file-directory startup.
 - Local image resolution: relative Markdown images render correctly in the editor, previews, and export flows.
+- Data safety: closing a tab or window with unsaved changes prompts a single "Save / Discard / Cancel" dialog; external file changes surface in the status bar.
 - Preferences: configure theme, fonts, encoding, language, auto-save, update checks, and Word/HTML export presets.
 - Native desktop behavior: file associations, drag-and-drop open, single-instance forwarding, external file change notices, and auto-update support.
 
@@ -229,6 +247,10 @@ Common shortcuts:
 - `Cmd/Ctrl + O`: Open file
 - `Cmd/Ctrl + S`: Save
 - `Cmd/Ctrl + Shift + S`: Save as
+- `Cmd/Ctrl + F`: Find
+- `Cmd/Ctrl + H`: Replace
+- `Cmd/Ctrl + P`: Quick open
+- `Cmd/Ctrl + Shift + I`: Editing utilities
 - `Cmd/Ctrl + Alt + S`: Toggle source mode
 - `Cmd/Ctrl + Alt + P`: Toggle Word preview
 - `Cmd/Ctrl + Alt + M`: Toggle HTML preview

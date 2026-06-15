@@ -7,15 +7,16 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
-- 新增 AI 文档工作台 Phase 1：顶部 Bot 按钮可打开左侧推开式 Claude CLI 面板，支持当前文档上下文、工作目录选择、流式输出、停止运行和清除当前文档会话；AI 输出只显示在工作台内，不会直接覆盖源文件。
-- 设置页新增 `AI CLI` 分区，可配置 Claude CLI 路径、检测 `claude --version`，并控制同一文档是否复用 `--session-id` / `--resume` 会话。
 - 新增左侧目录文件树：支持打开一个目录、展开/折叠子目录、从文件树打开支持的文档，未保存文件会在文件树名称前显示 `*`。
+- 设置页新增 `AI CLI` 分区：可配置 Claude CLI 路径并检测 `claude --version`，供后续 AI 集成功能使用。
+- 编辑器与右侧预览同步滚动：编辑器滚动时右侧 Word / 公众号预览按 scroll ratio 单向同步（rAF 节流，零额外重渲染）。
+- 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 
 ### Changed
 
 - 重写 README 为中英文双语文档，补充 Typola 的核心能力、安装方式、基础使用、打包命令、技术栈和产品优势说明。
-- AI 工作台左侧栏改为更贴近 Open Design 的消息流 + 底部 Composer 结构：默认只展示 Claude 最终结果，thinking / stderr 等过程信息折叠到“运行日志”，旧的结果确认页不再展示。
-- 左侧目录栏默认收起，改为通过正文左侧小箭头展开/收起；目录栏与 AI 工作台互斥显示，并且目录栏、AI 工作台、右侧 Word / HTML 预览宽度都支持拖拽调整。
+- 左侧目录栏默认收起，改为通过正文左侧小箭头展开/收起；目录栏与右侧 Word / HTML 预览宽度均支持拖拽调整。
+- 顶栏控件与整体背景配色统一到暖米基底：`--surface` / `--panel-bg` / `--control-bg` / `--toc-panel-bg` 等基底色相对齐 `--bg`，消除顶栏控件在暖米背景上「比背景更白」的不协调。
 - 右侧 Word 预览面板可拖拽到更窄宽度，纸张预览更靠近分隔条展示，减少预览打开时左侧无效空白。
 - 主工作区新增轻量多文件 tab：从文件树、最近文件、系统打开或拖拽打开多个文档时会保留已打开文件，未保存 tab 文件名前显示 `*`；只打开单个文件时自动隐藏 tab 栏。
 - 主 WYSIWYG 编辑区改为宽版排版：Vditor 正文容器不再居中限宽，左右留白提升到 120px；右侧预览面板默认宽度提升到 520px、最小宽度提升到 400px，优先保证阅读和编辑宽度。
@@ -42,12 +43,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- 修复打包后的 Windows GUI 环境可能找不到 npm 全局安装的 Claude CLI 的问题：未配置路径时会自动探测 `%APPDATA%\npm\claude.cmd` / `claude.exe`，避免仅依赖应用进程 PATH。
-- 修复 Claude CLI 会话启动报 `Invalid session ID` 的问题：会话 ID 改为标准 UUID，并按 Open Design 的 Claude Code 适配方式使用 `-p --input-format stream-json --output-format stream-json --verbose` 与 JSONL stdin。
-- 修复 Claude CLI 启动后在 Windows 弹出黑色终端窗口的问题；后台检测和运行 Claude CLI 现在使用隐藏子进程窗口。
-- 修复 Claude stream-json 输出中 `thinking` / `result` / 包装消息被原样显示到回答区的问题；AI 工作台现在只把标准文本 delta 和 assistant text block 展示为 Claude 回答。
+- 修复 tab 关闭与窗口关闭未保存确认在 Tauri WebView2 下不弹窗的问题：原 `window.confirm` 会被 WebView 静默吞掉，造成 tab 关闭时静默丢失编辑；改为自定义 React 模态对话框（保存 / 不保存 / 取消 三按钮），并补全 `dialog:allow-confirm` / `dialog:allow-message` capability。
+- 修复 WYSIWYG 模式下 Markdown 代码块或行内代码编辑时光标频繁跳回开头的问题：Vditor IR 归一化让受控同步 `editor.getValue() === source` 判断失效，触发 `setValue` 重置光标；改为记录"自身回显值"，自身回显时跳过 `setValue`，外部写入仍正常刷新。
 - 修复多文件 tab 中当前活动文件刚被编辑后，关闭 tab 或关闭窗口可能没有提示未保存修改的问题。
-- 修复多文件 tab 中关闭未保存文档只提示“确定关闭”、不能选择保存的问题；现在关闭脏 tab 会先提示保存后关闭、不保存关闭或取消关闭。
 - 彻底修复右上角关闭按钮可能无响应的问题：关闭请求现在先拦截确认，再显式销毁窗口；销毁过程中的重复关闭事件会直接放行，并提供 Rust 后端强制关闭兜底。
 - 关闭存在未保存文档的窗口时改为“保存并关闭 / 不保存关闭 / 取消关闭”流程，选择保存会先写回所有未保存文档，保存失败则取消关闭，降低数据丢失风险。
 - 修复编辑器聚焦时 `Ctrl/Cmd+S` 被编辑器快捷键保护提前放行、无法触发保存的问题。
