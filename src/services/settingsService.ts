@@ -209,7 +209,6 @@ export interface AppSettings {
   terminalConfirmMultilinePaste: boolean;
   // AI 工作台
   aiClaudePath: string;
-  aiResumeSessions: boolean;
   // 外观
   theme: 'light' | 'dark';
   zoomLevel: number;
@@ -255,7 +254,6 @@ const defaults: AppSettings = {
   terminalShortcutPreset: 'default',
   terminalConfirmMultilinePaste: true,
   aiClaudePath: '',
-  aiResumeSessions: true,
   theme: 'light',
   zoomLevel: 100,
 };
@@ -761,7 +759,6 @@ export function getSettings(): AppSettings {
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
-      aiResumeSessions: stored.aiResumeSessions !== false,
     };
     settingsSnapshot = normalized;
     settingsSnapshotRaw = localStorage.getItem(STORAGE_KEY);
@@ -841,7 +838,6 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
       patch.terminalConfirmMultilinePaste ?? current.terminalConfirmMultilinePaste
     ) !== false,
     aiClaudePath: normalizeExecutablePath(patch.aiClaudePath ?? current.aiClaudePath),
-    aiResumeSessions: (patch.aiResumeSessions ?? current.aiResumeSessions) !== false,
   };
   return persistSettings(merged);
 }

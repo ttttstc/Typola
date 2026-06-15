@@ -2,15 +2,11 @@ use std::{
     collections::HashMap,
     env,
     ffi::OsStr,
-    io::{BufRead, BufReader, Read, Write},
+    io::{Read, Write},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
-    },
+    process::{Command, Stdio},
+    sync::{Arc, Mutex},
     thread,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -27,11 +23,6 @@ struct TerminalStore(Mutex<TerminalRegistry>);
 #[derive(Default)]
 struct DocumentWatcherStore(Mutex<HashMap<String, RecommendedWatcher>>);
 #[derive(Default)]
-struct AgentStore(Mutex<HashMap<String, Arc<Mutex<Child>>>>);
-
-static LOCAL_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
-
-#[derive(Default)]
 struct TerminalRegistry {
     next_id: u32,
     sessions: HashMap<u32, TerminalSession>,
@@ -47,23 +38,6 @@ struct TerminalSession {
 #[serde(rename_all = "camelCase")]
 struct AgentDetectRequest {
     agent_path: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AgentRunCreateRequest {
-    agent_path: Option<String>,
-    conversation_id: String,
-    cwd: Option<String>,
-    prompt: String,
-    stable_prompt_hash: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AgentSessionClearRequest {
-    conversation_id: String,
-    agent_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,53 +89,11 @@ struct AgentDetectResult {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct AgentRunCreateResult {
-    run_id: String,
-    session_id: String,
-    resumed: bool,
-    cwd: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct AgentEventPayload {
-    run_id: String,
-    event_type: String,
-    text: Option<String>,
-    status: Option<String>,
-    code: Option<i32>,
-    signal: Option<String>,
-    message: Option<String>,
-    session_id: Option<String>,
-}
-
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
 struct DirectoryEntryPayload {
     name: String,
     path: String,
     is_dir: bool,
     is_supported: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct AgentSessionRecord {
-    conversation_id: String,
-    agent_id: String,
-    session_id: String,
-    cwd: String,
-    stable_prompt_hash: String,
-    created_at: u64,
-    updated_at: u64,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AttachmentWriteRequest {
-  document_path: String,
-  file_name: String,
-  data: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -275,186 +207,6 @@ fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
 }
 
 #[tauri::command]
-fn agent_run_create(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AgentStore>,
-    request: AgentRunCreateRequest,
-) -> Result<AgentRunCreateResult, String> {
-    if request.prompt.trim().is_empty() {
-        return Err("prompt is empty".into());
-    }
-
-    let run_id = generate_local_id("run");
-    let agent_id = "claude".to_string();
-    let agent_path = normalize_agent_path(request.agent_path.as_deref());
-    let cwd = resolve_agent_cwd(request.cwd.as_deref());
-    let now = now_millis();
-    let mut sessions = read_agent_sessions(&app).unwrap_or_default();
-    let session_key = agent_session_key(&request.conversation_id, &agent_id);
-    let existing_session = sessions
-        .get(&session_key)
-        .filter(|record| is_valid_uuid(&record.session_id))
-        .cloned();
-    let resumed = existing_session.is_some();
-    let session_id = existing_session
-        .as_ref()
-        .map(|record| record.session_id.clone())
-        .unwrap_or_else(generate_uuid);
-
-    let mut args = vec![
-        "-p".to_string(),
-        "--input-format".to_string(),
-        "stream-json".to_string(),
-        "--output-format".to_string(),
-        "stream-json".to_string(),
-        "--verbose".to_string(),
-        "--permission-mode".to_string(),
-        "bypassPermissions".to_string(),
-    ];
-    if resumed {
-        args.push("--resume".to_string());
-    } else {
-        args.push("--session-id".to_string());
-    }
-    args.push(session_id.clone());
-
-    let mut command = create_agent_command(&agent_path, &args);
-    command
-        .current_dir(&cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("failed to spawn Claude CLI: {error}"))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        let user_message = serde_json::json!({
-          "type": "user",
-          "message": {
-            "role": "user",
-            "content": [{ "type": "text", "text": request.prompt }],
-          },
-        });
-        stdin
-            .write_all(format!("{user_message}\n").as_bytes())
-            .and_then(|_| stdin.flush())
-            .map_err(|error| format!("failed to write Claude prompt: {error}"))?;
-    }
-
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    sessions.insert(
-        session_key,
-        AgentSessionRecord {
-            conversation_id: request.conversation_id,
-            agent_id,
-            session_id: session_id.clone(),
-            cwd: cwd.to_string_lossy().to_string(),
-            stable_prompt_hash: request.stable_prompt_hash,
-            created_at: existing_session
-                .map(|record| record.created_at)
-                .unwrap_or(now),
-            updated_at: now,
-        },
-    );
-    write_agent_sessions(&app, &sessions)?;
-
-    let child = Arc::new(Mutex::new(child));
-    {
-        let mut runs = state
-            .0
-            .lock()
-            .map_err(|_| "agent store poisoned".to_string())?;
-        runs.insert(run_id.clone(), Arc::clone(&child));
-    }
-
-    emit_agent_status(&app, &run_id, "running", Some(&session_id));
-
-    if let Some(stdout) = stdout {
-        let stdout_app = app.clone();
-        let stdout_run_id = run_id.clone();
-        thread::spawn(move || read_agent_stdout(stdout_app, stdout_run_id, stdout));
-    }
-
-    if let Some(stderr) = stderr {
-        let stderr_app = app.clone();
-        let stderr_run_id = run_id.clone();
-        thread::spawn(move || read_agent_stderr(stderr_app, stderr_run_id, stderr));
-    }
-
-    let exit_app = app.clone();
-    let exit_run_id = run_id.clone();
-    thread::spawn(move || loop {
-        let status = child
-            .lock()
-            .ok()
-            .and_then(|mut child| child.try_wait().ok())
-            .flatten();
-        if let Some(status) = status {
-            if let Ok(mut runs) = exit_app.state::<AgentStore>().0.lock() {
-                runs.remove(&exit_run_id);
-            }
-            let _ = exit_app.emit(
-                "agent_event",
-                AgentEventPayload {
-                    run_id: exit_run_id,
-                    event_type: "exit".into(),
-                    text: None,
-                    status: Some("done".into()),
-                    code: status.code(),
-                    signal: None,
-                    message: None,
-                    session_id: None,
-                },
-            );
-            break;
-        }
-        thread::sleep(std::time::Duration::from_millis(300));
-    });
-
-    Ok(AgentRunCreateResult {
-        run_id,
-        session_id,
-        resumed,
-        cwd: cwd.to_string_lossy().to_string(),
-    })
-}
-
-#[tauri::command]
-fn agent_run_stop(state: tauri::State<'_, AgentStore>, run_id: String) -> Result<(), String> {
-    let mut child = {
-        let mut runs = state
-            .0
-            .lock()
-            .map_err(|_| "agent store poisoned".to_string())?;
-        runs.remove(&run_id)
-    };
-
-    if let Some(child) = child.as_mut() {
-        child
-            .lock()
-            .map_err(|_| "agent run poisoned".to_string())?
-            .kill()
-            .map_err(|error| format!("failed to stop agent run: {error}"))?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn agent_session_clear(
-    app: tauri::AppHandle,
-    request: AgentSessionClearRequest,
-) -> Result<(), String> {
-    let mut sessions = read_agent_sessions(&app).unwrap_or_default();
-    sessions.remove(&agent_session_key(
-        &request.conversation_id,
-        &request.agent_id,
-    ));
-    write_agent_sessions(&app, &sessions)
-}
-
-#[tauri::command]
 fn list_directory_entries(
     request: DirectoryListRequest,
 ) -> Result<Vec<DirectoryEntryPayload>, String> {
@@ -494,26 +246,6 @@ fn list_directory_entries(
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(entries)
-}
-
-#[tauri::command]
-fn write_attachment_file(request: AttachmentWriteRequest) -> Result<String, String> {
-  let document_path = PathBuf::from(request.document_path);
-  if !is_writable_document_path(&document_path) {
-    return Err("unsupported document type".into());
-  }
-
-  let parent = document_path.parent().ok_or_else(|| "document has no parent directory".to_string())?;
-  let safe_name = sanitize_attachment_file_name(&request.file_name);
-  let assets_dir = parent.join("assets");
-  std::fs::create_dir_all(&assets_dir).map_err(|error| format!("failed to create assets directory: {error}"))?;
-  let output_path = unique_attachment_path(&assets_dir, &safe_name);
-  std::fs::write(&output_path, request.data).map_err(|error| format!("failed to write attachment: {error}"))?;
-  let file_name = output_path
-    .file_name()
-    .and_then(OsStr::to_str)
-    .ok_or_else(|| "invalid attachment file name".to_string())?;
-  Ok(format!("./assets/{file_name}"))
 }
 
 #[tauri::command]
@@ -789,7 +521,6 @@ pub fn run() {
         .manage(OpenedPaths(Mutex::new(collect_initial_open_paths())))
         .manage(TerminalStore::default())
         .manage(DocumentWatcherStore::default())
-        .manage(AgentStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let paths = opened_paths_from_args(args, &cwd);
             if paths.is_empty() {
@@ -821,9 +552,6 @@ pub fn run() {
             write_opened_document,
             write_attachment_file,
             agent_detect,
-            agent_run_create,
-            agent_run_stop,
-            agent_session_clear,
             list_directory_entries,
             watch_opened_document,
             unwatch_opened_document,
@@ -1030,15 +758,6 @@ fn windows_claude_candidates() -> Vec<PathBuf> {
     candidates
 }
 
-fn resolve_agent_cwd(requested: Option<&str>) -> PathBuf {
-    requested
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .filter(|path| path.is_dir())
-        .or_else(home_dir)
-        .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
-}
-
 #[cfg(target_os = "windows")]
 fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     use std::os::windows::process::CommandExt;
@@ -1090,240 +809,6 @@ fn run_agent_version(agent_path: &str) -> Result<String, String> {
     } else {
         stdout
     })
-}
-
-fn emit_agent_status(app: &tauri::AppHandle, run_id: &str, status: &str, session_id: Option<&str>) {
-    let _ = app.emit(
-        "agent_event",
-        AgentEventPayload {
-            run_id: run_id.into(),
-            event_type: "status".into(),
-            text: None,
-            status: Some(status.into()),
-            code: None,
-            signal: None,
-            message: None,
-            session_id: session_id.map(str::to_string),
-        },
-    );
-}
-
-fn emit_agent_text(app: &tauri::AppHandle, run_id: &str, event_type: &str, text: String) {
-    if text.is_empty() {
-        return;
-    }
-    let _ = app.emit(
-        "agent_event",
-        AgentEventPayload {
-            run_id: run_id.into(),
-            event_type: event_type.into(),
-            text: Some(text),
-            status: None,
-            code: None,
-            signal: None,
-            message: None,
-            session_id: None,
-        },
-    );
-}
-
-fn read_agent_stdout(app: tauri::AppHandle, run_id: String, stdout: std::process::ChildStdout) {
-    let reader = BufReader::new(stdout);
-    for line in reader.lines().map_while(Result::ok) {
-        if let Some((event_type, text)) = parse_claude_jsonl_text(&line) {
-            emit_agent_text(&app, &run_id, &event_type, text);
-        } else if serde_json::from_str::<serde_json::Value>(&line).is_err() {
-            emit_agent_text(&app, &run_id, "text_delta", format!("{line}\n"));
-        }
-    }
-}
-
-fn read_agent_stderr(app: tauri::AppHandle, run_id: String, stderr: std::process::ChildStderr) {
-    let reader = BufReader::new(stderr);
-    for line in reader.lines().map_while(Result::ok) {
-        emit_agent_text(&app, &run_id, "stderr", format!("{line}\n"));
-    }
-}
-
-fn parse_claude_jsonl_text(line: &str) -> Option<(String, String)> {
-    let value: serde_json::Value = serde_json::from_str(line).ok()?;
-    if value.get("type").and_then(|value| value.as_str()) == Some("system")
-        && value.get("subtype").and_then(|value| value.as_str()) == Some("init")
-    {
-        let model = value
-            .get("model")
-            .and_then(|value| value.as_str())
-            .unwrap_or("claude");
-        return Some(("status".into(), format!("initializing {model}")));
-    }
-    if let Some(event) = value.get("event") {
-        if let Some(text) = event
-            .pointer("/delta/text")
-            .and_then(|value| value.as_str())
-        {
-            return Some(("text_delta".into(), text.into()));
-        }
-        if let Some(text) = event
-            .pointer("/delta/thinking")
-            .and_then(|value| value.as_str())
-        {
-            return Some(("thinking_delta".into(), text.into()));
-        }
-        if let Some(text) = event
-            .pointer("/delta/partial_json")
-            .and_then(|value| value.as_str())
-        {
-            return Some(("tool_delta".into(), text.into()));
-        }
-    }
-    if let Some(text) = value
-        .pointer("/delta/text")
-        .and_then(|value| value.as_str())
-    {
-        return Some(("text_delta".into(), text.into()));
-    }
-    if let Some(text) = value
-        .pointer("/delta/thinking")
-        .and_then(|value| value.as_str())
-    {
-        return Some(("thinking_delta".into(), text.into()));
-    }
-    if let Some(content) = value
-        .pointer("/message/content")
-        .and_then(|value| value.as_array())
-    {
-        let text = extract_claude_content_text(content);
-        if !text.trim().is_empty() {
-            return Some(("text_delta".into(), format!("{text}\n")));
-        }
-        return Some(("stdout".into(), String::new()));
-    }
-    if let Some(content) = value.pointer("/content").and_then(|value| value.as_array()) {
-        let text = extract_claude_content_text(content);
-        if !text.trim().is_empty() {
-            return Some(("text_delta".into(), format!("{text}\n")));
-        }
-        return Some(("stdout".into(), String::new()));
-    }
-    if let Some(text) = value.get("text").and_then(|value| value.as_str()) {
-        return Some(("text_delta".into(), text.into()));
-    }
-    if value.get("type").and_then(|value| value.as_str()) == Some("result") {
-        return Some(("stdout".into(), String::new()));
-    }
-    if let Some(error) = value.get("error").and_then(|value| value.as_str()) {
-        return Some(("error".into(), error.into()));
-    }
-    if value.get("type").and_then(|value| value.as_str()).is_some() {
-        return Some(("stdout".into(), String::new()));
-    }
-    None
-}
-
-fn extract_claude_content_text(content: &[serde_json::Value]) -> String {
-    content
-        .iter()
-        .filter(|item| {
-            item.get("type")
-                .and_then(|value| value.as_str())
-                .map(|kind| matches!(kind, "text" | "output_text"))
-                .unwrap_or(true)
-        })
-        .filter_map(|item| item.get("text").and_then(|value| value.as_str()))
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-fn agent_sessions_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("failed to resolve app data dir: {error}"))?;
-    std::fs::create_dir_all(&dir)
-        .map_err(|error| format!("failed to create app data dir: {error}"))?;
-    Ok(dir.join("agent-sessions.json"))
-}
-
-fn read_agent_sessions(
-    app: &tauri::AppHandle,
-) -> Result<HashMap<String, AgentSessionRecord>, String> {
-    let path = agent_sessions_path(app)?;
-    if !path.exists() {
-        return Ok(HashMap::new());
-    }
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|error| format!("failed to read agent sessions: {error}"))?;
-    serde_json::from_str(&raw).map_err(|error| format!("failed to parse agent sessions: {error}"))
-}
-
-fn write_agent_sessions(
-    app: &tauri::AppHandle,
-    sessions: &HashMap<String, AgentSessionRecord>,
-) -> Result<(), String> {
-    let path = agent_sessions_path(app)?;
-    let raw = serde_json::to_string_pretty(sessions)
-        .map_err(|error| format!("failed to encode agent sessions: {error}"))?;
-    std::fs::write(path, raw).map_err(|error| format!("failed to write agent sessions: {error}"))
-}
-
-fn agent_session_key(conversation_id: &str, agent_id: &str) -> String {
-    format!("{conversation_id}:{agent_id}")
-}
-
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or_default()
-}
-
-fn generate_uuid() -> String {
-    uuid::Uuid::new_v4().to_string()
-}
-
-fn is_valid_uuid(value: &str) -> bool {
-    uuid::Uuid::parse_str(value).is_ok()
-}
-
-fn generate_local_id(prefix: &str) -> String {
-    let counter = LOCAL_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{prefix}-{}-{}-{counter}", std::process::id(), now_millis())
-}
-
-fn sanitize_attachment_file_name(file_name: &str) -> String {
-  let candidate = Path::new(file_name)
-    .file_name()
-    .and_then(OsStr::to_str)
-    .unwrap_or("pasted-image.png")
-    .chars()
-    .map(|ch| match ch {
-      '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
-      _ => ch,
-    })
-    .collect::<String>();
-  let trimmed = candidate.trim_matches(['.', ' ']).trim();
-  if trimmed.is_empty() {
-    "pasted-image.png".into()
-  } else {
-    trimmed.chars().take(96).collect()
-  }
-}
-
-fn unique_attachment_path(dir: &Path, file_name: &str) -> PathBuf {
-  let original = Path::new(file_name);
-  let stem = original
-    .file_stem()
-    .and_then(OsStr::to_str)
-    .filter(|value| !value.is_empty())
-    .unwrap_or("pasted-image");
-  let extension = original.extension().and_then(OsStr::to_str).unwrap_or("png");
-  let mut candidate = dir.join(format!("{stem}.{extension}"));
-  let mut index = 2;
-  while candidate.exists() {
-    candidate = dir.join(format!("{stem}-{index}.{extension}"));
-    index += 1;
-  }
-  candidate
 }
 
 fn resolve_terminal_cwd(requested: Option<&str>) -> PathBuf {
@@ -1485,52 +970,6 @@ mod tests {
                 || path.ends_with("\\npm\\claude.cmd")
                 || path.ends_with("\\npm\\claude.exe"),
             "unexpected default Claude path: {path}"
-        );
-    }
-
-    #[test]
-    fn agent_session_ids_are_valid_uuids() {
-        assert!(is_valid_uuid(&generate_uuid()));
-        assert!(!is_valid_uuid("session-123"));
-    }
-
-    #[test]
-    fn claude_stream_parser_reads_stream_event_delta() {
-        let line = r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}}"#;
-
-        assert_eq!(
-            parse_claude_jsonl_text(line),
-            Some(("text_delta".into(), "hello".into()))
-        );
-    }
-
-    #[test]
-    fn claude_stream_parser_reads_final_assistant_text() {
-        let line = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"final"}]}}"#;
-
-        assert_eq!(
-            parse_claude_jsonl_text(line),
-            Some(("text_delta".into(), "final\n".into()))
-        );
-    }
-
-    #[test]
-    fn claude_stream_parser_suppresses_thinking_blocks() {
-        let line = r#"{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"hidden reasoning"}]}}"#;
-
-        assert_eq!(
-            parse_claude_jsonl_text(line),
-            Some(("stdout".into(), String::new()))
-        );
-    }
-
-    #[test]
-    fn claude_stream_parser_suppresses_result_usage_event() {
-        let line = r#"{"type":"result","result":"done"}"#;
-
-        assert_eq!(
-            parse_claude_jsonl_text(line),
-            Some(("stdout".into(), String::new()))
         );
     }
 

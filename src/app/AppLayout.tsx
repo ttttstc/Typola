@@ -31,7 +31,6 @@ import { FloatingToc } from '../components/FloatingToc';
 import { FindReplacePanel } from '../components/FindReplacePanel';
 import { QuickOpenPanel } from '../components/QuickOpenPanel';
 import { EditAssistPanel } from '../components/EditAssistPanel';
-import { AIWorkspacePanel } from '../components/AIWorkspacePanel';
 import { FileTreePanel } from '../components/FileTreePanel';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 import type { EditorCommandHandle } from '../types/editorCommands';
@@ -95,7 +94,7 @@ const TerminalPanel = lazy(() =>
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 type RightPanelMode = 'none' | 'word' | 'wechat';
-type LeftPanelMode = 'none' | 'workspace' | 'ai';
+type LeftPanelMode = 'none' | 'workspace';
 type OpenFileTab = {
   id: string;
   file: OpenedFile;
@@ -113,7 +112,6 @@ const RIGHT_PANEL_RESIZER_GAP = 9;
 const LEFT_PANEL_MIN_WIDTH = 220;
 const LEFT_PANEL_MAX_WIDTH = 560;
 const WORKSPACE_PANEL_DEFAULT_WIDTH = 260;
-const AI_PANEL_DEFAULT_WIDTH = 390;
 
 function imageExtensionFromMime(type: string): string {
   if (type === 'image/jpeg') return 'jpg';
@@ -205,7 +203,6 @@ export function AppLayout() {
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [leftPanelMode, setLeftPanelMode] = useState<LeftPanelMode>('none');
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(WORKSPACE_PANEL_DEFAULT_WIDTH);
-  const [aiPanelWidth, setAiPanelWidth] = useState(AI_PANEL_DEFAULT_WIDTH);
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
   const [activeTocIndex, setActiveTocIndex] = useState(0);
@@ -214,7 +211,6 @@ export function AppLayout() {
   const [findFocusTarget, setFindFocusTarget] = useState<'find' | 'replace'>('find');
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [editAssistVisible, setEditAssistVisible] = useState(false);
-  const [aiWorkspaceVisible, setAiWorkspaceVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
@@ -316,8 +312,6 @@ export function AppLayout() {
     setFindVisible(false);
     if (opened.fileType === 'docx') {
       setRightPanelMode('none');
-      setAiWorkspaceVisible(false);
-      setLeftPanelMode((mode) => mode === 'ai' ? 'none' : mode);
     } else {
       setEditorMode('wysiwyg');
     }
@@ -353,8 +347,6 @@ export function AppLayout() {
     setHtmlPresentationVisible(false);
     if (tab.file.fileType === 'docx') {
       setRightPanelMode('none');
-      setAiWorkspaceVisible(false);
-      setLeftPanelMode((mode) => mode === 'ai' ? 'none' : mode);
     }
   }, [openTabs]);
 
@@ -609,21 +601,8 @@ export function AppLayout() {
     setTerminalVisible((visible) => !visible);
   }, []);
 
-  const handleToggleAiWorkspace = useCallback(() => {
-    if (fileRef.current.fileType === 'docx') return;
-    setAiWorkspaceVisible((visible) => {
-      const nextVisible = !visible;
-      setLeftPanelMode(nextVisible ? 'ai' : 'none');
-      return nextVisible;
-    });
-  }, []);
-
   const handleToggleWorkspacePanel = useCallback(() => {
-    setLeftPanelMode((mode) => {
-      const nextMode = mode === 'workspace' ? 'none' : 'workspace';
-      if (nextMode === 'workspace') setAiWorkspaceVisible(false);
-      return nextMode;
-    });
+    setLeftPanelMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
   }, []);
 
   const handleCreateTerminal = useCallback(() => {
@@ -777,7 +756,6 @@ export function AppLayout() {
       if (e.key === 'm' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleWechatPreview(); return; }
       if (e.code === 'Backquote' && e.shiftKey && !e.altKey) { e.preventDefault(); handleCreateTerminal(); return; }
       if (e.code === 'Backquote' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleToggleTerminal(); return; }
-      if (e.key === 'A' && e.shiftKey && !e.altKey) { e.preventDefault(); handleToggleAiWorkspace(); return; }
       if (e.key === 'i' && e.shiftKey && !e.altKey) { e.preventDefault(); setEditAssistVisible(true); return; }
       if (e.key === ',' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
@@ -796,7 +774,6 @@ export function AppLayout() {
     handleToggleWordPreview,
     handleToggleWechatPreview,
     handleToggleTerminal,
-    handleToggleAiWorkspace,
     handleCreateTerminal,
     openFindPanel,
   ]);
@@ -1050,7 +1027,6 @@ export function AppLayout() {
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
     leftPanelMode !== 'none' ? 'left-panel-open' : '',
-    leftPanelMode === 'ai' && !isDocx ? 'ai-workbench-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
     leftResizing !== 'none' ? 'is-left-resizing' : '',
     resizing ? 'is-resizing' : '',
@@ -1101,18 +1077,16 @@ export function AppLayout() {
   const handleLeftPanelResizerPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (leftPanelMode === 'none') return;
     event.preventDefault();
-    const mode = leftPanelMode;
     const startX = event.clientX;
-    const startWidth = mode === 'workspace' ? workspacePanelWidth : aiPanelWidth;
-    setLeftResizing(mode);
+    const startWidth = workspacePanelWidth;
+    setLeftResizing('workspace');
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       const nextWidth = Math.min(
         LEFT_PANEL_MAX_WIDTH,
         Math.max(LEFT_PANEL_MIN_WIDTH, startWidth + moveEvent.clientX - startX),
       );
-      if (mode === 'workspace') setWorkspacePanelWidth(nextWidth);
-      else setAiPanelWidth(nextWidth);
+      setWorkspacePanelWidth(nextWidth);
     };
 
     const handlePointerUp = () => {
@@ -1125,7 +1099,7 @@ export function AppLayout() {
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
-  }, [aiPanelWidth, leftPanelMode, workspacePanelWidth]);
+  }, [leftPanelMode, workspacePanelWidth]);
 
   const dirtyPaths = useMemo(() => new Set(
     openTabs
@@ -1259,13 +1233,11 @@ export function AppLayout() {
         wordPreviewVisible={rightPanelMode === 'word'}
         wechatPreviewVisible={rightPanelMode === 'wechat'}
         terminalVisible={terminalVisible}
-        aiWorkspaceVisible={aiWorkspaceVisible}
         editingDisabled={isDocx}
         onToggleEditorMode={handleToggleEditorMode}
         onToggleWordPreview={handleToggleWordPreview}
         onToggleWechatPreview={handleToggleWechatPreview}
         onToggleTerminal={handleToggleTerminal}
-        onToggleAiWorkspace={handleToggleAiWorkspace}
         onOpen={handleOpen}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
@@ -1310,30 +1282,6 @@ export function AppLayout() {
               aria-label="调整目录栏宽度"
               aria-orientation="vertical"
               title="拖拽调整目录栏宽度"
-              onPointerDown={handleLeftPanelResizerPointerDown}
-            />
-          </>
-        )}
-        {!isDocx && leftPanelMode === 'ai' && (
-          <>
-            <AIWorkspacePanel
-              visible={leftPanelMode === 'ai'}
-              currentFilePath={file.path}
-              currentFileName={file.name}
-              currentContent={file.content}
-              readOnly={isDocx}
-              width={aiPanelWidth}
-              onClose={() => {
-                setAiWorkspaceVisible(false);
-                setLeftPanelMode('none');
-              }}
-            />
-            <div
-              className={`left-panel-resizer ${leftResizing === 'ai' ? 'dragging' : ''}`}
-              role="separator"
-              aria-label="调整 AI 工作台宽度"
-              aria-orientation="vertical"
-              title="拖拽调整 AI 工作台宽度"
               onPointerDown={handleLeftPanelResizerPointerDown}
             />
           </>

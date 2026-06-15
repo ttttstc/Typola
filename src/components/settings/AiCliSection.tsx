@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { useSettings } from '../../hooks/useSettings';
-import { detectAgent, clearAgentSession, type AgentDetectResult } from '../../services/agentService';
+import { detectAgent, type AgentDetectResult } from '../../services/agentService';
 import { updateSettings } from '../../services/settingsService';
 
 export function AiCliSection() {
   const settings = useSettings();
   const [detecting, setDetecting] = useState(false);
   const [result, setResult] = useState<AgentDetectResult | null>(null);
-  const [message, setMessage] = useState('');
 
   const handleDetect = async () => {
     setDetecting(true);
-    setMessage('');
     try {
       const next = await detectAgent(settings.aiClaudePath);
       setResult(next);
@@ -23,15 +21,6 @@ export function AiCliSection() {
       });
     } finally {
       setDetecting(false);
-    }
-  };
-
-  const handleClearGlobalSession = async () => {
-    try {
-      await clearAgentSession('global');
-      setMessage('默认会话已清除。当前文档会话可在 AI 工作台中单独清除。');
-    } catch (error) {
-      setMessage(`清除失败：${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -50,19 +39,6 @@ export function AiCliSection() {
         />
       </label>
 
-      <label className="settings-field settings-toggle-row">
-        <span>
-          <span className="settings-label">复用 Claude 会话</span>
-          <span className="settings-desc">同一文档继续使用 --resume，保留上下文；关闭后后续版本会支持强制新会话。</span>
-        </span>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.aiResumeSessions ? 'on' : ''}`}
-          onClick={() => updateSettings({ aiResumeSessions: !settings.aiResumeSessions })}
-          aria-pressed={settings.aiResumeSessions}
-        />
-      </label>
-
       <div className="settings-section-actions">
         <button
           type="button"
@@ -71,13 +47,6 @@ export function AiCliSection() {
           disabled={detecting}
         >
           {detecting ? '检测中...' : '检测 Claude CLI'}
-        </button>
-        <button
-          type="button"
-          className="settings-action-button secondary"
-          onClick={() => void handleClearGlobalSession()}
-        >
-          清除默认会话
         </button>
       </div>
 
@@ -88,7 +57,6 @@ export function AiCliSection() {
             : `不可用：${result.error || result.path}`}
         </div>
       )}
-      {message && <div className="settings-message">{message}</div>}
     </div>
   );
 }
