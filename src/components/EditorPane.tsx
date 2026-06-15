@@ -15,6 +15,7 @@ type EditorPaneProps = {
   source: string;
   onChange: (value: string) => void;
   headingScrollRequest?: SourceHeadingScrollRequest;
+  onScrollRatio?: (ratio: number) => void;
 };
 
 function findHeadingPosition(source: string, targetIndex: number): number | null {
@@ -31,7 +32,7 @@ function findHeadingPosition(source: string, targetIndex: number): number | null
 }
 
 export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(function EditorPane(
-  { source, onChange, headingScrollRequest },
+  { source, onChange, headingScrollRequest, onScrollRatio },
   ref,
 ) {
   const settings = useSettings();
@@ -83,6 +84,25 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       selection: { anchor: position },
     });
   }, [editorView, headingScrollRequest, source]);
+
+  useEffect(() => {
+    if (!editorView || !onScrollRatio) return;
+    const dom = editorView.scrollDOM;
+    let rafId: number | null = null;
+    const handleScroll = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        const max = dom.scrollHeight - dom.clientHeight;
+        onScrollRatio(max > 0 ? dom.scrollTop / max : 0);
+      });
+    };
+    dom.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      dom.removeEventListener('scroll', handleScroll);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
+  }, [editorView, onScrollRatio]);
 
   useImperativeHandle(ref, () => ({
     focus() {

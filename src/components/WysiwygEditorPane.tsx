@@ -9,6 +9,7 @@ type WysiwygEditorPaneProps = {
   source: string;
   onChange: (value: string) => void;
   filePath?: string;
+  onScrollRatio?: (ratio: number) => void;
 };
 
 const IR_MARKER_COLLAPSE_DELAY_MS = 220;
@@ -40,7 +41,7 @@ type WindowWithFind = Window & {
 };
 
 export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
-  { source, onChange, filePath },
+  { source, onChange, filePath, onScrollRatio },
   ref,
 ) {
   const settings = useSettings();
@@ -52,7 +53,13 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const editorRef = useRef<import('vditor').default | null>(null);
   const applyingExternalValue = useRef(false);
   const latestSource = useRef(source);
+  const lastEmittedValue = useRef(source);
   const collapseTimerRef = useRef<number | null>(null);
+  const onScrollRatioRef = useRef(onScrollRatio);
+
+  useEffect(() => {
+    onScrollRatioRef.current = onScrollRatio;
+  }, [onScrollRatio]);
 
   useEffect(() => {
     latestSource.current = source;
@@ -70,6 +77,22 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+
+    // Scroll sync: capture-phase listener on host catches any inner scroll container Vditor creates.
+    let scrollRafId: number | null = null;
+    const handleScroll = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (scrollRafId !== null) return;
+      scrollRafId = window.requestAnimationFrame(() => {
+        scrollRafId = null;
+        const cb = onScrollRatioRef.current;
+        if (!cb) return;
+        const max = target.scrollHeight - target.clientHeight;
+        cb(max > 0 ? target.scrollTop / max : 0);
+      });
+    };
+    host.addEventListener('scroll', handleScroll, { capture: true, passive: true });
 
     let cancelled = false;
     void Promise.all([
@@ -110,6 +133,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         },
         input(value) {
           if (applyingExternalValue.current) return;
+          lastEmittedValue.current = value;
 
           if (collapseTimerRef.current !== null) {
             window.clearTimeout(collapseTimerRef.current);
@@ -144,6 +168,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
 
     return () => {
       cancelled = true;
+      host.removeEventListener('scroll', handleScroll, { capture: true } as EventListenerOptions);
+      if (scrollRafId !== null) window.cancelAnimationFrame(scrollRafId);
       if (collapseTimerRef.current !== null) {
         window.clearTimeout(collapseTimerRef.current);
         collapseTimerRef.current = null;
@@ -157,11 +183,16 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     const editor = editorRef.current;
     if (!editor) return;
 
+    // 来自本编辑器自身输入的回显：跳过 setValue，保住光标
+    // （修复代码块 / 行内代码编辑时光标跳回开头：Vditor IR 归一化会让 getValue() 与刚 emit 的 source 不等）
+    if (source === lastEmittedValue.current) return;
+
     const currentValue = editor.getValue();
     if (currentValue === source) return;
 
     applyingExternalValue.current = true;
     editor.setValue(source, true);
+    lastEmittedValue.current = source;
     window.requestAnimationFrame(() => {
       applyingExternalValue.current = false;
     });
@@ -176,7 +207,9 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       if (!editor) return;
       editor.focus();
       editor.insertValue(text, true);
-      onChange(editor.getValue());
+      const value = editor.getValue();
+      lastEmittedValue.current = value;
+      onChange(value);
     },
     revealRange() {
       editorRef.current?.focus();

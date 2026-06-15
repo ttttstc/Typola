@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   WandSparkles,
   Terminal,
+  Workflow,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useSettings } from '../hooks/useSettings';
@@ -29,11 +30,13 @@ type ToolbarProps = {
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
   terminalVisible: boolean;
+  aiWorkspaceVisible: boolean;
   editingDisabled: boolean;
   onToggleEditorMode: () => void;
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleTerminal: () => void;
+  onToggleAiWorkspace: () => void;
   onOpen: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -46,8 +49,8 @@ type ToolbarProps = {
 
 export function Toolbar({
   dirty, fileName,
-  editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
-  onToggleTerminal, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, aiWorkspaceVisible, editingDisabled, onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
+  onToggleTerminal, onToggleAiWorkspace, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -157,6 +160,16 @@ export function Toolbar({
             aria-label={t('toolbarTerminalLabel')}
           >
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+          <button
+            className={aiWorkspaceVisible ? 'active' : ''}
+            onClick={onToggleAiWorkspace}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+            title={t('toolbarAiWorkbenchTitle')}
+            aria-label={t('toolbarAiWorkbenchLabel')}
+          >
+            <Workflow size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
             onClick={onOpenEditAssist}

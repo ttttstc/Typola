@@ -207,6 +207,9 @@ export interface AppSettings {
   terminalCursorBlink: boolean;
   terminalShortcutPreset: TerminalShortcutPreset;
   terminalConfirmMultilinePaste: boolean;
+  // AI 工作台
+  aiClaudePath: string;
+  aiResumeSessions: boolean;
   // 外观
   theme: 'light' | 'dark';
   zoomLevel: number;
@@ -251,6 +254,8 @@ const defaults: AppSettings = {
   terminalCursorBlink: true,
   terminalShortcutPreset: 'default',
   terminalConfirmMultilinePaste: true,
+  aiClaudePath: '',
+  aiResumeSessions: true,
   theme: 'light',
   zoomLevel: 100,
 };
@@ -333,6 +338,10 @@ function normalizeTerminalFontFamily(value: unknown): string {
 
 function normalizeTerminalShellPath(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, 260) : '';
+}
+
+function normalizeExecutablePath(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, 500) : '';
 }
 
 function normalizeTerminalFontSize(value: unknown): number {
@@ -751,6 +760,8 @@ export function getSettings(): AppSettings {
       terminalCursorBlink: stored.terminalCursorBlink !== false,
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
+      aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
+      aiResumeSessions: stored.aiResumeSessions !== false,
     };
     settingsSnapshot = normalized;
     settingsSnapshotRaw = localStorage.getItem(STORAGE_KEY);
@@ -829,6 +840,8 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     terminalConfirmMultilinePaste: (
       patch.terminalConfirmMultilinePaste ?? current.terminalConfirmMultilinePaste
     ) !== false,
+    aiClaudePath: normalizeExecutablePath(patch.aiClaudePath ?? current.aiClaudePath),
+    aiResumeSessions: (patch.aiResumeSessions ?? current.aiResumeSessions) !== false,
   };
   return persistSettings(merged);
 }

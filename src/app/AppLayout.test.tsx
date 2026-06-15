@@ -15,7 +15,9 @@ const updateServiceMock = vi.hoisted(() => ({
 
 const tauriWindowMock = vi.hoisted(() => ({
   onDragDropEvent: vi.fn().mockResolvedValue(vi.fn()),
+  onCloseRequested: vi.fn().mockResolvedValue(vi.fn()),
   setTitle: vi.fn().mockResolvedValue(undefined),
+  destroy: vi.fn().mockResolvedValue(undefined),
 }));
 
 const tauriCoreMock = vi.hoisted(() => ({
@@ -33,6 +35,11 @@ const fileServiceMock = vi.hoisted(() => ({
   saveFileAs: vi.fn(),
 }));
 
+const dialogServiceMock = vi.hoisted(() => ({
+  confirmDialog: vi.fn(),
+  messageDialog: vi.fn().mockResolvedValue(undefined),
+}));
+
 const editorPaneMock = vi.hoisted(() => ({
   source: '',
   renderCount: 0,
@@ -47,6 +54,8 @@ vi.mock('@tauri-apps/api/core', () => tauriCoreMock);
 vi.mock('@tauri-apps/api/event', () => tauriEventMock);
 
 vi.mock('../services/fileService', () => fileServiceMock);
+
+vi.mock('../services/dialogService', () => dialogServiceMock);
 
 vi.mock('../services/updateService', () => ({
   checkForAppUpdate: updateServiceMock.checkForAppUpdate,
@@ -105,7 +114,9 @@ describe('AppLayout update flow', () => {
     document.body.append(host);
     root = createRoot(host);
     tauriWindowMock.onDragDropEvent.mockResolvedValue(vi.fn());
+    tauriWindowMock.onCloseRequested.mockResolvedValue(vi.fn());
     tauriWindowMock.setTitle.mockResolvedValue(undefined);
+    tauriWindowMock.destroy.mockResolvedValue(undefined);
     tauriCoreMock.invoke.mockResolvedValue([]);
     tauriEventMock.listen.mockResolvedValue(vi.fn());
     fileServiceMock.openFile.mockResolvedValue(null);
@@ -211,6 +222,252 @@ describe('AppLayout update flow', () => {
 
     expect(editorPaneMock.renderCount).toBeGreaterThan(0);
     expect(editorPaneMock.source).toBe(source);
+  });
+
+  it('explicitly destroys the window after an allowed native close request', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    const preventDefault = vi.fn();
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+
+    expect(closeHandler).toBeTruthy();
+    await act(async () => {
+      closeHandler?.({ preventDefault });
+      await flushPromises();
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not prevent a repeated close request while destroy is already in progress', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    const firstPreventDefault = vi.fn();
+    const secondPreventDefault = vi.fn();
+    tauriWindowMock.destroy.mockImplementation(() => new Promise(() => {}));
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      closeHandler?.({ preventDefault: firstPreventDefault });
+      await flushPromises();
+      closeHandler?.({ preventDefault: secondPreventDefault });
+      await flushPromises();
+    });
+
+    expect(firstPreventDefault).toHaveBeenCalledTimes(1);
+    expect(secondPreventDefault).not.toHaveBeenCalled();
+    expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the window open when dirty content exists and the user cancels close', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    const preventDefault = vi.fn();
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+    fileServiceMock.openFile.mockResolvedValue({
+      path: '/tmp/dirty.md',
+      name: 'dirty.md',
+      content: '# dirty',
+      dirty: true,
+      lastSavedContent: '# original',
+      fileType: 'markdown',
+    });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      closeHandler?.({ preventDefault });
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(tauriWindowMock.destroy).not.toHaveBeenCalled();
+  });
+
+  it('saves dirty content before closing when the user chooses save', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    const preventDefault = vi.fn();
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+    fileServiceMock.openFile.mockResolvedValue({
+      path: '/tmp/save-before-close.md',
+      name: 'save-before-close.md',
+      content: '# changed',
+      dirty: true,
+      lastSavedContent: '# original',
+      fileType: 'markdown',
+    });
+    fileServiceMock.saveFile.mockImplementation(async (file) => ({
+      ...file,
+      dirty: false,
+      lastSavedContent: file.content,
+    }));
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      closeHandler?.({ preventDefault });
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(fileServiceMock.saveFile).toHaveBeenCalledWith(expect.objectContaining({ path: '/tmp/save-before-close.md' }));
+    expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a dirty tab open when the user cancels tab close', async () => {
+    fileServiceMock.openFile
+      .mockResolvedValueOnce({
+        path: '/tmp/dirty-tab.md',
+        name: 'dirty-tab.md',
+        content: '# dirty tab',
+        dirty: true,
+        lastSavedContent: '# original',
+        fileType: 'markdown',
+      })
+      .mockResolvedValueOnce({
+        path: '/tmp/clean-tab.md',
+        name: 'clean-tab.md',
+        content: '# clean tab',
+        dirty: false,
+        lastSavedContent: '# clean tab',
+        fileType: 'markdown',
+      });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="关闭 dirty-tab.md"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(fileServiceMock.saveFile).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="关闭 dirty-tab.md"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="关闭 clean-tab.md"]')).not.toBeNull();
+  });
+
+  it('saves a dirty tab before closing it when the user chooses save', async () => {
+    fileServiceMock.openFile
+      .mockResolvedValueOnce({
+        path: '/tmp/dirty-tab-save.md',
+        name: 'dirty-tab-save.md',
+        content: '# changed tab',
+        dirty: true,
+        lastSavedContent: '# original',
+        fileType: 'markdown',
+      })
+      .mockResolvedValueOnce({
+        path: '/tmp/clean-tab-save.md',
+        name: 'clean-tab-save.md',
+        content: '# clean tab',
+        dirty: false,
+        lastSavedContent: '# clean tab',
+        fileType: 'markdown',
+      });
+    fileServiceMock.saveFile.mockImplementation(async (file) => ({
+      ...file,
+      dirty: false,
+      lastSavedContent: file.content,
+    }));
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="关闭 dirty-tab-save.md"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(fileServiceMock.saveFile).toHaveBeenCalledWith(expect.objectContaining({ path: '/tmp/dirty-tab-save.md' }));
+    expect(host.querySelector('[aria-label="关闭 dirty-tab-save.md"]')).toBeNull();
   });
 });
 

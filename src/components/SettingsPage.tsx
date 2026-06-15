@@ -9,6 +9,7 @@ import {
   preloadExportSection,
   preloadGeneralSection,
   preloadHtmlExportSection,
+  preloadAiCliSection,
   preloadPreviewSection,
   preloadTerminalSection,
 } from './settings/preloadSections';
@@ -22,6 +23,7 @@ type SettingsSection =
   | 'export'
   | 'htmlExport'
   | 'terminal'
+  | 'aiCli'
   | 'about';
 
 // Each section becomes its own chunk so opening the modal only downloads
@@ -35,6 +37,7 @@ const AppearanceSection = lazy(preloadAppearanceSection);
 const ExportSection = lazy(preloadExportSection);
 const HtmlExportSection = lazy(preloadHtmlExportSection);
 const TerminalSection = lazy(preloadTerminalSection);
+const AiCliSection = lazy(preloadAiCliSection);
 const AboutSection = lazy(preloadAboutSection);
 
 interface SettingsPageProps {
@@ -50,6 +53,7 @@ const NAV_ITEMS: { id: SettingsSection; labelKey: Parameters<typeof translate>[1
   { id: 'export', labelKey: 'navExport' },
   { id: 'htmlExport', labelKey: 'navHtmlExport' },
   { id: 'terminal', labelKey: 'navTerminal' },
+  { id: 'aiCli', labelKey: 'navAiCli' },
   { id: 'about', labelKey: 'navAbout' },
 ];
 
@@ -113,6 +117,7 @@ export function SettingsPage({ onClose, onUpdateAvailable }: SettingsPageProps) 
             {activeSection === 'export' && <ExportSection />}
             {activeSection === 'htmlExport' && <HtmlExportSection />}
             {activeSection === 'terminal' && <TerminalSection />}
+            {activeSection === 'aiCli' && <AiCliSection />}
             {activeSection === 'about' && <AboutSection onUpdateAvailable={onUpdateAvailable} />}
           </Suspense>
         </div>

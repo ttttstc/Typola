@@ -7,10 +7,17 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
+- 新增 AI 文档工作台 Phase 1：顶部 Bot 按钮可打开左侧推开式 Claude CLI 面板，支持当前文档上下文、工作目录选择、流式输出、停止运行和清除当前文档会话；AI 输出只显示在工作台内，不会直接覆盖源文件。
+- 设置页新增 `AI CLI` 分区，可配置 Claude CLI 路径、检测 `claude --version`，并控制同一文档是否复用 `--session-id` / `--resume` 会话。
+- 新增左侧目录文件树：支持打开一个目录、展开/折叠子目录、从文件树打开支持的文档，未保存文件会在文件树名称前显示 `*`。
 
 ### Changed
 
 - 重写 README 为中英文双语文档，补充 Typola 的核心能力、安装方式、基础使用、打包命令、技术栈和产品优势说明。
+- AI 工作台左侧栏改为更贴近 Open Design 的消息流 + 底部 Composer 结构：默认只展示 Claude 最终结果，thinking / stderr 等过程信息折叠到“运行日志”，旧的结果确认页不再展示。
+- 左侧目录栏默认收起，改为通过正文左侧小箭头展开/收起；目录栏与 AI 工作台互斥显示，并且目录栏、AI 工作台、右侧 Word / HTML 预览宽度都支持拖拽调整。
+- 右侧 Word 预览面板可拖拽到更窄宽度，纸张预览更靠近分隔条展示，减少预览打开时左侧无效空白。
+- 主工作区新增轻量多文件 tab：从文件树、最近文件、系统打开或拖拽打开多个文档时会保留已打开文件，未保存 tab 文件名前显示 `*`；只打开单个文件时自动隐藏 tab 栏。
 - 主 WYSIWYG 编辑区改为宽版排版：Vditor 正文容器不再居中限宽，左右留白提升到 120px；右侧预览面板默认宽度提升到 520px、最小宽度提升到 400px，优先保证阅读和编辑宽度。
 - 右侧 Word / HTML 预览展开时默认改为左侧编辑区与右侧预览区约 `2:1` 宽度比例；双击分隔条会恢复该比例，拖拽时右侧预览最小宽度收窄到 320px。
 - 顶部应用工具栏背景与阅读底色统一，居中文件名字号提升到 13px 并增强对比度，改善窗口顶部的一致性和可读性。
@@ -35,6 +42,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复打包后的 Windows GUI 环境可能找不到 npm 全局安装的 Claude CLI 的问题：未配置路径时会自动探测 `%APPDATA%\npm\claude.cmd` / `claude.exe`，避免仅依赖应用进程 PATH。
+- 修复 Claude CLI 会话启动报 `Invalid session ID` 的问题：会话 ID 改为标准 UUID，并按 Open Design 的 Claude Code 适配方式使用 `-p --input-format stream-json --output-format stream-json --verbose` 与 JSONL stdin。
+- 修复 Claude CLI 启动后在 Windows 弹出黑色终端窗口的问题；后台检测和运行 Claude CLI 现在使用隐藏子进程窗口。
+- 修复 Claude stream-json 输出中 `thinking` / `result` / 包装消息被原样显示到回答区的问题；AI 工作台现在只把标准文本 delta 和 assistant text block 展示为 Claude 回答。
+- 修复多文件 tab 中当前活动文件刚被编辑后，关闭 tab 或关闭窗口可能没有提示未保存修改的问题。
+- 修复多文件 tab 中关闭未保存文档只提示“确定关闭”、不能选择保存的问题；现在关闭脏 tab 会先提示保存后关闭、不保存关闭或取消关闭。
+- 彻底修复右上角关闭按钮可能无响应的问题：关闭请求现在先拦截确认，再显式销毁窗口；销毁过程中的重复关闭事件会直接放行，并提供 Rust 后端强制关闭兜底。
+- 关闭存在未保存文档的窗口时改为“保存并关闭 / 不保存关闭 / 取消关闭”流程，选择保存会先写回所有未保存文档，保存失败则取消关闭，降低数据丢失风险。
+- 修复编辑器聚焦时 `Ctrl/Cmd+S` 被编辑器快捷键保护提前放行、无法触发保存的问题。
+- 正文编辑区滚动条右侧留白收敛到 30px，减少编辑区无效空白。
 - 修复 PR 审查发现的高严重度安全与数据风险：Tauri CSP 移除 `script-src` 的 `unsafe-inline`，文件系统能力移除 `fs:default` 并限制到常用用户文档目录 / 对话框授权路径，另存为统一走 Rust 写入校验；打开、拖入或系统传入新文件前会提示未保存内容，避免静默丢失。
 - 修复全局快捷键在 Vditor、CodeMirror、输入框等编辑焦点中抢占按键的问题；编辑区内按键会交回编辑器处理。
 - 修复终端输出在 Windows PTY 下可能因 Rust 端 `from_utf8_lossy` 提前替换字节而乱码的问题：`terminal_data` 改为传输原始字节，前端按当前默认编码流式解码；终端清屏命令现在会真正向 PTY 写入清屏控制序列。
