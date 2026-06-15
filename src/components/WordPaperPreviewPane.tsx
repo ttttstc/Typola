@@ -1,4 +1,5 @@
-import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { forwardRef, useDeferredValue, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { PreviewScrollHandle } from '../types/previewScroll';
 import { Check, ChevronDown, FileOutput, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
@@ -21,7 +22,7 @@ type WordPaperPreviewPaneProps = {
 };
 
 const CSS_PX_PER_CM = 96 / 2.54;
-const PREVIEW_HORIZONTAL_PADDING = 56;
+const PREVIEW_HORIZONTAL_PADDING = 28;
 
 function useDebouncedValue(value: string, delay: number): string {
   const [debounced, setDebounced] = useState(value);
@@ -392,16 +393,27 @@ export function paginateRenderedContent(
   });
 }
 
-export function WordPaperPreviewPane({
+export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPreviewPaneProps>(function WordPaperPreviewPane({
   source,
   previewWidth,
   canExport,
   onExportWord,
   onClose,
   filePath,
-}: WordPaperPreviewPaneProps) {
+}, ref) {
   const measureRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    scrollToRatio(ratio: number) {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      if (max <= 0) return;
+      scroller.scrollTop = Math.max(0, Math.min(max, ratio * max));
+    },
+  }), []);
   const presetPickerRef = useRef<HTMLDivElement>(null);
   const presetListboxRef = useRef<HTMLDivElement>(null);
   const presetListboxId = useId();
@@ -458,7 +470,7 @@ export function WordPaperPreviewPane({
   const style = useMemo(() => {
     const pageWidthPx = preset.page.width * CSS_PX_PER_CM;
     const pageHeightPx = preset.page.height * CSS_PX_PER_CM;
-    const availableWidth = Math.max(320, previewWidth - PREVIEW_HORIZONTAL_PADDING);
+    const availableWidth = Math.max(280, previewWidth - PREVIEW_HORIZONTAL_PADDING);
     const scale = Math.min(1, Math.max(0.42, availableWidth / pageWidthPx));
     return {
       ...createWordPreviewStyle(preset),
@@ -650,7 +662,7 @@ export function WordPaperPreviewPane({
           <X size={15} />
         </button>
       </div>
-      <div className="word-preview-scroll">
+      <div ref={scrollRef} className="word-preview-scroll">
         <div className="word-preview-stage" style={style as React.CSSProperties}>
           <div ref={pagesRef} className="word-preview-pages" />
           <div className="word-preview-measure word-paper" aria-hidden="true">
@@ -660,4 +672,4 @@ export function WordPaperPreviewPane({
       </div>
     </aside>
   );
-}
+});

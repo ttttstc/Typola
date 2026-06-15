@@ -1,4 +1,5 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import type { PreviewScrollHandle } from '../types/previewScroll';
 import { ClipboardCopy, FileOutput, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import { detectMarkdownRenderFeatures } from '../services/markdownFeatureDetector';
@@ -32,11 +33,25 @@ type ActionStatus = {
   text: string;
 };
 
-export function WechatPreviewPane({ source, fileName = 'document.md', onClose, filePath }: WechatPreviewPaneProps) {
+export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPaneProps>(function WechatPreviewPane(
+  { source, fileName = 'document.md', onClose, filePath },
+  ref,
+) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const deferredSource = useDeferredValue(source);
   const renderRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    scrollToRatio(ratio: number) {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      if (max <= 0) return;
+      scroller.scrollTop = Math.max(0, Math.min(max, ratio * max));
+    },
+  }), []);
   const renderIdRef = useRef(0);
   const [previewResult, setPreviewResult] = useState<WechatPreviewResult | null>(null);
   const [actionStatus, setActionStatus] = useState<ActionStatus | null>(null);
@@ -241,7 +256,7 @@ export function WechatPreviewPane({ source, fileName = 'document.md', onClose, f
           </ul>
         </div>
       )}
-      <div className="wechat-preview-scroll">
+      <div ref={scrollRef} className="wechat-preview-scroll">
         {effectiveStatus === 'empty' ? (
           <div className="wechat-preview-empty">{t('wechatPreviewEmpty')}</div>
         ) : effectiveStatus === 'loading' && !previewResult ? (
@@ -258,4 +273,4 @@ export function WechatPreviewPane({ source, fileName = 'document.md', onClose, f
       <div ref={renderRef} className="wechat-preview-render-source" aria-hidden="true" />
     </aside>
   );
-}
+});

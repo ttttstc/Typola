@@ -1,6 +1,7 @@
 import {
   BookOpenText,
   Braces,
+  FilePlus,
   FolderOpen,
   Newspaper,
   RefreshCw,
@@ -34,6 +35,7 @@ type ToolbarProps = {
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleTerminal: () => void;
+  onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -47,7 +49,7 @@ type ToolbarProps = {
 export function Toolbar({
   dirty, fileName,
   editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
-  onToggleTerminal, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  onToggleTerminal, onNew, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -70,13 +72,16 @@ export function Toolbar({
     >
       <div className="toolbar-left">
         <div className="toolbar-group toolbar-file-actions" aria-label={t('toolbarFileGroup')}>
-          <button data-no-window-drag="true" onClick={onOpen} title={t('toolbarOpenTitle')} aria-label={t('toolbarOpenLabel')}>
+          <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewTitle')} aria-label={t('toolbarNewLabel')}>
+            <FilePlus size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+          <button data-no-window-drag="true" onClick={onOpen} data-tooltip={t('toolbarOpenTitle')} aria-label={t('toolbarOpenLabel')}>
             <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} title={t('toolbarSaveTitle')} aria-label={t('toolbarSaveLabel')}>
+          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} data-tooltip={t('toolbarSaveTitle')} aria-label={t('toolbarSaveLabel')}>
             <Save size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} title={t('toolbarSaveAsTitle')} aria-label={t('toolbarSaveAsLabel')}>
+          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} data-tooltip={t('toolbarSaveAsTitle')} aria-label={t('toolbarSaveAsLabel')}>
             <SaveAll size={iconSize} strokeWidth={strokeWidth} />
           </button>
         </div>
@@ -96,7 +101,7 @@ export function Toolbar({
               onClick={onRestartUpdate}
               disabled={updateStatus.phase === 'installing'}
               data-no-window-drag="true"
-              title={
+              data-tooltip={
                 updateStatus.phase === 'installing'
                   ? t('toolbarUpdateInstallingTitle')
                   : `${t('toolbarRestartUpdateTitle')} ${updateStatus.version}`
@@ -124,7 +129,7 @@ export function Toolbar({
             onClick={onToggleEditorMode}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            title={t('toolbarSourceTitle')}
+            data-tooltip={t('toolbarSourceTitle')}
             aria-label={t('toolbarSourceLabel')}
           >
             <Braces size={iconSize} strokeWidth={strokeWidth} />
@@ -134,7 +139,7 @@ export function Toolbar({
             onClick={onToggleWordPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            title={t('toolbarWordPreviewTitle')}
+            data-tooltip={t('toolbarWordPreviewTitle')}
             aria-label={t('toolbarWordPreviewLabel')}
           >
             <BookOpenText size={iconSize} strokeWidth={strokeWidth} />
@@ -144,7 +149,7 @@ export function Toolbar({
             onClick={onToggleWechatPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            title={t('toolbarWechatPreviewTitle')}
+            data-tooltip={t('toolbarWechatPreviewTitle')}
             aria-label={t('toolbarWechatPreviewLabel')}
           >
             <Newspaper size={iconSize} strokeWidth={strokeWidth} />
@@ -153,7 +158,7 @@ export function Toolbar({
             className={terminalVisible ? 'active' : ''}
             onClick={onToggleTerminal}
             data-no-window-drag="true"
-            title={t('toolbarTerminalTitle')}
+            data-tooltip={t('toolbarTerminalTitle')}
             aria-label={t('toolbarTerminalLabel')}
           >
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
@@ -162,7 +167,7 @@ export function Toolbar({
             onClick={onOpenEditAssist}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            title="编辑辅助"
+            data-tooltip="编辑辅助 (Cmd+Shift+I)"
             aria-label="编辑辅助"
           >
             <WandSparkles size={iconSize} strokeWidth={strokeWidth} />
@@ -175,7 +180,7 @@ export function Toolbar({
             onPointerEnter={onPreloadSettings}
             onFocus={onPreloadSettings}
             onClick={onOpenSettings}
-            title={t('toolbarSettingsTitle')}
+            data-tooltip={t('toolbarSettingsTitle')}
             aria-label={t('toolbarSettingsLabel')}
           >
             <SlidersHorizontal size={iconSize} strokeWidth={strokeWidth} />

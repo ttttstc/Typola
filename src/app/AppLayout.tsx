@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { OpenedFile, TocItem } from '../types/document';
 import { createEmptyFile } from '../types/document';
@@ -22,14 +23,18 @@ import {
 } from '../services/updateService';
 import { scheduleDelayedAutoUpdateCheck } from '../services/autoUpdateScheduler';
 import { translate } from '../services/i18n';
+import { messageDialog } from '../services/dialogService';
+import { UnsavedChangesDialog, type UnsavedDecision } from '../components/UnsavedChangesDialog';
 import { Toolbar, type EditorMode } from '../components/Toolbar';
 import { StatusBar } from '../components/StatusBar';
 import { FloatingToc } from '../components/FloatingToc';
 import { FindReplacePanel } from '../components/FindReplacePanel';
 import { QuickOpenPanel } from '../components/QuickOpenPanel';
 import { EditAssistPanel } from '../components/EditAssistPanel';
+import { FileTreePanel } from '../components/FileTreePanel';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 import type { EditorCommandHandle } from '../types/editorCommands';
+import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
 import { addRecentFile, getRecentFiles, removeRecentFile, type RecentFile } from '../services/recentFilesService';
@@ -89,6 +94,11 @@ const TerminalPanel = lazy(() =>
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 type RightPanelMode = 'none' | 'word' | 'wechat';
+type LeftPanelMode = 'none' | 'workspace';
+type OpenFileTab = {
+  id: string;
+  file: OpenedFile;
+};
 type UpdateInstallState =
   | { phase: 'idle' }
   | { phase: 'downloading'; source: UpdateSource; update: AvailableUpdate }
@@ -99,6 +109,9 @@ type UpdateInstallState =
 const RIGHT_PANEL_MIN_WIDTH = 320;
 const RIGHT_PANEL_MAX_WIDTH = 760;
 const RIGHT_PANEL_RESIZER_GAP = 9;
+const LEFT_PANEL_MIN_WIDTH = 220;
+const LEFT_PANEL_MAX_WIDTH = 560;
+const WORKSPACE_PANEL_DEFAULT_WIDTH = 260;
 
 function imageExtensionFromMime(type: string): string {
   if (type === 'image/jpeg') return 'jpg';
@@ -159,6 +172,10 @@ function sameDocumentPath(a: string, b: string): boolean {
   return a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
 }
 
+function fileTabId(file: OpenedFile, fallback = ''): string {
+  return file.path || fallback || `untitled-${Date.now()}`;
+}
+
 export function AppLayout() {
   const settings = useSettings();
   const isTauriRuntime = '__TAURI_INTERNALS__' in window;
@@ -166,13 +183,26 @@ export function AppLayout() {
   const reopenAttempted = useRef(false);
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
+  const windowCloseInProgressRef = useRef(false);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const editorCommandRef = useRef<EditorCommandHandle | null>(null);
+  const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
+  const handleEditorScrollRatio = useCallback((ratio: number) => {
+    previewScrollRef.current?.scrollToRatio(ratio);
+  }, []);
   const fileRef = useRef<OpenedFile>(createEmptyFile());
+  const openTabsRef = useRef<OpenFileTab[]>([]);
+  const activeTabIdRef = useRef('');
   const defaultEncodingRef = useRef(settings.defaultEncoding);
   const autoSaveFailureRef = useRef({ key: '', count: 0, suspended: false });
   const lastSelfWriteRef = useRef({ path: '', at: 0 });
+  const dirtyFilesRef = useRef(false);
   const [file, setFile] = useState<OpenedFile>(createEmptyFile());
+  const [openTabs, setOpenTabs] = useState<OpenFileTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState('');
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [leftPanelMode, setLeftPanelMode] = useState<LeftPanelMode>('none');
+  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(WORKSPACE_PANEL_DEFAULT_WIDTH);
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
   const [activeTocIndex, setActiveTocIndex] = useState(0);
@@ -187,6 +217,7 @@ export function AppLayout() {
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [resizing, setResizing] = useState(false);
+  const [leftResizing, setLeftResizing] = useState<LeftPanelMode>('none');
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
@@ -205,6 +236,25 @@ export function AppLayout() {
   useEffect(() => {
     fileRef.current = file;
   }, [file]);
+
+  useEffect(() => {
+    openTabsRef.current = openTabs;
+  }, [openTabs]);
+
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  useEffect(() => {
+    dirtyFilesRef.current = file.dirty || openTabs.some((candidate) => candidate.file.dirty);
+  }, [file.dirty, openTabs]);
+
+  useEffect(() => {
+    if (!activeTabId) return;
+    setOpenTabs((tabs) => tabs.map((tab) => (
+      tab.id === activeTabId ? { ...tab, file } : tab
+    )));
+  }, [activeTabId, file]);
 
   useEffect(() => {
     defaultEncodingRef.current = settings.defaultEncoding;
@@ -234,13 +284,21 @@ export function AppLayout() {
     void preloadSettingsPage();
   }, []);
 
-  const confirmDiscardDirtyFile = useCallback(() => {
-    const current = fileRef.current;
-    if (!current.dirty) return true;
-    return window.confirm(`"${current.name}" 有未保存的修改，确定放弃并打开其他文件吗？`);
-  }, []);
-
   const applyOpenedFile = useCallback((opened: OpenedFile, path?: string) => {
+    const id = fileTabId(opened, path);
+    setOpenTabs((tabs) => {
+      const existingIndex = tabs.findIndex((tab) => (
+        opened.path && tab.file.path && sameDocumentPath(opened.path, tab.file.path)
+      ));
+      if (existingIndex >= 0) {
+        return tabs.map((tab, index) => index === existingIndex ? { id: tab.id, file: opened } : tab);
+      }
+      return [...tabs, { id, file: opened }];
+    });
+    setActiveTabId(() => {
+      const existing = openTabs.find((tab) => opened.path && tab.file.path && sameDocumentPath(opened.path, tab.file.path));
+      return existing?.id ?? id;
+    });
     setFile(opened);
     setToc(opened.fileType === 'docx' ? [] : extractToc(opened.content));
     const openedPath = opened.path || path || '';
@@ -257,17 +315,19 @@ export function AppLayout() {
     } else {
       setEditorMode('wysiwyg');
     }
-  }, []);
+  }, [openTabs]);
 
   const handleOpen = useCallback(async () => {
-    if (!confirmDiscardDirtyFile()) return;
     const { openFile } = await import('../services/fileService');
     const opened = await openFile(defaultEncodingRef.current);
     if (opened) applyOpenedFile(opened);
-  }, [applyOpenedFile, confirmDiscardDirtyFile]);
+  }, [applyOpenedFile]);
+
+  const handleNewFile = useCallback(() => {
+    applyOpenedFile(createEmptyFile());
+  }, [applyOpenedFile]);
 
   const handleOpenPath = useCallback(async (path: string) => {
-    if (!confirmDiscardDirtyFile()) return;
     const { openPath } = await import('../services/fileService');
     try {
       const opened = await openPath(path, defaultEncodingRef.current);
@@ -277,7 +337,166 @@ export function AppLayout() {
       setTransientMessage('打开失败，已从最近文件移除。');
       throw error;
     }
-  }, [applyOpenedFile, confirmDiscardDirtyFile]);
+  }, [applyOpenedFile]);
+
+  const handleSwitchTab = useCallback((tabId: string) => {
+    const tab = openTabs.find((candidate) => candidate.id === tabId);
+    if (!tab) return;
+    setActiveTabId(tab.id);
+    setFile(tab.file);
+    setToc(tab.file.fileType === 'docx' ? [] : extractToc(tab.file.content));
+    setDiskChangeMessage('');
+    setTransientMessage('');
+    setFindVisible(false);
+    setHtmlPresentationVisible(false);
+    if (tab.file.fileType === 'docx') {
+      setRightPanelMode('none');
+    }
+  }, [openTabs]);
+
+  const closeTypolaWindow = useCallback((appWindow: ReturnType<typeof getCurrentWindow>) => {
+    windowCloseInProgressRef.current = true;
+    void appWindow.destroy().catch(async (error) => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('force_close_main_window');
+      } catch (fallbackError) {
+        windowCloseInProgressRef.current = false;
+        console.warn('Failed to close Typola window:', error, fallbackError);
+      }
+    });
+  }, []);
+
+  const saveDirtyFilesBeforeClose = useCallback(async () => {
+    const { saveFile } = await import('../services/fileService');
+    const activeId = activeTabIdRef.current;
+    const tabs = openTabsRef.current.map((tab) => (
+      tab.id === activeId ? { ...tab, file: fileRef.current } : tab
+    ));
+    const dirtyTabs = tabs.filter((tab) => tab.file.dirty && tab.file.fileType !== 'docx');
+
+    for (const tab of dirtyTabs) {
+      const updated = await saveFile(tab.file);
+      if (updated.dirty) return false;
+      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+      setOpenTabs((currentTabs) => currentTabs.map((candidate) => (
+        candidate.id === tab.id ? { ...candidate, file: updated } : candidate
+      )));
+      if (tab.id === activeId) {
+        setFile(updated);
+        if (updated.path) setLastOpenedPath(updated.path);
+      }
+    }
+
+    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+    setAutoSaveError('');
+    setDiskChangeMessage('');
+    dirtyFilesRef.current = false;
+    return true;
+  }, []);
+
+  const [unsavedDialog, setUnsavedDialog] = useState<{ message: string } | null>(null);
+  const unsavedResolverRef = useRef<((decision: UnsavedDecision) => void) | null>(null);
+
+  const requestUnsavedChoice = useCallback((message: string) => {
+    return new Promise<UnsavedDecision>((resolve) => {
+      // 已有未决弹窗时,先把旧的 resolve 为 cancel,避免 Promise 泄漏
+      unsavedResolverRef.current?.('cancel');
+      unsavedResolverRef.current = resolve;
+      setUnsavedDialog({ message });
+    });
+  }, []);
+
+  const handleUnsavedChoice = useCallback((decision: UnsavedDecision) => {
+    setUnsavedDialog(null);
+    const resolve = unsavedResolverRef.current;
+    unsavedResolverRef.current = null;
+    resolve?.(decision);
+  }, []);
+
+  const confirmCloseWithDirtyFiles = useCallback(async () => {
+    if (!dirtyFilesRef.current) return true;
+    const dirtyTabs = openTabsRef.current.filter((tab) => tab.file.dirty && tab.file.fileType !== 'docx');
+    const liveActive = fileRef.current;
+    const liveActiveDirty = liveActive.dirty && liveActive.fileType !== 'docx';
+    const dirtyCount = Math.max(dirtyTabs.length, liveActiveDirty ? 1 : 0);
+    const message = dirtyCount > 1
+      ? `有 ${dirtyCount} 个文档存在未保存的修改，是否保存后关闭？`
+      : `“${liveActive.name}” 有未保存的修改，是否保存后关闭？`;
+    const choice = await requestUnsavedChoice(message);
+    if (choice === 'cancel') return false;
+    if (choice === 'discard') return true;
+    try {
+      return await saveDirtyFilesBeforeClose();
+    } catch (error) {
+      console.warn('Failed to save before closing:', error);
+      await messageDialog('保存失败，已取消关闭。请检查文件权限或磁盘状态后重试。', { title: '保存失败' });
+      return false;
+    }
+  }, [requestUnsavedChoice, saveDirtyFilesBeforeClose]);
+
+  const confirmCloseTabWithDirtyFile = useCallback(async (targetFile: OpenedFile) => {
+    if (!targetFile.dirty || targetFile.fileType === 'docx') return true;
+    const choice = await requestUnsavedChoice(`“${targetFile.name}” 有未保存的修改，是否保存后关闭？`);
+    if (choice === 'cancel') return false;
+    if (choice === 'discard') return true;
+    try {
+      const { saveFile } = await import('../services/fileService');
+      const updated = await saveFile(targetFile);
+      if (updated.dirty) return false;
+      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+      autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+      setAutoSaveError('');
+      setDiskChangeMessage('');
+      return true;
+    } catch (error) {
+      console.warn('Failed to save before closing tab:', error);
+      await messageDialog('保存失败，已取消关闭标签页。请检查文件权限或磁盘状态后重试。', { title: '保存失败' });
+      return false;
+    }
+  }, [requestUnsavedChoice]);
+
+  useEffect(() => {
+    if (!isTauriRuntime) return undefined;
+    const appWindow = getCurrentWindow();
+    if (typeof appWindow.onCloseRequested !== 'function') return undefined;
+    let unlisten: (() => void) | undefined;
+    void appWindow.onCloseRequested((event) => {
+      if (windowCloseInProgressRef.current) return;
+      event.preventDefault();
+      void confirmCloseWithDirtyFiles().then((shouldClose) => {
+        if (shouldClose) {
+          closeTypolaWindow(appWindow);
+        }
+      });
+    }).then((listener) => {
+      unlisten = listener;
+    });
+    return () => unlisten?.();
+  }, [closeTypolaWindow, confirmCloseWithDirtyFiles, isTauriRuntime]);
+
+  const handleCloseTab = useCallback((tabId: string) => {
+    const tab = openTabs.find((candidate) => candidate.id === tabId);
+    if (!tab) return;
+    const liveTabFile = activeTabId === tabId ? fileRef.current : tab.file;
+    void confirmCloseTabWithDirtyFile(liveTabFile).then((shouldClose) => {
+      if (!shouldClose) return;
+      const removedIndex = openTabs.findIndex((candidate) => candidate.id === tabId);
+      const nextTabs = openTabs.filter((candidate) => candidate.id !== tabId);
+      setOpenTabs(nextTabs);
+      if (activeTabId !== tabId) return;
+      const nextActive = nextTabs[Math.max(0, removedIndex - 1)] ?? nextTabs[0];
+      if (nextActive) {
+        setActiveTabId(nextActive.id);
+        setFile(nextActive.file);
+        setToc(nextActive.file.fileType === 'docx' ? [] : extractToc(nextActive.file.content));
+      } else {
+        setActiveTabId('');
+        setFile(createEmptyFile());
+        setToc([]);
+      }
+    });
+  }, [activeTabId, confirmCloseTabWithDirtyFile, openTabs]);
 
   const handleSave = useCallback(async () => {
     if (file.fileType === 'docx') return;
@@ -384,6 +603,10 @@ export function AppLayout() {
 
   const handleToggleTerminal = useCallback(() => {
     setTerminalVisible((visible) => !visible);
+  }, []);
+
+  const handleToggleWorkspacePanel = useCallback(() => {
+    setLeftPanelMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
   }, []);
 
   const handleCreateTerminal = useCallback(() => {
@@ -527,10 +750,11 @@ export function AppLayout() {
         setQuickOpenVisible(true);
         return;
       }
-      if (isEditableShortcutTarget(e.target)) return;
-      if (e.key === 'o' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleOpen(); return; }
       if (e.key === 's' && e.shiftKey && !e.altKey) { e.preventDefault(); handleSaveAs(); return; }
       if (e.key === 's' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleSave(); return; }
+      if (isEditableShortcutTarget(e.target)) return;
+      if (e.key === 'o' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleOpen(); return; }
+      if (e.key === 'n' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleNewFile(); return; }
       if (e.key === 'e' && e.shiftKey && !e.altKey) { e.preventDefault(); handleExportWord(); return; }
       if (e.key === 's' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleEditorMode(); return; }
       if (e.key === 'p' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleWordPreview(); return; }
@@ -548,6 +772,7 @@ export function AppLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [
     handleOpen,
+    handleNewFile,
     handleSave,
     handleSaveAs,
     handleExportWord,
@@ -807,7 +1032,9 @@ export function AppLayout() {
     rightPanelMode !== 'none' && !isDocx ? 'right-panel-open' : '',
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
+    leftPanelMode !== 'none' ? 'left-panel-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
+    leftResizing !== 'none' ? 'is-left-resizing' : '',
     resizing ? 'is-resizing' : '',
   ].filter(Boolean).join(' ');
 
@@ -852,6 +1079,39 @@ export function AppLayout() {
     }
     updateSettings({ tocAlwaysPinned: nextAlwaysPinned });
   }, []);
+
+  const handleLeftPanelResizerPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (leftPanelMode === 'none') return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = workspacePanelWidth;
+    setLeftResizing('workspace');
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextWidth = Math.min(
+        LEFT_PANEL_MAX_WIDTH,
+        Math.max(LEFT_PANEL_MIN_WIDTH, startWidth + moveEvent.clientX - startX),
+      );
+      setWorkspacePanelWidth(nextWidth);
+    };
+
+    const handlePointerUp = () => {
+      setLeftResizing('none');
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  }, [leftPanelMode, workspacePanelWidth]);
+
+  const dirtyPaths = useMemo(() => new Set(
+    openTabs
+      .filter((tab) => tab.file.dirty && tab.file.path)
+      .map((tab) => tab.file.path),
+  ), [openTabs]);
 
   useEffect(() => {
     if (toc.length === 0) return;
@@ -910,6 +1170,7 @@ export function AppLayout() {
         source={file.content}
         onChange={handleContentChange}
         headingScrollRequest={sourceHeadingScrollRequest}
+        onScrollRatio={handleEditorScrollRatio}
       />
     </Suspense>
   ) : shouldShowHtmlPresentation ? (
@@ -927,6 +1188,7 @@ export function AppLayout() {
         source={file.content}
         onChange={handleContentChange}
         filePath={file.path}
+        onScrollRatio={handleEditorScrollRatio}
       />
     </Suspense>
   );
@@ -934,6 +1196,7 @@ export function AppLayout() {
   const rightPanel = rightPanelMode === 'word' && !isDocx ? (
     <Suspense fallback={<aside className="word-preview-panel" aria-label={t('wordPreviewAria')} />}>
       <WordPaperPreviewPane
+        ref={previewScrollRef}
         source={file.content}
         previewWidth={rightPanelWidth}
         canExport={Boolean(file.path)}
@@ -945,6 +1208,7 @@ export function AppLayout() {
   ) : rightPanelMode === 'wechat' && !isDocx ? (
     <Suspense fallback={<aside className="wechat-preview-panel" aria-label={t('wechatPreviewAria')} />}>
       <WechatPreviewPane
+        ref={previewScrollRef}
         source={file.content}
         fileName={file.name}
         onClose={() => setRightPanelMode('none')}
@@ -980,6 +1244,7 @@ export function AppLayout() {
         onToggleWordPreview={handleToggleWordPreview}
         onToggleWechatPreview={handleToggleWechatPreview}
         onToggleTerminal={handleToggleTerminal}
+        onNew={handleNewFile}
         onOpen={handleOpen}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
@@ -997,7 +1262,38 @@ export function AppLayout() {
         className={mainContentClassName}
         style={{ '--right-panel-width': `${rightPanelWidth}px` } as React.CSSProperties}
       >
-        {isDocx ? docxPane : (
+        <button
+          type="button"
+          className={`workspace-toggle-rail ${leftPanelMode === 'workspace' ? 'active' : ''}`}
+          onClick={handleToggleWorkspacePanel}
+          aria-label={leftPanelMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
+          title={leftPanelMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
+        >
+          {leftPanelMode === 'workspace' ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+        </button>
+        {leftPanelMode === 'workspace' && (
+          <>
+            <FileTreePanel
+              rootPath={workspaceRoot}
+              activePath={file.path}
+              dirtyPaths={dirtyPaths}
+              width={workspacePanelWidth}
+              onRootChange={setWorkspaceRoot}
+              onOpenFile={(path) => {
+                void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
+              }}
+            />
+            <div
+              className={`left-panel-resizer ${leftResizing === 'workspace' ? 'dragging' : ''}`}
+              role="separator"
+              aria-label="调整目录栏宽度"
+              aria-orientation="vertical"
+              title="拖拽调整目录栏宽度"
+              onPointerDown={handleLeftPanelResizerPointerDown}
+            />
+          </>
+        )}
+        {!isDocx && (
           <>
             <FloatingToc
               items={toc}
@@ -1008,9 +1304,40 @@ export function AppLayout() {
               onAlwaysPinnedChange={handleTocAlwaysPinnedChange}
               onNavigate={handleTocNavigate}
             />
-            {editorPane}
           </>
         )}
+        <section className="editor-workbench">
+          {openTabs.length > 1 && (
+            <div className="editor-tabbar" role="tablist" aria-label="打开的文件">
+              {openTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className={`editor-tab ${tab.id === activeTabId ? 'active' : ''}`}
+                  title={tab.file.path || tab.file.name}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={tab.id === activeTabId}
+                    className="editor-tab-main"
+                    onClick={() => handleSwitchTab(tab.id)}
+                  >
+                    <span>{tab.file.dirty ? `*${tab.file.name}` : tab.file.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="editor-tab-close"
+                    aria-label={`关闭 ${tab.file.name}`}
+                    onClick={() => handleCloseTab(tab.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {isDocx ? docxPane : editorPane}
+        </section>
         {rightPanelMode !== 'none' && !isDocx && (
           <div
             className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
@@ -1074,6 +1401,11 @@ export function AppLayout() {
           />
         </Suspense>
       )}
+      <UnsavedChangesDialog
+        open={unsavedDialog !== null}
+        message={unsavedDialog?.message ?? ''}
+        onChoice={handleUnsavedChoice}
+      />
     </div>
   );
 }

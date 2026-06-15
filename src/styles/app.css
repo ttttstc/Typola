@@ -3,7 +3,7 @@
 :root {
   /* Neutral scale */
   --bg: oklch(97% 0.012 80);       /* warm cream — preview area */
-  --surface: oklch(99% 0.005 80);   /* pure white — editor, sidebar */
+  --surface: oklch(98% 0.012 80);   /* warm cream — editor, sidebar (unified with --bg) */
   --border: oklch(89% 0.012 80);    /* dividers, input borders */
   --fg: oklch(20% 0.02 60);         /* body text, headings */
   --muted: oklch(48% 0.015 60);     /* secondary text, buttons */
@@ -12,16 +12,16 @@
   --accent: oklch(58% 0.16 35);
 
   /* Shared surfaces */
-  --panel-bg: oklch(99% 0.005 80 / 0.92);
-  --control-bg: oklch(99% 0.005 80 / 0.58);
-  --control-hover-bg: oklch(99% 0.005 80 / 0.76);
+  --panel-bg: oklch(99% 0.012 80 / 0.92);
+  --control-bg: oklch(99% 0.012 80 / 0.58);
+  --control-hover-bg: oklch(99% 0.012 80 / 0.76);
   --control-active-bg: oklch(58% 0.16 35 / 0.1);
   --border-soft: oklch(89% 0.012 80 / 0.42);
   --border-hover: oklch(80% 0.014 80 / 0.58);
   --overlay-bg: oklch(20% 0.02 60 / 0.35);
   --shadow-soft: oklch(20% 0.02 60 / 0.18);
   --paper-shadow: oklch(20% 0.02 60 / 0.08);
-  --toc-panel-bg: oklch(99% 0.005 80 / 0.72);
+  --toc-panel-bg: oklch(99% 0.012 80 / 0.72);
   --success: oklch(44% 0.09 145);
   --danger: oklch(52% 0.16 30);
   --select-chevron: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23766f65' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -288,6 +288,91 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   min-width: 0;
 }
 
+.editor-workbench {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.editor-workbench > .editor-pane,
+.editor-workbench > .wysiwyg-editor-pane,
+.editor-workbench > .html-presentation-pane {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-tabbar {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: color-mix(in oklch, var(--surface) 82%, var(--bg));
+  flex-shrink: 0;
+}
+
+.editor-tab {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.editor-tab.active {
+  background: var(--panel-bg);
+  border-color: var(--border-soft);
+  color: var(--fg);
+  box-shadow: 0 4px 14px color-mix(in oklch, var(--paper-shadow) 28%, transparent);
+}
+
+.editor-tab-main {
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0 6px 0 11px;
+  text-align: left;
+}
+
+.editor-tab-main span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-tab-close {
+  width: 26px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 8px 1px 4px;
+}
+
+.editor-tab-close:hover {
+  color: var(--danger);
+}
+
 /* When a right panel is open, every writing-layout pane (including the HTML
    presentation pane that replaces the editor in `html-presentation-layout`)
    must refuse to shrink below the readable threshold. The right panel
@@ -367,11 +452,66 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   cursor: col-resize;
 }
 
-.main-content.is-resizing * {
+.main-content.is-left-resizing {
+  cursor: col-resize;
+}
+
+.main-content.is-resizing *,
+.main-content.is-left-resizing * {
   user-select: none;
 }
 
 /* ===== Resizer (9px hit area for optional right preview) ===== */
+
+.workspace-toggle-rail {
+  flex: 0 0 24px;
+  width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-right: 1px solid var(--border-soft);
+  background: color-mix(in oklch, var(--surface) 72%, var(--bg));
+  color: var(--muted);
+  cursor: pointer;
+  z-index: 6;
+}
+
+.workspace-toggle-rail:hover,
+.workspace-toggle-rail.active {
+  color: var(--accent);
+  background: var(--control-hover-bg);
+}
+
+.left-panel-resizer {
+  position: relative;
+  flex: 0 0 9px;
+  width: 9px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 6;
+}
+
+.left-panel-resizer::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 3px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--border);
+  opacity: 0.28;
+  transform: translateY(-50%);
+  transition: background 0.15s, opacity 0.15s, height 0.15s;
+}
+
+.left-panel-resizer:hover::before,
+.left-panel-resizer.dragging::before {
+  height: 58px;
+  background: var(--accent);
+  opacity: 0.72;
+}
 
 .word-preview-resizer {
   width: 9px;
@@ -874,12 +1014,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .wysiwyg-editor-pane .vditor-ir,
 .wysiwyg-editor-pane .vditor-wysiwyg {
   height: 100%;
-  padding: 10px 120px;
+  padding: 10px 30px 10px 120px;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--reading-font-family, var(--font-reading));
   font-size: 15px;
   line-height: 1.72;
+}
+
+.right-panel-open .wysiwyg-editor-pane .vditor-ir,
+.right-panel-open .wysiwyg-editor-pane .vditor-wysiwyg {
+  padding-left: clamp(48px, 5vw, 84px);
+  padding-right: 30px;
 }
 
 .wysiwyg-editor-pane .vditor-reset {
@@ -1381,7 +1527,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 18px 18px 40px;
+  padding: 12px 12px 40px;
 }
 
 .word-preview-stage {
@@ -1391,7 +1537,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .word-preview-pages {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 22px;
 }
 
@@ -1967,6 +2113,118 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   cursor: pointer;
   font-family: var(--font-body);
   font-size: 12px;
+}
+
+/* ===== Workspace File Tree ===== */
+
+.workspace-sidebar {
+  flex: 0 0 auto;
+  min-width: 220px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border-soft);
+  background: color-mix(in oklch, var(--surface) 88%, var(--bg));
+}
+
+.workspace-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 10px 8px;
+}
+
+.workspace-sidebar-header span,
+.workspace-root-path {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-sidebar-header strong {
+  display: block;
+  max-width: 170px;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-sidebar-header button,
+.workspace-empty {
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.workspace-sidebar-header button {
+  width: 30px;
+  height: 30px;
+}
+
+.workspace-root-path {
+  overflow: hidden;
+  padding: 0 10px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-list {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 6px 10px;
+}
+
+.workspace-empty {
+  width: 100%;
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.file-tree-item {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.file-tree-item:hover,
+.file-tree-item.active {
+  background: var(--control-hover-bg);
+}
+
+.file-tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-spacer {
+  width: 13px;
+  flex-shrink: 0;
+}
+
+.file-tree-loading,
+.file-tree-error {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.file-tree-error {
+  color: var(--danger);
 }
 
 .find-panel button:hover,
@@ -3490,4 +3748,270 @@ html[data-theme='dark'] .terminal-session {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ===== Unsaved Changes Dialog ===== */
+
+.unsaved-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(2px);
+}
+
+.unsaved-dialog {
+  width: min(420px, 100%);
+  padding: 22px 22px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-bg);
+  box-shadow: 0 18px 48px var(--shadow-soft);
+  color: var(--fg);
+}
+
+.unsaved-dialog-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.unsaved-dialog-body {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: break-all;
+}
+
+.unsaved-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.unsaved-dialog-button {
+  height: 30px;
+  min-width: 76px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.unsaved-dialog-button:hover {
+  background: var(--control-hover-bg);
+  border-color: var(--border-hover);
+}
+
+.unsaved-dialog-button.save {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: oklch(99% 0.005 80);
+}
+
+.unsaved-dialog-button.save:hover {
+  background: color-mix(in oklch, var(--accent) 88%, black);
+  border-color: color-mix(in oklch, var(--accent) 88%, black);
+}
+
+.unsaved-dialog-button.discard {
+  color: var(--danger);
+}
+
+.unsaved-dialog-button.discard:hover {
+  background: color-mix(in oklch, var(--danger) 10%, var(--control-hover-bg));
+  border-color: color-mix(in oklch, var(--danger) 35%, transparent);
+}
+
+.unsaved-dialog-button:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+
+/* ===== Editor Context Menu ===== */
+
+.editor-ctx-menu {
+  position: fixed;
+  z-index: 900;
+  min-width: 196px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-bg);
+  box-shadow: 0 14px 36px var(--shadow-soft);
+  color: var(--fg);
+  font-size: 12.5px;
+  user-select: none;
+}
+
+.editor-ctx-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+}
+
+.editor-ctx-heading-label {
+  color: var(--muted);
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.editor-ctx-heading-row button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.editor-ctx-heading-row button:hover {
+  background: var(--control-hover-bg);
+  border-color: var(--border-soft);
+}
+
+.editor-ctx-separator {
+  height: 1px;
+  margin: 4px 4px;
+  background: var(--border-soft);
+}
+
+.editor-ctx-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-ctx-item:hover:not(:disabled) {
+  background: var(--control-hover-bg);
+}
+
+.editor-ctx-item:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.editor-ctx-item kbd {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin-left: 16px;
+}
+
+/* ===== Vditor IR Code Block (single-view + editing indicator) ===== */
+
+/* Vditor IR 默认会同时渲染源码 pre(.vditor-ir__marker--pre)和高亮预览 pre
+   (.vditor-ir__preview),导致代码块出现两段一样的内容。隐藏预览 pre,
+   只保留可编辑源码,避免视觉重复。 */
+.vditor-ir [data-type="code-block"] > pre.vditor-ir__preview {
+  display: none !important;
+}
+
+/* 代码块容器:始终有轻边框,聚焦时显性突出 */
+.vditor-ir [data-type="code-block"] {
+  position: relative;
+  margin: 12px 0;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 90%, var(--bg));
+  border: 1px solid var(--border-soft);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.vditor-ir [data-type="code-block"]:focus-within {
+  border-color: color-mix(in oklch, var(--accent) 58%, transparent);
+  background: color-mix(in oklch, var(--accent) 6%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 14%, transparent);
+}
+
+/* 源码 pre 紧贴容器边框,边距清爽 */
+.vditor-ir [data-type="code-block"] > pre.vditor-ir__marker--pre {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* ===== Toolbar custom tooltip ===== */
+
+.app-toolbar button[data-tooltip] {
+  position: relative;
+}
+
+.app-toolbar button[data-tooltip]::after,
+.app-toolbar button[data-tooltip]::before {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -2px);
+  transition: opacity 120ms ease 350ms, transform 120ms ease 350ms;
+  z-index: 200;
+}
+
+.app-toolbar button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--fg) 92%, transparent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--shadow-soft) 60%, transparent);
+}
+
+.app-toolbar button[data-tooltip]::before {
+  content: '';
+  top: calc(100% + 1px);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid color-mix(in oklch, var(--fg) 92%, transparent);
+}
+
+.app-toolbar button[data-tooltip]:hover:not(:disabled)::after,
+.app-toolbar button[data-tooltip]:hover:not(:disabled)::before,
+.app-toolbar button[data-tooltip]:focus-visible::after,
+.app-toolbar button[data-tooltip]:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.app-toolbar button[data-tooltip]:disabled::after,
+.app-toolbar button[data-tooltip]:disabled::before {
+  display: none;
 }

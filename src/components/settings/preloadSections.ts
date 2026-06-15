@@ -27,5 +27,8 @@ export const preloadHtmlExportSection = () =>
 export const preloadTerminalSection = () =>
   import('./TerminalSection').then((module) => ({ default: module.TerminalSection }));
 
+export const preloadAiCliSection = () =>
+  import('./AiCliSection').then((module) => ({ default: module.AiCliSection }));
+
 export const preloadAboutSection = () =>
   import('./AboutSection').then((module) => ({ default: module.AboutSection }));

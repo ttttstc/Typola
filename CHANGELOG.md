@@ -7,10 +7,18 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
+- 新增左侧目录文件树：支持打开一个目录、展开/折叠子目录、从文件树打开支持的文档，未保存文件会在文件树名称前显示 `*`。
+- 设置页新增 `AI CLI` 分区：可配置 Claude CLI 路径并检测 `claude --version`，供后续 AI 集成功能使用。
+- 编辑器与右侧预览同步滚动：编辑器滚动时右侧 Word / 公众号预览按 scroll ratio 单向同步（rAF 节流，零额外重渲染）。
+- 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 
 ### Changed
 
 - 重写 README 为中英文双语文档，补充 Typola 的核心能力、安装方式、基础使用、打包命令、技术栈和产品优势说明。
+- 左侧目录栏默认收起，改为通过正文左侧小箭头展开/收起；目录栏与右侧 Word / HTML 预览宽度均支持拖拽调整。
+- 顶栏控件与整体背景配色统一到暖米基底：`--surface` / `--panel-bg` / `--control-bg` / `--toc-panel-bg` 等基底色相对齐 `--bg`，消除顶栏控件在暖米背景上「比背景更白」的不协调。
+- 右侧 Word 预览面板可拖拽到更窄宽度，纸张预览更靠近分隔条展示，减少预览打开时左侧无效空白。
+- 主工作区新增轻量多文件 tab：从文件树、最近文件、系统打开或拖拽打开多个文档时会保留已打开文件，未保存 tab 文件名前显示 `*`；只打开单个文件时自动隐藏 tab 栏。
 - 主 WYSIWYG 编辑区改为宽版排版：Vditor 正文容器不再居中限宽，左右留白提升到 120px；右侧预览面板默认宽度提升到 520px、最小宽度提升到 400px，优先保证阅读和编辑宽度。
 - 右侧 Word / HTML 预览展开时默认改为左侧编辑区与右侧预览区约 `2:1` 宽度比例；双击分隔条会恢复该比例，拖拽时右侧预览最小宽度收窄到 320px。
 - 顶部应用工具栏背景与阅读底色统一，居中文件名字号提升到 13px 并增强对比度，改善窗口顶部的一致性和可读性。
@@ -35,6 +43,13 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 tab 关闭与窗口关闭未保存确认在 Tauri WebView2 下不弹窗的问题：原 `window.confirm` 会被 WebView 静默吞掉，造成 tab 关闭时静默丢失编辑；改为自定义 React 模态对话框（保存 / 不保存 / 取消 三按钮），并补全 `dialog:allow-confirm` / `dialog:allow-message` capability。
+- 修复 WYSIWYG 模式下 Markdown 代码块或行内代码编辑时光标频繁跳回开头的问题：Vditor IR 归一化让受控同步 `editor.getValue() === source` 判断失效，触发 `setValue` 重置光标；改为记录"自身回显值"，自身回显时跳过 `setValue`，外部写入仍正常刷新。
+- 修复多文件 tab 中当前活动文件刚被编辑后，关闭 tab 或关闭窗口可能没有提示未保存修改的问题。
+- 彻底修复右上角关闭按钮可能无响应的问题：关闭请求现在先拦截确认，再显式销毁窗口；销毁过程中的重复关闭事件会直接放行，并提供 Rust 后端强制关闭兜底。
+- 关闭存在未保存文档的窗口时改为“保存并关闭 / 不保存关闭 / 取消关闭”流程，选择保存会先写回所有未保存文档，保存失败则取消关闭，降低数据丢失风险。
+- 修复编辑器聚焦时 `Ctrl/Cmd+S` 被编辑器快捷键保护提前放行、无法触发保存的问题。
+- 正文编辑区滚动条右侧留白收敛到 30px，减少编辑区无效空白。
 - 修复 PR 审查发现的高严重度安全与数据风险：Tauri CSP 移除 `script-src` 的 `unsafe-inline`，文件系统能力移除 `fs:default` 并限制到常用用户文档目录 / 对话框授权路径，另存为统一走 Rust 写入校验；打开、拖入或系统传入新文件前会提示未保存内容，避免静默丢失。
 - 修复全局快捷键在 Vditor、CodeMirror、输入框等编辑焦点中抢占按键的问题；编辑区内按键会交回编辑器处理。
 - 修复终端输出在 Windows PTY 下可能因 Rust 端 `from_utf8_lossy` 提前替换字节而乱码的问题：`terminal_data` 改为传输原始字节，前端按当前默认编码流式解码；终端清屏命令现在会真正向 PTY 写入清屏控制序列。
