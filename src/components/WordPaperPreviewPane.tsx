@@ -433,7 +433,7 @@ export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPre
      close this side panel — the user can still reopen it once the window
      grows back. */
   useEffect(() => {
-    const MIN_VIEWPORT = 910;
+    const MIN_VIEWPORT = 950;
     const handleResize = () => {
       if (window.innerWidth < MIN_VIEWPORT) {
         onClose();

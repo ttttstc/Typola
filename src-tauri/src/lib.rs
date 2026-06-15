@@ -156,6 +156,14 @@ struct AgentSessionRecord {
     updated_at: u64,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentWriteRequest {
+  document_path: String,
+  file_name: String,
+  data: Vec<u8>,
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct TerminalCreateResult {
@@ -486,6 +494,26 @@ fn list_directory_entries(
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(entries)
+}
+
+#[tauri::command]
+fn write_attachment_file(request: AttachmentWriteRequest) -> Result<String, String> {
+  let document_path = PathBuf::from(request.document_path);
+  if !is_writable_document_path(&document_path) {
+    return Err("unsupported document type".into());
+  }
+
+  let parent = document_path.parent().ok_or_else(|| "document has no parent directory".to_string())?;
+  let safe_name = sanitize_attachment_file_name(&request.file_name);
+  let assets_dir = parent.join("assets");
+  std::fs::create_dir_all(&assets_dir).map_err(|error| format!("failed to create assets directory: {error}"))?;
+  let output_path = unique_attachment_path(&assets_dir, &safe_name);
+  std::fs::write(&output_path, request.data).map_err(|error| format!("failed to write attachment: {error}"))?;
+  let file_name = output_path
+    .file_name()
+    .and_then(OsStr::to_str)
+    .ok_or_else(|| "invalid attachment file name".to_string())?;
+  Ok(format!("./assets/{file_name}"))
 }
 
 #[tauri::command]
@@ -1260,6 +1288,42 @@ fn is_valid_uuid(value: &str) -> bool {
 fn generate_local_id(prefix: &str) -> String {
     let counter = LOCAL_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("{prefix}-{}-{}-{counter}", std::process::id(), now_millis())
+}
+
+fn sanitize_attachment_file_name(file_name: &str) -> String {
+  let candidate = Path::new(file_name)
+    .file_name()
+    .and_then(OsStr::to_str)
+    .unwrap_or("pasted-image.png")
+    .chars()
+    .map(|ch| match ch {
+      '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '-',
+      _ => ch,
+    })
+    .collect::<String>();
+  let trimmed = candidate.trim_matches(['.', ' ']).trim();
+  if trimmed.is_empty() {
+    "pasted-image.png".into()
+  } else {
+    trimmed.chars().take(96).collect()
+  }
+}
+
+fn unique_attachment_path(dir: &Path, file_name: &str) -> PathBuf {
+  let original = Path::new(file_name);
+  let stem = original
+    .file_stem()
+    .and_then(OsStr::to_str)
+    .filter(|value| !value.is_empty())
+    .unwrap_or("pasted-image");
+  let extension = original.extension().and_then(OsStr::to_str).unwrap_or("png");
+  let mut candidate = dir.join(format!("{stem}.{extension}"));
+  let mut index = 2;
+  while candidate.exists() {
+    candidate = dir.join(format!("{stem}-{index}.{extension}"));
+    index += 1;
+  }
+  candidate
 }
 
 fn resolve_terminal_cwd(requested: Option<&str>) -> PathBuf {

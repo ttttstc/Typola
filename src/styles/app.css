@@ -400,11 +400,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .word-preview-open .word-preview-panel,
 .wechat-preview-open .wechat-preview-panel {
   flex: 0 0 clamp(
-    280px,
+    320px,
     var(--right-panel-width, calc((100% - var(--main-resizer-gap)) / 3)),
     calc(100% - var(--main-min-width) - var(--main-resizer-gap))
   );
-  min-width: 280px;
+  min-width: 320px;
 }
 
 /* Explicit layout class for the HTML reading view. The pane is the main
@@ -426,18 +426,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex-shrink: 1;
 }
 
-/* Below 910px (620 main + 9 resizer + 280 right panel = 909) the right
+/* Below 950px (620 main + 9 resizer + 320 right panel = 949) the right
    panel cannot co-exist with the 620px main editor floor. WordPaperPreviewPane
    auto-closes itself in this range (see its useEffect) and the CSS clamp
    below uses the viewport width to make sure that any in-flight render
    still respects the 620px main area instead of overflowing into a
    clipped, unusable side panel. */
-@media (max-width: 910px) {
+@media (max-width: 950px) {
   .right-panel-open .word-preview-panel,
   .right-panel-open .wechat-preview-panel,
   .word-preview-open .word-preview-panel,
   .wechat-preview-open .wechat-preview-panel {
-    flex-basis: clamp(280px, var(--right-panel-width, calc((100vw - var(--main-resizer-gap)) / 3)), calc(100vw - var(--main-min-width) - var(--main-resizer-gap)));
+    flex-basis: clamp(320px, var(--right-panel-width, calc((100vw - var(--main-resizer-gap)) / 3)), calc(100vw - var(--main-min-width) - var(--main-resizer-gap)));
   }
 }
 

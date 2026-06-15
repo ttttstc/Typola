@@ -107,7 +107,7 @@ type UpdateInstallState =
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
-const RIGHT_PANEL_MIN_WIDTH = 280;
+const RIGHT_PANEL_MIN_WIDTH = 320;
 const RIGHT_PANEL_MAX_WIDTH = 760;
 const RIGHT_PANEL_RESIZER_GAP = 9;
 const LEFT_PANEL_MIN_WIDTH = 220;
