@@ -1,8 +1,19 @@
 # Typola AI 文档工作台 Spec（终端方向 · 心流模式）
 
-> 面向开发移交（codex）。方向/范围/验收见
-> [docs/changes/2026-06-14-work-package/brief.md](changes/2026-06-14-work-package/brief.md)；
-> headless 删除清单见 [docs/changes/2026-06-14-work-package/headless-removal.md](changes/2026-06-14-work-package/headless-removal.md)。
+> **状态**：已移交开发。前置（headless 移除）已完成。MVP 待 codex 实施。
+> **配套文档**：
+> - [brief.md](changes/2026-06-14-work-package/brief.md) — 方向 / 范围 / 验收
+> - [headless-removal.md](changes/2026-06-14-work-package/headless-removal.md) — 移除清单（已执行，留作历史）
+> - [handoff.md](changes/2026-06-14-work-package/handoff.md) — **给 codex 的移交 prompt（启动开发会话用）**
+
+## 当前基线（截至 2026-06-16）
+
+✅ **已就绪**（前置全部完成，可直接基于当前 main 接力）：
+- headless AI 工作台原型已外科式移除（commit `abae51e`），保留 `agent_detect` 等地基
+- 文件树（`FileTreePanel`）+ 多 tab + 未保存改动三按钮对话框（`UnsavedChangesDialog`）+ 编辑器→预览同步滚动 + WYSIWYG 代码块焦点态 + 右键菜单（`EditorContextMenu`）+ 自定义 tooltip + 新建文件按钮
+- 跑通 `npm run typecheck` / `npm test`(222) / `cargo test`(9) / `cargo check`
+
+🚧 **本期 MVP**（codex 接力实施，按本 spec §4–§9）：心流模式布局 + 场景启动器 + 件1 选区注入 + 写盘刷新 + 改动可见 + 本次产物列表 + agent 终端启动/权限。
 
 ## 0. 方案与定位
 
@@ -46,14 +57,15 @@
 | 右栏槽 + resizer | `AppLayout` `rightPanelMode`/`rightPanelWidth` + word-preview-resizer |
 | 设置 | `settingsService.ts`（`aiClaudePath` 等） |
 
-## 3. 删除 headless（前置）
-见 [headless-removal.md](changes/2026-06-14-work-package/headless-removal.md)。外科式：删 `AIWorkspacePanel` + agentService 运行路径 + Rust `agent_run_*`/`agent_session_*`/`agent_event` + AppLayout 的 ai 左槽接线；**保留** `agent_detect`/`detectAgent`、`FileTreePanel`、`workspaceService`、`TerminalPanel`、watcher、`AiCliSection` 检测。建议先做完此步并跑通 typecheck/test/build/cargo。
+## 3. 删除 headless（前置）— ✅ 已完成（commit `abae51e`）
+按 [headless-removal.md](changes/2026-06-14-work-package/headless-removal.md) 外科式移除：删 `AIWorkspacePanel` + agentService 运行路径 + Rust `agent_run_*`/`agent_session_*`/`agent_event` + AppLayout 的 ai 左槽接线、CSS `.ai-workbench-*`、i18n、settings 中 `aiResumeSessions`。**保留** `agent_detect`/`detectAgent`、`FileTreePanel`、`workspaceService`、`TerminalPanel`、watcher、`AiCliSection`（路径配置 + 版本检测）。
+**codex 接力时无需重做。** typecheck/test/build/cargo 当前全绿。
 
 ## 4. 心流模式（布局编排）
 
 ### 状态与入口
 - `AppLayout` 新增 `flowMode: boolean`（持久化到 settings `flowModeEnabled`）。
-- 工具栏原 AI 按钮（[Toolbar.tsx](../src/components/Toolbar.tsx) L164–173，Bot）改造为**心流模式开关**；快捷键沿用 `Ctrl/Cmd+Shift+A`；i18n `toolbarAiWorkbench*` 改为心流模式文案。
+- 工具栏新增**心流模式开关**按钮（建议 `Sparkles` 或 `Workflow` 图标，与现有 toolbar 风格一致），快捷键 `Ctrl/Cmd+Shift+A`；新增 i18n `toolbarFlowMode*`（zh/en/ja）。原 AI 按钮 + `toolbarAiWorkbench*` i18n 在 headless 移除时已删除。
 - docx 文件下禁用。
 
 ### 布局
@@ -135,9 +147,9 @@ export type FlowScenario = {
 | 回车 | **不自动回车**（你输指令） | **自动回车**（autoRun） |
 | 预设 | 无 | 有（模板/skill） |
 
-- 扩展 `EditorCommandHandle`：加 `getSelection(): {text; fromLine?; toLine?} | null`。CodeMirror 用 `state.selection`+`doc.lineAt`；Vditor/预览回落 `window.getSelection()`。
+- 扩展 `EditorCommandHandle`：加 `getSelection(): {text; fromLine?; toLine?} | null`。CodeMirror 用 `state.selection`+`doc.lineAt`；Vditor 优先 `editor.getSelection()`（已存在的 API），回落 `window.getSelection()`。
 - `agentBridge`：组装 ```text path:Lx-Ly\n<选区>\n```，bracketed paste（`\x1b[200~`…`\x1b[201~`），件1 不加 `\r`。
-- 注入目标经 `TerminalPanel` handle（§9）。
+- 注入目标经 `TerminalPanel` handle（§8）。
 
 ## 8. agent 终端寻址 / 启动 / 权限（shell + 自动跑 claude）
 
@@ -182,21 +194,46 @@ MVP = **纯终端**（本 spec）。已评估并**暂缓** "Agent SDK app 原生
 
 ## 10. 改动文件清单
 
-**新增（前端）**：`src/components/ScenarioPanel.tsx`、`src/components/SelectionSendButton.tsx`、`src/services/agentBridge.ts`、`src/services/flowScenarioService.ts`（注册表读写/默认 seed/占位符解析）、`src/services/workspaceWatchService.ts`、`src/types/flowScenario.ts`。
-**改（前端）**：`AppLayout.tsx`（flowMode、编排、flowRightTab、件1 触发、6.1 reload、agentChangedPaths、terminalPanelRef、删 ai 左槽）、`Toolbar.tsx`（AI→心流模式开关）、`TerminalPanel.tsx`（handle + startAgentTerminal/sendText/sendTextAndSubmit + 权限 flag + restart）、`FileTreePanel.tsx`（`agentChangedPaths` 高亮）、`editorCommands.ts`+`EditorPane.tsx`/`WysiwygEditorPane.tsx`（`getSelection`）、`agentService.ts`（仅留 `detectAgent`）、`AiCliSection.tsx`（删会话项 + 加“自动接受编辑”说明可选）、`i18n.ts`、`app.css`（删 `.ai-workbench-*`，加 scenario/产物/分段样式）、`settingsService.ts`（`flowModeEnabled`、`flowAutoAcceptEdits`）。
-**删**：`AIWorkspacePanel.tsx`。
-**改（后端）**：`lib.rs`（删 agent_run_*/session/event；新增 `watch_workspace`/`unwatch_workspace`+`workspace_changed`）、`capabilities/default.json`（如需）。
+**新增（前端）**：
+- `src/components/ScenarioPanel.tsx` — 右栏「场景」面板（卡片 grid + 本次产物列表）
+- `src/components/SelectionSendButton.tsx` — 编辑器/预览选区浮动按钮
+- `src/services/agentBridge.ts` — bracketed paste 注入封装（件1 不回车 / 场景卡带回车）
+- `src/services/flowScenarioService.ts` — 注册表读写 / 默认 seed / 占位符解析
+- `src/services/workspaceWatchService.ts` — `watchWorkspace` / `onWorkspaceChanged` 前端封装
+- `src/types/flowScenario.ts` — `FlowScenario` / `FormatAction` 类型
+
+**改（前端）**：
+- `src/app/AppLayout.tsx` — `flowMode` 状态 + 编排 + `flowRightTab` + 件1 触发 + 6.1 自动 reload + `agentChangedPaths` + `terminalPanelRef`
+- `src/components/Toolbar.tsx` — 新增心流模式开关按钮（在现有按钮组中,使用 `data-tooltip`）
+- `src/components/TerminalPanel.tsx` — `forwardRef` 暴露 `TerminalPanelHandle`（§8）+ agent 终端启动逻辑 + 权限 flag
+- `src/components/FileTreePanel.tsx` — 新 prop `agentChangedPaths` + 区别于 `dirtyPaths` 的样式
+- `src/types/editorCommands.ts` — `EditorCommandHandle` 加 `getSelection()`
+- `src/components/EditorPane.tsx` / `src/components/WysiwygEditorPane.tsx` — 实现 `getSelection`
+- `src/services/i18n.ts` — 新增 `toolbarFlowMode*` 等键（zh/en/ja）
+- `src/styles/app.css` — 加 scenario 卡片 / 产物列表 / 右栏分段 / 选区浮动按钮样式
+- `src/services/settingsService.ts` — `flowModeEnabled`、`flowAutoAcceptEdits`
+- `src/components/settings/AiCliSection.tsx` — 加「自动接受编辑(acceptEdits)」开关（可选,与 §8 一致）
+
+**改（后端）**：
+- `src-tauri/src/lib.rs` — 新增 `watch_workspace` / `unwatch_workspace` + `workspace_changed` 事件
+- `src-tauri/capabilities/default.json` — 若新命令需放行
 
 ## 11. 验收标准
+
+**功能层**
 - 心流模式一键点亮 文件树/编辑器/右栏[场景|预览]/agent 终端；agent 自动跑起交互 claude。
-- 右栏“场景”渲染 4 个默认卡（来自可编辑 JSON）；点卡片自动注入+回车，终端开跑；产物落盘后进“本次产物”，点击打开。
+- 右栏「场景」渲染 4 个默认卡（来自可编辑 JSON）；点卡片自动注入+回车，终端开跑；产物落盘后进「本次产物」，点击打开。
 - 编辑 JSON 后场景卡随之变化；可把 `/ni-writer` 等 skill 接入模板。
 - 件1 选区注入：出处+围栏出现在 claude 输入处、不自动回车；用户输指令回车后处理。
 - claude 写回当前文件 → 编辑器/预览自动刷新（无脏改动）；有脏改动给二选一。
 - agent 改动文件在文件树高亮，区别于未保存高亮。
-- 权限默认保留提示；开启“自动接受编辑”后重起 agent 会话生效。
+- 权限默认保留权限提示；开启「自动接受编辑」=向 PTY 发 Shift+Tab（不重起会话，§8）。
 - Windows 下 claude 在 PTY 启动正常、中文宽字符正确。
-- 删 headless 后 `npm run typecheck`/`npm test`/`npm run build`/`cargo test --manifest-path src-tauri/Cargo.toml` 通过。
+- 阅读器模式（关闭心流后）行为完全不变。
+
+**工程层**
+- `npm run typecheck` / `npm test` / `npm run build` / `cargo test --manifest-path src-tauri/Cargo.toml` 全绿。
+- 不引入 PR #52、`abae51e`、当前 main 已修复 bug 的回归（代码块光标、未保存确认、配色统一、编辑器→预览同步滚动等）。
 
 ## 12. 测试计划
 - 单元：`flowScenarioService`（默认 seed、占位符解析、JSON 容错）；`agentBridge`（件1 无回车 / 场景卡带回车 / bracketed paste）；`getSelection`。
@@ -204,11 +241,17 @@ MVP = **纯终端**（本 spec）。已评估并**暂缓** "Agent SDK app 原生
 - Smoke（Windows 重点）：claude 在 PTY 启动；bracketed paste + 回车在 claude TUI 正确提交不被逐行执行；中文宽字符；acceptEdits 重起生效。
 
 ## 13. 风险与首个 spike
-- **R1（最高）Windows `claude` 在 PTY 启动**：开发第一步 spike——shell 内 `claude\r` 起 TUI、`aiClaudePath` 回退、中文宽字符。
-- **R2 注入 + 自动提交**：spike 验证 bracketed paste 末尾 `\r` 能让 claude TUI 提交多行；否则回退（去 paste 包裹 / 末尾双回车）。
-- **R3 权限模式切换**：需重起 agent 会话，处理“运行中切换”的提示。
-- **R4 recursive watch 性能**：忽略重目录 + 节流去重。
-- **R5 watcher ↔ 未保存改动竞态**：6.1 脏改动分支覆盖。
+
+**开发第一步必做 spike**（合并在一个会话里验证）:
+- **R1（最高）Windows `claude` 在 PTY 启动**：复用 `TerminalPanel.openNewTab` 起普通 shell（不动现有终端逻辑）→ 等 `ready` → `writeTerminal(termId, 'claude\r')`。验证：(a) TUI 起来；(b) `aiClaudePath` 路径配置生效；(c) 中文宽字符显示正确。
+- **R2 注入 + 自动提交**：在已起的 claude TUI 内 `writeTerminal(termId, '\x1b[200~hello\x1b[201~\r')` —— 验证 bracketed paste 包裹多行内容 + 末尾 `\r` 能让 TUI 把整段当一次输入提交。失败则记录 fallback（去包裹 / 末尾双回车 / 仅 `\n` 等）。
+- **R3 权限模式 Shift+Tab 切换**：`writeTerminal(termId, '\x1b[Z')` 验证 TUI 底部状态从 "normal" → "acceptEdits" → "plan" 循环切换。
+
+**Spike 报告**：在 `docs/changes/2026-06-14-work-package/spike-notes.md` 记录三条结论（OK / fallback 内容 / 阻断），用户确认后再进 §4–§9 实施。
+
+**其他风险**:
+- **R4 recursive watch 性能**：忽略 `.git`/`node_modules`/`dist`/`target`/`.worktrees` + 200–300ms 节流去重批量 emit。
+- **R5 watcher ↔ 未保存改动竞态**：§6.1 脏改动分支覆盖（自写抑制 1500ms + 脏改动二选一）。
 
 ## 14. 分期
 - **MVP**：§3–§9 全部（删 headless、心流布局、场景启动器、件1、写盘刷新、改动可见+产物列表、agent 终端+权限）。
