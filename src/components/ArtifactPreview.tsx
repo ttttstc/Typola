@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileText, Presentation, X } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { PreviewPane } from './PreviewPane';
 
 export type ArtifactItem = {
   path: string;
@@ -112,7 +113,12 @@ export function ArtifactPreview({ artifacts, onOpenFile, onClose }: ArtifactPrev
             srcDoc={content}
           />
         ) : activeItem?.kind === 'markdown' ? (
-          <pre className="artifact-markdown">{content}</pre>
+          // P1-F:复用主预览的 Vditor 渲染管线(spec §6.2),不再出裸 <pre> 源码
+          <PreviewPane
+            source={content}
+            tocIds={[]}
+            filePath={activeItem.path}
+          />
         ) : (
           <pre className="artifact-text">{content}</pre>
         )}
