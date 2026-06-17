@@ -75,6 +75,7 @@ describe('ScenarioPanel (P1-C 一步式应用)', () => {
     filePath?: string;
     workspaceRoot?: string;
     onOpenAiCliSettings?: () => void;
+    onBeforeInject?: () => void | Promise<void>;
   }) {
     act(() => {
       root.render(
@@ -83,7 +84,7 @@ describe('ScenarioPanel (P1-C 一步式应用)', () => {
           filePath={props.filePath ?? 'C:/work/demo.md'}
           workspaceRoot={props.workspaceRoot ?? 'C:/work'}
           onEnsureTerminalVisible={() => {}}
-          onBeforeInject={() => Promise.resolve()}
+          onBeforeInject={props.onBeforeInject ?? (() => Promise.resolve())}
           onOpenAiCliSettings={props.onOpenAiCliSettings ?? (() => {})}
         />,
       );
@@ -126,6 +127,35 @@ describe('ScenarioPanel (P1-C 一步式应用)', () => {
     const injected = bridge.injectText.mock.calls[0]?.[0] ?? '';
     expect(injected).toContain('把 ');
     expect(injected).toContain(' 生成 HTML 演示');
+  });
+
+  it('onBeforeInject 挂起期间二次点击被同步 ref 锁拦截,只启动+注入一次', async () => {
+    const bridge = makeBridge({ hasTerminal: false });
+    let releaseBefore!: () => void;
+    const beforeGate = new Promise<void>((resolve) => { releaseBefore = resolve; });
+    const onBeforeInject = vi.fn(() => beforeGate);
+    render({ bridge, onBeforeInject });
+
+    await act(async () => { await flushPromises(); });
+    const btn = host.querySelector<HTMLButtonElement>('.scenario-apply-btn')!;
+
+    // onBeforeInject 仍挂起(phase 还是 idle、按钮未 disabled),此时连点两次
+    await act(async () => {
+      btn.click();
+      btn.click();
+      await flushPromises();
+    });
+    // 第二次点击应被 ref 锁挡在门外:onBeforeInject 只进入一次
+    expect(onBeforeInject).toHaveBeenCalledTimes(1);
+
+    // 放行 → 首次 apply 跑完
+    await act(async () => {
+      releaseBefore();
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(bridge.ensureTerminal).toHaveBeenCalledTimes(1);
+    expect(bridge.injectText).toHaveBeenCalledTimes(1);
   });
 
   it('已有终端时直接 injectText,不再 ensureTerminal', async () => {

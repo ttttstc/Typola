@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, Presentation, WandSparkles } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import {
@@ -49,6 +49,9 @@ export function ScenarioPanel({
   // 单步应用:点击后按顺序走「启动 → 注入」,阶段用于按钮文案 + 防连点
   // (替代旧版「启动完成,点击应用」两步式 —— spec §5:启动与注入是一段连续体验)
   const [phase, setPhase] = useState<'idle' | 'starting' | 'injecting'>('idle');
+  // P1-C:同步 ref 锁。phase 是 React state,在 await onBeforeInject 期间还没翻到非 idle,
+  // 仅靠 phase / 按钮 disabled 挡不住同帧二次点击;ref 进入即置位,才真正防连点。
+  const applyingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,22 +77,24 @@ export function ScenarioPanel({
       setError('请先打开文件再应用场景卡。');
       return;
     }
-    if (phase !== 'idle') return; // 防连点
+    // P1-C:同步 ref 锁防连点(phase 异步更新前的窗口里,二次点击仍会进来)
+    if (applyingRef.current) return;
+    applyingRef.current = true;
     setError('');
     setAgentNotFound(false);
-    try {
-      await onBeforeInject();
-    } catch (e) {
-      setError(String(e));
-      return;
-    }
-    const ctx = buildContextFromFile(filePath, workspaceRoot);
-    const command = resolveFlowScenarioTemplate(selected.promptTemplate, ctx);
     const claudeCommand = settings.aiClaudePath?.trim() || 'claude';
-    const cwd = workspaceRoot
-      ?? (filePath ? filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/') : undefined);
-
     try {
+      try {
+        await onBeforeInject();
+      } catch (e) {
+        setError(String(e));
+        return;
+      }
+      const ctx = buildContextFromFile(filePath, workspaceRoot);
+      const command = resolveFlowScenarioTemplate(selected.promptTemplate, ctx);
+      const cwd = workspaceRoot
+        ?? (filePath ? filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/') : undefined);
+
       if (!bridge.hasTerminal()) {
         // P1-C:TerminalPanel.startAgentTerminal 内部用 PTY 静默检测等真正就绪后才返回
         setPhase('starting');
@@ -107,6 +112,7 @@ export function ScenarioPanel({
         setError(`启动或注入失败: ${e instanceof Error ? e.message : String(e)}`);
       }
     } finally {
+      applyingRef.current = false;
       setPhase('idle');
     }
   };
