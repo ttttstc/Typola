@@ -52,8 +52,6 @@ type TerminalRuntime = {
 
 const MIN_HEIGHT = 180;
 const MAX_HEIGHT = 520;
-const BRACKETED_PASTE_START = '\x1b[200~';
-const BRACKETED_PASTE_END = '\x1b[201~';
 
 function createLocalId(): string {
   return `terminal-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -380,7 +378,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
         console.warn('sendText called without active agent terminal');
         return;
       }
-      void writeTerminal(agentTab.termId, `${BRACKETED_PASTE_START}${text}${BRACKETED_PASTE_END}`);
+      // 写裸文本:bracketed paste 包裹由 agentBridge.injectText 单一出口负责(spec §10),不在此层重复包裹
+      void writeTerminal(agentTab.termId, text);
     },
     hasAgentTerminal: () => {
       return tabs.some((tab) => tab.isAgent && tab.status !== 'exited' && tab.status !== 'error');
