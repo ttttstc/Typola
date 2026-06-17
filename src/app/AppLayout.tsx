@@ -40,6 +40,7 @@ import { calculateDocumentStats } from '../services/documentStatsService';
 import { addRecentFile, getRecentFiles, removeRecentFile, type RecentFile } from '../services/recentFilesService';
 import { createImageMarkdown, createLinkMarkdown, createTableMarkdown } from '../services/editAssistService';
 import { createAgentBridge } from '../services/agentBridge';
+import { filterSelfWritePaths } from '../services/selfWriteFilter';
 import type { SearchMatch } from '../services/documentSearchService';
 
 const EditorPane = lazy(() =>
@@ -1170,10 +1171,16 @@ export function AppLayout() {
       .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
         await watchWorkspace(workspaceRoot);
         return onWorkspaceChanged((payload) => {
+          // P0-B: 自写抑制,与 document watcher 路径同模式(`AppLayout.tsx:1116-1119`)。
+          // 局限:lastSelfWriteRef 是单槽、只记最后一次自写;多文件并发自写仍可能漏抑制。
+          // MVP 可接受(与编辑器自写抑制同款),Phase 2 升级为「最近写入路径集合(带 TTL)」。
+          const now = Date.now();
+          const paths = filterSelfWritePaths(payload.paths, lastSelfWriteRef.current, now);
+          if (paths.length === 0) return;
           setAgentChangedPaths((prev) => {
             const next = new Map(prev);
-            for (const path of payload.paths) {
-              next.set(path, Date.now());
+            for (const path of paths) {
+              next.set(path, now);
             }
             return next;
           });
