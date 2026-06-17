@@ -16,6 +16,7 @@ import {
   writeTerminal,
   type TerminalCreateResult,
 } from '../services/terminalService';
+import { waitForPtyReady } from '../services/ptyReady';
 
 export type TerminalPanelHandle = {
   startAgentTerminal: (opts: { command: string; cwd?: string }) => Promise<void>;
@@ -368,9 +369,15 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
 
       const localId = createLocalId();
       pendingAgentCommandRef.current = { localId, command: opts.command };
-      // 等待 pty 创建 + claude 命令写入完成;再给 1200ms 让 claude REPL banner 渲染出来
+      // 等 PTY 创建 + claude 命令写入完成,然后用 PTY 输出静默检测等真正就绪
+      // (替代 1200ms 墙钟猜测;spec §0.1 不解析 TUI)
+      // 已知边界:claude 首启对该目录弹 trust/权限确认时,自动注入可能把命令当成 prompt 答案——
+      // 这是自动注入固有边界,与检测方式无关;Phase 2 再考虑「首启只启动不注入」
       await openNewTab({ isAgent: true, cwd: opts.cwd, title: 'Claude' });
-      await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+      const termId = runtimesRef.current.get(localId)?.termId;
+      if (termId !== undefined) {
+        await waitForPtyReady(onTerminalData, termId, 250, 5000);
+      }
     },
     sendText: (text: string) => {
       const agentTab = tabs.find((tab) => tab.isAgent);

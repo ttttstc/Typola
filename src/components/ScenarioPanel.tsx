@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, Presentation, WandSparkles } from 'lucide-react';
+import { ExternalLink, Loader2, Presentation, WandSparkles } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import {
   buildContextFromFile,
@@ -37,8 +37,9 @@ export function ScenarioPanel({
   const [scenarios, setScenarios] = useState<FlowScenario[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  // 首次点「应用到终端」时如果 claude 没起:只启动、不贴命令,等用户第二次点击再贴
-  const [agentStarted, setAgentStarted] = useState(false);
+  // 单步应用:点击后按顺序走「启动 → 注入」,阶段用于按钮文案 + 防连点
+  // (替代旧版「启动完成,点击应用」两步式 —— spec §5:启动与注入是一段连续体验)
+  const [phase, setPhase] = useState<'idle' | 'starting' | 'injecting'>('idle');
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +64,7 @@ export function ScenarioPanel({
       setError('请先打开文件再应用场景卡。');
       return;
     }
+    if (phase !== 'idle') return; // 防连点
     setError('');
     try {
       await onBeforeInject();
@@ -76,22 +78,20 @@ export function ScenarioPanel({
     const cwd = workspaceRoot
       ?? (filePath ? filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/') : undefined);
 
-    if (!bridge.hasTerminal()) {
-      // 首次:只启动 claude REPL,不贴命令(避免命令落到未就绪的 pty 被吞)
-      try {
+    try {
+      if (!bridge.hasTerminal()) {
+        // P1-C:TerminalPanel.startAgentTerminal 内部用 PTY 静默检测等真正就绪后才返回
+        setPhase('starting');
         await bridge.ensureTerminal(claudeCommand, cwd);
-      } catch (e) {
-        setError(`启动 agent 终端失败: ${e instanceof Error ? e.message : String(e)}`);
-        return;
       }
-      setAgentStarted(true);
+      setPhase('injecting');
+      bridge.injectText(command);
       onEnsureTerminalVisible();
-      return;
+    } catch (e) {
+      setError(`启动或注入失败: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setPhase('idle');
     }
-
-    setAgentStarted(false);
-    bridge.injectText(command);
-    onEnsureTerminalVisible();
   };
 
   const handleCopy = async () => {
@@ -165,10 +165,19 @@ export function ScenarioPanel({
               type="button"
               className="scenario-apply-btn"
               onClick={() => void handleApply()}
-              disabled={!filePath}
-              title={agentStarted ? 'Claude 已就绪,点击把场景命令贴入终端' : '把场景命令贴到终端;若 claude 未起,先启动再应用'}
+              disabled={!filePath || phase !== 'idle'}
+              title={
+                phase === 'starting' ? '正在启动 Claude…'
+                : phase === 'injecting' ? '正在把场景命令贴入终端…'
+                : '把场景命令贴到终端;若 claude 未起,先启动再应用'
+              }
             >
-              {agentStarted ? '启动完成,点击应用' : '应用到终端'}
+              {phase !== 'idle' && <Loader2 size={14} className="spinning" />}
+              <span>
+                {phase === 'starting' ? '正在启动 Claude…'
+                  : phase === 'injecting' ? '正在注入…'
+                  : '应用到终端'}
+              </span>
             </button>
             <button
               type="button"
@@ -179,9 +188,6 @@ export function ScenarioPanel({
               复制命令
             </button>
           </div>
-          {agentStarted && (
-            <p className="scenario-hint">Claude REPL 已就绪,再次点击「启动完成,点击应用」把场景命令贴入。</p>
-          )}
           {error && <p className="scenario-error">{error}</p>}
         </div>
       )}
