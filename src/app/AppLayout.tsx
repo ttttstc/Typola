@@ -39,6 +39,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
 import { addRecentFile, getRecentFiles, removeRecentFile, type RecentFile } from '../services/recentFilesService';
 import { createImageMarkdown, createLinkMarkdown, createTableMarkdown } from '../services/editAssistService';
+import { createAgentBridge } from '../services/agentBridge';
 import type { SearchMatch } from '../services/documentSearchService';
 
 const EditorPane = lazy(() =>
@@ -91,10 +92,20 @@ const HtmlPresentationPane = lazy(() =>
 const TerminalPanel = lazy(() =>
   import('../components/TerminalPanel').then((module) => ({ default: module.TerminalPanel })),
 );
+type TerminalPanelHandle = import('../components/TerminalPanel').TerminalPanelHandle;
+const ScenarioPanel = lazy(() =>
+  import('../components/ScenarioPanel').then((module) => ({ default: module.ScenarioPanel })),
+);
+type AgentBridge = import('../services/agentBridge').AgentBridge;
+const ArtifactPreview = lazy(() =>
+  import('../components/ArtifactPreview').then((module) => ({ default: module.ArtifactPreview })),
+);
+type ArtifactItem = import('../components/ArtifactPreview').ArtifactItem;
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
-type RightPanelMode = 'none' | 'word' | 'wechat';
+type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow';
 type LeftPanelMode = 'none' | 'workspace';
+type FlowRightTab = 'scenario' | 'preview';
 type OpenFileTab = {
   id: string;
   file: OpenedFile;
@@ -187,6 +198,7 @@ export function AppLayout() {
   const mainContentRef = useRef<HTMLDivElement>(null);
   const editorCommandRef = useRef<EditorCommandHandle | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
+  const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   const handleEditorScrollRatio = useCallback((ratio: number) => {
     previewScrollRef.current?.scrollToRatio(ratio);
   }, []);
@@ -222,6 +234,17 @@ export function AppLayout() {
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
+  const [flowMode, setFlowMode] = useState(settings.flowModeEnabled);
+  const [flowRightTab, setFlowRightTab] = useState<FlowRightTab>('scenario');
+  const [agentChangedPaths, setAgentChangedPaths] = useState<Map<string, number>>(new Map());
+  const [externalChangeConflict, setExternalChangeConflict] = useState<{ path: string; ts: number } | null>(null);
+  const flowSnapshotRef = useRef<{
+    leftPanelMode: LeftPanelMode;
+    rightPanelMode: RightPanelMode;
+    rightPanelWidth: number;
+    terminalVisible: boolean;
+    maximized: boolean;
+  } | null>(null);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
   const [autoSaveError, setAutoSaveError] = useState('');
@@ -609,10 +632,105 @@ export function AppLayout() {
     setLeftPanelMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
   }, []);
 
+  const handleToggleAiPanel = useCallback(() => {
+    setRightPanelMode((mode) => {
+      if (mode === 'flow') return 'none';
+      setFlowRightTab('scenario');
+      setRightPanelWidth(getDefaultRightPanelWidth());
+      return 'flow';
+    });
+  }, [getDefaultRightPanelWidth]);
+
+  const handleToggleFlowMode = useCallback(async () => {
+    if (file.fileType === 'docx') return;
+
+    if (!flowMode) {
+      // Enter flow mode: snapshot → maximize → open all panels
+      let maximized = false;
+      if (isTauriRuntime) {
+        try {
+          const appWindow = getCurrentWindow();
+          maximized = await appWindow.isMaximized();
+          if (!maximized) await appWindow.maximize();
+        } catch { /* ignore */ }
+      }
+
+      flowSnapshotRef.current = {
+        leftPanelMode,
+        rightPanelMode,
+        rightPanelWidth,
+        terminalVisible,
+        maximized,
+      };
+
+      setLeftPanelMode('workspace');
+      setRightPanelMode('flow');
+      setFlowRightTab('scenario');
+      setRightPanelWidth(getDefaultRightPanelWidth());
+      setFlowMode(true);
+      updateSettings({ flowModeEnabled: true });
+    } else {
+      // Exit flow mode: restore snapshot
+      const snapshot = flowSnapshotRef.current;
+
+      if (isTauriRuntime) {
+        try {
+          const appWindow = getCurrentWindow();
+          const currentlyMaximized = await appWindow.isMaximized();
+          if (currentlyMaximized && !snapshot?.maximized) {
+            await appWindow.unmaximize();
+          }
+        } catch { /* ignore */ }
+      }
+
+      if (snapshot) {
+        setLeftPanelMode(snapshot.leftPanelMode);
+        setRightPanelMode(snapshot.rightPanelMode);
+        setRightPanelWidth(snapshot.rightPanelWidth);
+        setTerminalVisible(snapshot.terminalVisible);
+      } else {
+        setRightPanelMode('none');
+      }
+
+      flowSnapshotRef.current = null;
+      setFlowMode(false);
+      updateSettings({ flowModeEnabled: false });
+    }
+  }, [
+    flowMode, leftPanelMode, rightPanelMode, rightPanelWidth, terminalVisible,
+    file.fileType, isTauriRuntime, getDefaultRightPanelWidth,
+  ]);
+
   const handleCreateTerminal = useCallback(() => {
     setTerminalVisible(true);
     setTerminalCreateRequest((request) => request + 1);
   }, []);
+
+  const handleEnsureTerminalVisible = useCallback(() => {
+    setTerminalVisible(true);
+  }, []);
+
+  // 场景卡「发送到终端」前置: 发送即存盘
+  const handleScenarioBeforeInject = useCallback(async () => {
+    if (file.fileType === 'docx' || !file.path || !file.dirty) return;
+    const { saveFile } = await import('../services/fileService');
+    const updated = await saveFile(file);
+    lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+    setAutoSaveError('');
+    setDiskChangeMessage('');
+    setFile(updated);
+    if (updated.path) setLastOpenedPath(updated.path);
+  }, [file]);
+
+  // bridge 每次渲染现取 ref —— ref.current 变化不触发重渲染,所以必须用 getter 闭包
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const agentBridge = useMemo<AgentBridge>(
+    () => createAgentBridge(() => terminalPanelRef.current),
+    [],
+  );
+
+  // §6.2 文件树刷新触发: workspace watcher 触发时自增
+  const [workspaceTreeVersion, setWorkspaceTreeVersion] = useState(0);
 
   const handleQuickOpenPath = useCallback((path: string) => {
     setQuickOpenVisible(false);
@@ -761,6 +879,7 @@ export function AppLayout() {
       if (e.key === 'm' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleWechatPreview(); return; }
       if (e.code === 'Backquote' && e.shiftKey && !e.altKey) { e.preventDefault(); handleCreateTerminal(); return; }
       if (e.code === 'Backquote' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleToggleTerminal(); return; }
+      if (e.key === 'a' && e.shiftKey && !e.altKey) { e.preventDefault(); void handleToggleFlowMode(); return; }
       if (e.key === 'i' && e.shiftKey && !e.altKey) { e.preventDefault(); setEditAssistVisible(true); return; }
       if (e.key === ',' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
@@ -781,6 +900,7 @@ export function AppLayout() {
     handleToggleWechatPreview,
     handleToggleTerminal,
     handleCreateTerminal,
+    handleToggleFlowMode,
     openFindPanel,
   ]);
 
@@ -989,7 +1109,7 @@ export function AppLayout() {
     let cancelled = false;
 
     void import('../services/documentWatchService')
-      .then(({ onFileChanged }) => onFileChanged((payload) => {
+      .then(({ onFileChanged }) => onFileChanged(async (payload) => {
         const current = fileRef.current;
         if (!current.path || !sameDocumentPath(current.path, payload.path)) return;
 
@@ -998,7 +1118,32 @@ export function AppLayout() {
           return;
         }
 
-        setDiskChangeMessage('磁盘文件已在外部变更，请保存前确认是否需要重新打开。');
+        if (current.dirty) {
+          // 写竞争:有未保存改动,弹"外部已修改"条,绝不覆盖
+          setExternalChangeConflict({ path: payload.path, ts: Date.now() });
+          return;
+        }
+
+        // 编辑器干净:自动 reload
+        try {
+          const { readTextWithEncoding } = await import('../services/fileService');
+          const content = await readTextWithEncoding(payload.path, settings.defaultEncoding);
+          if (fileRef.current.path && sameDocumentPath(fileRef.current.path, payload.path)
+              && !fileRef.current.dirty) {
+            setFile((prev) => ({
+              ...prev,
+              content,
+              lastSavedContent: content,
+              dirty: false,
+            }));
+            setToc(extractToc(content));
+            setDiskChangeMessage('');
+            setTransientMessage('已自动从磁盘重新加载。');
+          }
+        } catch (error) {
+          console.warn('Failed to auto-reload file:', error);
+          setDiskChangeMessage('磁盘文件已在外部变更，请保存前确认是否需要重新打开。');
+        }
       }))
       .then((fn) => {
         if (cancelled) fn();
@@ -1010,7 +1155,113 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
     };
-  }, [isTauriRuntime]);
+  }, [isTauriRuntime, settings.defaultEncoding]);
+
+  // §6.2 workspace watch: 收集 agent 改动的文件
+  useEffect(() => {
+    if (!isTauriRuntime || !flowMode || !workspaceRoot) {
+      setAgentChangedPaths(new Map());
+      return undefined;
+    }
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    void import('../services/workspaceWatchService')
+      .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
+        await watchWorkspace(workspaceRoot);
+        return onWorkspaceChanged((payload) => {
+          setAgentChangedPaths((prev) => {
+            const next = new Map(prev);
+            for (const path of payload.paths) {
+              next.set(path, Date.now());
+            }
+            return next;
+          });
+          // 新建/删除/重命名都会让顶层 entries 变化,触发文件树重读
+          if (payload.kind === 'create' || payload.kind === 'remove' || payload.kind === 'rename') {
+            setWorkspaceTreeVersion((version) => version + 1);
+          }
+        });
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch((error) => console.warn('Failed to bind workspace watcher:', error));
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      void import('../services/workspaceWatchService')
+        .then(({ unwatchWorkspace }) => unwatchWorkspace(workspaceRoot))
+        .catch((error) => console.warn('Failed to unwatch workspace:', error));
+    };
+  }, [flowMode, isTauriRuntime, workspaceRoot]);
+
+  // 写竞争:三选项
+  const handleViewDiff = useCallback(async () => {
+    if (!externalChangeConflict) return;
+    const { diffTexts } = await import('../services/textDiffService');
+    const current = fileRef.current;
+    if (!current.path) return;
+    try {
+      const { readTextWithEncoding } = await import('../services/fileService');
+      const diskContent = await readTextWithEncoding(current.path, settings.defaultEncoding);
+      const result = diffTexts(current.content, diskContent);
+      setDiffPreview({ path: current.path, ...result });
+    } catch (e) {
+      console.warn('Failed to view diff:', e);
+    }
+  }, [externalChangeConflict, settings.defaultEncoding]);
+
+  const handleAcceptExternal = useCallback(async () => {
+    if (!externalChangeConflict) return;
+    const current = fileRef.current;
+    if (!current.path) {
+      setExternalChangeConflict(null);
+      return;
+    }
+    try {
+      const { readTextWithEncoding } = await import('../services/fileService');
+      const content = await readTextWithEncoding(current.path, settings.defaultEncoding);
+      setFile((prev) => ({
+        ...prev,
+        content,
+        lastSavedContent: content,
+        dirty: false,
+      }));
+      setToc(extractToc(content));
+      setExternalChangeConflict(null);
+      setTransientMessage('已采用 Claude 的版本。');
+    } catch (e) {
+      console.warn('Failed to accept external:', e);
+    }
+  }, [externalChangeConflict, settings.defaultEncoding]);
+
+  const handleKeepMine = useCallback(() => {
+    setExternalChangeConflict(null);
+    setTransientMessage('保留你的版本。可在保存前对比。');
+  }, []);
+
+  const [diffPreview, setDiffPreview] = useState<{ path: string; hunks: import('../services/textDiffService').DiffHunk[] } | null>(null);
+
+  const artifactItems = useMemo<ArtifactItem[]>(() => {
+    const items: ArtifactItem[] = [];
+    agentChangedPaths.forEach((ts, path) => {
+      const name = path.replace(/\\/g, '/').split('/').pop() ?? path;
+      const lower = name.toLowerCase();
+      let kind: ArtifactItem['kind'] = 'other';
+      if (lower.endsWith('.md') || lower.endsWith('.markdown')) kind = 'markdown';
+      else if (lower.endsWith('.html') || lower.endsWith('.htm')) kind = 'html';
+      else if (lower.endsWith('.txt') || lower.endsWith('.json') || lower.endsWith('.css') || lower.endsWith('.js')) kind = 'text';
+      items.push({ path, name, ts, kind });
+    });
+    return items.sort((a, b) => b.ts - a.ts);
+  }, [agentChangedPaths]);
+
+  const handleClearArtifacts = useCallback(() => {
+    setAgentChangedPaths(new Map());
+  }, []);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1032,6 +1283,7 @@ export function AppLayout() {
     rightPanelMode !== 'none' && !isDocx ? 'right-panel-open' : '',
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
+    rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
     leftPanelMode !== 'none' ? 'left-panel-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
     leftResizing !== 'none' ? 'is-left-resizing' : '',
@@ -1215,6 +1467,56 @@ export function AppLayout() {
         filePath={file.path}
       />
     </Suspense>
+  ) : rightPanelMode === 'flow' && !isDocx ? (
+    <aside className="flow-panel" aria-label="AI 工作流">
+      <div className="flow-panel-tabs">
+        <button
+          type="button"
+          className={flowRightTab === 'scenario' ? 'active' : ''}
+          onClick={() => setFlowRightTab('scenario')}
+        >
+          {t('flowRightTabScenario')}
+        </button>
+        <button
+          type="button"
+          className={flowRightTab === 'preview' ? 'active' : ''}
+          onClick={() => setFlowRightTab('preview')}
+        >
+          {t('flowRightTabPreview')}
+        </button>
+        <button
+          type="button"
+          className="flow-panel-close"
+          onClick={() => setRightPanelMode('none')}
+          title={t('closePreviewTitle')}
+        >
+          ×
+        </button>
+      </div>
+      <div className="flow-panel-content">
+        {flowRightTab === 'scenario' ? (
+          <Suspense fallback={<div className="scenario-panel-skeleton">加载场景...</div>}>
+            <ScenarioPanel
+              bridge={agentBridge}
+              filePath={file.path}
+              workspaceRoot={workspaceRoot}
+              onEnsureTerminalVisible={handleEnsureTerminalVisible}
+              onBeforeInject={handleScenarioBeforeInject}
+            />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<div className="scenario-panel-skeleton">加载产物...</div>}>
+            <ArtifactPreview
+              artifacts={artifactItems}
+              onOpenFile={(path) => {
+                void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
+              }}
+              onClose={handleClearArtifacts}
+            />
+          </Suspense>
+        )}
+      </div>
+    </aside>
   ) : null;
 
   const docxPane = (
@@ -1240,10 +1542,14 @@ export function AppLayout() {
         wechatPreviewVisible={rightPanelMode === 'wechat'}
         terminalVisible={terminalVisible}
         editingDisabled={isDocx}
+        flowMode={flowMode}
+        aiPanelVisible={rightPanelMode === 'flow'}
         onToggleEditorMode={handleToggleEditorMode}
         onToggleWordPreview={handleToggleWordPreview}
         onToggleWechatPreview={handleToggleWechatPreview}
         onToggleTerminal={handleToggleTerminal}
+        onToggleFlowMode={() => void handleToggleFlowMode()}
+        onToggleAiPanel={handleToggleAiPanel}
         onNew={handleNewFile}
         onOpen={handleOpen}
         onSave={handleSave}
@@ -1277,7 +1583,9 @@ export function AppLayout() {
               rootPath={workspaceRoot}
               activePath={file.path}
               dirtyPaths={dirtyPaths}
+              agentChangedPaths={new Set(agentChangedPaths.keys())}
               width={workspacePanelWidth}
+              refreshKey={workspaceTreeVersion}
               onRootChange={setWorkspaceRoot}
               onOpenFile={(path) => {
                 void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
@@ -1307,6 +1615,22 @@ export function AppLayout() {
           </>
         )}
         <section className="editor-workbench">
+          {externalChangeConflict && (
+            <div className="external-change-conflict" role="alert">
+              <span className="external-change-text">
+                Claude 改了这个文件,你有未保存修改
+              </span>
+              <button type="button" onClick={() => void handleViewDiff()}>
+                查看差异
+              </button>
+              <button type="button" onClick={() => void handleAcceptExternal()}>
+                用 Claude 的版本
+              </button>
+              <button type="button" onClick={handleKeepMine}>
+                保留我的
+              </button>
+            </div>
+          )}
           {openTabs.length > 1 && (
             <div className="editor-tabbar" role="tablist" aria-label="打开的文件">
               {openTabs.map((tab) => (
@@ -1356,6 +1680,7 @@ export function AppLayout() {
       </div>
       <Suspense fallback={null}>
         <TerminalPanel
+          ref={terminalPanelRef}
           visible={terminalVisible}
           height={terminalHeight}
           currentFilePath={file.path}
@@ -1406,6 +1731,26 @@ export function AppLayout() {
         message={unsavedDialog?.message ?? ''}
         onChoice={handleUnsavedChoice}
       />
+      {diffPreview && (
+        <div className="diff-preview-overlay" onClick={() => setDiffPreview(null)}>
+          <div className="diff-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="diff-preview-header">
+              <span>差异: {diffPreview.path}</span>
+              <button type="button" onClick={() => setDiffPreview(null)} title="关闭">
+                ×
+              </button>
+            </div>
+            <div className="diff-preview-body">
+              {diffPreview.hunks.map((hunk, i) => (
+                <div key={i} className={`diff-hunk diff-hunk-${hunk.op}`}>
+                  {hunk.op === 'insert' ? '+ ' : hunk.op === 'delete' ? '- ' : '  '}
+                  {hunk.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

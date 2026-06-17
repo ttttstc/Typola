@@ -10,6 +10,8 @@ import {
   SlidersHorizontal,
   WandSparkles,
   Terminal,
+  Sparkles,
+  LayoutPanelLeft,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useSettings } from '../hooks/useSettings';
@@ -31,10 +33,14 @@ type ToolbarProps = {
   wechatPreviewVisible: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
+  flowMode: boolean;
+  aiPanelVisible: boolean;
   onToggleEditorMode: () => void;
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleTerminal: () => void;
+  onToggleFlowMode: () => void;
+  onToggleAiPanel: () => void;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -48,8 +54,10 @@ type ToolbarProps = {
 
 export function Toolbar({
   dirty, fileName,
-  editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
-  onToggleTerminal, onNew, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, flowMode, aiPanelVisible,
+  onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
+  onToggleTerminal, onToggleFlowMode, onToggleAiPanel,
+  onNew, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -162,6 +170,26 @@ export function Toolbar({
             aria-label={t('toolbarTerminalLabel')}
           >
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+          <button
+            className={aiPanelVisible ? 'active' : ''}
+            onClick={onToggleAiPanel}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+            data-tooltip={t('toolbarAiPanelTitle')}
+            aria-label={t('toolbarAiPanelLabel')}
+          >
+            <LayoutPanelLeft size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+          <button
+            className={flowMode ? 'active' : ''}
+            onClick={onToggleFlowMode}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+            data-tooltip={t('toolbarFlowModeTitle')}
+            aria-label={t('toolbarFlowModeLabel')}
+          >
+            <Sparkles size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
             onClick={onOpenEditAssist}

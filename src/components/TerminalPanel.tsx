@@ -1,5 +1,5 @@
 import { Clipboard, Copy, Eraser, Maximize2, Plus, Square, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal as XTerm } from '@xterm/xterm';
@@ -17,6 +17,13 @@ import {
   type TerminalCreateResult,
 } from '../services/terminalService';
 
+export type TerminalPanelHandle = {
+  startAgentTerminal: (opts: { command: string; cwd?: string }) => Promise<void>;
+  sendText: (text: string) => void;
+  hasAgentTerminal: () => boolean;
+  focusAgentTerminal: () => void;
+};
+
 type TerminalPanelProps = {
   visible: boolean;
   height: number;
@@ -33,6 +40,7 @@ type TerminalTab = {
   cwd?: string;
   status: 'connecting' | 'ready' | 'exited' | 'error';
   error?: string;
+  isAgent?: boolean;
 };
 
 type TerminalRuntime = {
@@ -44,6 +52,8 @@ type TerminalRuntime = {
 
 const MIN_HEIGHT = 180;
 const MAX_HEIGHT = 520;
+const BRACKETED_PASTE_START = '\x1b[200~';
+const BRACKETED_PASTE_END = '\x1b[201~';
 
 function createLocalId(): string {
   return `terminal-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -53,14 +63,14 @@ function clampHeight(value: number): number {
   return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, value));
 }
 
-export function TerminalPanel({
+export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>(function TerminalPanel({
   visible,
   height,
   currentFilePath,
   createRequest,
   onHeightChange,
   onHide,
-}: TerminalPanelProps) {
+}: TerminalPanelProps, ref) {
   const settings = useSettings();
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeLocalId, setActiveLocalId] = useState<string | null>(null);
@@ -69,6 +79,7 @@ export function TerminalPanel({
   const terminalSettingsRef = useRef(settings);
   const terminalOutputDecoderRef = useRef(new TextDecoder('utf-8'));
   const lastCreateRequestRef = useRef(0);
+  const pendingAgentCommandRef = useRef<{ localId: string; command: string } | null>(null);
 
   useEffect(() => {
     terminalSettingsRef.current = settings;
@@ -103,10 +114,12 @@ export function TerminalPanel({
     runtime.terminal.open(node);
     runtime.opened = true;
     fitRuntime(runtime);
-    runtime.terminal.focus();
+    if (!pendingAgentCommandRef.current || pendingAgentCommandRef.current.localId !== localId) {
+      runtime.terminal.focus();
+    }
   }, [fitRuntime]);
 
-  const openNewTab = useCallback(() => {
+  const openNewTab = useCallback(async (opts?: { isAgent?: boolean; cwd?: string; title?: string }): Promise<void> => {
     const localId = createLocalId();
     const tabNumber = tabs.length + 1;
     const fitAddon = new FitAddon();
@@ -137,45 +150,55 @@ export function TerminalPanel({
       ...current,
       {
         localId,
-        title: `terminal ${tabNumber}`,
+        title: opts?.title ?? (opts?.isAgent ? 'Claude' : `terminal ${tabNumber}`),
         status: 'connecting',
+        isAgent: opts?.isAgent,
       },
     ]);
     setActiveLocalId(localId);
 
-    void createTerminal({
-      cwd: directoryFromPath(currentFilePath),
-      shell: settings.terminalShellPath.trim() || undefined,
-      cols: terminal.cols,
-      rows: terminal.rows,
-    })
-      .then((result: TerminalCreateResult) => {
-        const runtime = runtimesRef.current.get(localId);
-        if (!runtime) return;
-        runtime.termId = result.termId;
-        termIdToLocalIdRef.current.set(result.termId, localId);
-        setTabs((current) => current.map((tab) => (
-          tab.localId === localId
-            ? {
-              ...tab,
-              termId: result.termId,
-              title: result.processName || tab.title,
-              cwd: result.cwd,
-              status: 'ready',
-            }
-            : tab
-        )));
-        fitRuntime(runtime);
-      })
-      .catch((error) => {
-        const runtime = runtimesRef.current.get(localId);
-        runtime?.terminal.writeln(`\r\nFailed to start terminal: ${String(error)}`);
-        setTabs((current) => current.map((tab) => (
-          tab.localId === localId
-            ? { ...tab, status: 'error', error: String(error) }
-            : tab
-        )));
+    const cwd = opts?.cwd ?? directoryFromPath(currentFilePath);
+    try {
+      const result: TerminalCreateResult = await createTerminal({
+        cwd,
+        shell: settings.terminalShellPath.trim() || undefined,
+        cols: terminal.cols,
+        rows: terminal.rows,
       });
+      const runtime = runtimesRef.current.get(localId);
+      if (!runtime) return;
+      runtime.termId = result.termId;
+      termIdToLocalIdRef.current.set(result.termId, localId);
+      setTabs((current) => current.map((tab) => (
+        tab.localId === localId
+          ? {
+            ...tab,
+            termId: result.termId,
+            title: opts?.isAgent ? 'Claude' : (result.processName || tab.title),
+            cwd: result.cwd,
+            status: 'ready',
+          }
+          : tab
+      )));
+      fitRuntime(runtime);
+
+      // 若是 agent 终端且有待执行命令,启动 claude
+      const pending = pendingAgentCommandRef.current;
+      if (opts?.isAgent && pending && pending.localId === localId) {
+        await writeTerminal(result.termId, `${pending.command}\r`).catch((err) => {
+          console.warn('Failed to launch agent in terminal:', err);
+        });
+        pendingAgentCommandRef.current = null;
+        setTimeout(() => runtime.terminal.focus(), 50);
+      }
+    } catch (error) {
+      const runtime = runtimesRef.current.get(localId);
+      runtime?.terminal.writeln(`\r\nFailed to start terminal: ${String(error)}`);
+      setTabs((current) => current.map((tab) => (
+        tab.localId === localId ? { ...tab, status: 'error', error: String(error) }
+          : tab
+      )));
+    }
   }, [
     currentFilePath,
     fitRuntime,
@@ -329,6 +352,48 @@ export function TerminalPanel({
     termIdToLocalIdRef.current.clear();
   }, []);
 
+  // ========== Expose handle to parent via ref ==========
+  useImperativeHandle(ref, () => ({
+    startAgentTerminal: async (opts: { command: string; cwd?: string }) => {
+      // 只把真正 ready 的 agent tab 算"已存在";exited/error/connecting 都重起
+      const existing = tabs.find((tab) => tab.isAgent && tab.status === 'ready' && tab.termId);
+      if (existing) {
+        setActiveLocalId(existing.localId);
+        const runtime = runtimesRef.current.get(existing.localId);
+        runtime?.terminal.focus();
+        return;
+      }
+
+      // 旧 agent tab 存在但死了,先关掉再开新的(否则 claude 进程已 exit,inject 会落到空 pty)
+      const stale = tabs.find((tab) => tab.isAgent);
+      if (stale) closeTab(stale.localId);
+
+      const localId = createLocalId();
+      pendingAgentCommandRef.current = { localId, command: opts.command };
+      // 等待 pty 创建 + claude 命令写入完成;再给 1200ms 让 claude REPL banner 渲染出来
+      await openNewTab({ isAgent: true, cwd: opts.cwd, title: 'Claude' });
+      await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+    },
+    sendText: (text: string) => {
+      const agentTab = tabs.find((tab) => tab.isAgent);
+      if (!agentTab?.termId) {
+        console.warn('sendText called without active agent terminal');
+        return;
+      }
+      void writeTerminal(agentTab.termId, `${BRACKETED_PASTE_START}${text}${BRACKETED_PASTE_END}`);
+    },
+    hasAgentTerminal: () => {
+      return tabs.some((tab) => tab.isAgent && tab.status !== 'exited' && tab.status !== 'error');
+    },
+    focusAgentTerminal: () => {
+      const agentTab = tabs.find((tab) => tab.isAgent);
+      if (!agentTab) return;
+      setActiveLocalId(agentTab.localId);
+      const runtime = runtimesRef.current.get(agentTab.localId);
+      runtime?.terminal.focus();
+    },
+  }), [tabs, openNewTab, closeTab]);
+
   if (!visible) return null;
 
   return (
@@ -349,7 +414,7 @@ export function TerminalPanel({
             <div
               key={tab.localId}
               role="tab"
-              className={`terminal-tab ${tab.localId === activeLocalId ? 'active' : ''} ${tab.status}`}
+              className={`terminal-tab ${tab.localId === activeLocalId ? 'active' : ''} ${tab.status} ${tab.isAgent ? 'agent' : ''}`}
               title={tab.cwd ?? tab.error ?? tab.title}
             >
               <button type="button" className="terminal-tab-main" onClick={() => setActiveLocalId(tab.localId)}>
@@ -370,7 +435,7 @@ export function TerminalPanel({
           ))}
         </div>
         <div className="terminal-actions">
-          <button type="button" onClick={openNewTab} title="新建终端">
+          <button type="button" onClick={() => openNewTab()} title="新建终端">
             <Plus size={15} />
           </button>
           <button type="button" onClick={handleCopy} title="复制选中内容" disabled={!activeTab}>
@@ -393,7 +458,7 @@ export function TerminalPanel({
       <div className="terminal-body">
         {tabs.length === 0 && (
           <div className="terminal-empty">
-            <button type="button" onClick={openNewTab}>打开终端</button>
+            <button type="button" onClick={() => openNewTab()}>打开终端</button>
           </div>
         )}
         {tabs.map((tab) => (
@@ -407,4 +472,4 @@ export function TerminalPanel({
       {activeTab?.cwd && <div className="terminal-cwd">{activeTab.cwd}</div>}
     </section>
   );
-}
+});

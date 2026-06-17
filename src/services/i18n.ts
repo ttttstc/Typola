@@ -118,6 +118,19 @@ const zhCN = {
   exportWordLabel: '导出 Word',
   closePreviewTitle: '关闭',
   closePreviewLabel: '关闭预览',
+  toolbarFlowModeTitle: '心流模式（Cmd+Shift+A）',
+  toolbarFlowModeLabel: '心流模式',
+  toolbarAiPanelTitle: 'AI 工作流面板',
+  toolbarAiPanelLabel: 'AI 工作流',
+  flowRightTabScenario: '场景',
+  flowRightTabPreview: '预览',
+  scenarioEmpty: '正在加载场景注册表…',
+  scenarioEditLink: '编辑场景',
+  scenarioApplyButton: '应用到终端',
+  scenarioCopyButton: '复制命令',
+  scenarioSkillHint: '建议 skill',
+  scenarioNoFile: '请先打开文件再应用场景卡。',
+  agentPermissionHint: '权限在终端里用 Shift+Tab 切换',
 };
 
 type I18nKey = keyof typeof zhCN;
@@ -234,6 +247,19 @@ const enUS: Record<I18nKey, string> = {
   exportWordLabel: 'Export Word',
   closePreviewTitle: 'Close',
   closePreviewLabel: 'Close preview',
+  toolbarFlowModeTitle: 'Flow Mode (Cmd+Shift+A)',
+  toolbarFlowModeLabel: 'Flow Mode',
+  toolbarAiPanelTitle: 'AI Workflow Panel',
+  toolbarAiPanelLabel: 'AI Workflow',
+  flowRightTabScenario: 'Scenarios',
+  flowRightTabPreview: 'Preview',
+  scenarioEmpty: 'Loading scenario registry…',
+  scenarioEditLink: 'Edit scenarios',
+  scenarioApplyButton: 'Apply to terminal',
+  scenarioCopyButton: 'Copy command',
+  scenarioSkillHint: 'Suggested skill',
+  scenarioNoFile: 'Open a file before applying a scenario.',
+  agentPermissionHint: 'Use Shift+Tab in the terminal to switch permission mode',
 };
 
 const jaJP: Record<I18nKey, string> = {
@@ -348,6 +374,19 @@ const jaJP: Record<I18nKey, string> = {
   exportWordLabel: 'Word に書き出し',
   closePreviewTitle: '閉じる',
   closePreviewLabel: 'プレビューを閉じる',
+  toolbarFlowModeTitle: 'フローモード（Cmd+Shift+A）',
+  toolbarFlowModeLabel: 'フローモード',
+  toolbarAiPanelTitle: 'AI ワークフローパネル',
+  toolbarAiPanelLabel: 'AI ワークフロー',
+  flowRightTabScenario: 'シナリオ',
+  flowRightTabPreview: 'プレビュー',
+  scenarioEmpty: 'シナリオ登録を読み込み中…',
+  scenarioEditLink: 'シナリオを編集',
+  scenarioApplyButton: 'ターミナルに適用',
+  scenarioCopyButton: 'コマンドをコピー',
+  scenarioSkillHint: '推奨 skill',
+  scenarioNoFile: 'シナリオを適用する前にファイルを開いてください。',
+  agentPermissionHint: '権限モードはターミナルで Shift+Tab を押して切り替えます',
 };
 
 const dictionaries: Record<AppLocale, Record<I18nKey, string>> = {

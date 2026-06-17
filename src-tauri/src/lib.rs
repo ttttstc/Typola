@@ -22,6 +22,16 @@ struct OpenedPaths(Mutex<Vec<String>>);
 struct TerminalStore(Mutex<TerminalRegistry>);
 #[derive(Default)]
 struct DocumentWatcherStore(Mutex<HashMap<String, RecommendedWatcher>>);
+
+#[derive(Default)]
+struct WorkspaceWatcherStore(Mutex<HashMap<String, WorkspaceWatcherEntry>>);
+
+struct WorkspaceWatcherEntry {
+    #[allow(dead_code)]
+    root: PathBuf,
+    #[allow(dead_code)]
+    watcher: RecommendedWatcher,
+}
 #[derive(Default)]
 struct TerminalRegistry {
     next_id: u32,
@@ -124,6 +134,12 @@ struct TerminalExitPayload {
 #[serde(rename_all = "camelCase")]
 struct FileChangedPayload {
     path: String,
+}
+
+#[derive(Serialize, Clone)]
+struct WorkspaceChangedPayload {
+    kind: String,
+    paths: Vec<String>,
 }
 
 #[tauri::command]
@@ -316,6 +332,108 @@ fn unwatch_opened_document(
         .lock()
         .map_err(|_| "document watcher store poisoned".to_string())?;
     watchers.remove(&watch_key);
+    Ok(())
+}
+
+const WORKSPACE_IGNORE_DIRS: &[&str] = &[
+    ".git",
+    "node_modules",
+    "dist",
+    "target",
+    ".worktrees",
+    ".vscode",
+    ".idea",
+    ".DS_Store",
+];
+
+fn should_ignore_workspace_path(path: &Path) -> bool {
+    for component in path.components() {
+        let name = component.as_os_str().to_string_lossy();
+        if name.starts_with('.') {
+            return true;
+        }
+        if WORKSPACE_IGNORE_DIRS.iter().any(|ignored| name == *ignored) {
+            return true;
+        }
+    }
+    false
+}
+
+#[tauri::command]
+fn watch_workspace(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WorkspaceWatcherStore>,
+    path: String,
+) -> Result<(), String> {
+    let root = PathBuf::from(&path);
+    if !root.is_dir() {
+        return Err(format!("workspace path is not a directory: {path}"));
+    }
+    let key = watch_path_key(&root);
+
+    let mut watchers = state
+        .0
+        .lock()
+        .map_err(|_| "workspace watcher store poisoned".to_string())?;
+    if watchers.contains_key(&key) {
+        return Ok(());
+    }
+
+    let emit_app = app.clone();
+    let root_for_filter = root.clone();
+    let mut watcher: RecommendedWatcher = RecommendedWatcher::new(
+        move |result: notify::Result<Event>| {
+            let Ok(event) = result else { return; };
+            if !is_document_change_event(&event.kind) {
+                return;
+            }
+            let kind = workspace_change_kind(&event.kind);
+            let mut touched: Vec<String> = event
+                .paths
+                .iter()
+                .filter(|candidate| {
+                    candidate.starts_with(&root_for_filter)
+                        && !should_ignore_workspace_path(candidate)
+                })
+                .map(|candidate| watch_path_key(candidate))
+                .collect();
+            if touched.is_empty() {
+                return;
+            }
+            touched.sort();
+            touched.dedup();
+            let _ = emit_app.emit(
+                "workspace-changed",
+                WorkspaceChangedPayload { kind, paths: touched },
+            );
+        },
+        Config::default(),
+    )
+    .map_err(|error| format!("failed to create workspace watcher: {error}"))?;
+
+    watcher
+        .watch(&root, RecursiveMode::Recursive)
+        .map_err(|error| format!("failed to watch workspace: {error}"))?;
+
+    let entry = WorkspaceWatcherEntry {
+        root,
+        watcher,
+    };
+    watchers.insert(key, entry);
+    Ok(())
+}
+
+#[tauri::command]
+fn unwatch_workspace(
+    state: tauri::State<'_, WorkspaceWatcherStore>,
+    path: String,
+) -> Result<(), String> {
+    let key = watch_path_key(Path::new(&path));
+    let mut watchers = state
+        .0
+        .lock()
+        .map_err(|_| "workspace watcher store poisoned".to_string())?;
+    watchers.remove(&key);
     Ok(())
 }
 
@@ -521,6 +639,7 @@ pub fn run() {
         .manage(OpenedPaths(Mutex::new(collect_initial_open_paths())))
         .manage(TerminalStore::default())
         .manage(DocumentWatcherStore::default())
+        .manage(WorkspaceWatcherStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let paths = opened_paths_from_args(args, &cwd);
             if paths.is_empty() {
@@ -555,11 +674,16 @@ pub fn run() {
             list_directory_entries,
             watch_opened_document,
             unwatch_opened_document,
+            watch_workspace,
+            unwatch_workspace,
             terminal_create,
             terminal_write,
             terminal_resize,
             terminal_kill,
-            terminal_clear
+            terminal_clear,
+            read_flow_scenarios,
+            write_flow_scenarios,
+            open_flow_scenarios_file
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -652,6 +776,16 @@ fn is_document_change_event(kind: &EventKind) -> bool {
         kind,
         EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
     )
+}
+
+fn workspace_change_kind(kind: &EventKind) -> String {
+    match kind {
+        EventKind::Create(_) => "create".to_string(),
+        EventKind::Remove(_) => "remove".to_string(),
+        EventKind::Modify(notify::event::ModifyKind::Name(_)) => "rename".to_string(),
+        EventKind::Modify(_) => "modify".to_string(),
+        _ => "other".to_string(),
+    }
 }
 
 fn is_openable_document_path(path: &Path) -> bool {
@@ -877,6 +1011,41 @@ fn find_on_path(executable: &str) -> Option<PathBuf> {
     env::split_paths(&paths)
         .map(|path| path.join(executable))
         .find(|path| path.is_file())
+}
+
+fn flow_scenarios_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("failed to resolve app config dir: {error}"))?
+        .join("typola");
+    std::fs::create_dir_all(&dir).map_err(|error| format!("failed to create config dir: {error}"))?;
+    Ok(dir.join("flow-scenarios.json"))
+}
+
+#[tauri::command]
+fn read_flow_scenarios(app: tauri::AppHandle) -> Result<String, String> {
+    let path = flow_scenarios_file(&app)?;
+    match std::fs::read_to_string(&path) {
+        Ok(content) => Ok(content),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(format!("failed to read flow scenarios: {error}")),
+    }
+}
+
+#[tauri::command]
+fn write_flow_scenarios(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let path = flow_scenarios_file(&app)?;
+    std::fs::write(&path, content).map_err(|error| format!("failed to write flow scenarios: {error}"))
+}
+
+#[tauri::command]
+fn open_flow_scenarios_file(app: tauri::AppHandle) -> Result<String, String> {
+    let path = flow_scenarios_file(&app)?;
+    if !path.exists() {
+        std::fs::write(&path, "[]").map_err(|error| format!("failed to seed flow scenarios: {error}"))?;
+    }
+    Ok(path.to_string_lossy().to_string())
 }
 
 #[cfg(test)]

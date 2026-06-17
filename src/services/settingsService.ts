@@ -209,6 +209,8 @@ export interface AppSettings {
   terminalConfirmMultilinePaste: boolean;
   // AI 工作台
   aiClaudePath: string;
+  // 心流模式
+  flowModeEnabled: boolean;
   // 外观
   theme: 'light' | 'dark';
   zoomLevel: number;
@@ -254,6 +256,7 @@ const defaults: AppSettings = {
   terminalShortcutPreset: 'default',
   terminalConfirmMultilinePaste: true,
   aiClaudePath: '',
+  flowModeEnabled: false,
   theme: 'light',
   zoomLevel: 100,
 };
@@ -759,6 +762,7 @@ export function getSettings(): AppSettings {
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
+      flowModeEnabled: stored.flowModeEnabled === true,
     };
     settingsSnapshot = normalized;
     settingsSnapshotRaw = localStorage.getItem(STORAGE_KEY);
@@ -838,6 +842,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
       patch.terminalConfirmMultilinePaste ?? current.terminalConfirmMultilinePaste
     ) !== false,
     aiClaudePath: normalizeExecutablePath(patch.aiClaudePath ?? current.aiClaudePath),
+    flowModeEnabled: (patch.flowModeEnabled ?? current.flowModeEnabled) === true,
   };
   return persistSettings(merged);
 }

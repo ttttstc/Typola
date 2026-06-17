@@ -11,7 +11,9 @@ type FileTreePanelProps = {
   rootPath: string;
   activePath: string;
   dirtyPaths: Set<string>;
+  agentChangedPaths?: Set<string>;
   width: number;
+  refreshKey?: number;
   onRootChange: (path: string) => void;
   onOpenFile: (path: string) => void;
 };
@@ -21,29 +23,33 @@ type TreeNodeProps = {
   depth: number;
   activePath: string;
   dirtyPaths: Set<string>;
+  agentChangedPaths?: Set<string>;
+  refreshKey?: number;
   onOpenFile: (path: string) => void;
 };
 
-function TreeNode({ entry, depth, activePath, dirtyPaths, onOpenFile }: TreeNodeProps) {
+function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, refreshKey, onOpenFile }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<WorkspaceEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const active = !entry.isDir && activePath === entry.path;
+  const isAgentChanged = !entry.isDir && Boolean(agentChangedPaths?.has(entry.path));
 
+  // refreshKey 变化或首次展开 → 重新拉子目录
   useEffect(() => {
-    if (!entry.isDir || !expanded || children.length > 0 || loading) return;
+    if (!entry.isDir || !expanded) return;
     setLoading(true);
     void listWorkspaceEntries(entry.path)
       .then(setChildren)
       .catch(() => setChildren([]))
       .finally(() => setLoading(false));
-  }, [children.length, entry.isDir, entry.path, expanded, loading]);
+  }, [entry.isDir, entry.path, expanded, refreshKey]);
 
   return (
     <div className="file-tree-node">
       <button
         type="button"
-        className={`file-tree-item ${active ? 'active' : ''}`}
+        className={`file-tree-item ${active ? 'active' : ''} ${isAgentChanged ? 'agent-changed' : ''} ${dirtyPaths.has(entry.path) ? 'dirty' : ''}`}
         style={{ paddingLeft: `${10 + depth * 14}px` }}
         onClick={() => {
           if (entry.isDir) setExpanded((value) => !value);
@@ -73,6 +79,8 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, onOpenFile }: TreeNode
               depth={depth + 1}
               activePath={activePath}
               dirtyPaths={dirtyPaths}
+              agentChangedPaths={agentChangedPaths}
+              refreshKey={refreshKey}
               onOpenFile={onOpenFile}
             />
           ))}
@@ -86,7 +94,9 @@ export function FileTreePanel({
   rootPath,
   activePath,
   dirtyPaths,
+  agentChangedPaths,
   width,
+  refreshKey,
   onRootChange,
   onOpenFile,
 }: FileTreePanelProps) {
@@ -108,7 +118,7 @@ export function FileTreePanel({
         setError(reason instanceof Error ? reason.message : String(reason));
       })
       .finally(() => setLoading(false));
-  }, [rootPath]);
+  }, [refreshKey, rootPath]);
 
   const handlePickRoot = async () => {
     const selected = await pickWorkspaceDirectory();
@@ -138,6 +148,8 @@ export function FileTreePanel({
             depth={0}
             activePath={activePath}
             dirtyPaths={dirtyPaths}
+            agentChangedPaths={agentChangedPaths}
+            refreshKey={refreshKey}
             onOpenFile={onOpenFile}
           />
         ))}
