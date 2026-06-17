@@ -3,8 +3,6 @@
 > **状态**：设计已收敛（2026-06-16 评审 OpenDesign mock 后定稿），待 codex 实施。
 > **配套文档**：
 > - [brief.md](changes/2026-06-14-work-package/brief.md) — 方向 / 范围 / 验收
-> - [headless-removal.md](changes/2026-06-14-work-package/headless-removal.md) — 移除清单（已执行，留作历史）
-> - [handoff.md](changes/2026-06-14-work-package/handoff.md) — **给 codex 的移交 prompt（启动开发会话用）**
 
 ## 当前基线（截至 2026-06-16）
 
@@ -72,7 +70,7 @@
 | 设置 | `settingsService.ts`（`aiClaudePath` 等） |
 
 ## 3. 删除 headless（前置）— ✅ 已完成（commit `abae51e`）
-按 [headless-removal.md](changes/2026-06-14-work-package/headless-removal.md) 外科式移除：删 `AIWorkspacePanel` + agentService 运行路径 + Rust `agent_run_*`/`agent_session_*`/`agent_event` + AppLayout 的 ai 左槽接线、CSS `.ai-workbench-*`、i18n、settings 中 `aiResumeSessions`。**保留** `agent_detect`/`detectAgent`、`FileTreePanel`、`workspaceService`、`TerminalPanel`、watcher、`AiCliSection`（路径配置 + 版本检测）。
+外科式移除：删 `AIWorkspacePanel` + agentService 运行路径 + Rust `agent_run_*`/`agent_session_*`/`agent_event` + AppLayout 的 ai 左槽接线、CSS `.ai-workbench-*`、i18n、settings 中 `aiResumeSessions`。**保留** `agent_detect`/`detectAgent`、`FileTreePanel`、`workspaceService`、`TerminalPanel`、watcher、`AiCliSection`（路径配置 + 版本检测）。
 **codex 接力时无需重做。** typecheck/test/build/cargo 当前全绿。
 
 ## 4. 心流模式（布局编排）
@@ -262,12 +260,10 @@ MVP = **纯终端**（本 spec）。已评估并**暂缓** "Agent SDK app 原生
 
 ## 13. 风险与首个 spike
 
-**开发第一步必做 spike**（合并在一个会话里验证）:
+**开发第一步必做 spike**（合并在一个会话里验证,R1/R2 结论在 commit `663f7ed` / `8010912`）:
 - **R1（最高）Windows `claude` 在 PTY 启动**：复用 `TerminalPanel.openNewTab` 起普通 shell（不动现有终端逻辑）→ 等 `ready` → `writeTerminal(termId, 'claude\r')`。验证：(a) TUI 起来；(b) `aiClaudePath` 路径配置生效；(c) 中文宽字符显示正确。
 - **R2 注入落为可编辑输入（不自动提交）**：在已起的 claude TUI 内 `writeTerminal(termId, '\x1b[200~把 a.md 生成 HTML 演示\x1b[201~')`（**末尾不加 `\r`**）—— 验证 bracketed paste 把整段作为**一条可继续编辑的输入**落在 claude 输入行，用户随后手敲参数 + Enter 能正常提交。失败则记录 fallback（去包裹 / 仅 `\n` 等）。
 - ~~R3 权限模式 Shift+Tab~~ **已删**：权限全在终端由用户手动操作，App 不发按键，无需验证。
-
-**Spike 报告**：在 `docs/changes/2026-06-14-work-package/spike-notes.md` 记录两条结论（OK / fallback 内容 / 阻断），用户确认后再进 §4–§9 实施。
 
 **其他风险**:
 - **R4 recursive watch 性能**：忽略 `.git`/`node_modules`/`dist`/`target`/`.worktrees` + 200–300ms 节流去重批量 emit。

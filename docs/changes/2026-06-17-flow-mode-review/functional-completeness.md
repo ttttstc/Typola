@@ -4,7 +4,7 @@
 
 subagent: functional-completeness · 2026-06-17
 对齐准绳:`docs/AI_WORKBENCH_SPEC.md` §0–§14(已逐节对位)
-参考范围:brief / headless-removal / competitive-research
+参考范围:brief / competitive-research
 
 ## 总评(2-3 段)
 
