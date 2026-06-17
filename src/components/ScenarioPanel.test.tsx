@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScenarioPanel } from './ScenarioPanel';
 import type { AgentBridge } from '../services/agentBridge';
+import { readFlowScenarios } from '../services/flowScenarioService';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,17 +20,16 @@ vi.mock('../hooks/useSettings', () => ({
   useSettings: () => ({ aiClaudePath: 'claude' }),
 }));
 
-vi.mock('../services/flowScenarioService', () => ({
-  readFlowScenarios: () => Promise.resolve([TEST_SCENARIO]),
-  openFlowScenariosFile: () => Promise.resolve(''),
-  buildContextFromFile: (filePath: string, workspaceRoot?: string) => ({
-    file: filePath.split(/[\\/]/).pop() ?? '',
-    fileName: 'demo',
-    workspace: workspaceRoot,
-  }),
-  resolveFlowScenarioTemplate: (template: string, ctx: { file: string; fileName: string }) =>
-    template.replace('{file}', ctx.file).replace('{fileName}', ctx.fileName),
-}));
+// P1-D:readFlowScenarios 改返回 {scenarios, error?};用真实 buildContextFromFile / resolveFlowScenarioTemplate
+// (透传原模块),readFlowScenarios mock 化让用例可覆盖错误场景
+vi.mock('../services/flowScenarioService', async () => {
+  const actual = await vi.importActual<typeof import('../services/flowScenarioService')>('../services/flowScenarioService');
+  return {
+    ...actual,
+    readFlowScenarios: vi.fn(() => Promise.resolve({ scenarios: [TEST_SCENARIO] })),
+    openFlowScenariosFile: vi.fn(() => Promise.resolve('')),
+  };
+});
 
 function flushPromises(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, 0));
@@ -208,5 +208,119 @@ describe('ScenarioPanel (P1-C 一步式应用)', () => {
 
     expect(bridge.ensureTerminal).not.toHaveBeenCalled();
     expect(bridge.injectText).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScenarioPanel (P1-D JSON 解析失败可见)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    vi.mocked(readFlowScenarios).mockReset();
+    vi.mocked(readFlowScenarios).mockResolvedValue({ scenarios: [TEST_SCENARIO] });
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+    vi.clearAllTimers();
+  });
+
+  function renderWithBridge(initial: { hasTerminal: boolean }) {
+    const bridge = makeBridge(initial);
+    act(() => {
+      root.render(
+        <ScenarioPanel
+          bridge={bridge}
+          filePath="C:/work/demo.md"
+          workspaceRoot="C:/work"
+          onEnsureTerminalVisible={() => {}}
+          onBeforeInject={() => Promise.resolve()}
+        />,
+      );
+    });
+    return bridge;
+  }
+
+  it('JSON 解析失败时显示红条 + 「打开文件修复」按钮(不静默回退 seed)', async () => {
+    vi.mocked(readFlowScenarios).mockResolvedValueOnce({
+      scenarios: [],
+      error: 'JSON 解析失败: Unexpected token } in JSON at position 12',
+    });
+
+    renderWithBridge({ hasTerminal: false });
+    await act(async () => { await flushPromises(); });
+
+    const errBar = host.querySelector<HTMLDivElement>('.scenario-load-error');
+    expect(errBar).not.toBeNull();
+    expect(errBar?.textContent).toContain('JSON 解析失败');
+    expect(errBar?.textContent).toContain('Unexpected token');
+    const fixBtn = errBar?.querySelector<HTMLButtonElement>('.scenario-load-error-btn');
+    expect(fixBtn?.textContent).toContain('打开文件修复');
+    // 不应该渲染场景卡网格(因为没有 scenarios)
+    expect(host.querySelector('.scenario-grid')).toBeNull();
+    // 也不应该渲染「正在加载…」(因为已加载,只是失败)
+    expect(host.querySelector('.scenario-empty')).toBeNull();
+  });
+
+  it('IO 失败但 seed 可用时,场景卡仍可用 + 顶部红条提示', async () => {
+    vi.mocked(readFlowScenarios).mockResolvedValueOnce({
+      scenarios: [TEST_SCENARIO],
+      error: '读场景注册表失败: disk error',
+    });
+
+    renderWithBridge({ hasTerminal: true });
+    await act(async () => { await flushPromises(); });
+
+    const errBar = host.querySelector<HTMLDivElement>('.scenario-load-error');
+    expect(errBar).not.toBeNull();
+    expect(errBar?.textContent).toContain('disk error');
+    // 场景卡仍可用
+    const card = host.querySelector<HTMLButtonElement>('.scenario-card');
+    expect(card).not.toBeNull();
+  });
+
+  it('点击「打开文件修复」触发 openFlowScenariosFile', async () => {
+    vi.mocked(readFlowScenarios).mockResolvedValueOnce({
+      scenarios: [],
+      error: 'JSON 解析失败: boom',
+    });
+
+    renderWithBridge({ hasTerminal: false });
+    await act(async () => { await flushPromises(); });
+
+    const fixBtn = host.querySelector<HTMLButtonElement>('.scenario-load-error-btn');
+    expect(fixBtn).not.toBeNull();
+
+    const { openFlowScenariosFile } = await import('../services/flowScenarioService');
+    await act(async () => {
+      fixBtn!.click();
+      await flushPromises();
+    });
+    expect(openFlowScenariosFile).toHaveBeenCalled();
+  });
+
+  it('loadError 不会被 apply 操作误清', async () => {
+    vi.mocked(readFlowScenarios).mockResolvedValueOnce({
+      scenarios: [TEST_SCENARIO],
+      error: '读场景注册表失败: disk error',
+    });
+
+    const bridge = renderWithBridge({ hasTerminal: true });
+    await act(async () => { await flushPromises(); });
+
+    expect(host.querySelector('.scenario-load-error')).not.toBeNull();
+
+    // 点 apply —— 不应清掉 loadError
+    const btn = host.querySelector<HTMLButtonElement>('.scenario-apply-btn');
+    await act(async () => {
+      btn?.click();
+      await flushPromises();
+    });
+    expect(host.querySelector('.scenario-load-error')).not.toBeNull();
+    expect(bridge.injectText).toHaveBeenCalled();
   });
 });

@@ -37,6 +37,9 @@ export function ScenarioPanel({
   const [scenarios, setScenarios] = useState<FlowScenario[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // P1-D:加载时一次性写入的 JSON 错误,独立于 apply/copy 的 transient error,
+  // 不会被后续 handleApply 误清
+  const [loadError, setLoadError] = useState('');
   // 单步应用:点击后按顺序走「启动 → 注入」,阶段用于按钮文案 + 防连点
   // (替代旧版「启动完成,点击应用」两步式 —— spec §5:启动与注入是一段连续体验)
   const [phase, setPhase] = useState<'idle' | 'starting' | 'injecting'>('idle');
@@ -44,14 +47,15 @@ export function ScenarioPanel({
   useEffect(() => {
     let cancelled = false;
     void readFlowScenarios()
-      .then((list) => {
+      .then((result) => {
         if (cancelled) return;
-        setScenarios(list);
-        if (list.length > 0) setSelectedId(list[0].id);
+        setScenarios(result.scenarios);
+        if (result.scenarios.length > 0) setSelectedId(result.scenarios[0].id);
+        if (result.error) setLoadError(result.error);
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(String(e));
+        setLoadError(String(e));
       });
     return () => { cancelled = true; };
   }, []);
@@ -116,7 +120,21 @@ export function ScenarioPanel({
   if (scenarios.length === 0) {
     return (
       <div className="scenario-panel">
-        <p className="scenario-empty">正在加载场景注册表…</p>
+        {loadError ? (
+          // P1-D:JSON 解析失败 / 文件读不出 — 红条 + 一键打开文件修复(不静默回退)
+          <div className="scenario-load-error" role="alert">
+            <p className="scenario-load-error-text">场景注册表加载失败:{loadError}</p>
+            <button
+              type="button"
+              className="scenario-load-error-btn"
+              onClick={() => void handleOpenRegistry()}
+            >
+              打开文件修复
+            </button>
+          </div>
+        ) : (
+          <p className="scenario-empty">正在加载场景注册表…</p>
+        )}
         {error && <p className="scenario-error">{error}</p>}
       </div>
     );
@@ -124,6 +142,19 @@ export function ScenarioPanel({
 
   return (
     <div className="scenario-panel">
+      {loadError && (
+        // 解析失败但 seed 已用(例如 IO 错误) — 顶部红条,下方仍可用
+        <div className="scenario-load-error" role="alert">
+          <p className="scenario-load-error-text">场景注册表异常:{loadError}</p>
+          <button
+            type="button"
+            className="scenario-load-error-btn"
+            onClick={() => void handleOpenRegistry()}
+          >
+            打开文件修复
+          </button>
+        </div>
+      )}
       <div className="scenario-header">
         <h3 className="scenario-title">场景</h3>
         <button
