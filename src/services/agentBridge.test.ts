@@ -1,6 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAgentBridge, wrapBracketedPaste } from './agentBridge';
 import type { TerminalPanelHandle } from '../components/TerminalPanel';
+import { detectAgent } from './agentService';
+
+vi.mock('./agentService', () => ({
+  detectAgent: vi.fn(),
+}));
+
+const mockedDetect = vi.mocked(detectAgent);
 
 describe('agentBridge bracketed paste (P0-A 单层包裹)', () => {
   it('wrapBracketedPaste 包单层 ESC[200~ / ESC[201~', () => {
@@ -46,5 +53,46 @@ describe('agentBridge bracketed paste (P0-A 单层包裹)', () => {
 
     const expected = wrapBracketedPaste(input);
     expect(sendText).toHaveBeenCalledWith(expected);
+  });
+});
+
+describe('agentBridge.ensureTerminal (P1-E claude 探测前置)', () => {
+  beforeEach(() => {
+    mockedDetect.mockReset();
+  });
+
+  function makeHandle(): TerminalPanelHandle {
+    return {
+      startAgentTerminal: vi.fn().mockResolvedValue(undefined),
+      sendText: vi.fn(),
+      hasAgentTerminal: vi.fn().mockReturnValue(false),
+      focusAgentTerminal: vi.fn(),
+    };
+  }
+
+  it('claude 可用时 detect 通过并以 command/cwd 启动终端', async () => {
+    mockedDetect.mockResolvedValue({ available: true, path: 'claude', version: '1.0' });
+    const handle = makeHandle();
+    const bridge = createAgentBridge(() => handle);
+
+    await bridge.ensureTerminal('claude', '/work');
+
+    expect(mockedDetect).toHaveBeenCalledWith('claude');
+    expect(handle.startAgentTerminal).toHaveBeenCalledWith({ command: 'claude', cwd: '/work' });
+  });
+
+  it('claude 不可用时抛 not-found 且不起终端(isClaudeNotFoundError 可识别)', async () => {
+    mockedDetect.mockResolvedValue({ available: false, path: 'claude', error: 'spawn ENOENT' });
+    const handle = makeHandle();
+    const bridge = createAgentBridge(() => handle);
+
+    await expect(bridge.ensureTerminal('claude')).rejects.toThrow(/not found/i);
+    expect(handle.startAgentTerminal).not.toHaveBeenCalled();
+  });
+
+  it('TerminalPanel 未挂载时抛错且不探测', async () => {
+    const bridge = createAgentBridge(() => null);
+    await expect(bridge.ensureTerminal('claude')).rejects.toThrow(/未挂载/);
+    expect(mockedDetect).not.toHaveBeenCalled();
   });
 });
