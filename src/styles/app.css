@@ -2309,6 +2309,33 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-radius: 6px;
 }
 
+.scenario-error-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.scenario-error-block .scenario-error {
+  /* 嵌套在 block 里时去掉外边距,避免和按钮之间空太多 */
+  margin: 0;
+}
+
+.scenario-error-action-btn {
+  align-self: flex-start;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: white;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.scenario-error-action-btn:hover {
+  opacity: 0.9;
+}
+
 .scenario-load-error {
   display: flex;
   flex-direction: column;

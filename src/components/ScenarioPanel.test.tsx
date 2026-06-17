@@ -74,6 +74,7 @@ describe('ScenarioPanel (P1-C 一步式应用)', () => {
     bridge: MockBridge;
     filePath?: string;
     workspaceRoot?: string;
+    onOpenAiCliSettings?: () => void;
   }) {
     act(() => {
       root.render(
@@ -83,6 +84,7 @@ describe('ScenarioPanel (P1-C 一步式应用)', () => {
           workspaceRoot={props.workspaceRoot ?? 'C:/work'}
           onEnsureTerminalVisible={() => {}}
           onBeforeInject={() => Promise.resolve()}
+          onOpenAiCliSettings={props.onOpenAiCliSettings ?? (() => {})}
         />,
       );
     });
@@ -239,6 +241,7 @@ describe('ScenarioPanel (P1-D JSON 解析失败可见)', () => {
           workspaceRoot="C:/work"
           onEnsureTerminalVisible={() => {}}
           onBeforeInject={() => Promise.resolve()}
+          onOpenAiCliSettings={() => {}}
         />,
       );
     });
@@ -322,5 +325,160 @@ describe('ScenarioPanel (P1-D JSON 解析失败可见)', () => {
     });
     expect(host.querySelector('.scenario-load-error')).not.toBeNull();
     expect(bridge.injectText).toHaveBeenCalled();
+  });
+});
+
+describe('ScenarioPanel (P1-E Claude CLI 未找到引导设置)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    vi.mocked(readFlowScenarios).mockReset();
+    vi.mocked(readFlowScenarios).mockResolvedValue({ scenarios: [TEST_SCENARIO] });
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+    vi.clearAllTimers();
+  });
+
+  function renderWithBridgeAndCb(opts: {
+    ensureError?: unknown;
+    openSettings: () => void;
+  }) {
+    const bridge: MockBridge = {
+      ensureTerminal: vi.fn(async () => {
+        if (opts.ensureError) throw opts.ensureError;
+      }),
+      injectText: vi.fn(),
+      hasTerminal: vi.fn(() => false),
+      focus: vi.fn(),
+    };
+    act(() => {
+      root.render(
+        <ScenarioPanel
+          bridge={bridge}
+          filePath="C:/work/demo.md"
+          workspaceRoot="C:/work"
+          onEnsureTerminalVisible={() => {}}
+          onBeforeInject={() => Promise.resolve()}
+          onOpenAiCliSettings={opts.openSettings}
+        />,
+      );
+    });
+    return bridge;
+  }
+
+  it('ensureTerminal 报 not found → 错误文案带 Claude CLI + 「打开设置」按钮', async () => {
+    const openSettings = vi.fn();
+    renderWithBridgeAndCb({
+      ensureError: new Error('failed to spawn terminal shell: claude: not found'),
+      openSettings,
+    });
+    await act(async () => { await flushPromises(); });
+
+    const btn = host.querySelector<HTMLButtonElement>('.scenario-apply-btn');
+    await act(async () => {
+      btn!.click();
+      await flushPromises();
+    });
+
+    const errBlock = host.querySelector<HTMLDivElement>('.scenario-error-block');
+    expect(errBlock).not.toBeNull();
+    expect(errBlock?.textContent).toContain('未找到 Claude CLI');
+    const actionBtn = errBlock?.querySelector<HTMLButtonElement>('.scenario-error-action-btn');
+    expect(actionBtn?.textContent).toContain('打开设置');
+    expect(actionBtn).not.toBeNull();
+
+    // 点击「打开设置」触发 onOpenAiCliSettings
+    await act(async () => {
+      actionBtn!.click();
+      await flushPromises();
+    });
+    expect(openSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('ensureTerminal 报 cannot find(Windows 常见)→ 同样识别为 not-found', async () => {
+    const openSettings = vi.fn();
+    renderWithBridgeAndCb({
+      ensureError: new Error('failed to spawn terminal shell: The system cannot find the file specified.'),
+      openSettings,
+    });
+    await act(async () => { await flushPromises(); });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.scenario-apply-btn')!.click();
+      await flushPromises();
+    });
+
+    const actionBtn = host.querySelector<HTMLButtonElement>('.scenario-error-action-btn');
+    expect(actionBtn).not.toBeNull();
+  });
+
+  it('ensureTerminal 报无关错误(permission denied)→ 不显示「打开设置」按钮', async () => {
+    const openSettings = vi.fn();
+    renderWithBridgeAndCb({
+      ensureError: new Error('permission denied'),
+      openSettings,
+    });
+    await act(async () => { await flushPromises(); });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.scenario-apply-btn')!.click();
+      await flushPromises();
+    });
+
+    const errBlock = host.querySelector<HTMLDivElement>('.scenario-error-block');
+    expect(errBlock).not.toBeNull();
+    expect(errBlock?.textContent).toContain('启动或注入失败');
+    expect(errBlock?.querySelector('.scenario-error-action-btn')).toBeNull();
+  });
+
+  it('重试 apply(成功)后,上一次的「打开设置」按钮应消失', async () => {
+    let failNext = true;
+    const openSettings = vi.fn();
+    const bridge: MockBridge = {
+      ensureTerminal: vi.fn(async () => {
+        if (failNext) {
+          failNext = false;
+          throw new Error('not found');
+        }
+      }),
+      injectText: vi.fn(),
+      hasTerminal: vi.fn(() => false),
+      focus: vi.fn(),
+    };
+    act(() => {
+      root.render(
+        <ScenarioPanel
+          bridge={bridge}
+          filePath="C:/work/demo.md"
+          workspaceRoot="C:/work"
+          onEnsureTerminalVisible={() => {}}
+          onBeforeInject={() => Promise.resolve()}
+          onOpenAiCliSettings={openSettings}
+        />,
+      );
+    });
+    await act(async () => { await flushPromises(); });
+
+    // 第一次:not found
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.scenario-apply-btn')!.click();
+      await flushPromises();
+    });
+    expect(host.querySelector('.scenario-error-action-btn')).not.toBeNull();
+
+    // 第二次:成功(用户在设置里改好了)
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.scenario-apply-btn')!.click();
+      await flushPromises();
+    });
+    expect(host.querySelector('.scenario-error-action-btn')).toBeNull();
+    expect(bridge.injectText).toHaveBeenCalledTimes(1);
   });
 });

@@ -7,6 +7,7 @@ import {
   readFlowScenarios,
   resolveFlowScenarioTemplate,
 } from '../services/flowScenarioService';
+import { isClaudeNotFoundError } from '../services/agentErrors';
 import type { AgentBridge } from '../services/agentBridge';
 import type { FlowScenario } from '../types/flowScenario';
 
@@ -16,6 +17,8 @@ type ScenarioPanelProps = {
   workspaceRoot?: string;
   onEnsureTerminalVisible: () => void;
   onBeforeInject: () => void | Promise<void>;
+  // P1-E:Claude CLI 未找到时跳设置面板 AI CLI 段
+  onOpenAiCliSettings: () => void;
 };
 
 function iconFor(scenario: FlowScenario): React.ReactNode {
@@ -32,6 +35,7 @@ export function ScenarioPanel({
   workspaceRoot,
   onEnsureTerminalVisible,
   onBeforeInject,
+  onOpenAiCliSettings,
 }: ScenarioPanelProps) {
   const settings = useSettings();
   const [scenarios, setScenarios] = useState<FlowScenario[]>([]);
@@ -40,6 +44,8 @@ export function ScenarioPanel({
   // P1-D:加载时一次性写入的 JSON 错误,独立于 apply/copy 的 transient error,
   // 不会被后续 handleApply 误清
   const [loadError, setLoadError] = useState('');
+  // P1-E:Claude CLI 未找到时显示「打开设置」入口(独立状态避免每次重写 error 文案)
+  const [agentNotFound, setAgentNotFound] = useState(false);
   // 单步应用:点击后按顺序走「启动 → 注入」,阶段用于按钮文案 + 防连点
   // (替代旧版「启动完成,点击应用」两步式 —— spec §5:启动与注入是一段连续体验)
   const [phase, setPhase] = useState<'idle' | 'starting' | 'injecting'>('idle');
@@ -70,6 +76,7 @@ export function ScenarioPanel({
     }
     if (phase !== 'idle') return; // 防连点
     setError('');
+    setAgentNotFound(false);
     try {
       await onBeforeInject();
     } catch (e) {
@@ -92,7 +99,13 @@ export function ScenarioPanel({
       bridge.injectText(command);
       onEnsureTerminalVisible();
     } catch (e) {
-      setError(`启动或注入失败: ${e instanceof Error ? e.message : String(e)}`);
+      // P1-E:Claude CLI 不存在时,给用户跳设置面板的入口(不止 raw error 文案)
+      if (isClaudeNotFoundError(e)) {
+        setAgentNotFound(true);
+        setError(`未找到 Claude CLI(${claudeCommand})。请在设置中配置正确的可执行文件路径。`);
+      } else {
+        setError(`启动或注入失败: ${e instanceof Error ? e.message : String(e)}`);
+      }
     } finally {
       setPhase('idle');
     }
@@ -219,7 +232,20 @@ export function ScenarioPanel({
               复制命令
             </button>
           </div>
-          {error && <p className="scenario-error">{error}</p>}
+          {error && (
+            <div className="scenario-error-block" role="alert">
+              <p className="scenario-error">{error}</p>
+              {agentNotFound && (
+                <button
+                  type="button"
+                  className="scenario-error-action-btn"
+                  onClick={onOpenAiCliSettings}
+                >
+                  打开设置
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

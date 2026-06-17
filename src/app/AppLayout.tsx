@@ -220,6 +220,8 @@ export function AppLayout() {
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
   const [activeTocIndex, setActiveTocIndex] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  // P1-E:从外部(场景卡)跳转时指定的初始段
+  const [settingsInitialSection, setSettingsInitialSection] = useState<'aiCli' | undefined>(undefined);
   const [findVisible, setFindVisible] = useState(false);
   const [findFocusTarget, setFindFocusTarget] = useState<'find' | 'replace'>('find');
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
@@ -709,6 +711,13 @@ export function AppLayout() {
 
   const handleEnsureTerminalVisible = useCallback(() => {
     setTerminalVisible(true);
+  }, []);
+
+  // P1-E:场景卡发现 Claude CLI 未找到 → 跳设置面板 AI CLI 段
+  const handleOpenAiCliSettings = useCallback(() => {
+    void preloadSettingsPage();
+    setSettingsInitialSection('aiCli');
+    setSettingsVisible(true);
   }, []);
 
   // 场景卡「发送到终端」前置: 发送即存盘
@@ -1509,6 +1518,7 @@ export function AppLayout() {
               workspaceRoot={workspaceRoot}
               onEnsureTerminalVisible={handleEnsureTerminalVisible}
               onBeforeInject={handleScenarioBeforeInject}
+              onOpenAiCliSettings={handleOpenAiCliSettings}
             />
           </Suspense>
         ) : (
@@ -1728,8 +1738,12 @@ export function AppLayout() {
       {settingsVisible && (
         <Suspense fallback={<SettingsPageFallback />}>
           <SettingsPage
-            onClose={() => setSettingsVisible(false)}
+            onClose={() => {
+              setSettingsVisible(false);
+              setSettingsInitialSection(undefined);
+            }}
             onUpdateAvailable={(update) => startBackgroundUpdateDownload('manual', update)}
+            initialSection={settingsInitialSection}
           />
         </Suspense>
       )}
