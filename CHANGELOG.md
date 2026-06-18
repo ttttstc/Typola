@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 - 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
 - 新增左侧目录文件树：支持打开一个目录、展开/折叠子目录、从文件树打开支持的文档，未保存文件会在文件树名称前显示 `*`。
 - 设置页新增 `AI CLI` 分区：可配置 Claude CLI 路径并检测 `claude --version`，供后续 AI 集成功能使用。
+- 新增 Skill OS M1 左侧 AI 工作台：工具栏可展开 Claude 对话面板，文件树自动收起，支持直连 Claude CLI、多轮 resume、思考流/正文/工具卡/完成状态渲染，以及错误诊断与重试入口。
+- AI CLI 设置新增 Claude 模型占位配置；默认留空时继续使用 Claude CLI 自身默认模型。
+- AI 工作台新增工作区选择条、Composer `+` 菜单、附件上下文 chips、`.mcp.json` 编辑入口和 Plugin directory 配置；发送时会把当前文档与附件路径追加到 Claude prompt，Rust 启动参数会按配置追加 `--plugin-dir`。
+- AI 工作台工作区/会话模型调整为全局单会话：切换编辑器文件不再重置对话；AI 工作区独立持久化，不再跟随左侧文件树工作区变化；工作区选择移到 Composer 底部并支持最近目录。
 - 编辑器与右侧预览同步滚动：编辑器滚动时右侧 Word / 公众号预览按 scroll ratio 单向同步（rAF 节流，零额外重渲染）。
 - 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 
@@ -16,6 +20,9 @@ All notable changes to this project will be documented in this file.
 
 - 重写 README 为中英文双语文档，补充 Typola 的核心能力、安装方式、基础使用、打包命令、技术栈和产品优势说明。
 - 左侧目录栏默认收起，改为通过正文左侧小箭头展开/收起；目录栏与右侧 Word / HTML 预览宽度均支持拖拽调整。
+- 左侧栏改为“文件树 / AI 工作台 / 收起”单状态机，顶部提供文件树与 AI 工作台互斥切换 tab，避免出现文件树与 AI 工作台叠加成第四列。
+- 心流模式进入时不再自动展开底部终端，终端仍可通过工具栏手动打开。
+- AI 工作台 header 不再绑定当前文件名；当前文件改为 Composer 上下文 chip，可手动移除，切换文件后自动显示新文件 chip。
 - 顶栏控件与整体背景配色统一到暖米基底：`--surface` / `--panel-bg` / `--control-bg` / `--toc-panel-bg` 等基底色相对齐 `--bg`，消除顶栏控件在暖米背景上「比背景更白」的不协调。
 - 右侧 Word 预览面板可拖拽到更窄宽度，纸张预览更靠近分隔条展示，减少预览打开时左侧无效空白。
 - 主工作区新增轻量多文件 tab：从文件树、最近文件、系统打开或拖拽打开多个文档时会保留已打开文件，未保存 tab 文件名前显示 `*`；只打开单个文件时自动隐藏 tab 栏。

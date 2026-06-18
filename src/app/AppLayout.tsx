@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderOpen, Sparkles } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { OpenedFile, TocItem } from '../types/document';
 import { createEmptyFile } from '../types/document';
@@ -32,6 +32,7 @@ import { FindReplacePanel } from '../components/FindReplacePanel';
 import { QuickOpenPanel } from '../components/QuickOpenPanel';
 import { EditAssistPanel } from '../components/EditAssistPanel';
 import { FileTreePanel } from '../components/FileTreePanel';
+import { ConversationPanel } from '../components/conversation/ConversationPanel';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import type { PreviewScrollHandle } from '../types/previewScroll';
@@ -105,7 +106,7 @@ type ArtifactItem = import('../components/ArtifactPreview').ArtifactItem;
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow';
-type LeftPanelMode = 'none' | 'workspace';
+type LeftRailMode = 'none' | 'workspace' | 'aiWorkbench';
 type FlowRightTab = 'scenario' | 'preview';
 type OpenFileTab = {
   id: string;
@@ -214,7 +215,7 @@ export function AppLayout() {
   const [openTabs, setOpenTabs] = useState<OpenFileTab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
-  const [leftPanelMode, setLeftPanelMode] = useState<LeftPanelMode>('none');
+  const [leftRailMode, setLeftRailMode] = useState<LeftRailMode>('none');
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(WORKSPACE_PANEL_DEFAULT_WIDTH);
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
@@ -232,17 +233,20 @@ export function AppLayout() {
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [resizing, setResizing] = useState(false);
-  const [leftResizing, setLeftResizing] = useState<LeftPanelMode>('none');
+  const [leftResizing, setLeftResizing] = useState<LeftRailMode>('none');
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
-  const [flowMode, setFlowMode] = useState(settings.flowModeEnabled);
+  // 每次启动都从阅读器模式起步:进入心流模式的副作用(maximize + 开面板)只在用户点
+  // 按钮时跑,如果初始化时从 settings 把 flowMode 设成 true,按钮会亮但布局还是阅读器,
+  // 状态与可见态不一致。阅读器是基础态,所以不持久化心流偏好。
+  const [flowMode, setFlowMode] = useState(false);
   const [flowRightTab, setFlowRightTab] = useState<FlowRightTab>('scenario');
   const [agentChangedPaths, setAgentChangedPaths] = useState<Map<string, number>>(new Map());
   const [externalChangeConflict, setExternalChangeConflict] = useState<{ path: string; ts: number } | null>(null);
   const flowSnapshotRef = useRef<{
-    leftPanelMode: LeftPanelMode;
+    leftRailMode: LeftRailMode;
     rightPanelMode: RightPanelMode;
     rightPanelWidth: number;
     terminalVisible: boolean;
@@ -632,23 +636,19 @@ export function AppLayout() {
   }, []);
 
   const handleToggleWorkspacePanel = useCallback(() => {
-    setLeftPanelMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
+    setLeftRailMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
   }, []);
 
   const handleToggleAiPanel = useCallback(() => {
-    setRightPanelMode((mode) => {
-      if (mode === 'flow') return 'none';
-      setFlowRightTab('scenario');
-      setRightPanelWidth(getDefaultRightPanelWidth());
-      return 'flow';
-    });
-  }, [getDefaultRightPanelWidth]);
+    if (fileRef.current.fileType === 'docx') return;
+    setLeftRailMode((mode) => mode === 'aiWorkbench' ? 'none' : 'aiWorkbench');
+  }, []);
 
   const handleToggleFlowMode = useCallback(async () => {
     if (file.fileType === 'docx') return;
 
     if (!flowMode) {
-      // Enter flow mode: snapshot → maximize → open all panels
+      // Enter flow mode: snapshot → maximize → open left rail and right workflow panel.
       let maximized = false;
       if (isTauriRuntime) {
         try {
@@ -659,19 +659,18 @@ export function AppLayout() {
       }
 
       flowSnapshotRef.current = {
-        leftPanelMode,
+        leftRailMode,
         rightPanelMode,
         rightPanelWidth,
         terminalVisible,
         maximized,
       };
 
-      setLeftPanelMode('workspace');
+      setLeftRailMode('workspace');
       setRightPanelMode('flow');
       setFlowRightTab('scenario');
       setRightPanelWidth(getDefaultRightPanelWidth());
       setFlowMode(true);
-      updateSettings({ flowModeEnabled: true });
     } else {
       // Exit flow mode: restore snapshot
       const snapshot = flowSnapshotRef.current;
@@ -687,7 +686,7 @@ export function AppLayout() {
       }
 
       if (snapshot) {
-        setLeftPanelMode(snapshot.leftPanelMode);
+        setLeftRailMode(snapshot.leftRailMode);
         setRightPanelMode(snapshot.rightPanelMode);
         setRightPanelWidth(snapshot.rightPanelWidth);
         setTerminalVisible(snapshot.terminalVisible);
@@ -697,10 +696,9 @@ export function AppLayout() {
 
       flowSnapshotRef.current = null;
       setFlowMode(false);
-      updateSettings({ flowModeEnabled: false });
     }
   }, [
-    flowMode, leftPanelMode, rightPanelMode, rightPanelWidth, terminalVisible,
+    flowMode, leftRailMode, rightPanelMode, rightPanelWidth, terminalVisible,
     file.fileType, isTauriRuntime, getDefaultRightPanelWidth,
   ]);
 
@@ -1300,7 +1298,8 @@ export function AppLayout() {
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
     rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
-    leftPanelMode !== 'none' ? 'left-panel-open' : '',
+    leftRailMode !== 'none' ? 'left-panel-open' : '',
+    leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
     leftResizing !== 'none' ? 'is-left-resizing' : '',
     resizing ? 'is-resizing' : '',
@@ -1349,7 +1348,7 @@ export function AppLayout() {
   }, []);
 
   const handleLeftPanelResizerPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (leftPanelMode === 'none') return;
+    if (leftRailMode === 'none') return;
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = workspacePanelWidth;
@@ -1373,7 +1372,7 @@ export function AppLayout() {
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
-  }, [leftPanelMode, workspacePanelWidth]);
+  }, [leftRailMode, workspacePanelWidth]);
 
   const dirtyPaths = useMemo(() => new Set(
     openTabs
@@ -1560,7 +1559,7 @@ export function AppLayout() {
         terminalVisible={terminalVisible}
         editingDisabled={isDocx}
         flowMode={flowMode}
-        aiPanelVisible={rightPanelMode === 'flow'}
+        aiPanelVisible={leftRailMode === 'aiWorkbench'}
         onToggleEditorMode={handleToggleEditorMode}
         onToggleWordPreview={handleToggleWordPreview}
         onToggleWechatPreview={handleToggleWechatPreview}
@@ -1587,27 +1586,64 @@ export function AppLayout() {
       >
         <button
           type="button"
-          className={`workspace-toggle-rail ${leftPanelMode === 'workspace' ? 'active' : ''}`}
+          className={`workspace-toggle-rail ${leftRailMode === 'workspace' ? 'active' : ''}`}
           onClick={handleToggleWorkspacePanel}
-          aria-label={leftPanelMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
-          title={leftPanelMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
+          aria-label={leftRailMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
+          title={leftRailMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
         >
-          {leftPanelMode === 'workspace' ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+          <FolderOpen size={15} />
         </button>
-        {leftPanelMode === 'workspace' && (
+        {leftRailMode !== 'none' && (
           <>
-            <FileTreePanel
-              rootPath={workspaceRoot}
-              activePath={file.path}
-              dirtyPaths={dirtyPaths}
-              agentChangedPaths={new Set(agentChangedPaths.keys())}
-              width={workspacePanelWidth}
-              refreshKey={workspaceTreeVersion}
-              onRootChange={setWorkspaceRoot}
-              onOpenFile={(path) => {
-                void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
-              }}
-            />
+            <aside className="left-rail-shell" style={{ width: workspacePanelWidth }}>
+              <div className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
+                <button
+                  type="button"
+                  className={leftRailMode === 'workspace' ? 'active' : ''}
+                  onClick={handleToggleWorkspacePanel}
+                  aria-label={leftRailMode === 'workspace' ? '收起文件树' : '打开文件树'}
+                  title={leftRailMode === 'workspace' ? '收起文件树' : '打开文件树'}
+                >
+                  <FolderOpen size={15} />
+                  <span>文件树</span>
+                </button>
+                <button
+                  type="button"
+                  className={leftRailMode === 'aiWorkbench' ? 'active' : ''}
+                  onClick={handleToggleAiPanel}
+                  aria-label={leftRailMode === 'aiWorkbench' ? '收起 AI 工作台' : '打开 AI 工作台'}
+                  title={leftRailMode === 'aiWorkbench' ? '收起 AI 工作台' : '打开 AI 工作台'}
+                >
+                  <Sparkles size={15} />
+                  <span>AI 工作台</span>
+                </button>
+              </div>
+              {leftRailMode === 'aiWorkbench' ? (
+                <ConversationPanel
+                  conversationId="ai-workbench"
+                  workspaceSuggestion={workspaceRoot || undefined}
+                  agentPath={settings.aiClaudePath}
+                  model={settings.aiClaudeModel}
+                  pluginDirs={settings.aiPluginDirs}
+                  currentFileName={file.path ? file.name : undefined}
+                  currentFilePath={file.path || undefined}
+                  onClose={() => setLeftRailMode('none')}
+                />
+              ) : (
+                <FileTreePanel
+                  rootPath={workspaceRoot}
+                  activePath={file.path}
+                  dirtyPaths={dirtyPaths}
+                  agentChangedPaths={new Set(agentChangedPaths.keys())}
+                  width={workspacePanelWidth}
+                  refreshKey={workspaceTreeVersion}
+                  onRootChange={setWorkspaceRoot}
+                  onOpenFile={(path) => {
+                    void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
+                  }}
+                />
+              )}
+            </aside>
             <div
               className={`left-panel-resizer ${leftResizing === 'workspace' ? 'dragging' : ''}`}
               role="separator"

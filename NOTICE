@@ -1,0 +1,10 @@
+Typola includes code adapted from Open Design (https://github.com/nexu-io/open-design).
+
+The adapted files are located under src/services/agent/ and are based on:
+- apps/daemon/src/claude-stream.ts
+- apps/daemon/src/role-marker-guard.ts
+- apps/daemon/src/claude-diagnostics.ts
+- apps/daemon/src/redact.ts
+
+Open Design is licensed under the Apache License, Version 2.0.
+Copyright belongs to the Open Design authors.

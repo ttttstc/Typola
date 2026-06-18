@@ -2,11 +2,15 @@ use std::{
     collections::HashMap,
     env,
     ffi::OsStr,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::{Arc, Mutex},
+    process::{Child, Command, Stdio},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread,
+    time::{Duration, Instant},
 };
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -33,6 +37,15 @@ struct WorkspaceWatcherEntry {
     watcher: RecommendedWatcher,
 }
 #[derive(Default)]
+struct AgentHeadlessStore(Arc<Mutex<AgentHeadlessRegistry>>);
+
+#[derive(Default)]
+struct AgentHeadlessRegistry {
+    sessions: HashMap<String, String>,
+    runs: HashMap<String, Arc<Mutex<Child>>>,
+}
+
+#[derive(Default)]
 struct TerminalRegistry {
     next_id: u32,
     sessions: HashMap<u32, TerminalSession>,
@@ -48,6 +61,37 @@ struct TerminalSession {
 #[serde(rename_all = "camelCase")]
 struct AgentDetectRequest {
     agent_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSessionStartRequest {
+    conversation_id: String,
+    prompt: String,
+    cwd: Option<String>,
+    agent_path: Option<String>,
+    model: Option<String>,
+    plugin_dirs: Option<Vec<String>>,
+    stall_timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSessionCancelRequest {
+    run_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpConfigReadRequest {
+    cwd: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpConfigWriteRequest {
+    cwd: String,
+    content: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,6 +139,46 @@ struct AgentDetectResult {
     path: String,
     version: Option<String>,
     error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentSessionStartResult {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    resumed: bool,
+    agent_path: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentStdoutPayload {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    line: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentExitPayload {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    exit_code: Option<i32>,
+    cancelled: bool,
+    stderr_tail: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentStallPayload {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    idle_ms: u64,
+    stderr_tail: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -220,6 +304,79 @@ fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
             error: Some(error),
         },
     }
+}
+
+#[tauri::command]
+fn agent_session_start(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionStartRequest,
+) -> Result<AgentSessionStartResult, String> {
+    start_agent_headless_run(app, state, request, false)
+}
+
+#[tauri::command]
+fn agent_session_resume(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionStartRequest,
+) -> Result<AgentSessionStartResult, String> {
+    start_agent_headless_run(app, state, request, true)
+}
+
+#[tauri::command]
+fn agent_session_cancel(
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionCancelRequest,
+) -> Result<(), String> {
+    let child = {
+        let registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        registry
+            .runs
+            .get(&request.run_id)
+            .cloned()
+            .ok_or_else(|| "agent run not found".to_string())?
+    };
+
+    let mut child = child
+        .lock()
+        .map_err(|_| "agent child process poisoned".to_string())?;
+    child
+        .kill()
+        .map_err(|error| format!("failed to cancel agent run: {error}"))
+}
+
+#[tauri::command]
+fn read_mcp_config(request: McpConfigReadRequest) -> Result<Option<String>, String> {
+    let cwd = PathBuf::from(request.cwd.trim());
+    if !cwd.is_dir() {
+        return Err("workspace path is not a directory".into());
+    }
+    let path = cwd.join(".mcp.json");
+    if !path.exists() {
+        return Ok(None);
+    }
+    std::fs::read_to_string(&path)
+        .map(Some)
+        .map_err(|error| format!("failed to read .mcp.json: {error}"))
+}
+
+#[tauri::command]
+fn write_mcp_config(request: McpConfigWriteRequest) -> Result<(), String> {
+    let cwd = PathBuf::from(request.cwd.trim());
+    if !cwd.is_dir() {
+        return Err("workspace path is not a directory".into());
+    }
+    let content = request.content.trim();
+    if !content.is_empty() {
+        serde_json::from_str::<serde_json::Value>(content)
+            .map_err(|error| format!("invalid .mcp.json: {error}"))?;
+    }
+    std::fs::write(cwd.join(".mcp.json"), request.content)
+        .map_err(|error| format!("failed to write .mcp.json: {error}"))
 }
 
 #[tauri::command]
@@ -640,6 +797,7 @@ pub fn run() {
         .manage(TerminalStore::default())
         .manage(DocumentWatcherStore::default())
         .manage(WorkspaceWatcherStore::default())
+        .manage(AgentHeadlessStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let paths = opened_paths_from_args(args, &cwd);
             if paths.is_empty() {
@@ -671,6 +829,11 @@ pub fn run() {
             write_opened_document,
             write_attachment_file,
             agent_detect,
+            agent_session_start,
+            agent_session_resume,
+            agent_session_cancel,
+            read_mcp_config,
+            write_mcp_config,
             list_directory_entries,
             watch_opened_document,
             unwatch_opened_document,
@@ -849,19 +1012,325 @@ fn unique_attachment_path(dir: &Path, file_name: &str) -> PathBuf {
 
 fn normalize_agent_path(path: Option<&str>) -> String {
     if let Some(path) = path.map(str::trim).filter(|value| !value.is_empty()) {
+        // Windows: 裸命令名(无路径分隔符、无扩展名)必须回退到 PATH/npm 全局扫描,
+        // 因为 std::process::Command::new("claude") 不会自动尝试 PATHEXT 上的
+        // .cmd/.exe/.bat 后缀,而 npm 全局安装的 Claude CLI 实际是 `claude.cmd`。
+        // 不做这一步 detect 就会假阴报"未找到",尽管用户在终端里能直接用 `claude`。
+        #[cfg(target_os = "windows")]
+        {
+            let p = std::path::Path::new(path);
+            let bare = p
+                .parent()
+                .map_or(true, |parent| parent.as_os_str().is_empty())
+                && p.extension().is_none();
+            if bare {
+                if let Some(resolved) = resolve_windows_bare_command(path) {
+                    return resolved;
+                }
+            }
+        }
         return path.to_string();
     }
 
     default_claude_command()
 }
 
+fn start_agent_headless_run(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionStartRequest,
+    prefer_resume: bool,
+) -> Result<AgentSessionStartResult, String> {
+    let conversation_id = request.conversation_id.trim();
+    if conversation_id.is_empty() {
+        return Err("conversationId is required".into());
+    }
+    if request.prompt.is_empty() {
+        return Err("prompt is required".into());
+    }
+
+    let agent_path = normalize_agent_path(request.agent_path.as_deref());
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let (session_uuid, resumed) = {
+        let mut registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        let existing = registry.sessions.get(conversation_id).cloned();
+        match (prefer_resume, existing) {
+            (true, Some(session_uuid)) => (session_uuid, true),
+            _ => {
+                let session_uuid = uuid::Uuid::new_v4().to_string();
+                registry
+                    .sessions
+                    .insert(conversation_id.to_string(), session_uuid.clone());
+                (session_uuid, false)
+            }
+        }
+    };
+
+    let args = build_claude_headless_args(
+        &session_uuid,
+        resumed,
+        request.model.as_deref(),
+        request.plugin_dirs.as_deref().unwrap_or(&[]),
+    );
+    let mut command = create_agent_command(&agent_path, &args);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(cwd) = request.cwd.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        let cwd_path = PathBuf::from(cwd);
+        if cwd_path.is_dir() {
+            command.current_dir(cwd_path);
+        }
+    }
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("failed to start Claude headless run: {error}"))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "failed to open Claude stdin".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "failed to open Claude stdout".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "failed to open Claude stderr".to_string())?;
+
+    stdin
+        .write_all(request.prompt.as_bytes())
+        .and_then(|_| stdin.flush())
+        .map_err(|error| format!("failed to write Claude prompt: {error}"))?;
+    drop(stdin);
+
+    let child = Arc::new(Mutex::new(child));
+    {
+        let mut registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        registry.runs.insert(run_id.clone(), Arc::clone(&child));
+    }
+
+    let stderr_tail = Arc::new(Mutex::new(String::new()));
+    spawn_agent_stderr_collector(stderr, Arc::clone(&stderr_tail));
+    let last_output_at = Arc::new(Mutex::new(Instant::now()));
+    spawn_agent_stdout_forwarder(
+        app.clone(),
+        run_id.clone(),
+        conversation_id.to_string(),
+        session_uuid.clone(),
+        stdout,
+        Arc::clone(&last_output_at),
+    );
+    let done = Arc::new(AtomicBool::new(false));
+    spawn_agent_stall_monitor(
+        app.clone(),
+        run_id.clone(),
+        conversation_id.to_string(),
+        session_uuid.clone(),
+        Arc::clone(&last_output_at),
+        Arc::clone(&stderr_tail),
+        Arc::clone(&done),
+        request.stall_timeout_ms.unwrap_or(30_000),
+    );
+    spawn_agent_waiter(
+        app,
+        child,
+        Arc::clone(&state.0),
+        run_id.clone(),
+        conversation_id.to_string(),
+        session_uuid.clone(),
+        stderr_tail,
+        done,
+    );
+
+    Ok(AgentSessionStartResult {
+        run_id,
+        conversation_id: conversation_id.to_string(),
+        session_uuid,
+        resumed,
+        agent_path,
+    })
+}
+
+fn build_claude_headless_args(
+    session_uuid: &str,
+    resumed: bool,
+    model: Option<&str>,
+    plugin_dirs: &[String],
+) -> Vec<String> {
+    let mut args = vec![
+        "-p".to_string(),
+        "--input-format".to_string(),
+        "text".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--permission-mode".to_string(),
+        "bypassPermissions".to_string(),
+    ];
+    if resumed {
+        args.push("--resume".to_string());
+    } else {
+        args.push("--session-id".to_string());
+    }
+    args.push(session_uuid.to_string());
+    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--model".to_string());
+        args.push(model.to_string());
+    }
+    for dir in plugin_dirs.iter().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        args.push("--plugin-dir".to_string());
+        args.push(dir.to_string());
+    }
+    args
+}
+
+fn spawn_agent_stdout_forwarder(
+    app: tauri::AppHandle,
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    stdout: impl Read + Send + 'static,
+    last_output_at: Arc<Mutex<Instant>>,
+) {
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            let Ok(line) = line else { break };
+            if let Ok(mut last) = last_output_at.lock() {
+                *last = Instant::now();
+            }
+            let _ = app.emit(
+                "agent-stdout",
+                AgentStdoutPayload {
+                    run_id: run_id.clone(),
+                    conversation_id: conversation_id.clone(),
+                    session_uuid: session_uuid.clone(),
+                    line,
+                },
+            );
+        }
+    });
+}
+
+fn spawn_agent_stderr_collector(stderr: impl Read + Send + 'static, stderr_tail: Arc<Mutex<String>>) {
+    thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut buffer = String::new();
+        loop {
+            buffer.clear();
+            match reader.read_line(&mut buffer) {
+                Ok(0) => break,
+                Ok(_) => {
+                    if let Ok(mut tail) = stderr_tail.lock() {
+                        tail.push_str(&buffer);
+                        if tail.len() > 8192 {
+                            let keep_from = tail.len().saturating_sub(8192);
+                            *tail = tail[keep_from..].to_string();
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+}
+
+fn spawn_agent_stall_monitor(
+    app: tauri::AppHandle,
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    last_output_at: Arc<Mutex<Instant>>,
+    stderr_tail: Arc<Mutex<String>>,
+    done: Arc<AtomicBool>,
+    stall_timeout_ms: u64,
+) {
+    thread::spawn(move || {
+        let timeout = Duration::from_millis(stall_timeout_ms.max(5_000));
+        let mut emitted = false;
+        while !done.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(1_000));
+            if emitted {
+                continue;
+            }
+            let idle = last_output_at
+                .lock()
+                .map(|last| last.elapsed())
+                .unwrap_or_default();
+            if idle >= timeout {
+                emitted = true;
+                let stderr_tail = stderr_tail
+                    .lock()
+                    .map(|tail| tail.clone())
+                    .unwrap_or_default();
+                let _ = app.emit(
+                    "agent-stall",
+                    AgentStallPayload {
+                        run_id: run_id.clone(),
+                        conversation_id: conversation_id.clone(),
+                        session_uuid: session_uuid.clone(),
+                        idle_ms: idle.as_millis().min(u128::from(u64::MAX)) as u64,
+                        stderr_tail,
+                    },
+                );
+            }
+        }
+    });
+}
+
+fn spawn_agent_waiter(
+    app: tauri::AppHandle,
+    child: Arc<Mutex<Child>>,
+    registry: Arc<Mutex<AgentHeadlessRegistry>>,
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    stderr_tail: Arc<Mutex<String>>,
+    done: Arc<AtomicBool>,
+) {
+    thread::spawn(move || {
+        let exit_code = child
+            .lock()
+            .ok()
+            .and_then(|mut child| child.wait().ok())
+            .and_then(|status| status.code());
+        if let Ok(mut registry) = registry.lock() {
+            registry.runs.remove(&run_id);
+        }
+        done.store(true, Ordering::Relaxed);
+        let stderr_tail = stderr_tail
+            .lock()
+            .map(|tail| tail.clone())
+            .unwrap_or_default();
+        let cancelled = exit_code.is_none();
+        let _ = app.emit(
+            "agent-exit",
+            AgentExitPayload {
+                run_id,
+                conversation_id,
+                session_uuid,
+                exit_code,
+                cancelled,
+                stderr_tail,
+            },
+        );
+    });
+}
+
 fn default_claude_command() -> String {
     #[cfg(target_os = "windows")]
     {
-        for candidate in windows_claude_candidates() {
-            if candidate.is_file() {
-                return candidate.to_string_lossy().to_string();
-            }
+        if let Some(resolved) = resolve_windows_bare_command("claude") {
+            return resolved;
         }
     }
 
@@ -869,7 +1338,29 @@ fn default_claude_command() -> String {
 }
 
 #[cfg(target_os = "windows")]
-fn windows_claude_candidates() -> Vec<PathBuf> {
+fn resolve_windows_bare_command(bare_name: &str) -> Option<String> {
+    // 1) 已知的 npm 全局位置(claude/pnpm/yarn 全局基本落在 %APPDATA%\npm)
+    for candidate in windows_npm_global_candidates(bare_name) {
+        if candidate.is_file() {
+            return Some(candidate.to_string_lossy().to_string());
+        }
+    }
+    // 2) 系统 PATH 上扫 .cmd/.exe/.bat —— 兜底 nvm/volta/手装等其他路径
+    if let Ok(path_env) = env::var("PATH") {
+        for dir in env::split_paths(&path_env) {
+            for ext in ["cmd", "exe", "bat"] {
+                let candidate = dir.join(format!("{bare_name}.{ext}"));
+                if candidate.is_file() {
+                    return Some(candidate.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn windows_npm_global_candidates(bare_name: &str) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(app_data) = env::var("APPDATA") {
         roots.push(PathBuf::from(app_data).join("npm"));
@@ -885,9 +1376,9 @@ fn windows_claude_candidates() -> Vec<PathBuf> {
 
     let mut candidates = Vec::new();
     for root in roots {
-        candidates.push(root.join("claude.cmd"));
-        candidates.push(root.join("claude.exe"));
-        candidates.push(root.join("claude"));
+        candidates.push(root.join(format!("{bare_name}.cmd")));
+        candidates.push(root.join(format!("{bare_name}.exe")));
+        candidates.push(root.join(bare_name));
     }
     candidates
 }
@@ -1140,6 +1631,28 @@ mod tests {
                 || path.ends_with("\\npm\\claude.exe"),
             "unexpected default Claude path: {path}"
         );
+    }
+
+    #[test]
+    fn claude_headless_args_use_text_stdin_and_stream_json_output() {
+        let plugin_dirs = vec!["D:\\plugins\\one".to_string(), "D:\\plugins\\two".to_string()];
+        let args = build_claude_headless_args("session-123", false, Some("sonnet"), &plugin_dirs);
+
+        assert!(args.windows(2).any(|pair| pair == ["--input-format", "text"]));
+        assert!(args.windows(2).any(|pair| pair == ["--output-format", "stream-json"]));
+        assert!(args.windows(2).any(|pair| pair == ["--session-id", "session-123"]));
+        assert!(args.windows(2).any(|pair| pair == ["--model", "sonnet"]));
+        assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\one"]));
+        assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\two"]));
+        assert!(!args.contains(&"--resume".to_string()));
+    }
+
+    #[test]
+    fn claude_headless_resume_args_reuse_session_uuid() {
+        let args = build_claude_headless_args("session-123", true, None, &[]);
+
+        assert!(args.windows(2).any(|pair| pair == ["--resume", "session-123"]));
+        assert!(!args.contains(&"--session-id".to_string()));
     }
 
     #[test]

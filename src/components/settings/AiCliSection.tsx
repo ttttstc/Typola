@@ -39,6 +39,17 @@ export function AiCliSection() {
         />
       </label>
 
+      <label className="settings-field">
+        <span className="settings-label">Claude 模型</span>
+        <span className="settings-desc">M1 默认留空，交给 Claude CLI 使用自身默认模型；需要固定模型时填写如 sonnet。</span>
+        <input
+          className="settings-input"
+          value={settings.aiClaudeModel}
+          placeholder="留空使用 Claude CLI 默认模型"
+          onChange={(event) => updateSettings({ aiClaudeModel: event.target.value })}
+        />
+      </label>
+
       <div className="settings-section-actions">
         <button
           type="button"

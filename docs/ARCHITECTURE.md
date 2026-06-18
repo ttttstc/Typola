@@ -12,8 +12,10 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/components/WordPaperPreviewPane.tsx` and `src/services/word/*` provide Word-style preview and `.docx` export.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
+- `src/components/conversation/ConversationPanel.tsx` provides the left AI Workbench conversation surface for Skill OS M1.
+- `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge Claude headless stdout into typed message state and UI-friendly diagnostics.
 - `src/services/documentWatchService.ts` bridges file watcher commands/events for the active document.
-- `src-tauri/src/lib.rs` owns system file open/read/write commands, directory listing, document watching, single-instance forwarding, terminal PTY commands, and Claude CLI detection (`agent_detect`).
+- `src-tauri/src/lib.rs` owns system file open/read/write commands, directory listing, document watching, single-instance forwarding, terminal PTY commands, Claude CLI detection (`agent_detect`), and the headless Claude session commands used by the AI Workbench.
 
 ## Desktop File Flow
 
@@ -48,10 +50,18 @@ The terminal is implemented with Tauri commands plus event streaming:
 - macOS/Linux shell resolution prefers `$SHELL`, then `/bin/zsh`, `/bin/bash`, and `/bin/sh`.
 - The front end derives terminal cwd from the opened file path when available; otherwise Rust falls back to the user home directory.
 
-## Claude CLI Detection
+## Claude AI Workbench
 
 - `agent_detect` runs `claude --version` through Rust and supports either PATH lookup or a user-configured executable path. On Windows it probes the npm global directory (`%APPDATA%\npm\claude.cmd` / `claude.exe`) before falling back to PATH. Child processes spawn with `CREATE_NO_WINDOW` so `.cmd` wrappers do not flash a console.
-- The Settings → AI CLI section uses `agent_detect` to surface availability and version. Future Claude integration work is tracked in `docs/AI_WORKBENCH_SPEC.md` (terminal-based design, not yet implemented).
+- The Settings → AI CLI section uses `agent_detect` to surface availability and version. It also stores an optional Claude model string; when empty, Typola lets Claude CLI choose its default model.
+- Skill OS M1 uses separate headless commands (`agent_session_start`, `agent_session_resume`, and `agent_session_cancel`) instead of the PTY terminal. Rust spawns Claude with ordinary pipes, writes the raw prompt through stdin using `--input-format text`, requests `--output-format stream-json`, and forwards each stdout line as the `agent-stdout` Tauri event.
+- Conversation-to-Claude session IDs live only in an in-memory Rust map for M1. The AI Workbench uses one global frontend conversation id (`ai-workbench`) so switching editor files does not reset message history. `agent_session_resume` reuses the UUID for that conversation while app restarts intentionally start fresh sessions.
+- Frontend parsing is isolated in `src/services/agent/claudeStream.ts` and related guard/diagnostic helpers. `useAgentSession` listens to `agent-stdout`, `agent-exit`, and `agent-stall`, then accumulates user messages, assistant text, thinking deltas, tool cards, usage summaries, and human-readable error diagnostics for `ConversationPanel`.
+- The AI Workbench cwd is independent from the file tree. Typola uses only the user-selected `aiWorkspaceRoot`; if empty, no cwd is passed and Claude uses the process default directory. The current file-tree workspace is only surfaced as a recent-directory suggestion in the Composer WorkingDirPicker and never acts as an implicit cwd fallback.
+- Changing the AI workspace starts a new conversation: the frontend confirms the change, cancels any active headless run, clears local messages, and lets the next prompt create/resume a fresh in-memory Claude session for the new cwd.
+- Composer context chips are prompt-only context: the current document and attached files are appended to stdin text as reference paths. The current document chip is removable for the current file, and switching files restores a new current-document chip without resetting the global conversation. Chips do not change Claude CLI argv.
+- The Composer `+` menu exposes three Claude-native integrations for M1: file attachment, `.mcp.json` editing under the selected cwd, and Plugin directories. Plugin directories are persisted as `aiPluginDirs` and forwarded to Rust so `build_claude_headless_args` appends repeated `--plugin-dir <path>` pairs.
+- The headless workbench coexists with the terminal-based flow-mode agent path. The left rail is a single state machine (`none` / `workspace` / `aiWorkbench`), so file tree and AI Workbench are mutually exclusive and never create a fourth column. The existing bottom PTY terminal remains unchanged and flow mode no longer auto-opens it.
 
 ## Product Rules
 
