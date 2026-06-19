@@ -10,6 +10,8 @@ import {
   SlidersHorizontal,
   WandSparkles,
   Terminal,
+  Sparkles,
+  LayoutPanelLeft,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useSettings } from '../hooks/useSettings';
@@ -31,14 +33,19 @@ type ToolbarProps = {
   wechatPreviewVisible: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
+  flowMode: boolean;
+  aiPanelVisible: boolean;
   onToggleEditorMode: () => void;
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleTerminal: () => void;
+  onToggleFlowMode: () => void;
+  onToggleAiPanel: () => void;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
   onSaveAs: () => void;
+  onRename?: () => void;
   onOpenEditAssist: () => void;
   onOpenSettings: () => void;
   onPreloadSettings?: () => void;
@@ -48,8 +55,10 @@ type ToolbarProps = {
 
 export function Toolbar({
   dirty, fileName,
-  editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
-  onToggleTerminal, onNew, onOpen, onSave, onSaveAs, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, flowMode, aiPanelVisible,
+  onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
+  onToggleTerminal, onToggleFlowMode, onToggleAiPanel,
+  onNew, onOpen, onSave, onSaveAs, onRename, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -89,7 +98,16 @@ export function Toolbar({
       <div className="toolbar-title" data-tauri-drag-region aria-label={t('currentFileLabel')}>
         <span className={`file-name ${hasOpenedFile || dirty ? 'visible' : ''}`}>
           {dirty && <span className="dirty-dot" />}
-          <span className="file-name-text">{fileName}</span>
+          <span
+            className="file-name-text"
+            title={onRename ? t('toolbarRenameTitle') : undefined}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              onRename?.();
+            }}
+          >
+            {fileName}
+          </span>
         </span>
       </div>
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
@@ -164,11 +182,31 @@ export function Toolbar({
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
+            className={aiPanelVisible ? 'active' : ''}
+            onClick={onToggleAiPanel}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+            data-tooltip={t('toolbarAiPanelTitle')}
+            aria-label={t('toolbarAiPanelLabel')}
+          >
+            <LayoutPanelLeft size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+          <button
+            className={flowMode ? 'active' : ''}
+            onClick={onToggleFlowMode}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+            data-tooltip={t('toolbarFlowModeTitle')}
+            aria-label={t('toolbarFlowModeLabel')}
+          >
+            <Sparkles size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+          <button
             onClick={onOpenEditAssist}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            data-tooltip="编辑辅助 (Cmd+Shift+I)"
-            aria-label="编辑辅助"
+            data-tooltip={t('toolbarEditAssistTitle')}
+            aria-label={t('toolbarEditAssistLabel')}
           >
             <WandSparkles size={iconSize} strokeWidth={strokeWidth} />
           </button>

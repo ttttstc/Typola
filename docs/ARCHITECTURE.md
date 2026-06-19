@@ -12,13 +12,16 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/components/WordPaperPreviewPane.tsx` and `src/services/word/*` provide Word-style preview and `.docx` export.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
+- `src/components/conversation/ConversationPanel.tsx` provides the left AI Workbench conversation surface for Skill OS M1.
+- `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge Claude headless stdout into typed message state and UI-friendly diagnostics.
 - `src/services/documentWatchService.ts` bridges file watcher commands/events for the active document.
-- `src-tauri/src/lib.rs` owns system file open/read/write commands, directory listing, document watching, single-instance forwarding, terminal PTY commands, and Claude CLI detection (`agent_detect`).
+- `src-tauri/src/lib.rs` owns system file open/read/write commands, directory listing, document watching, single-instance forwarding, terminal PTY commands, Claude CLI detection (`agent_detect`), and the headless Claude session commands used by the AI Workbench.
 
 ## Desktop File Flow
 
 - File open paths can come from the native open dialog, drag/drop, OS file association, second-instance forwarding, or reopen-last-file.
 - `read_opened_document` and `write_opened_document` are the controlled Rust read/write path for supported document types. `saveFileAs` uses the same Rust write command in Tauri builds, so unsupported extensions are rejected consistently.
+- `rename_opened_document` renames an already-saved writable document within its current directory. The frontend exposes it from the title/tab rename dialog and syncs the resulting path back into tabs, recent files, and the active document state.
 - Tauri capabilities keep filesystem plugin access scoped to common user document locations and dialog-granted paths. The desktop CSP allows Vditor's required `unsafe-eval`, but does not allow `script-src 'unsafe-inline'`.
 - Opening another document creates or switches to a lightweight file tab instead of replacing the active document. Dirty state is stored per opened tab; dirty tabs and matching file-tree entries show a leading `*`. The active file state is mirrored into refs for close confirmation, so a just-edited tab cannot close before the tab snapshot catches up. Closing a dirty tab uses the same save / discard / cancel decision model as window close; choosing save writes the tab first and aborts the close if saving fails or Save As is cancelled. The Tauri close-request listener is registered once and reads that live dirty ref. Close requests are always intercepted first; dirty sessions ask whether to save before closing, discard changes, or cancel. If the user chooses save, Typola saves every dirty writable tab before closing and aborts if any save fails. After the decision Typola explicitly calls `window.destroy()`, allows repeated close events while destruction is in progress, and falls back to the Rust `force_close_main_window` command if the frontend close API fails. The tab bar is hidden while only one file is open.
 - `list_directory_entries` lists a user-selected workspace directory for the file tree. It includes directories and supported document files, excludes hidden/build-heavy folders such as `.git`, `node_modules`, `dist`, and `target`, and sorts folders before files.
@@ -46,12 +49,22 @@ The terminal is implemented with Tauri commands plus event streaming:
 - `terminal_clear` writes `ESC[3J ESC[2J ESC[H` to the PTY in addition to clearing the xterm viewport.
 - Windows shell resolution prefers `pwsh.exe`, then `powershell.exe`, then `cmd.exe`.
 - macOS/Linux shell resolution prefers `$SHELL`, then `/bin/zsh`, `/bin/bash`, and `/bin/sh`.
-- The front end derives terminal cwd from the opened file path when available; otherwise Rust falls back to the user home directory.
+- The front end derives terminal cwd from the selected workspace tree first, then the opened file path; otherwise Rust falls back to the user home directory.
 
-## Claude CLI Detection
+## Claude AI Workbench
 
 - `agent_detect` runs `claude --version` through Rust and supports either PATH lookup or a user-configured executable path. On Windows it probes the npm global directory (`%APPDATA%\npm\claude.cmd` / `claude.exe`) before falling back to PATH. Child processes spawn with `CREATE_NO_WINDOW` so `.cmd` wrappers do not flash a console.
-- The Settings → AI CLI section uses `agent_detect` to surface availability and version. Future Claude integration work is tracked in `docs/AI_WORKBENCH_SPEC.md` (terminal-based design, not yet implemented).
+- The Settings → AI CLI section uses `agent_detect` to surface availability and version. It also stores an optional Claude model string; when empty, Typola lets Claude CLI choose its default model.
+- Skill OS M1 uses separate headless commands (`agent_session_start`, `agent_session_resume`, and `agent_session_cancel`) instead of the PTY terminal. Rust spawns Claude with ordinary pipes, writes the raw prompt through stdin using `--input-format text`, requests `--output-format stream-json`, and forwards each stdout line as the `agent-stdout` Tauri event.
+- Conversation-to-Claude session IDs live only in an in-memory Rust map for M1. The AI Workbench uses one global frontend conversation id (`ai-workbench`) so switching editor files does not reset message history. `agent_session_resume` reuses the UUID for that conversation while app restarts intentionally start fresh sessions.
+- Frontend parsing is isolated in `src/services/agent/claudeStream.ts` and related guard/diagnostic helpers. `useAgentSession` listens to `agent-stdout`, `agent-exit`, and `agent-stall`, then accumulates user messages, assistant text, thinking deltas, tool cards, usage summaries, and human-readable error diagnostics for `ConversationPanel`.
+- The AI Workbench cwd is independent from the file tree. Typola uses only the user-selected `aiWorkspaceRoot`; if empty, no cwd is passed and Claude uses the process default directory. The current file-tree workspace is only surfaced as a recent-directory suggestion in the Composer WorkingDirPicker and never acts as an implicit cwd fallback.
+- Changing the AI workspace starts a new conversation: the frontend confirms the change, cancels any active headless run, clears local messages, and lets the next prompt create/resume a fresh in-memory Claude session for the new cwd.
+- Composer context chips are prompt-only context: the current document and attached files are appended to stdin text as reference paths. The current document chip is removable for the current file, and switching files restores a new current-document chip without resetting the global conversation. Chips do not change Claude CLI argv.
+- The Composer `+` menu exposes three Claude-native integrations for M1: file attachment, `.mcp.json` editing under the selected cwd, and Plugin directories. Plugin directories are persisted as `aiPluginDirs` and forwarded to Rust so `build_claude_headless_args` appends repeated `--plugin-dir <path>` pairs.
+- For M2 artifact return, headless requests can pass `extraAllowedDirs`; Rust maps them to repeated `--add-dir <path>` arguments while keeping stdin as `--input-format text`. Typola runs Claude from `<aiWorkspaceRoot>/.typola-output/<conversation>/` so relative writes land in a temporary local artifact area, while `--add-dir <aiWorkspaceRoot>` still lets Claude read source documents by absolute path.
+- `claudeStream.ts` emits an `artifact_file` event when stream-json reports Write/Edit-style tool calls with a file path. The workspace watcher also listens to the AI workspace and filters changes under `.typola-output/` as a fallback. The UI shows these artifacts as right-bottom filename chips only; clicking a chip opens the file in the central editor, and `archive_artifact_to_workspace` moves a temporary artifact into the workspace with automatic name de-duplication.
+- The headless workbench coexists with the terminal-based flow-mode agent path. The left rail is a single state machine (`none` / `workspace` / `aiWorkbench`), so file tree and AI Workbench are mutually exclusive and never create a fourth column. The existing bottom PTY terminal remains unchanged and flow mode no longer auto-opens it.
 
 ## Product Rules
 

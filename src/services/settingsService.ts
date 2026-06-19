@@ -209,6 +209,10 @@ export interface AppSettings {
   terminalConfirmMultilinePaste: boolean;
   // AI 工作台
   aiClaudePath: string;
+  aiClaudeModel: string;
+  aiWorkspaceRoot: string;
+  aiWorkspaceRecents: string[];
+  aiPluginDirs: string[];
   // 外观
   theme: 'light' | 'dark';
   zoomLevel: number;
@@ -254,6 +258,10 @@ const defaults: AppSettings = {
   terminalShortcutPreset: 'default',
   terminalConfirmMultilinePaste: true,
   aiClaudePath: '',
+  aiClaudeModel: '',
+  aiWorkspaceRoot: '',
+  aiWorkspaceRecents: [],
+  aiPluginDirs: [],
   theme: 'light',
   zoomLevel: 100,
 };
@@ -340,6 +348,17 @@ function normalizeTerminalShellPath(value: unknown): string {
 
 function normalizeExecutablePath(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, 500) : '';
+}
+
+function normalizePathList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    const normalized = normalizeExecutablePath(item);
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [normalized];
+  }).slice(0, 16);
 }
 
 function normalizeTerminalFontSize(value: unknown): number {
@@ -759,6 +778,10 @@ export function getSettings(): AppSettings {
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
+      aiClaudeModel: normalizeExecutablePath(stored.aiClaudeModel),
+      aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
+      aiWorkspaceRecents: normalizePathList(stored.aiWorkspaceRecents).slice(0, 8),
+      aiPluginDirs: normalizePathList(stored.aiPluginDirs),
     };
     settingsSnapshot = normalized;
     settingsSnapshotRaw = localStorage.getItem(STORAGE_KEY);
@@ -838,6 +861,10 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
       patch.terminalConfirmMultilinePaste ?? current.terminalConfirmMultilinePaste
     ) !== false,
     aiClaudePath: normalizeExecutablePath(patch.aiClaudePath ?? current.aiClaudePath),
+    aiClaudeModel: normalizeExecutablePath(patch.aiClaudeModel ?? current.aiClaudeModel),
+    aiWorkspaceRoot: normalizeExecutablePath(patch.aiWorkspaceRoot ?? current.aiWorkspaceRoot),
+    aiWorkspaceRecents: normalizePathList(patch.aiWorkspaceRecents ?? current.aiWorkspaceRecents).slice(0, 8),
+    aiPluginDirs: normalizePathList(patch.aiPluginDirs ?? current.aiPluginDirs),
   };
   return persistSettings(merged);
 }

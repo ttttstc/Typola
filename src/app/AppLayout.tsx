@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderOpen, Sparkles } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { OpenedFile, TocItem } from '../types/document';
 import { createEmptyFile } from '../types/document';
@@ -32,6 +33,7 @@ import { FindReplacePanel } from '../components/FindReplacePanel';
 import { QuickOpenPanel } from '../components/QuickOpenPanel';
 import { EditAssistPanel } from '../components/EditAssistPanel';
 import { FileTreePanel } from '../components/FileTreePanel';
+import { ConversationPanel } from '../components/conversation/ConversationPanel';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import type { PreviewScrollHandle } from '../types/previewScroll';
@@ -39,6 +41,8 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
 import { addRecentFile, getRecentFiles, removeRecentFile, type RecentFile } from '../services/recentFilesService';
 import { createImageMarkdown, createLinkMarkdown, createTableMarkdown } from '../services/editAssistService';
+import { createAgentBridge } from '../services/agentBridge';
+import { filterSelfWritePaths } from '../services/selfWriteFilter';
 import type { SearchMatch } from '../services/documentSearchService';
 
 const EditorPane = lazy(() =>
@@ -91,10 +95,20 @@ const HtmlPresentationPane = lazy(() =>
 const TerminalPanel = lazy(() =>
   import('../components/TerminalPanel').then((module) => ({ default: module.TerminalPanel })),
 );
+type TerminalPanelHandle = import('../components/TerminalPanel').TerminalPanelHandle;
+const ScenarioPanel = lazy(() =>
+  import('../components/ScenarioPanel').then((module) => ({ default: module.ScenarioPanel })),
+);
+type AgentBridge = import('../services/agentBridge').AgentBridge;
+const ArtifactPreview = lazy(() =>
+  import('../components/ArtifactPreview').then((module) => ({ default: module.ArtifactPreview })),
+);
+type ArtifactItem = import('../components/ArtifactPreview').ArtifactItem;
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
-type RightPanelMode = 'none' | 'word' | 'wechat';
-type LeftPanelMode = 'none' | 'workspace';
+type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow';
+type LeftRailMode = 'none' | 'workspace' | 'aiWorkbench';
+type FlowRightTab = 'scenario' | 'preview';
 type OpenFileTab = {
   id: string;
   file: OpenedFile;
@@ -111,7 +125,28 @@ const RIGHT_PANEL_MAX_WIDTH = 760;
 const RIGHT_PANEL_RESIZER_GAP = 9;
 const LEFT_PANEL_MIN_WIDTH = 220;
 const LEFT_PANEL_MAX_WIDTH = 560;
-const WORKSPACE_PANEL_DEFAULT_WIDTH = 260;
+const WORKSPACE_PANEL_DEFAULT_WIDTH = 366;
+const FLOW_LEFT_PANEL_WIDTH = 366;
+const FLOW_RIGHT_PANEL_WIDTH = 456;
+
+function pathBasename(path: string): string {
+  return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
+}
+
+function joinLocalPath(root: string, ...parts: string[]): string {
+  const separator = root.includes('\\') ? '\\' : '/';
+  return [
+    root.replace(/[\\/]+$/u, ''),
+    ...parts.map((part) => part.replace(/^[\\/]+|[\\/]+$/gu, '')),
+  ].filter(Boolean).join(separator);
+}
+
+function pathStartsWith(path: string, root: string): boolean {
+  const normalize = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/u, '').toLowerCase();
+  const normalizedPath = normalize(path);
+  const normalizedRoot = normalize(root);
+  return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}/`);
+}
 
 function imageExtensionFromMime(type: string): string {
   if (type === 'image/jpeg') return 'jpg';
@@ -173,7 +208,7 @@ function sameDocumentPath(a: string, b: string): boolean {
 }
 
 function fileTabId(file: OpenedFile, fallback = ''): string {
-  return file.path || fallback || `untitled-${Date.now()}`;
+  return file.path || fallback || `untitled-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function AppLayout() {
@@ -187,6 +222,7 @@ export function AppLayout() {
   const mainContentRef = useRef<HTMLDivElement>(null);
   const editorCommandRef = useRef<EditorCommandHandle | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
+  const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   const handleEditorScrollRatio = useCallback((ratio: number) => {
     previewScrollRef.current?.scrollToRatio(ratio);
   }, []);
@@ -197,16 +233,19 @@ export function AppLayout() {
   const autoSaveFailureRef = useRef({ key: '', count: 0, suspended: false });
   const lastSelfWriteRef = useRef({ path: '', at: 0 });
   const dirtyFilesRef = useRef(false);
+  const untitledCounterRef = useRef(1);
   const [file, setFile] = useState<OpenedFile>(createEmptyFile());
   const [openTabs, setOpenTabs] = useState<OpenFileTab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
-  const [leftPanelMode, setLeftPanelMode] = useState<LeftPanelMode>('none');
+  const [leftRailMode, setLeftRailMode] = useState<LeftRailMode>('none');
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(WORKSPACE_PANEL_DEFAULT_WIDTH);
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
   const [activeTocIndex, setActiveTocIndex] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  // P1-E:从外部(场景卡)跳转时指定的初始段
+  const [settingsInitialSection, setSettingsInitialSection] = useState<'aiCli' | undefined>(undefined);
   const [findVisible, setFindVisible] = useState(false);
   const [findFocusTarget, setFindFocusTarget] = useState<'find' | 'replace'>('find');
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
@@ -217,11 +256,26 @@ export function AppLayout() {
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [resizing, setResizing] = useState(false);
-  const [leftResizing, setLeftResizing] = useState<LeftPanelMode>('none');
+  const [leftResizing, setLeftResizing] = useState<LeftRailMode>('none');
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
+  // 每次启动都从阅读器模式起步:进入心流模式的副作用(maximize + 开面板)只在用户点
+  // 按钮时跑,如果初始化时从 settings 把 flowMode 设成 true,按钮会亮但布局还是阅读器,
+  // 状态与可见态不一致。阅读器是基础态,所以不持久化心流偏好。
+  const [flowMode, setFlowMode] = useState(false);
+  const [flowRightTab, setFlowRightTab] = useState<FlowRightTab>('scenario');
+  const [agentChangedPaths, setAgentChangedPaths] = useState<Map<string, number>>(new Map());
+  const [externalChangeConflict, setExternalChangeConflict] = useState<{ path: string; ts: number } | null>(null);
+  const [hasEditorSelection, setHasEditorSelection] = useState(false);
+  const flowSnapshotRef = useRef<{
+    leftRailMode: LeftRailMode;
+    rightPanelMode: RightPanelMode;
+    rightPanelWidth: number;
+    terminalVisible: boolean;
+    maximized: boolean;
+  } | null>(null);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
   const [autoSaveError, setAutoSaveError] = useState('');
@@ -232,6 +286,11 @@ export function AppLayout() {
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
     [debouncedStatsSource, file.fileType],
   );
+  const agentOutputRoot = useMemo(() => (
+    settings.aiWorkspaceRoot
+      ? joinLocalPath(settings.aiWorkspaceRoot, '.typola-output', 'ai-workbench')
+      : undefined
+  ), [settings.aiWorkspaceRoot]);
 
   useEffect(() => {
     fileRef.current = file;
@@ -324,7 +383,9 @@ export function AppLayout() {
   }, [applyOpenedFile]);
 
   const handleNewFile = useCallback(() => {
-    applyOpenedFile(createEmptyFile());
+    const index = untitledCounterRef.current++;
+    const name = index === 1 ? '未命名.md' : `未命名 ${index}.md`;
+    applyOpenedFile(createEmptyFile(name), `untitled-${index}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   }, [applyOpenedFile]);
 
   const handleOpenPath = useCallback(async (path: string) => {
@@ -396,6 +457,7 @@ export function AppLayout() {
   }, []);
 
   const [unsavedDialog, setUnsavedDialog] = useState<{ message: string } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{ tabId: string; name: string; error?: string } | null>(null);
   const unsavedResolverRef = useRef<((decision: UnsavedDecision) => void) | null>(null);
 
   const requestUnsavedChoice = useCallback((message: string) => {
@@ -497,6 +559,46 @@ export function AppLayout() {
       }
     });
   }, [activeTabId, confirmCloseTabWithDirtyFile, openTabs]);
+
+  const handleRequestRename = useCallback((tabId = activeTabIdRef.current) => {
+    const target = openTabsRef.current.find((tab) => tab.id === tabId);
+    const targetFile = target?.file ?? fileRef.current;
+    if (!targetFile.path) {
+      setRenameDialog({ tabId, name: targetFile.name, error: '未保存文档请先保存后再重命名。' });
+      return;
+    }
+    setRenameDialog({ tabId, name: targetFile.name });
+  }, []);
+
+  const handleConfirmRename = useCallback(async () => {
+    if (!renameDialog) return;
+    const target = openTabsRef.current.find((tab) => tab.id === renameDialog.tabId);
+    const targetFile = target?.file ?? fileRef.current;
+    if (!targetFile.path) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ path: string; name: string }>('rename_opened_document', {
+        request: { path: targetFile.path, newName: renameDialog.name },
+      });
+      const updatedFile = { ...targetFile, path: result.path, name: result.name };
+      const nextId = fileTabId(updatedFile, result.path);
+      setOpenTabs((tabs) => tabs.map((tab) => (
+        tab.id === renameDialog.tabId ? { id: nextId, file: updatedFile } : tab
+      )));
+      if (activeTabIdRef.current === renameDialog.tabId) {
+        setActiveTabId(nextId);
+        setFile(updatedFile);
+        setLastOpenedPath(result.path);
+      }
+      addRecentFile(result.path, result.name);
+      setRenameDialog(null);
+      setTransientMessage('已重命名文件。');
+    } catch (error) {
+      setRenameDialog((current) => current
+        ? { ...current, error: error instanceof Error ? error.message : String(error) }
+        : current);
+    }
+  }, [renameDialog]);
 
   const handleSave = useCallback(async () => {
     if (file.fileType === 'docx') return;
@@ -606,13 +708,139 @@ export function AppLayout() {
   }, []);
 
   const handleToggleWorkspacePanel = useCallback(() => {
-    setLeftPanelMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
+    setLeftRailMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
   }, []);
+
+  const handleToggleAiPanel = useCallback(() => {
+    if (fileRef.current.fileType === 'docx') return;
+    setLeftRailMode((mode) => mode === 'aiWorkbench' ? 'none' : 'aiWorkbench');
+  }, []);
+
+  const handleToggleFlowMode = useCallback(async () => {
+    if (file.fileType === 'docx') return;
+
+    if (!flowMode) {
+      // Enter flow mode: snapshot → maximize → open left rail and right workflow panel.
+      let maximized = false;
+      if (isTauriRuntime) {
+        try {
+          const appWindow = getCurrentWindow();
+          maximized = await appWindow.isMaximized();
+          if (!maximized) await appWindow.maximize();
+        } catch { /* ignore */ }
+      }
+
+      flowSnapshotRef.current = {
+        leftRailMode,
+        rightPanelMode,
+        rightPanelWidth,
+        terminalVisible,
+        maximized,
+      };
+
+      setLeftRailMode('workspace');
+      setWorkspacePanelWidth((width) => Math.max(width, FLOW_LEFT_PANEL_WIDTH));
+      setRightPanelMode('flow');
+      setFlowRightTab('scenario');
+      setRightPanelWidth(FLOW_RIGHT_PANEL_WIDTH);
+      setFlowMode(true);
+    } else {
+      // Exit flow mode: restore snapshot
+      const snapshot = flowSnapshotRef.current;
+
+      if (isTauriRuntime) {
+        try {
+          const appWindow = getCurrentWindow();
+          const currentlyMaximized = await appWindow.isMaximized();
+          if (currentlyMaximized && !snapshot?.maximized) {
+            await appWindow.unmaximize();
+          }
+        } catch { /* ignore */ }
+      }
+
+      if (snapshot) {
+        setLeftRailMode(snapshot.leftRailMode);
+        setRightPanelMode(snapshot.rightPanelMode);
+        setRightPanelWidth(snapshot.rightPanelWidth);
+        setTerminalVisible(snapshot.terminalVisible);
+      } else {
+        setRightPanelMode('none');
+      }
+
+      flowSnapshotRef.current = null;
+      setFlowMode(false);
+    }
+  }, [
+    flowMode, leftRailMode, rightPanelMode, rightPanelWidth, terminalVisible,
+    file.fileType, isTauriRuntime, getDefaultRightPanelWidth,
+  ]);
 
   const handleCreateTerminal = useCallback(() => {
     setTerminalVisible(true);
     setTerminalCreateRequest((request) => request + 1);
   }, []);
+
+  const refreshEditorSelectionState = useCallback(() => {
+    setHasEditorSelection(Boolean(editorCommandRef.current?.getSelection()));
+  }, []);
+
+  const handleInsertToEditor = useCallback((text: string) => {
+    editorCommandRef.current?.insertText(text);
+    refreshEditorSelectionState();
+  }, [refreshEditorSelectionState]);
+
+  const handleReplaceEditorSelection = useCallback((text: string) => {
+    const editor = editorCommandRef.current;
+    if (!editor) return;
+    if (editor.getSelection()) editor.replaceSelection(text);
+    else editor.insertText(text);
+    refreshEditorSelectionState();
+  }, [refreshEditorSelectionState]);
+
+  useEffect(() => {
+    const scheduleRefresh = () => window.requestAnimationFrame(refreshEditorSelectionState);
+    document.addEventListener('selectionchange', scheduleRefresh);
+    window.addEventListener('keyup', scheduleRefresh);
+    window.addEventListener('mouseup', scheduleRefresh);
+    return () => {
+      document.removeEventListener('selectionchange', scheduleRefresh);
+      window.removeEventListener('keyup', scheduleRefresh);
+      window.removeEventListener('mouseup', scheduleRefresh);
+    };
+  }, [refreshEditorSelectionState]);
+
+  const handleEnsureTerminalVisible = useCallback(() => {
+    setTerminalVisible(true);
+  }, []);
+
+  // P1-E:场景卡发现 Claude CLI 未找到 → 跳设置面板 AI CLI 段
+  const handleOpenAiCliSettings = useCallback(() => {
+    void preloadSettingsPage();
+    setSettingsInitialSection('aiCli');
+    setSettingsVisible(true);
+  }, []);
+
+  // 场景卡「发送到终端」前置: 发送即存盘
+  const handleScenarioBeforeInject = useCallback(async () => {
+    if (file.fileType === 'docx' || !file.path || !file.dirty) return;
+    const { saveFile } = await import('../services/fileService');
+    const updated = await saveFile(file);
+    lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+    setAutoSaveError('');
+    setDiskChangeMessage('');
+    setFile(updated);
+    if (updated.path) setLastOpenedPath(updated.path);
+  }, [file]);
+
+  // bridge 每次渲染现取 ref —— ref.current 变化不触发重渲染,所以必须用 getter 闭包
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const agentBridge = useMemo<AgentBridge>(
+    () => createAgentBridge(() => terminalPanelRef.current),
+    [],
+  );
+
+  // §6.2 文件树刷新触发: workspace watcher 触发时自增
+  const [workspaceTreeVersion, setWorkspaceTreeVersion] = useState(0);
 
   const handleQuickOpenPath = useCallback((path: string) => {
     setQuickOpenVisible(false);
@@ -761,6 +989,7 @@ export function AppLayout() {
       if (e.key === 'm' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleWechatPreview(); return; }
       if (e.code === 'Backquote' && e.shiftKey && !e.altKey) { e.preventDefault(); handleCreateTerminal(); return; }
       if (e.code === 'Backquote' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleToggleTerminal(); return; }
+      if (e.key === 'a' && e.shiftKey && !e.altKey) { e.preventDefault(); void handleToggleFlowMode(); return; }
       if (e.key === 'i' && e.shiftKey && !e.altKey) { e.preventDefault(); setEditAssistVisible(true); return; }
       if (e.key === ',' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
@@ -781,6 +1010,7 @@ export function AppLayout() {
     handleToggleWechatPreview,
     handleToggleTerminal,
     handleCreateTerminal,
+    handleToggleFlowMode,
     openFindPanel,
   ]);
 
@@ -989,7 +1219,7 @@ export function AppLayout() {
     let cancelled = false;
 
     void import('../services/documentWatchService')
-      .then(({ onFileChanged }) => onFileChanged((payload) => {
+      .then(({ onFileChanged }) => onFileChanged(async (payload) => {
         const current = fileRef.current;
         if (!current.path || !sameDocumentPath(current.path, payload.path)) return;
 
@@ -998,7 +1228,32 @@ export function AppLayout() {
           return;
         }
 
-        setDiskChangeMessage('磁盘文件已在外部变更，请保存前确认是否需要重新打开。');
+        if (current.dirty) {
+          // 写竞争:有未保存改动,弹"外部已修改"条,绝不覆盖
+          setExternalChangeConflict({ path: payload.path, ts: Date.now() });
+          return;
+        }
+
+        // 编辑器干净:自动 reload
+        try {
+          const { readTextWithEncoding } = await import('../services/fileService');
+          const content = await readTextWithEncoding(payload.path, settings.defaultEncoding);
+          if (fileRef.current.path && sameDocumentPath(fileRef.current.path, payload.path)
+              && !fileRef.current.dirty) {
+            setFile((prev) => ({
+              ...prev,
+              content,
+              lastSavedContent: content,
+              dirty: false,
+            }));
+            setToc(extractToc(content));
+            setDiskChangeMessage('');
+            setTransientMessage('已自动从磁盘重新加载。');
+          }
+        } catch (error) {
+          console.warn('Failed to auto-reload file:', error);
+          setDiskChangeMessage('磁盘文件已在外部变更，请保存前确认是否需要重新打开。');
+        }
       }))
       .then((fn) => {
         if (cancelled) fn();
@@ -1010,7 +1265,156 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
     };
-  }, [isTauriRuntime]);
+  }, [isTauriRuntime, settings.defaultEncoding]);
+
+  // M2-B2: 收集 AI 暂存区产物。AI 工作台 cwd 独立于文件树 workspaceRoot。
+  useEffect(() => {
+    const watchRoot = settings.aiWorkspaceRoot;
+    const outputRoot = agentOutputRoot;
+    if (!isTauriRuntime || !watchRoot || !outputRoot) {
+      setAgentChangedPaths(new Map());
+      return undefined;
+    }
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    void import('../services/workspaceWatchService')
+      .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
+        await watchWorkspace(watchRoot);
+        return onWorkspaceChanged((payload) => {
+          // P0-B: 自写抑制,与 document watcher 路径同模式(`AppLayout.tsx:1116-1119`)。
+          // 局限:lastSelfWriteRef 是单槽、只记最后一次自写;多文件并发自写仍可能漏抑制。
+          // MVP 可接受(与编辑器自写抑制同款),Phase 2 升级为「最近写入路径集合(带 TTL)」。
+          const now = Date.now();
+          const paths = filterSelfWritePaths(payload.paths, lastSelfWriteRef.current, now);
+          const artifactPaths = paths.filter((path) => pathStartsWith(path, outputRoot));
+          if (artifactPaths.length === 0) return;
+          setAgentChangedPaths((prev) => {
+            const next = new Map(prev);
+            for (const path of artifactPaths) {
+              next.set(path, now);
+            }
+            return next;
+          });
+          // 新建/删除/重命名都会让顶层 entries 变化,触发文件树重读
+          if (payload.kind === 'create' || payload.kind === 'remove' || payload.kind === 'rename') {
+            setWorkspaceTreeVersion((version) => version + 1);
+          }
+        });
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch((error) => console.warn('Failed to bind workspace watcher:', error));
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      void import('../services/workspaceWatchService')
+        .then(({ unwatchWorkspace }) => unwatchWorkspace(watchRoot))
+        .catch((error) => console.warn('Failed to unwatch workspace:', error));
+    };
+  }, [agentOutputRoot, isTauriRuntime, settings.aiWorkspaceRoot]);
+
+  // 写竞争:三选项
+  const handleViewDiff = useCallback(async () => {
+    if (!externalChangeConflict) return;
+    const { diffTexts } = await import('../services/textDiffService');
+    const current = fileRef.current;
+    if (!current.path) return;
+    try {
+      const { readTextWithEncoding } = await import('../services/fileService');
+      const diskContent = await readTextWithEncoding(current.path, settings.defaultEncoding);
+      const result = diffTexts(current.content, diskContent);
+      setDiffPreview({ path: current.path, ...result });
+    } catch (e) {
+      console.warn('Failed to view diff:', e);
+    }
+  }, [externalChangeConflict, settings.defaultEncoding]);
+
+  const handleAcceptExternal = useCallback(async () => {
+    if (!externalChangeConflict) return;
+    const current = fileRef.current;
+    if (!current.path) {
+      setExternalChangeConflict(null);
+      return;
+    }
+    try {
+      const { readTextWithEncoding } = await import('../services/fileService');
+      const content = await readTextWithEncoding(current.path, settings.defaultEncoding);
+      setFile((prev) => ({
+        ...prev,
+        content,
+        lastSavedContent: content,
+        dirty: false,
+      }));
+      setToc(extractToc(content));
+      setExternalChangeConflict(null);
+      setTransientMessage('已采用 Claude 的版本。');
+    } catch (e) {
+      console.warn('Failed to accept external:', e);
+    }
+  }, [externalChangeConflict, settings.defaultEncoding]);
+
+  const handleKeepMine = useCallback(() => {
+    setExternalChangeConflict(null);
+    setTransientMessage('保留你的版本。可在保存前对比。');
+  }, []);
+
+  const [diffPreview, setDiffPreview] = useState<{ path: string; hunks: import('../services/textDiffService').DiffHunk[] } | null>(null);
+
+  const artifactItems = useMemo<ArtifactItem[]>(() => {
+    const items: ArtifactItem[] = [];
+    agentChangedPaths.forEach((ts, path) => {
+      const name = path.replace(/\\/g, '/').split('/').pop() ?? path;
+      const lower = name.toLowerCase();
+      let kind: ArtifactItem['kind'] = 'other';
+      if (lower.endsWith('.md') || lower.endsWith('.markdown')) kind = 'markdown';
+      else if (lower.endsWith('.html') || lower.endsWith('.htm')) kind = 'html';
+      else if (lower.endsWith('.txt') || lower.endsWith('.json') || lower.endsWith('.css') || lower.endsWith('.js')) kind = 'text';
+      items.push({ path, name, ts, kind });
+    });
+    return items.sort((a, b) => b.ts - a.ts);
+  }, [agentChangedPaths]);
+
+  const handleClearArtifacts = useCallback(() => {
+    setAgentChangedPaths(new Map());
+  }, []);
+
+  const handleAgentArtifactFile = useCallback((artifact: { path: string }) => {
+    const outputRoot = agentOutputRoot;
+    const path = artifact.path;
+    if (!outputRoot || !pathStartsWith(path, outputRoot)) return;
+    setAgentChangedPaths((prev) => {
+      const next = new Map(prev);
+      next.set(path, Date.now());
+      return next;
+    });
+  }, [agentOutputRoot]);
+
+  const handleArchiveArtifact = useCallback(async (artifactPath: string) => {
+    const workspaceRoot = settings.aiWorkspaceRoot;
+    if (!workspaceRoot) {
+      await messageDialog('请先在 AI 工作台选择工作区，再保存产物。', { title: '保存产物' });
+      return;
+    }
+    try {
+      const archivedPath = await invoke<string>('archive_artifact_to_workspace', {
+        request: { artifactPath, workspaceRoot },
+      });
+      setAgentChangedPaths((prev) => {
+        const next = new Map(prev);
+        next.delete(artifactPath);
+        return next;
+      });
+      setWorkspaceTreeVersion((version) => version + 1);
+      await handleOpenPath(archivedPath);
+      setTransientMessage(`已保存到工作区：${pathBasename(archivedPath)}`);
+    } catch (error) {
+      await messageDialog(String(error), { title: '保存产物失败' });
+    }
+  }, [handleOpenPath, settings.aiWorkspaceRoot]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1025,6 +1429,7 @@ export function AppLayout() {
     ? { phase: updateState.phase, version: updateState.update.version }
     : undefined;
   const shouldShowHtmlPresentation = htmlPresentationVisible && file.fileType === 'html' && !isDocx;
+  const shouldShowTabbar = openTabs.length > 1 || (openTabs.length === 1 && activeTabId !== '');
   const tocPinned = tocSessionPinned || settings.tocAlwaysPinned;
   const mainContentClassName = [
     'main-content',
@@ -1032,7 +1437,9 @@ export function AppLayout() {
     rightPanelMode !== 'none' && !isDocx ? 'right-panel-open' : '',
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
-    leftPanelMode !== 'none' ? 'left-panel-open' : '',
+    rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
+    leftRailMode !== 'none' ? 'left-panel-open' : '',
+    leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
     leftResizing !== 'none' ? 'is-left-resizing' : '',
     resizing ? 'is-resizing' : '',
@@ -1081,7 +1488,7 @@ export function AppLayout() {
   }, []);
 
   const handleLeftPanelResizerPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (leftPanelMode === 'none') return;
+    if (leftRailMode === 'none') return;
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = workspacePanelWidth;
@@ -1105,7 +1512,7 @@ export function AppLayout() {
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
-  }, [leftPanelMode, workspacePanelWidth]);
+  }, [leftRailMode, workspacePanelWidth]);
 
   const dirtyPaths = useMemo(() => new Set(
     openTabs
@@ -1215,6 +1622,49 @@ export function AppLayout() {
         filePath={file.path}
       />
     </Suspense>
+  ) : rightPanelMode === 'flow' && !isDocx ? (
+    <aside className="flow-panel" aria-label="AI 工作流">
+      <div className="flow-panel-tabs">
+        <button
+          type="button"
+          className={flowRightTab === 'scenario' ? 'active' : ''}
+          onClick={() => setFlowRightTab('scenario')}
+        >
+          {t('flowRightTabScenario')}
+        </button>
+        <button
+          type="button"
+          className={flowRightTab === 'preview' ? 'active' : ''}
+          onClick={() => setFlowRightTab('preview')}
+        >
+          {t('flowRightTabPreview')}
+        </button>
+        <button
+          type="button"
+          className="flow-panel-close"
+          onClick={() => setRightPanelMode('none')}
+          title={t('closePreviewTitle')}
+        >
+          ×
+        </button>
+      </div>
+      <div className="flow-panel-content">
+        {flowRightTab === 'scenario' ? (
+          <Suspense fallback={<div className="scenario-panel-skeleton">加载场景...</div>}>
+            <ScenarioPanel
+              bridge={agentBridge}
+              filePath={file.path}
+              workspaceRoot={workspaceRoot}
+              onEnsureTerminalVisible={handleEnsureTerminalVisible}
+              onBeforeInject={handleScenarioBeforeInject}
+              onOpenAiCliSettings={handleOpenAiCliSettings}
+            />
+          </Suspense>
+        ) : (
+          <div className="scenario-panel-skeleton">AI 产物会以右下角文件 chips 显示，点击后在中间编辑器打开。</div>
+        )}
+      </div>
+    </aside>
   ) : null;
 
   const docxPane = (
@@ -1240,14 +1690,19 @@ export function AppLayout() {
         wechatPreviewVisible={rightPanelMode === 'wechat'}
         terminalVisible={terminalVisible}
         editingDisabled={isDocx}
+        flowMode={flowMode}
+        aiPanelVisible={leftRailMode === 'aiWorkbench'}
         onToggleEditorMode={handleToggleEditorMode}
         onToggleWordPreview={handleToggleWordPreview}
         onToggleWechatPreview={handleToggleWechatPreview}
         onToggleTerminal={handleToggleTerminal}
+        onToggleFlowMode={() => void handleToggleFlowMode()}
+        onToggleAiPanel={handleToggleAiPanel}
         onNew={handleNewFile}
         onOpen={handleOpen}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
+        onRename={() => handleRequestRename()}
         onOpenEditAssist={() => setEditAssistVisible(true)}
         onOpenSettings={() => {
           void preloadSettingsPage();
@@ -1264,25 +1719,68 @@ export function AppLayout() {
       >
         <button
           type="button"
-          className={`workspace-toggle-rail ${leftPanelMode === 'workspace' ? 'active' : ''}`}
+          className={`workspace-toggle-rail ${leftRailMode === 'workspace' ? 'active' : ''}`}
           onClick={handleToggleWorkspacePanel}
-          aria-label={leftPanelMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
-          title={leftPanelMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
+          aria-label={leftRailMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
+          title={leftRailMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
         >
-          {leftPanelMode === 'workspace' ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+          <FolderOpen size={15} />
         </button>
-        {leftPanelMode === 'workspace' && (
+        {leftRailMode !== 'none' && (
           <>
-            <FileTreePanel
-              rootPath={workspaceRoot}
-              activePath={file.path}
-              dirtyPaths={dirtyPaths}
-              width={workspacePanelWidth}
-              onRootChange={setWorkspaceRoot}
-              onOpenFile={(path) => {
-                void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
-              }}
-            />
+            <aside className="left-rail-shell" style={{ width: workspacePanelWidth }}>
+              <div className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
+                <button
+                  type="button"
+                  className={leftRailMode === 'workspace' ? 'active' : ''}
+                  onClick={handleToggleWorkspacePanel}
+                  aria-label={leftRailMode === 'workspace' ? '收起文件树' : '打开文件树'}
+                  title={leftRailMode === 'workspace' ? '收起文件树' : '打开文件树'}
+                >
+                  <FolderOpen size={15} />
+                  <span>文件树</span>
+                </button>
+                <button
+                  type="button"
+                  className={leftRailMode === 'aiWorkbench' ? 'active' : ''}
+                  onClick={handleToggleAiPanel}
+                  aria-label={leftRailMode === 'aiWorkbench' ? '收起 AI 工作台' : '打开 AI 工作台'}
+                  title={leftRailMode === 'aiWorkbench' ? '收起 AI 工作台' : '打开 AI 工作台'}
+                >
+                  <Sparkles size={15} />
+                  <span>AI 工作台</span>
+                </button>
+              </div>
+              {leftRailMode === 'aiWorkbench' ? (
+                <ConversationPanel
+                  conversationId="ai-workbench"
+                  workspaceSuggestion={workspaceRoot || undefined}
+                  agentPath={settings.aiClaudePath}
+                  model={settings.aiClaudeModel}
+                  pluginDirs={settings.aiPluginDirs}
+                  currentFileName={file.path ? file.name : undefined}
+                  currentFilePath={file.path || undefined}
+                  hasEditorSelection={hasEditorSelection}
+                  onInsertToEditor={handleInsertToEditor}
+                  onReplaceEditorSelection={handleReplaceEditorSelection}
+                  onArtifactFile={handleAgentArtifactFile}
+                  onClose={() => setLeftRailMode('none')}
+                />
+              ) : (
+                <FileTreePanel
+                  rootPath={workspaceRoot}
+                  activePath={file.path}
+                  dirtyPaths={dirtyPaths}
+                  agentChangedPaths={new Set(agentChangedPaths.keys())}
+                  width={workspacePanelWidth}
+                  refreshKey={workspaceTreeVersion}
+                  onRootChange={setWorkspaceRoot}
+                  onOpenFile={(path) => {
+                    void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
+                  }}
+                />
+              )}
+            </aside>
             <div
               className={`left-panel-resizer ${leftResizing === 'workspace' ? 'dragging' : ''}`}
               role="separator"
@@ -1307,7 +1805,23 @@ export function AppLayout() {
           </>
         )}
         <section className="editor-workbench">
-          {openTabs.length > 1 && (
+          {externalChangeConflict && (
+            <div className="external-change-conflict" role="alert">
+              <span className="external-change-text">
+                Claude 改了这个文件,你有未保存修改
+              </span>
+              <button type="button" onClick={() => void handleViewDiff()}>
+                查看差异
+              </button>
+              <button type="button" onClick={() => void handleAcceptExternal()}>
+                用 Claude 的版本
+              </button>
+              <button type="button" onClick={handleKeepMine}>
+                保留我的
+              </button>
+            </div>
+          )}
+          {shouldShowTabbar && (
             <div className="editor-tabbar" role="tablist" aria-label="打开的文件">
               {openTabs.map((tab) => (
                 <div
@@ -1321,6 +1835,8 @@ export function AppLayout() {
                     aria-selected={tab.id === activeTabId}
                     className="editor-tab-main"
                     onClick={() => handleSwitchTab(tab.id)}
+                    onDoubleClick={() => handleRequestRename(tab.id)}
+                    title={tab.file.path ? t('toolbarRenameTitle') : t('toolbarRenameTitleUnsaved')}
                   >
                     <span>{tab.file.dirty ? `*${tab.file.name}` : tab.file.name}</span>
                   </button>
@@ -1356,9 +1872,11 @@ export function AppLayout() {
       </div>
       <Suspense fallback={null}>
         <TerminalPanel
+          ref={terminalPanelRef}
           visible={terminalVisible}
           height={terminalHeight}
           currentFilePath={file.path}
+          workspaceRoot={workspaceRoot || undefined}
           createRequest={terminalCreateRequest}
           onHeightChange={setTerminalHeight}
           onHide={() => setTerminalVisible(false)}
@@ -1393,11 +1911,29 @@ export function AppLayout() {
         onInsertImage={(alt, path) => insertMarkdown(createImageMarkdown(alt, path))}
         onInsertTable={(rows, columns) => insertMarkdown(`\n${createTableMarkdown(rows, columns)}\n`)}
       />
+      {artifactItems.length > 0 && (
+        <Suspense fallback={null}>
+          <ArtifactPreview
+            artifacts={artifactItems}
+            onOpenFile={(path) => {
+              void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
+            }}
+            onArchiveFile={(path) => {
+              void handleArchiveArtifact(path);
+            }}
+            onClose={handleClearArtifacts}
+          />
+        </Suspense>
+      )}
       {settingsVisible && (
         <Suspense fallback={<SettingsPageFallback />}>
           <SettingsPage
-            onClose={() => setSettingsVisible(false)}
+            onClose={() => {
+              setSettingsVisible(false);
+              setSettingsInitialSection(undefined);
+            }}
             onUpdateAvailable={(update) => startBackgroundUpdateDownload('manual', update)}
+            initialSection={settingsInitialSection}
           />
         </Suspense>
       )}
@@ -1406,6 +1942,51 @@ export function AppLayout() {
         message={unsavedDialog?.message ?? ''}
         onChoice={handleUnsavedChoice}
       />
+      {renameDialog && (
+        <div className="rename-dialog-overlay" role="presentation">
+          <form
+            className="rename-dialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleConfirmRename();
+            }}
+          >
+            <h3>重命名文件</h3>
+            <input
+              autoFocus
+              value={renameDialog.name}
+              onChange={(event) => setRenameDialog((current) => current
+                ? { ...current, name: event.target.value, error: undefined }
+                : current)}
+            />
+            {renameDialog.error && <p>{renameDialog.error}</p>}
+            <div className="rename-dialog-actions">
+              <button type="button" onClick={() => setRenameDialog(null)}>取消</button>
+              <button type="submit">重命名</button>
+            </div>
+          </form>
+        </div>
+      )}
+      {diffPreview && (
+        <div className="diff-preview-overlay" onClick={() => setDiffPreview(null)}>
+          <div className="diff-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="diff-preview-header">
+              <span>差异: {diffPreview.path}</span>
+              <button type="button" onClick={() => setDiffPreview(null)} title="关闭">
+                ×
+              </button>
+            </div>
+            <div className="diff-preview-body">
+              {diffPreview.hunks.map((hunk, i) => (
+                <div key={i} className={`diff-hunk diff-hunk-${hunk.op}`}>
+                  {hunk.op === 'insert' ? '+ ' : hunk.op === 'delete' ? '- ' : '  '}
+                  {hunk.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

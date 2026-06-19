@@ -1,0 +1,46 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { AgentExitPayload, AgentStallPayload, AgentStdoutPayload } from './types';
+
+export type AgentSessionStartRequest = {
+  conversationId: string;
+  prompt: string;
+  cwd?: string;
+  agentPath?: string;
+  model?: string;
+  pluginDirs?: string[];
+  extraAllowedDirs?: string[];
+  stallTimeoutMs?: number;
+};
+
+export type AgentSessionStartResult = {
+  runId: string;
+  conversationId: string;
+  sessionUuid: string;
+  resumed: boolean;
+  agentPath: string;
+};
+
+export function startAgentSession(request: AgentSessionStartRequest): Promise<AgentSessionStartResult> {
+  return invoke<AgentSessionStartResult>('agent_session_start', { request });
+}
+
+export function resumeAgentSession(request: AgentSessionStartRequest): Promise<AgentSessionStartResult> {
+  return invoke<AgentSessionStartResult>('agent_session_resume', { request });
+}
+
+export function cancelAgentSession(runId: string): Promise<void> {
+  return invoke('agent_session_cancel', { request: { runId } });
+}
+
+export function onAgentStdout(handler: (payload: AgentStdoutPayload) => void): Promise<UnlistenFn> {
+  return listen<AgentStdoutPayload>('agent-stdout', (event) => handler(event.payload));
+}
+
+export function onAgentExit(handler: (payload: AgentExitPayload) => void): Promise<UnlistenFn> {
+  return listen<AgentExitPayload>('agent-exit', (event) => handler(event.payload));
+}
+
+export function onAgentStall(handler: (payload: AgentStallPayload) => void): Promise<UnlistenFn> {
+  return listen<AgentStallPayload>('agent-stall', (event) => handler(event.payload));
+}

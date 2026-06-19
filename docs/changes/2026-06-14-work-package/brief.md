@@ -1,5 +1,7 @@
 # Brief — Typola 文档中心 AI 工作台(心流模式)
 
+> ⚠️ **MVP 切片已于 2026-06-16 评审 mock 后细化**：触发入口从"选区甩终端"收敛为**场景卡注入（不自动回车）**，首张卡 = **HTML 生成**（非"润色闭环"）；"改动可见"= **文件高亮 + 预览顶部产物 chips**（git diff 移到 Phase 2）。**当前 MVP 范围以 [AI_WORKBENCH_SPEC.md](../../AI_WORKBENCH_SPEC.md) 为准**；本 brief 的 Direction/价值/差异化仍有效，但下方 Goals/Acceptance 是初版 Spark 记录，已被 spec 覆盖。
+
 **日期**: 2026-06-14
 **分支**: codex/ai-doc-workbench
 **阶段**: Spark

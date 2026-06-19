@@ -2,11 +2,15 @@ use std::{
     collections::HashMap,
     env,
     ffi::OsStr,
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::{Arc, Mutex},
+    process::{Child, Command, Stdio},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     thread,
+    time::{Duration, Instant},
 };
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -22,6 +26,25 @@ struct OpenedPaths(Mutex<Vec<String>>);
 struct TerminalStore(Mutex<TerminalRegistry>);
 #[derive(Default)]
 struct DocumentWatcherStore(Mutex<HashMap<String, RecommendedWatcher>>);
+
+#[derive(Default)]
+struct WorkspaceWatcherStore(Mutex<HashMap<String, WorkspaceWatcherEntry>>);
+
+struct WorkspaceWatcherEntry {
+    #[allow(dead_code)]
+    root: PathBuf,
+    #[allow(dead_code)]
+    watcher: RecommendedWatcher,
+}
+#[derive(Default)]
+struct AgentHeadlessStore(Arc<Mutex<AgentHeadlessRegistry>>);
+
+#[derive(Default)]
+struct AgentHeadlessRegistry {
+    sessions: HashMap<String, String>,
+    runs: HashMap<String, Arc<Mutex<Child>>>,
+}
+
 #[derive(Default)]
 struct TerminalRegistry {
     next_id: u32,
@@ -38,6 +61,59 @@ struct TerminalSession {
 #[serde(rename_all = "camelCase")]
 struct AgentDetectRequest {
     agent_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSessionStartRequest {
+    conversation_id: String,
+    prompt: String,
+    cwd: Option<String>,
+    agent_path: Option<String>,
+    model: Option<String>,
+    plugin_dirs: Option<Vec<String>>,
+    extra_allowed_dirs: Option<Vec<String>>,
+    stall_timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ArchiveArtifactRequest {
+    artifact_path: String,
+    workspace_root: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSessionCancelRequest {
+    run_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpConfigReadRequest {
+    cwd: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpConfigWriteRequest {
+    cwd: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameDocumentRequest {
+    path: String,
+    new_name: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RenameDocumentResult {
+    path: String,
+    name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,6 +165,46 @@ struct AgentDetectResult {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct AgentSessionStartResult {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    resumed: bool,
+    agent_path: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentStdoutPayload {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    line: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentExitPayload {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    exit_code: Option<i32>,
+    cancelled: bool,
+    stderr_tail: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentStallPayload {
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    idle_ms: u64,
+    stderr_tail: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct DirectoryEntryPayload {
     name: String,
     path: String,
@@ -126,6 +242,12 @@ struct FileChangedPayload {
     path: String,
 }
 
+#[derive(Serialize, Clone)]
+struct WorkspaceChangedPayload {
+    kind: String,
+    paths: Vec<String>,
+}
+
 #[tauri::command]
 fn pending_opened_paths(app: tauri::AppHandle) -> Vec<String> {
     let state = app.state::<OpenedPaths>();
@@ -161,6 +283,38 @@ fn write_opened_document(path: String, content: String) -> Result<(), String> {
     }
 
     std::fs::write(&path, content).map_err(|error| format!("failed to write document: {error}"))
+}
+
+#[tauri::command]
+fn rename_opened_document(request: RenameDocumentRequest) -> Result<RenameDocumentResult, String> {
+    let path = PathBuf::from(request.path);
+    if !is_writable_document_path(&path) {
+        return Err("unsupported document type".into());
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| "document has no parent directory".to_string())?;
+    let new_name = request.new_name.trim();
+    if new_name.is_empty() || new_name.contains('/') || new_name.contains('\\') {
+        return Err("invalid file name".into());
+    }
+    let target = parent.join(new_name);
+    if !is_writable_document_path(&target) {
+        return Err("unsupported document type".into());
+    }
+    if target.exists() && target != path {
+        return Err("target file already exists".into());
+    }
+    std::fs::rename(&path, &target).map_err(|error| format!("failed to rename document: {error}"))?;
+    let name = target
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| "invalid target file name".to_string())?
+        .to_string();
+    Ok(RenameDocumentResult {
+        path: target.to_string_lossy().to_string(),
+        name,
+    })
 }
 
 #[tauri::command]
@@ -204,6 +358,103 @@ fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
             error: Some(error),
         },
     }
+}
+
+#[tauri::command]
+fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<String, String> {
+    let artifact_path = PathBuf::from(request.artifact_path);
+    if !artifact_path.is_file() {
+        return Err("artifact file not found".into());
+    }
+    if !is_openable_document_path(&artifact_path) {
+        return Err("unsupported artifact type".into());
+    }
+
+    let workspace_root = PathBuf::from(request.workspace_root);
+    if !workspace_root.is_dir() {
+        return Err("workspace root not found".into());
+    }
+    let file_name = artifact_path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| "invalid artifact file name".to_string())?;
+    let target = unique_file_path(&workspace_root, file_name);
+    std::fs::rename(&artifact_path, &target)
+        .map_err(|error| format!("failed to archive artifact: {error}"))?;
+    Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn agent_session_start(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionStartRequest,
+) -> Result<AgentSessionStartResult, String> {
+    start_agent_headless_run(app, state, request, false)
+}
+
+#[tauri::command]
+fn agent_session_resume(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionStartRequest,
+) -> Result<AgentSessionStartResult, String> {
+    start_agent_headless_run(app, state, request, true)
+}
+
+#[tauri::command]
+fn agent_session_cancel(
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionCancelRequest,
+) -> Result<(), String> {
+    let child = {
+        let registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        registry
+            .runs
+            .get(&request.run_id)
+            .cloned()
+            .ok_or_else(|| "agent run not found".to_string())?
+    };
+
+    let mut child = child
+        .lock()
+        .map_err(|_| "agent child process poisoned".to_string())?;
+    child
+        .kill()
+        .map_err(|error| format!("failed to cancel agent run: {error}"))
+}
+
+#[tauri::command]
+fn read_mcp_config(request: McpConfigReadRequest) -> Result<Option<String>, String> {
+    let cwd = PathBuf::from(request.cwd.trim());
+    if !cwd.is_dir() {
+        return Err("workspace path is not a directory".into());
+    }
+    let path = cwd.join(".mcp.json");
+    if !path.exists() {
+        return Ok(None);
+    }
+    std::fs::read_to_string(&path)
+        .map(Some)
+        .map_err(|error| format!("failed to read .mcp.json: {error}"))
+}
+
+#[tauri::command]
+fn write_mcp_config(request: McpConfigWriteRequest) -> Result<(), String> {
+    let cwd = PathBuf::from(request.cwd.trim());
+    if !cwd.is_dir() {
+        return Err("workspace path is not a directory".into());
+    }
+    let content = request.content.trim();
+    if !content.is_empty() {
+        serde_json::from_str::<serde_json::Value>(content)
+            .map_err(|error| format!("invalid .mcp.json: {error}"))?;
+    }
+    std::fs::write(cwd.join(".mcp.json"), request.content)
+        .map_err(|error| format!("failed to write .mcp.json: {error}"))
 }
 
 #[tauri::command]
@@ -316,6 +567,108 @@ fn unwatch_opened_document(
         .lock()
         .map_err(|_| "document watcher store poisoned".to_string())?;
     watchers.remove(&watch_key);
+    Ok(())
+}
+
+const WORKSPACE_IGNORE_DIRS: &[&str] = &[
+    ".git",
+    "node_modules",
+    "dist",
+    "target",
+    ".worktrees",
+    ".vscode",
+    ".idea",
+    ".DS_Store",
+];
+
+fn should_ignore_workspace_path(path: &Path) -> bool {
+    for component in path.components() {
+        let name = component.as_os_str().to_string_lossy();
+        if name.starts_with('.') {
+            return true;
+        }
+        if WORKSPACE_IGNORE_DIRS.iter().any(|ignored| name == *ignored) {
+            return true;
+        }
+    }
+    false
+}
+
+#[tauri::command]
+fn watch_workspace(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WorkspaceWatcherStore>,
+    path: String,
+) -> Result<(), String> {
+    let root = PathBuf::from(&path);
+    if !root.is_dir() {
+        return Err(format!("workspace path is not a directory: {path}"));
+    }
+    let key = watch_path_key(&root);
+
+    let mut watchers = state
+        .0
+        .lock()
+        .map_err(|_| "workspace watcher store poisoned".to_string())?;
+    if watchers.contains_key(&key) {
+        return Ok(());
+    }
+
+    let emit_app = app.clone();
+    let root_for_filter = root.clone();
+    let mut watcher: RecommendedWatcher = RecommendedWatcher::new(
+        move |result: notify::Result<Event>| {
+            let Ok(event) = result else { return; };
+            if !is_document_change_event(&event.kind) {
+                return;
+            }
+            let kind = workspace_change_kind(&event.kind);
+            let mut touched: Vec<String> = event
+                .paths
+                .iter()
+                .filter(|candidate| {
+                    candidate.starts_with(&root_for_filter)
+                        && !should_ignore_workspace_path(candidate)
+                })
+                .map(|candidate| watch_path_key(candidate))
+                .collect();
+            if touched.is_empty() {
+                return;
+            }
+            touched.sort();
+            touched.dedup();
+            let _ = emit_app.emit(
+                "workspace-changed",
+                WorkspaceChangedPayload { kind, paths: touched },
+            );
+        },
+        Config::default(),
+    )
+    .map_err(|error| format!("failed to create workspace watcher: {error}"))?;
+
+    watcher
+        .watch(&root, RecursiveMode::Recursive)
+        .map_err(|error| format!("failed to watch workspace: {error}"))?;
+
+    let entry = WorkspaceWatcherEntry {
+        root,
+        watcher,
+    };
+    watchers.insert(key, entry);
+    Ok(())
+}
+
+#[tauri::command]
+fn unwatch_workspace(
+    state: tauri::State<'_, WorkspaceWatcherStore>,
+    path: String,
+) -> Result<(), String> {
+    let key = watch_path_key(Path::new(&path));
+    let mut watchers = state
+        .0
+        .lock()
+        .map_err(|_| "workspace watcher store poisoned".to_string())?;
+    watchers.remove(&key);
     Ok(())
 }
 
@@ -521,6 +874,8 @@ pub fn run() {
         .manage(OpenedPaths(Mutex::new(collect_initial_open_paths())))
         .manage(TerminalStore::default())
         .manage(DocumentWatcherStore::default())
+        .manage(WorkspaceWatcherStore::default())
+        .manage(AgentHeadlessStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let paths = opened_paths_from_args(args, &cwd);
             if paths.is_empty() {
@@ -550,16 +905,28 @@ pub fn run() {
             force_close_main_window,
             read_opened_document,
             write_opened_document,
+            rename_opened_document,
+            archive_artifact_to_workspace,
             write_attachment_file,
             agent_detect,
+            agent_session_start,
+            agent_session_resume,
+            agent_session_cancel,
+            read_mcp_config,
+            write_mcp_config,
             list_directory_entries,
             watch_opened_document,
             unwatch_opened_document,
+            watch_workspace,
+            unwatch_workspace,
             terminal_create,
             terminal_write,
             terminal_resize,
             terminal_kill,
-            terminal_clear
+            terminal_clear,
+            read_flow_scenarios,
+            write_flow_scenarios,
+            open_flow_scenarios_file
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -654,6 +1021,16 @@ fn is_document_change_event(kind: &EventKind) -> bool {
     )
 }
 
+fn workspace_change_kind(kind: &EventKind) -> String {
+    match kind {
+        EventKind::Create(_) => "create".to_string(),
+        EventKind::Remove(_) => "remove".to_string(),
+        EventKind::Modify(notify::event::ModifyKind::Name(_)) => "rename".to_string(),
+        EventKind::Modify(_) => "modify".to_string(),
+        _ => "other".to_string(),
+    }
+}
+
 fn is_openable_document_path(path: &Path) -> bool {
     matches!(
         path.extension()
@@ -713,21 +1090,360 @@ fn unique_attachment_path(dir: &Path, file_name: &str) -> PathBuf {
     candidate
 }
 
+fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
+    let original = Path::new(file_name);
+    let stem = original
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("artifact");
+    let extension = original.extension().and_then(OsStr::to_str);
+    let format_name = |index: Option<usize>| match (index, extension) {
+        (Some(index), Some(extension)) => format!("{stem}-{index}.{extension}"),
+        (Some(index), None) => format!("{stem}-{index}"),
+        (None, Some(extension)) => format!("{stem}.{extension}"),
+        (None, None) => stem.to_string(),
+    };
+    let mut candidate = dir.join(format_name(None));
+    let mut index = 2;
+    while candidate.exists() {
+        candidate = dir.join(format_name(Some(index)));
+        index += 1;
+    }
+    candidate
+}
+
 fn normalize_agent_path(path: Option<&str>) -> String {
     if let Some(path) = path.map(str::trim).filter(|value| !value.is_empty()) {
+        // Windows: 裸命令名(无路径分隔符、无扩展名)必须回退到 PATH/npm 全局扫描,
+        // 因为 std::process::Command::new("claude") 不会自动尝试 PATHEXT 上的
+        // .cmd/.exe/.bat 后缀,而 npm 全局安装的 Claude CLI 实际是 `claude.cmd`。
+        // 不做这一步 detect 就会假阴报"未找到",尽管用户在终端里能直接用 `claude`。
+        #[cfg(target_os = "windows")]
+        {
+            let p = std::path::Path::new(path);
+            let bare = p
+                .parent()
+                .map_or(true, |parent| parent.as_os_str().is_empty())
+                && p.extension().is_none();
+            if bare {
+                if let Some(resolved) = resolve_windows_bare_command(path) {
+                    return resolved;
+                }
+            }
+        }
         return path.to_string();
     }
 
     default_claude_command()
 }
 
+fn start_agent_headless_run(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionStartRequest,
+    prefer_resume: bool,
+) -> Result<AgentSessionStartResult, String> {
+    let conversation_id = request.conversation_id.trim();
+    if conversation_id.is_empty() {
+        return Err("conversationId is required".into());
+    }
+    if request.prompt.is_empty() {
+        return Err("prompt is required".into());
+    }
+
+    let agent_path = normalize_agent_path(request.agent_path.as_deref());
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let (session_uuid, resumed) = {
+        let mut registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        let existing = registry.sessions.get(conversation_id).cloned();
+        match (prefer_resume, existing) {
+            (true, Some(session_uuid)) => (session_uuid, true),
+            _ => {
+                let session_uuid = uuid::Uuid::new_v4().to_string();
+                registry
+                    .sessions
+                    .insert(conversation_id.to_string(), session_uuid.clone());
+                (session_uuid, false)
+            }
+        }
+    };
+
+    let args = build_claude_headless_args(
+        &session_uuid,
+        resumed,
+        request.model.as_deref(),
+        request.plugin_dirs.as_deref().unwrap_or(&[]),
+        request.extra_allowed_dirs.as_deref().unwrap_or(&[]),
+    );
+    let mut command = create_agent_command(&agent_path, &args);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(cwd) = request.cwd.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        let cwd_path = PathBuf::from(cwd);
+        std::fs::create_dir_all(&cwd_path)
+            .map_err(|error| format!("failed to create Claude cwd: {error}"))?;
+        command.current_dir(cwd_path);
+    }
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("failed to start Claude headless run: {error}"))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "failed to open Claude stdin".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "failed to open Claude stdout".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "failed to open Claude stderr".to_string())?;
+
+    stdin
+        .write_all(request.prompt.as_bytes())
+        .and_then(|_| stdin.flush())
+        .map_err(|error| format!("failed to write Claude prompt: {error}"))?;
+    drop(stdin);
+
+    let child = Arc::new(Mutex::new(child));
+    {
+        let mut registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        registry.runs.insert(run_id.clone(), Arc::clone(&child));
+    }
+
+    let stderr_tail = Arc::new(Mutex::new(String::new()));
+    spawn_agent_stderr_collector(stderr, Arc::clone(&stderr_tail));
+    let last_output_at = Arc::new(Mutex::new(Instant::now()));
+    spawn_agent_stdout_forwarder(
+        app.clone(),
+        run_id.clone(),
+        conversation_id.to_string(),
+        session_uuid.clone(),
+        stdout,
+        Arc::clone(&last_output_at),
+    );
+    let done = Arc::new(AtomicBool::new(false));
+    spawn_agent_stall_monitor(
+        app.clone(),
+        run_id.clone(),
+        conversation_id.to_string(),
+        session_uuid.clone(),
+        Arc::clone(&last_output_at),
+        Arc::clone(&stderr_tail),
+        Arc::clone(&done),
+        request.stall_timeout_ms.unwrap_or(30_000),
+    );
+    spawn_agent_waiter(
+        app,
+        child,
+        Arc::clone(&state.0),
+        run_id.clone(),
+        conversation_id.to_string(),
+        session_uuid.clone(),
+        stderr_tail,
+        done,
+    );
+
+    Ok(AgentSessionStartResult {
+        run_id,
+        conversation_id: conversation_id.to_string(),
+        session_uuid,
+        resumed,
+        agent_path,
+    })
+}
+
+fn build_claude_headless_args(
+    session_uuid: &str,
+    resumed: bool,
+    model: Option<&str>,
+    plugin_dirs: &[String],
+    extra_allowed_dirs: &[String],
+) -> Vec<String> {
+    let mut args = vec![
+        "-p".to_string(),
+        "--input-format".to_string(),
+        "text".to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--permission-mode".to_string(),
+        "bypassPermissions".to_string(),
+    ];
+    if resumed {
+        args.push("--resume".to_string());
+    } else {
+        args.push("--session-id".to_string());
+    }
+    args.push(session_uuid.to_string());
+    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--model".to_string());
+        args.push(model.to_string());
+    }
+    for dir in plugin_dirs.iter().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        args.push("--plugin-dir".to_string());
+        args.push(dir.to_string());
+    }
+    for dir in extra_allowed_dirs
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--add-dir".to_string());
+        args.push(dir.to_string());
+    }
+    args
+}
+
+fn spawn_agent_stdout_forwarder(
+    app: tauri::AppHandle,
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    stdout: impl Read + Send + 'static,
+    last_output_at: Arc<Mutex<Instant>>,
+) {
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            let Ok(line) = line else { break };
+            if let Ok(mut last) = last_output_at.lock() {
+                *last = Instant::now();
+            }
+            let _ = app.emit(
+                "agent-stdout",
+                AgentStdoutPayload {
+                    run_id: run_id.clone(),
+                    conversation_id: conversation_id.clone(),
+                    session_uuid: session_uuid.clone(),
+                    line,
+                },
+            );
+        }
+    });
+}
+
+fn spawn_agent_stderr_collector(stderr: impl Read + Send + 'static, stderr_tail: Arc<Mutex<String>>) {
+    thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut buffer = String::new();
+        loop {
+            buffer.clear();
+            match reader.read_line(&mut buffer) {
+                Ok(0) => break,
+                Ok(_) => {
+                    if let Ok(mut tail) = stderr_tail.lock() {
+                        tail.push_str(&buffer);
+                        if tail.len() > 8192 {
+                            let keep_from = tail.len().saturating_sub(8192);
+                            *tail = tail[keep_from..].to_string();
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+}
+
+fn spawn_agent_stall_monitor(
+    app: tauri::AppHandle,
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    last_output_at: Arc<Mutex<Instant>>,
+    stderr_tail: Arc<Mutex<String>>,
+    done: Arc<AtomicBool>,
+    stall_timeout_ms: u64,
+) {
+    thread::spawn(move || {
+        let timeout = Duration::from_millis(stall_timeout_ms.max(5_000));
+        let mut emitted = false;
+        while !done.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(1_000));
+            if emitted {
+                continue;
+            }
+            let idle = last_output_at
+                .lock()
+                .map(|last| last.elapsed())
+                .unwrap_or_default();
+            if idle >= timeout {
+                emitted = true;
+                let stderr_tail = stderr_tail
+                    .lock()
+                    .map(|tail| tail.clone())
+                    .unwrap_or_default();
+                let _ = app.emit(
+                    "agent-stall",
+                    AgentStallPayload {
+                        run_id: run_id.clone(),
+                        conversation_id: conversation_id.clone(),
+                        session_uuid: session_uuid.clone(),
+                        idle_ms: idle.as_millis().min(u128::from(u64::MAX)) as u64,
+                        stderr_tail,
+                    },
+                );
+            }
+        }
+    });
+}
+
+fn spawn_agent_waiter(
+    app: tauri::AppHandle,
+    child: Arc<Mutex<Child>>,
+    registry: Arc<Mutex<AgentHeadlessRegistry>>,
+    run_id: String,
+    conversation_id: String,
+    session_uuid: String,
+    stderr_tail: Arc<Mutex<String>>,
+    done: Arc<AtomicBool>,
+) {
+    thread::spawn(move || {
+        let exit_code = child
+            .lock()
+            .ok()
+            .and_then(|mut child| child.wait().ok())
+            .and_then(|status| status.code());
+        if let Ok(mut registry) = registry.lock() {
+            registry.runs.remove(&run_id);
+        }
+        done.store(true, Ordering::Relaxed);
+        let stderr_tail = stderr_tail
+            .lock()
+            .map(|tail| tail.clone())
+            .unwrap_or_default();
+        let cancelled = exit_code.is_none();
+        let _ = app.emit(
+            "agent-exit",
+            AgentExitPayload {
+                run_id,
+                conversation_id,
+                session_uuid,
+                exit_code,
+                cancelled,
+                stderr_tail,
+            },
+        );
+    });
+}
+
 fn default_claude_command() -> String {
     #[cfg(target_os = "windows")]
     {
-        for candidate in windows_claude_candidates() {
-            if candidate.is_file() {
-                return candidate.to_string_lossy().to_string();
-            }
+        if let Some(resolved) = resolve_windows_bare_command("claude") {
+            return resolved;
         }
     }
 
@@ -735,7 +1451,29 @@ fn default_claude_command() -> String {
 }
 
 #[cfg(target_os = "windows")]
-fn windows_claude_candidates() -> Vec<PathBuf> {
+fn resolve_windows_bare_command(bare_name: &str) -> Option<String> {
+    // 1) 已知的 npm 全局位置(claude/pnpm/yarn 全局基本落在 %APPDATA%\npm)
+    for candidate in windows_npm_global_candidates(bare_name) {
+        if candidate.is_file() {
+            return Some(candidate.to_string_lossy().to_string());
+        }
+    }
+    // 2) 系统 PATH 上扫 .cmd/.exe/.bat —— 兜底 nvm/volta/手装等其他路径
+    if let Ok(path_env) = env::var("PATH") {
+        for dir in env::split_paths(&path_env) {
+            for ext in ["cmd", "exe", "bat"] {
+                let candidate = dir.join(format!("{bare_name}.{ext}"));
+                if candidate.is_file() {
+                    return Some(candidate.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn windows_npm_global_candidates(bare_name: &str) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(app_data) = env::var("APPDATA") {
         roots.push(PathBuf::from(app_data).join("npm"));
@@ -751,9 +1489,9 @@ fn windows_claude_candidates() -> Vec<PathBuf> {
 
     let mut candidates = Vec::new();
     for root in roots {
-        candidates.push(root.join("claude.cmd"));
-        candidates.push(root.join("claude.exe"));
-        candidates.push(root.join("claude"));
+        candidates.push(root.join(format!("{bare_name}.cmd")));
+        candidates.push(root.join(format!("{bare_name}.exe")));
+        candidates.push(root.join(bare_name));
     }
     candidates
 }
@@ -879,6 +1617,41 @@ fn find_on_path(executable: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+fn flow_scenarios_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| format!("failed to resolve app config dir: {error}"))?
+        .join("typola");
+    std::fs::create_dir_all(&dir).map_err(|error| format!("failed to create config dir: {error}"))?;
+    Ok(dir.join("flow-scenarios.json"))
+}
+
+#[tauri::command]
+fn read_flow_scenarios(app: tauri::AppHandle) -> Result<String, String> {
+    let path = flow_scenarios_file(&app)?;
+    match std::fs::read_to_string(&path) {
+        Ok(content) => Ok(content),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(format!("failed to read flow scenarios: {error}")),
+    }
+}
+
+#[tauri::command]
+fn write_flow_scenarios(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let path = flow_scenarios_file(&app)?;
+    std::fs::write(&path, content).map_err(|error| format!("failed to write flow scenarios: {error}"))
+}
+
+#[tauri::command]
+fn open_flow_scenarios_file(app: tauri::AppHandle) -> Result<String, String> {
+    let path = flow_scenarios_file(&app)?;
+    if !path.exists() {
+        std::fs::write(&path, "[]").map_err(|error| format!("failed to seed flow scenarios: {error}"))?;
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -971,6 +1744,36 @@ mod tests {
                 || path.ends_with("\\npm\\claude.exe"),
             "unexpected default Claude path: {path}"
         );
+    }
+
+    #[test]
+    fn claude_headless_args_use_text_stdin_and_stream_json_output() {
+        let plugin_dirs = vec!["D:\\plugins\\one".to_string(), "D:\\plugins\\two".to_string()];
+        let extra_allowed_dirs = vec!["D:\\workspace".to_string()];
+        let args = build_claude_headless_args(
+            "session-123",
+            false,
+            Some("sonnet"),
+            &plugin_dirs,
+            &extra_allowed_dirs,
+        );
+
+        assert!(args.windows(2).any(|pair| pair == ["--input-format", "text"]));
+        assert!(args.windows(2).any(|pair| pair == ["--output-format", "stream-json"]));
+        assert!(args.windows(2).any(|pair| pair == ["--session-id", "session-123"]));
+        assert!(args.windows(2).any(|pair| pair == ["--model", "sonnet"]));
+        assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\one"]));
+        assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\two"]));
+        assert!(args.windows(2).any(|pair| pair == ["--add-dir", "D:\\workspace"]));
+        assert!(!args.contains(&"--resume".to_string()));
+    }
+
+    #[test]
+    fn claude_headless_resume_args_reuse_session_uuid() {
+        let args = build_claude_headless_args("session-123", true, None, &[], &[]);
+
+        assert!(args.windows(2).any(|pair| pair == ["--resume", "session-123"]));
+        assert!(!args.contains(&"--session-id".to_string()));
     }
 
     #[test]

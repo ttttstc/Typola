@@ -43,6 +43,8 @@ const AboutSection = lazy(preloadAboutSection);
 interface SettingsPageProps {
   onClose: () => void;
   onUpdateAvailable: (update: AvailableUpdate) => void;
+  // P1-E:从外部指定打开的初始段(例如场景卡「未找到 Claude」→ 'aiCli')
+  initialSection?: SettingsSection;
 }
 
 const NAV_ITEMS: { id: SettingsSection; labelKey: Parameters<typeof translate>[1] }[] = [
@@ -68,8 +70,8 @@ function SectionFallback() {
   );
 }
 
-export function SettingsPage({ onClose, onUpdateAvailable }: SettingsPageProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
+export function SettingsPage({ onClose, onUpdateAvailable, initialSection }: SettingsPageProps) {
+  const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection ?? 'general');
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
 

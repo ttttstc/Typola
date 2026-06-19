@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { useSettings } from '../hooks/useSettings';
+import { translate } from '../services/i18n';
 
 export type UnsavedDecision = 'save' | 'discard' | 'cancel';
 
@@ -9,6 +11,8 @@ type Props = {
 };
 
 export function UnsavedChangesDialog({ open, message, onChoice }: Props) {
+  const settings = useSettings();
+  const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -38,7 +42,7 @@ export function UnsavedChangesDialog({ open, message, onChoice }: Props) {
       }}
     >
       <div className="unsaved-dialog">
-        <h2 id="unsaved-dialog-title" className="unsaved-dialog-title">未保存的修改</h2>
+        <h2 id="unsaved-dialog-title" className="unsaved-dialog-title">{t('unsavedDialogTitle')}</h2>
         <p className="unsaved-dialog-body">{message}</p>
         <div className="unsaved-dialog-actions">
           <button
@@ -47,7 +51,7 @@ export function UnsavedChangesDialog({ open, message, onChoice }: Props) {
             data-action="discard"
             onClick={() => onChoice('discard')}
           >
-            不保存
+            {t('unsavedDialogDiscard')}
           </button>
           <button
             type="button"
@@ -55,7 +59,7 @@ export function UnsavedChangesDialog({ open, message, onChoice }: Props) {
             data-action="cancel"
             onClick={() => onChoice('cancel')}
           >
-            取消
+            {t('unsavedDialogCancel')}
           </button>
           <button
             ref={saveButtonRef}
@@ -64,7 +68,7 @@ export function UnsavedChangesDialog({ open, message, onChoice }: Props) {
             data-action="save"
             onClick={() => onChoice('save')}
           >
-            保存
+            {t('unsavedDialogSave')}
           </button>
         </div>
       </div>

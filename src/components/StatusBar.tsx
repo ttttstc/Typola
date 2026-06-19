@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { writeText } from '../services/clipboardService';
 import type { DocumentStats } from '../services/documentStatsService';
+import { useSettings } from '../hooks/useSettings';
+import { translate } from '../services/i18n';
 
 type StatusBarProps = {
   filePath: string;
@@ -15,6 +17,8 @@ type CopyMarker = { path: string; outcome: CopyOutcome } | null;
 const COPY_FEEDBACK_RESET_MS = 1200;
 
 export function StatusBar({ filePath, dirty, message, stats }: StatusBarProps) {
+  const settings = useSettings();
+  const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const hasPath = filePath.length > 0;
   const [copyMarker, setCopyMarker] = useState<CopyMarker>(null);
   const resetTimerRef = useRef<number | null>(null);
@@ -63,12 +67,12 @@ export function StatusBar({ filePath, dirty, message, stats }: StatusBarProps) {
         className="status-path"
         data-copy-state={copyState}
         onDoubleClick={hasPath ? handleDoubleClick : undefined}
-        title={hasPath ? '双击复制完整路径' : undefined}
+        title={hasPath ? t('statusBarCopyPathTitle') : undefined}
         style={
           hasPath ? { cursor: 'text', userSelect: 'text' } : undefined
         }
       >
-        {hasPath ? filePath : '未打开文件'}
+        {hasPath ? filePath : t('statusBarNoFile')}
       </span>
       {copyState !== 'idle' && (
         <span
@@ -79,14 +83,14 @@ export function StatusBar({ filePath, dirty, message, stats }: StatusBarProps) {
             fontWeight: 500,
           }}
         >
-          {copyState === 'copied' ? '已复制' : '复制失败'}
+          {copyState === 'copied' ? t('statusBarCopied') : t('statusBarCopyFailed')}
         </span>
       )}
-      {dirty && <span className="status-dirty">未保存</span>}
+      {dirty && <span className="status-dirty">{t('statusBarUnsaved')}</span>}
       {message && <span className="status-message" role="status">{message}</span>}
       {stats && (
-        <span className="status-stats" title={`字符 ${stats.characters} · 段落 ${stats.paragraphs}`}>
-          {stats.words} 词 · {stats.readingMinutes} 分钟
+        <span className="status-stats" title={`${stats.characters} chars · ${stats.paragraphs} para`}>
+          {stats.words} {settings.locale === 'zh-CN' ? '词' : settings.locale === 'ja-JP' ? '語' : 'words'} · {stats.readingMinutes} {settings.locale === 'zh-CN' ? '分钟' : settings.locale === 'ja-JP' ? '分' : 'min'}
         </span>
       )}
     </div>
