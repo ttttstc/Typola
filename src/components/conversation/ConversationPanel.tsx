@@ -17,6 +17,9 @@ type ConversationPanelProps = {
   pluginDirs?: string[];
   currentFileName?: string;
   currentFilePath?: string;
+  hasEditorSelection?: boolean;
+  onInsertToEditor?: (text: string) => void;
+  onReplaceEditorSelection?: (text: string) => void;
   onClose: () => void;
 };
 
@@ -36,6 +39,9 @@ export function ConversationPanel({
   pluginDirs,
   currentFileName,
   currentFilePath,
+  hasEditorSelection = false,
+  onInsertToEditor,
+  onReplaceEditorSelection,
   onClose,
 }: ConversationPanelProps) {
   const settings = useSettings();
@@ -111,7 +117,15 @@ export function ConversationPanel({
         {messages.map((message) => (
           message.role === 'user'
             ? <UserMessage key={message.id} message={message} />
-            : <AssistantMessage key={message.id} message={message} />
+            : (
+              <AssistantMessage
+                key={message.id}
+                message={message}
+                hasSelection={hasEditorSelection}
+                onInsertText={onInsertToEditor}
+                onReplaceSelection={onReplaceEditorSelection}
+              />
+            )
         ))}
         <ErrorRetryCard message={lastError} />
       </div>

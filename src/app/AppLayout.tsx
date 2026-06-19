@@ -124,7 +124,9 @@ const RIGHT_PANEL_MAX_WIDTH = 760;
 const RIGHT_PANEL_RESIZER_GAP = 9;
 const LEFT_PANEL_MIN_WIDTH = 220;
 const LEFT_PANEL_MAX_WIDTH = 560;
-const WORKSPACE_PANEL_DEFAULT_WIDTH = 260;
+const WORKSPACE_PANEL_DEFAULT_WIDTH = 366;
+const FLOW_LEFT_PANEL_WIDTH = 366;
+const FLOW_RIGHT_PANEL_WIDTH = 456;
 
 function imageExtensionFromMime(type: string): string {
   if (type === 'image/jpeg') return 'jpg';
@@ -186,7 +188,7 @@ function sameDocumentPath(a: string, b: string): boolean {
 }
 
 function fileTabId(file: OpenedFile, fallback = ''): string {
-  return file.path || fallback || `untitled-${Date.now()}`;
+  return file.path || fallback || `untitled-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function AppLayout() {
@@ -211,6 +213,7 @@ export function AppLayout() {
   const autoSaveFailureRef = useRef({ key: '', count: 0, suspended: false });
   const lastSelfWriteRef = useRef({ path: '', at: 0 });
   const dirtyFilesRef = useRef(false);
+  const untitledCounterRef = useRef(1);
   const [file, setFile] = useState<OpenedFile>(createEmptyFile());
   const [openTabs, setOpenTabs] = useState<OpenFileTab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
@@ -245,6 +248,7 @@ export function AppLayout() {
   const [flowRightTab, setFlowRightTab] = useState<FlowRightTab>('scenario');
   const [agentChangedPaths, setAgentChangedPaths] = useState<Map<string, number>>(new Map());
   const [externalChangeConflict, setExternalChangeConflict] = useState<{ path: string; ts: number } | null>(null);
+  const [hasEditorSelection, setHasEditorSelection] = useState(false);
   const flowSnapshotRef = useRef<{
     leftRailMode: LeftRailMode;
     rightPanelMode: RightPanelMode;
@@ -354,7 +358,9 @@ export function AppLayout() {
   }, [applyOpenedFile]);
 
   const handleNewFile = useCallback(() => {
-    applyOpenedFile(createEmptyFile());
+    const index = untitledCounterRef.current++;
+    const name = index === 1 ? '未命名.md' : `未命名 ${index}.md`;
+    applyOpenedFile(createEmptyFile(name), `untitled-${index}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   }, [applyOpenedFile]);
 
   const handleOpenPath = useCallback(async (path: string) => {
@@ -426,6 +432,7 @@ export function AppLayout() {
   }, []);
 
   const [unsavedDialog, setUnsavedDialog] = useState<{ message: string } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{ tabId: string; name: string; error?: string } | null>(null);
   const unsavedResolverRef = useRef<((decision: UnsavedDecision) => void) | null>(null);
 
   const requestUnsavedChoice = useCallback((message: string) => {
@@ -527,6 +534,46 @@ export function AppLayout() {
       }
     });
   }, [activeTabId, confirmCloseTabWithDirtyFile, openTabs]);
+
+  const handleRequestRename = useCallback((tabId = activeTabIdRef.current) => {
+    const target = openTabsRef.current.find((tab) => tab.id === tabId);
+    const targetFile = target?.file ?? fileRef.current;
+    if (!targetFile.path) {
+      setRenameDialog({ tabId, name: targetFile.name, error: '未保存文档请先保存后再重命名。' });
+      return;
+    }
+    setRenameDialog({ tabId, name: targetFile.name });
+  }, []);
+
+  const handleConfirmRename = useCallback(async () => {
+    if (!renameDialog) return;
+    const target = openTabsRef.current.find((tab) => tab.id === renameDialog.tabId);
+    const targetFile = target?.file ?? fileRef.current;
+    if (!targetFile.path) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ path: string; name: string }>('rename_opened_document', {
+        request: { path: targetFile.path, newName: renameDialog.name },
+      });
+      const updatedFile = { ...targetFile, path: result.path, name: result.name };
+      const nextId = fileTabId(updatedFile, result.path);
+      setOpenTabs((tabs) => tabs.map((tab) => (
+        tab.id === renameDialog.tabId ? { id: nextId, file: updatedFile } : tab
+      )));
+      if (activeTabIdRef.current === renameDialog.tabId) {
+        setActiveTabId(nextId);
+        setFile(updatedFile);
+        setLastOpenedPath(result.path);
+      }
+      addRecentFile(result.path, result.name);
+      setRenameDialog(null);
+      setTransientMessage('已重命名文件。');
+    } catch (error) {
+      setRenameDialog((current) => current
+        ? { ...current, error: error instanceof Error ? error.message : String(error) }
+        : current);
+    }
+  }, [renameDialog]);
 
   const handleSave = useCallback(async () => {
     if (file.fileType === 'docx') return;
@@ -667,9 +714,10 @@ export function AppLayout() {
       };
 
       setLeftRailMode('workspace');
+      setWorkspacePanelWidth((width) => Math.max(width, FLOW_LEFT_PANEL_WIDTH));
       setRightPanelMode('flow');
       setFlowRightTab('scenario');
-      setRightPanelWidth(getDefaultRightPanelWidth());
+      setRightPanelWidth(FLOW_RIGHT_PANEL_WIDTH);
       setFlowMode(true);
     } else {
       // Exit flow mode: restore snapshot
@@ -706,6 +754,35 @@ export function AppLayout() {
     setTerminalVisible(true);
     setTerminalCreateRequest((request) => request + 1);
   }, []);
+
+  const refreshEditorSelectionState = useCallback(() => {
+    setHasEditorSelection(Boolean(editorCommandRef.current?.getSelection()));
+  }, []);
+
+  const handleInsertToEditor = useCallback((text: string) => {
+    editorCommandRef.current?.insertText(text);
+    refreshEditorSelectionState();
+  }, [refreshEditorSelectionState]);
+
+  const handleReplaceEditorSelection = useCallback((text: string) => {
+    const editor = editorCommandRef.current;
+    if (!editor) return;
+    if (editor.getSelection()) editor.replaceSelection(text);
+    else editor.insertText(text);
+    refreshEditorSelectionState();
+  }, [refreshEditorSelectionState]);
+
+  useEffect(() => {
+    const scheduleRefresh = () => window.requestAnimationFrame(refreshEditorSelectionState);
+    document.addEventListener('selectionchange', scheduleRefresh);
+    window.addEventListener('keyup', scheduleRefresh);
+    window.addEventListener('mouseup', scheduleRefresh);
+    return () => {
+      document.removeEventListener('selectionchange', scheduleRefresh);
+      window.removeEventListener('keyup', scheduleRefresh);
+      window.removeEventListener('mouseup', scheduleRefresh);
+    };
+  }, [refreshEditorSelectionState]);
 
   const handleEnsureTerminalVisible = useCallback(() => {
     setTerminalVisible(true);
@@ -1165,9 +1242,10 @@ export function AppLayout() {
     };
   }, [isTauriRuntime, settings.defaultEncoding]);
 
-  // §6.2 workspace watch: 收集 agent 改动的文件
+  // M2-B2: 收集 AI 工作台 cwd 下 skill 落盘产物。AI cwd 独立于文件树 workspaceRoot。
   useEffect(() => {
-    if (!isTauriRuntime || !flowMode || !workspaceRoot) {
+    const aiWorkspaceRoot = settings.aiWorkspaceRoot;
+    if (!isTauriRuntime || !aiWorkspaceRoot) {
       setAgentChangedPaths(new Map());
       return undefined;
     }
@@ -1176,7 +1254,7 @@ export function AppLayout() {
 
     void import('../services/workspaceWatchService')
       .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
-        await watchWorkspace(workspaceRoot);
+        await watchWorkspace(aiWorkspaceRoot);
         return onWorkspaceChanged((payload) => {
           // P0-B: 自写抑制,与 document watcher 路径同模式(`AppLayout.tsx:1116-1119`)。
           // 局限:lastSelfWriteRef 是单槽、只记最后一次自写;多文件并发自写仍可能漏抑制。
@@ -1191,6 +1269,8 @@ export function AppLayout() {
             }
             return next;
           });
+          setRightPanelMode('flow');
+          setFlowRightTab('preview');
           // 新建/删除/重命名都会让顶层 entries 变化,触发文件树重读
           if (payload.kind === 'create' || payload.kind === 'remove' || payload.kind === 'rename') {
             setWorkspaceTreeVersion((version) => version + 1);
@@ -1207,10 +1287,10 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
       void import('../services/workspaceWatchService')
-        .then(({ unwatchWorkspace }) => unwatchWorkspace(workspaceRoot))
+        .then(({ unwatchWorkspace }) => unwatchWorkspace(aiWorkspaceRoot))
         .catch((error) => console.warn('Failed to unwatch workspace:', error));
     };
-  }, [flowMode, isTauriRuntime, workspaceRoot]);
+  }, [isTauriRuntime, settings.aiWorkspaceRoot]);
 
   // 写竞争:三选项
   const handleViewDiff = useCallback(async () => {
@@ -1290,6 +1370,7 @@ export function AppLayout() {
     ? { phase: updateState.phase, version: updateState.update.version }
     : undefined;
   const shouldShowHtmlPresentation = htmlPresentationVisible && file.fileType === 'html' && !isDocx;
+  const shouldShowTabbar = openTabs.length > 1 || (openTabs.length === 1 && activeTabId !== '');
   const tocPinned = tocSessionPinned || settings.tocAlwaysPinned;
   const mainContentClassName = [
     'main-content',
@@ -1570,6 +1651,7 @@ export function AppLayout() {
         onOpen={handleOpen}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
+        onRename={() => handleRequestRename()}
         onOpenEditAssist={() => setEditAssistVisible(true)}
         onOpenSettings={() => {
           void preloadSettingsPage();
@@ -1627,6 +1709,9 @@ export function AppLayout() {
                   pluginDirs={settings.aiPluginDirs}
                   currentFileName={file.path ? file.name : undefined}
                   currentFilePath={file.path || undefined}
+                  hasEditorSelection={hasEditorSelection}
+                  onInsertToEditor={handleInsertToEditor}
+                  onReplaceEditorSelection={handleReplaceEditorSelection}
                   onClose={() => setLeftRailMode('none')}
                 />
               ) : (
@@ -1684,7 +1769,7 @@ export function AppLayout() {
               </button>
             </div>
           )}
-          {openTabs.length > 1 && (
+          {shouldShowTabbar && (
             <div className="editor-tabbar" role="tablist" aria-label="打开的文件">
               {openTabs.map((tab) => (
                 <div
@@ -1698,6 +1783,8 @@ export function AppLayout() {
                     aria-selected={tab.id === activeTabId}
                     className="editor-tab-main"
                     onClick={() => handleSwitchTab(tab.id)}
+                    onDoubleClick={() => handleRequestRename(tab.id)}
+                    title={tab.file.path ? t('toolbarRenameTitle') : t('toolbarRenameTitleUnsaved')}
                   >
                     <span>{tab.file.dirty ? `*${tab.file.name}` : tab.file.name}</span>
                   </button>
@@ -1737,6 +1824,7 @@ export function AppLayout() {
           visible={terminalVisible}
           height={terminalHeight}
           currentFilePath={file.path}
+          workspaceRoot={workspaceRoot || undefined}
           createRequest={terminalCreateRequest}
           onHeightChange={setTerminalHeight}
           onHide={() => setTerminalVisible(false)}
@@ -1788,6 +1876,31 @@ export function AppLayout() {
         message={unsavedDialog?.message ?? ''}
         onChoice={handleUnsavedChoice}
       />
+      {renameDialog && (
+        <div className="rename-dialog-overlay" role="presentation">
+          <form
+            className="rename-dialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleConfirmRename();
+            }}
+          >
+            <h3>重命名文件</h3>
+            <input
+              autoFocus
+              value={renameDialog.name}
+              onChange={(event) => setRenameDialog((current) => current
+                ? { ...current, name: event.target.value, error: undefined }
+                : current)}
+            />
+            {renameDialog.error && <p>{renameDialog.error}</p>}
+            <div className="rename-dialog-actions">
+              <button type="button" onClick={() => setRenameDialog(null)}>取消</button>
+              <button type="submit">重命名</button>
+            </div>
+          </form>
+        </div>
+      )}
       {diffPreview && (
         <div className="diff-preview-overlay" onClick={() => setDiffPreview(null)}>
           <div className="diff-preview-modal" onClick={(e) => e.stopPropagation()}>

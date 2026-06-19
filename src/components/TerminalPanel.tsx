@@ -29,6 +29,7 @@ type TerminalPanelProps = {
   visible: boolean;
   height: number;
   currentFilePath?: string;
+  workspaceRoot?: string;
   createRequest: number;
   onHeightChange: (height: number) => void;
   onHide: () => void;
@@ -66,6 +67,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
   visible,
   height,
   currentFilePath,
+  workspaceRoot,
   createRequest,
   onHeightChange,
   onHide,
@@ -156,7 +158,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     ]);
     setActiveLocalId(localId);
 
-    const cwd = opts?.cwd ?? directoryFromPath(currentFilePath);
+    const cwd = opts?.cwd ?? workspaceRoot ?? directoryFromPath(currentFilePath);
     try {
       const result: TerminalCreateResult = await createTerminal({
         cwd,
@@ -208,6 +210,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     settings.terminalShellPath,
     settings.theme,
     tabs.length,
+    workspaceRoot,
   ]);
 
   const closeTab = useCallback((localId: string) => {

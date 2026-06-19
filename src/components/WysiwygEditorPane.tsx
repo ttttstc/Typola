@@ -21,84 +21,37 @@ function getIrElement(editor: import('vditor').default): HTMLElement | null {
   return vditor?.ir?.element ?? null;
 }
 
-// 找出光标所在的代码块(Vditor IR 的 ``` 围栏 pre,或行内 `code`)
-function findEnclosingCodeNode(node: Node | null, root: HTMLElement): HTMLElement | null {
-  let walker: Node | null = node;
-  while (walker && walker !== root) {
-    if (walker.nodeType === Node.ELEMENT_NODE) {
-      const el = walker as HTMLElement;
-      if (el.tagName === 'PRE' || el.tagName === 'CODE') return el;
-    }
-    walker = walker.parentNode;
-  }
-  return null;
-}
-
-// 记录光标在某个代码节点内的字符偏移 + 该节点在 IR 中的稳定索引
-type CodeCaret = { index: number; offset: number; tagName: string };
-
-function captureCodeCaret(ir: HTMLElement): CodeCaret | null {
-  const sel = ir.ownerDocument?.defaultView?.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-  const codeNode = findEnclosingCodeNode(range.endContainer, ir);
-  if (!codeNode) return null;
-  // 计算光标到 codeNode 起点的字符距离
-  const r = ir.ownerDocument!.createRange();
-  r.selectNodeContents(codeNode);
-  try {
-    r.setEnd(range.endContainer, range.endOffset);
-  } catch {
-    return null;
-  }
-  const offset = r.toString().length;
-  // 同 tagName 的同级节点中的索引(整个 IR 内)
-  const tag = codeNode.tagName;
-  const all = Array.from(ir.querySelectorAll(tag.toLowerCase()));
-  const index = all.indexOf(codeNode);
-  if (index < 0) return null;
-  return { index, offset, tagName: tag };
-}
-
-function restoreCodeCaret(ir: HTMLElement, info: CodeCaret): boolean {
-  const all = Array.from(ir.querySelectorAll(info.tagName.toLowerCase()));
-  const block = all[info.index] as HTMLElement | undefined;
-  if (!block) return false;
-  const text = block.textContent ?? '';
-  const target = Math.min(info.offset, text.length);
-  // 找到该 text offset 对应的 text node + 节点内偏移
-  const doc = ir.ownerDocument!;
-  const walker = doc.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-  let accumulated = 0;
-  let textNode: Node | null = walker.nextNode();
-  while (textNode) {
-    const len = textNode.textContent?.length ?? 0;
-    if (accumulated + len >= target) break;
-    accumulated += len;
-    textNode = walker.nextNode();
-  }
-  const sel = doc.defaultView?.getSelection();
-  if (!sel) return false;
-  const range = doc.createRange();
-  if (textNode) {
-    range.setStart(textNode, target - accumulated);
-  } else {
-    // 空代码块:把光标放在 block 内部
-    range.setStart(block, 0);
-  }
-  range.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(range);
-  return true;
-}
-
 function collapseExpandedMarkers(editor: import('vditor').default | null): void {
   if (!editor) return;
   const ir = getIrElement(editor);
   if (!ir) return;
   ir.querySelectorAll('.vditor-ir__node--expand').forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    if (node.closest('[data-type="code-block"], pre, code')) return;
+    if (node.querySelector('[data-type="code-block"], pre, code')) return;
     node.classList.remove('vditor-ir__node--expand');
   });
+}
+
+function silenceCodeBlockAssist(editor: import('vditor').default | null): void {
+  if (!editor) return;
+  const ir = getIrElement(editor);
+  if (!ir) return;
+  const sel = ir.ownerDocument?.defaultView?.getSelection();
+  const activeNode = sel?.rangeCount ? sel.getRangeAt(0).commonAncestorContainer : ir.ownerDocument.activeElement;
+  if (!activeNode) return;
+  const element = activeNode instanceof HTMLElement ? activeNode : activeNode.parentElement;
+  if (!element?.closest('[data-type="code-block"], pre, code')) return;
+  const internals = editor as unknown as {
+    vditor?: {
+      hint?: { element?: HTMLElement };
+      wysiwyg?: { popover?: HTMLElement; selectPopover?: HTMLElement };
+    };
+  };
+  const { hint, wysiwyg } = internals.vditor ?? {};
+  if (hint?.element) hint.element.style.display = 'none';
+  if (wysiwyg?.popover) wysiwyg.popover.style.display = 'none';
+  if (wysiwyg?.selectPopover) wysiwyg.selectPopover.style.display = 'none';
 }
 
 type WindowWithFind = Window & {
@@ -129,11 +82,35 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const lastEmittedValue = useRef(source);
   const collapseTimerRef = useRef<number | null>(null);
   const onScrollRatioRef = useRef(onScrollRatio);
-  // Vditor IR 在代码块/行内代码输入时会重排 DOM 丢光标,这里在 keydown 时记下
-  // 光标在代码块内的字符 offset,在下一帧若发现光标跳了就恢复。
-  const pendingCodeCaretRef = useRef<CodeCaret | null>(null);
-  const codeCaretRafRef = useRef<number | null>(null);
+  // 记录最近一次真实选区,用于 AI 回复的“替换选区”操作。
+  const lastSelectionRangeRef = useRef<Range | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
+
+  const getSavedOrCurrentSelection = useCallback((): Range | null => {
+    const editor = editorRef.current;
+    const ir = editor ? getIrElement(editor) : null;
+    if (!ir) return null;
+    const sel = ir.ownerDocument?.defaultView?.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      if (ir.contains(range.commonAncestorContainer)) {
+        lastSelectionRangeRef.current = range.cloneRange();
+        return range;
+      }
+    }
+    const saved = lastSelectionRangeRef.current;
+    if (saved && ir.contains(saved.commonAncestorContainer)) return saved;
+    return null;
+  }, []);
+
+  const restoreSelectionRange = useCallback((range: Range): void => {
+    const editor = editorRef.current;
+    const ir = editor ? getIrElement(editor) : null;
+    const sel = ir?.ownerDocument?.defaultView?.getSelection();
+    if (!sel) return;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, []);
 
   const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!editorRef.current) return;
@@ -191,6 +168,18 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       });
     };
     host.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    const handleSelectionChange = () => {
+      const editor = editorRef.current;
+      const ir = editor ? getIrElement(editor) : null;
+      if (!ir) return;
+      const sel = ir.ownerDocument?.defaultView?.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      if (ir.contains(range.commonAncestorContainer)) {
+        lastSelectionRangeRef.current = range.cloneRange();
+      }
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
 
     let cancelled = false;
     void Promise.all([
@@ -208,12 +197,18 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         lang: 'zh_CN',
         i18n: VDITOR_PREVIEW_I18N,
         toolbar: [],
+        hint: {
+          parse: false,
+          extend: [],
+          emoji: {},
+        },
         resize: { enable: false },
         counter: { enable: false },
         cache: { enable: false },
         preview: {
           markdown: {
             sanitize: true,
+            codeBlockPreview: false,
           },
           theme: {
             current: 'light',
@@ -233,53 +228,26 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
           if (applyingExternalValue.current) return;
           lastEmittedValue.current = value;
 
-          // 若 keydown 在代码块内记下了光标,Vditor 渲染完后判断是否需要恢复
-          const captured = pendingCodeCaretRef.current;
-          pendingCodeCaretRef.current = null;
-          if (captured) {
-            if (codeCaretRafRef.current !== null) {
-              window.cancelAnimationFrame(codeCaretRafRef.current);
-            }
-            codeCaretRafRef.current = window.requestAnimationFrame(() => {
-              codeCaretRafRef.current = null;
-              const ir = getIrElement(editorRef.current!);
-              if (!ir) return;
-              // 仅当光标已不在原代码块同位置时才恢复(避免覆盖合法的光标移动)
-              const current = captureCodeCaret(ir);
-              const jumped =
-                !current ||
-                current.tagName !== captured.tagName ||
-                current.index !== captured.index ||
-                Math.abs(current.offset - (captured.offset + 1)) > 1;
-              if (jumped) restoreCodeCaret(ir, { ...captured, offset: captured.offset + 1 });
-            });
-          }
-
           if (collapseTimerRef.current !== null) {
             window.clearTimeout(collapseTimerRef.current);
           }
+          silenceCodeBlockAssist(editorRef.current);
           collapseTimerRef.current = window.setTimeout(() => {
             collapseTimerRef.current = null;
+            silenceCodeBlockAssist(editorRef.current);
             collapseExpandedMarkers(editorRef.current);
           }, IR_MARKER_COLLAPSE_DELAY_MS);
 
           onChange(value);
         },
-        keydown(event) {
-          // 在代码块内时记下光标位置,供 input 钩子恢复
-          if (editorRef.current && !event.ctrlKey && !event.metaKey && !event.altKey) {
-            const ir = getIrElement(editorRef.current);
-            if (ir) {
-              const captured = captureCodeCaret(ir);
-              if (captured) pendingCodeCaretRef.current = captured;
-            }
-          }
-
+        keydown() {
           if (collapseTimerRef.current !== null) {
             window.clearTimeout(collapseTimerRef.current);
           }
+          silenceCodeBlockAssist(editorRef.current);
           collapseTimerRef.current = window.setTimeout(() => {
             collapseTimerRef.current = null;
+            silenceCodeBlockAssist(editorRef.current);
             collapseExpandedMarkers(editorRef.current);
           }, IR_MARKER_COLLAPSE_DELAY_MS);
         },
@@ -298,11 +266,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     return () => {
       cancelled = true;
       host.removeEventListener('scroll', handleScroll, { capture: true } as EventListenerOptions);
+      document.removeEventListener('selectionchange', handleSelectionChange);
       if (scrollRafId !== null) window.cancelAnimationFrame(scrollRafId);
-      if (codeCaretRafRef.current !== null) {
-        window.cancelAnimationFrame(codeCaretRafRef.current);
-        codeCaretRafRef.current = null;
-      }
       if (collapseTimerRef.current !== null) {
         window.clearTimeout(collapseTimerRef.current);
         collapseTimerRef.current = null;
@@ -344,6 +309,25 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       lastEmittedValue.current = value;
       onChange(value);
     },
+    getSelection() {
+      const range = getSavedOrCurrentSelection();
+      if (!range) return null;
+      const text = range.toString();
+      if (!text) return null;
+      return { text, from: 0, to: text.length };
+    },
+    replaceSelection(text: string) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const range = getSavedOrCurrentSelection();
+      editor.focus();
+      if (range) restoreSelectionRange(range);
+      editor.insertValue(text, true);
+      const value = editor.getValue();
+      lastSelectionRangeRef.current = null;
+      lastEmittedValue.current = value;
+      onChange(value);
+    },
     revealRange() {
       editorRef.current?.focus();
     },
@@ -353,7 +337,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       if (!text || typeof find !== 'function') return;
       find(text, false, backwards, true, false, false, false);
     },
-  }), [onChange]);
+  }), [getSavedOrCurrentSelection, onChange, restoreSelectionRange]);
 
   return (
     <div className="wysiwyg-editor-pane" aria-label="即时渲染编辑器">

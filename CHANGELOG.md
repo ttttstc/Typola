@@ -18,6 +18,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 心流模式打开时会主动调整左侧 AI 工作台与右侧场景栏到更接近“三栏工作台”的比例，减少右栏过宽与编辑区被压缩的问题。
+- 左侧文件树窄条切换入口改为更克制的线性图标与细指示条样式，弱化突兀感。
+- 终端新建会话的工作目录优先使用用户当前选择的文件树 workspace；未选择 workspace 时再回退到当前文件目录 / 系统默认目录。
+- Markdown WYSIWYG 代码块改回由 Vditor 原生管理光标，不再额外做按键后光标偏移修正；补充代码块 / 行内代码显示样式，降低代码块内容被空框“吞掉”的概率。
 - 重写 README 为中英文双语文档，补充 Typola 的核心能力、安装方式、基础使用、打包命令、技术栈和产品优势说明。
 - 左侧目录栏默认收起，改为通过正文左侧小箭头展开/收起；目录栏与右侧 Word / HTML 预览宽度均支持拖拽调整。
 - 左侧栏改为“文件树 / AI 工作台 / 收起”单状态机，顶部提供文件树与 AI 工作台互斥切换 tab，避免出现文件树与 AI 工作台叠加成第四列。
@@ -50,6 +54,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复多个未保存新建文档同名导致关闭 tab 时误关其他“未命名”文档的问题：新建文档会生成可区分名称与稳定内部 tab id。
+- 修复只有一个已打开文档时没有 tab 关闭入口的问题；默认空白初始态仍保持无 tab。
+- 新增当前文件重命名能力：可双击顶部文件名或 tab 文件名打开重命名弹窗，真实重命名磁盘文件并同步 tab / 最近文件。
 - 修复 tab 关闭与窗口关闭未保存确认在 Tauri WebView2 下不弹窗的问题：原 `window.confirm` 会被 WebView 静默吞掉，造成 tab 关闭时静默丢失编辑；改为自定义 React 模态对话框（保存 / 不保存 / 取消 三按钮），并补全 `dialog:allow-confirm` / `dialog:allow-message` capability。
 - 修复 WYSIWYG 模式下 Markdown 代码块或行内代码编辑时光标频繁跳回开头的问题：Vditor IR 归一化让受控同步 `editor.getValue() === source` 判断失效，触发 `setValue` 重置光标；改为记录"自身回显值"，自身回显时跳过 `setValue`，外部写入仍正常刷新。
 - 修复多文件 tab 中当前活动文件刚被编辑后，关闭 tab 或关闭窗口可能没有提示未保存修改的问题。

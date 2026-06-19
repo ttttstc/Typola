@@ -117,6 +117,25 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       });
       editorView.focus();
     },
+    getSelection() {
+      if (!editorView) return null;
+      const selection = editorView.state.selection.main;
+      if (selection.empty) return null;
+      return {
+        text: editorView.state.doc.sliceString(selection.from, selection.to),
+        from: selection.from,
+        to: selection.to,
+      };
+    },
+    replaceSelection(text: string) {
+      if (!editorView) return;
+      const selection = editorView.state.selection.main;
+      editorView.dispatch({
+        changes: { from: selection.from, to: selection.to, insert: text },
+        selection: { anchor: selection.from + text.length },
+      });
+      editorView.focus();
+    },
     revealRange(from: number, to: number) {
       if (!editorView) return;
       editorView.dispatch({

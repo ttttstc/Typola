@@ -14,6 +14,6 @@ export interface TocItem {
   id: string;
 }
 
-export function createEmptyFile(): OpenedFile {
-  return { path: '', name: '未命名', content: '', dirty: false, lastSavedContent: '', fileType: 'markdown' };
+export function createEmptyFile(name = '未命名'): OpenedFile {
+  return { path: '', name, content: '', dirty: false, lastSavedContent: '', fileType: 'markdown' };
 }

@@ -96,6 +96,20 @@ struct McpConfigWriteRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct RenameDocumentRequest {
+    path: String,
+    new_name: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RenameDocumentResult {
+    path: String,
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct DirectoryListRequest {
     path: String,
 }
@@ -261,6 +275,38 @@ fn write_opened_document(path: String, content: String) -> Result<(), String> {
     }
 
     std::fs::write(&path, content).map_err(|error| format!("failed to write document: {error}"))
+}
+
+#[tauri::command]
+fn rename_opened_document(request: RenameDocumentRequest) -> Result<RenameDocumentResult, String> {
+    let path = PathBuf::from(request.path);
+    if !is_writable_document_path(&path) {
+        return Err("unsupported document type".into());
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| "document has no parent directory".to_string())?;
+    let new_name = request.new_name.trim();
+    if new_name.is_empty() || new_name.contains('/') || new_name.contains('\\') {
+        return Err("invalid file name".into());
+    }
+    let target = parent.join(new_name);
+    if !is_writable_document_path(&target) {
+        return Err("unsupported document type".into());
+    }
+    if target.exists() && target != path {
+        return Err("target file already exists".into());
+    }
+    std::fs::rename(&path, &target).map_err(|error| format!("failed to rename document: {error}"))?;
+    let name = target
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| "invalid target file name".to_string())?
+        .to_string();
+    Ok(RenameDocumentResult {
+        path: target.to_string_lossy().to_string(),
+        name,
+    })
 }
 
 #[tauri::command]
@@ -827,6 +873,7 @@ pub fn run() {
             force_close_main_window,
             read_opened_document,
             write_opened_document,
+            rename_opened_document,
             write_attachment_file,
             agent_detect,
             agent_session_start,
