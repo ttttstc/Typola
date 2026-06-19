@@ -4,6 +4,7 @@ export type AgentEvent =
   | { type: 'thinking_start' }
   | { type: 'thinking_delta'; delta: string }
   | { type: 'tool_use'; id: unknown; name: unknown; input: unknown }
+  | { type: 'artifact_file'; path: string; content?: string; toolName: string }
   | { type: 'tool_input_delta'; id: unknown; name: unknown; delta: string }
   | { type: 'tool_result'; toolUseId: unknown; content: string; isError: boolean }
   | { type: 'turn_end'; stopReason: unknown }

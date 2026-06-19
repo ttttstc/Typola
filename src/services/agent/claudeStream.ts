@@ -183,6 +183,15 @@ export function createClaudeStreamHandler(
     if (isFileWriteToolUse(name, input)) {
       suppressNextArtifactText = true;
       const content = fileWriteContent(input);
+      const path = fileWritePath(input);
+      if (path && typeof name === 'string') {
+        onEvent({
+          type: 'artifact_file',
+          path,
+          ...(content ? { content } : {}),
+          toolName: name,
+        });
+      }
       if (content) {
         wroteHtmlFileThisTurn = wroteHtmlFileThisTurn || isHtmlWriteToolInput(input);
         recentWriteContents.push(normalizeArtifactEchoContent(content));
@@ -339,6 +348,14 @@ export function createClaudeStreamHandler(
     if (!isRecord(input)) return null;
     if (typeof input.content === 'string') return input.content;
     if (typeof input.new_string === 'string') return input.new_string;
+    return null;
+  }
+
+  function fileWritePath(input: unknown): string | null {
+    if (!isRecord(input)) return null;
+    if (typeof input.file_path === 'string') return input.file_path;
+    if (typeof input.filePath === 'string') return input.filePath;
+    if (typeof input.path === 'string') return input.path;
     return null;
   }
 

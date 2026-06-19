@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - AI CLI 设置新增 Claude 模型占位配置；默认留空时继续使用 Claude CLI 自身默认模型。
 - AI 工作台新增工作区选择条、Composer `+` 菜单、附件上下文 chips、`.mcp.json` 编辑入口和 Plugin directory 配置；发送时会把当前文档与附件路径追加到 Claude prompt，Rust 启动参数会按配置追加 `--plugin-dir`。
 - AI 工作台工作区/会话模型调整为全局单会话：切换编辑器文件不再重置对话；AI 工作区独立持久化，不再跟随左侧文件树工作区变化；工作区选择移到 Composer 底部并支持最近目录。
+- AI 工作台新增 M2 产物回流：Claude 写入的生成类产物会暂存到工作区 `.typola-output/`，右下角以文件 chips 展示，点击直接在中间编辑器打开，并可一键保存到工作区。
 - 编辑器与右侧预览同步滚动：编辑器滚动时右侧 Word / 公众号预览按 scroll ratio 单向同步（rAF 节流，零额外重渲染）。
 - 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 
@@ -27,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - 左侧栏改为“文件树 / AI 工作台 / 收起”单状态机，顶部提供文件树与 AI 工作台互斥切换 tab，避免出现文件树与 AI 工作台叠加成第四列。
 - 心流模式进入时不再自动展开底部终端，终端仍可通过工具栏手动打开。
 - AI 工作台 header 不再绑定当前文件名；当前文件改为 Composer 上下文 chip，可手动移除，切换文件后自动显示新文件 chip。
+- AI 产物预览从右侧面板收敛为右下角 chips 浮窗；右侧栏不再铺开产物预览，避免把 AI 产物当成对话副产品而挤压主编辑器。
 - 顶栏控件与整体背景配色统一到暖米基底：`--surface` / `--panel-bg` / `--control-bg` / `--toc-panel-bg` 等基底色相对齐 `--bg`，消除顶栏控件在暖米背景上「比背景更白」的不协调。
 - 右侧 Word 预览面板可拖拽到更窄宽度，纸张预览更靠近分隔条展示，减少预览打开时左侧无效空白。
 - 主工作区新增轻量多文件 tab：从文件树、最近文件、系统打开或拖拽打开多个文档时会保留已打开文件，未保存 tab 文件名前显示 `*`；只打开单个文件时自动隐藏 tab 栏。

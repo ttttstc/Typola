@@ -2542,52 +2542,72 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-color: var(--border-hover);
 }
 
-/* ===== Artifact Preview ===== */
+/* ===== Artifact Chips Floating Panel ===== */
 
 .artifact-preview {
+  position: fixed;
+  right: 24px;
+  bottom: 26px;
+  z-index: 35;
+  width: min(360px, calc(100vw - 48px));
+  max-height: min(360px, calc(100vh - 140px));
   display: flex;
   flex-direction: column;
-  height: 100%;
-  gap: 8px;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: color-mix(in oklch, var(--panel-bg) 94%, transparent);
+  box-shadow: 0 18px 48px rgba(49, 37, 24, 0.16);
+  backdrop-filter: blur(12px);
 }
 
-.artifact-empty {
+.artifact-preview-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--muted);
-  font-size: 13px;
-  text-align: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.artifact-hint {
-  font-size: 12px;
-  opacity: 0.7;
+.artifact-preview-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.artifact-preview-header strong {
+  font-size: 13px;
+}
+
+.artifact-preview-header span {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .artifact-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 7px;
+  overflow: auto;
+}
+
+.artifact-chip-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
-  padding: 4px 0;
 }
 
 .artifact-chip {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: 5px;
+  padding: 7px 10px;
   font-size: 12px;
   background: var(--control-bg);
   border: 1px solid var(--border-soft);
-  border-radius: 14px;
+  border-radius: 11px;
   color: var(--fg);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
-  max-width: 200px;
 }
 
 .artifact-chip:hover {
@@ -2595,19 +2615,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-color: var(--border-hover);
 }
 
-.artifact-chip.active {
-  background: var(--control-active-bg);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .artifact-chip-icon {
   display: inline-flex;
   color: var(--muted);
-}
-
-.artifact-chip.active .artifact-chip-icon {
-  color: var(--accent);
 }
 
 .artifact-chip-name {
@@ -2616,11 +2626,12 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   white-space: nowrap;
 }
 
-.artifact-clear {
+.artifact-clear,
+.artifact-archive {
   padding: 4px 6px;
   background: transparent;
   border: 1px solid var(--border-soft);
-  border-radius: 14px;
+  border-radius: 11px;
   color: var(--muted);
   cursor: pointer;
 }
@@ -2630,40 +2641,10 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-color: var(--danger);
 }
 
-.artifact-render {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-}
-
-.artifact-iframe {
-  width: 100%;
-  height: 100%;
-  min-height: 360px;
-  border: 0;
-  background: white;
-}
-
-.artifact-markdown,
-.artifact-text {
-  margin: 0;
-  padding: 14px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--fg);
-}
-
-.artifact-loading {
-  padding: 20px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
+.artifact-archive:hover {
+  color: var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 40%, var(--border-soft));
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface));
 }
 
 /* ===== File tree agent-changed highlight ===== */

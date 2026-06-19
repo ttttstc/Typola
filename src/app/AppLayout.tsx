@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { FolderOpen, Sparkles } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { OpenedFile, TocItem } from '../types/document';
 import { createEmptyFile } from '../types/document';
@@ -127,6 +128,25 @@ const LEFT_PANEL_MAX_WIDTH = 560;
 const WORKSPACE_PANEL_DEFAULT_WIDTH = 366;
 const FLOW_LEFT_PANEL_WIDTH = 366;
 const FLOW_RIGHT_PANEL_WIDTH = 456;
+
+function pathBasename(path: string): string {
+  return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
+}
+
+function joinLocalPath(root: string, ...parts: string[]): string {
+  const separator = root.includes('\\') ? '\\' : '/';
+  return [
+    root.replace(/[\\/]+$/u, ''),
+    ...parts.map((part) => part.replace(/^[\\/]+|[\\/]+$/gu, '')),
+  ].filter(Boolean).join(separator);
+}
+
+function pathStartsWith(path: string, root: string): boolean {
+  const normalize = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/u, '').toLowerCase();
+  const normalizedPath = normalize(path);
+  const normalizedRoot = normalize(root);
+  return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}/`);
+}
 
 function imageExtensionFromMime(type: string): string {
   if (type === 'image/jpeg') return 'jpg';
@@ -266,6 +286,11 @@ export function AppLayout() {
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
     [debouncedStatsSource, file.fileType],
   );
+  const agentOutputRoot = useMemo(() => (
+    settings.aiWorkspaceRoot
+      ? joinLocalPath(settings.aiWorkspaceRoot, '.typola-output', 'ai-workbench')
+      : undefined
+  ), [settings.aiWorkspaceRoot]);
 
   useEffect(() => {
     fileRef.current = file;
@@ -1242,10 +1267,11 @@ export function AppLayout() {
     };
   }, [isTauriRuntime, settings.defaultEncoding]);
 
-  // M2-B2: 收集 AI 工作台 cwd 下 skill 落盘产物。AI cwd 独立于文件树 workspaceRoot。
+  // M2-B2: 收集 AI 暂存区产物。AI 工作台 cwd 独立于文件树 workspaceRoot。
   useEffect(() => {
-    const aiWorkspaceRoot = settings.aiWorkspaceRoot;
-    if (!isTauriRuntime || !aiWorkspaceRoot) {
+    const watchRoot = settings.aiWorkspaceRoot;
+    const outputRoot = agentOutputRoot;
+    if (!isTauriRuntime || !watchRoot || !outputRoot) {
       setAgentChangedPaths(new Map());
       return undefined;
     }
@@ -1254,23 +1280,22 @@ export function AppLayout() {
 
     void import('../services/workspaceWatchService')
       .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
-        await watchWorkspace(aiWorkspaceRoot);
+        await watchWorkspace(watchRoot);
         return onWorkspaceChanged((payload) => {
           // P0-B: 自写抑制,与 document watcher 路径同模式(`AppLayout.tsx:1116-1119`)。
           // 局限:lastSelfWriteRef 是单槽、只记最后一次自写;多文件并发自写仍可能漏抑制。
           // MVP 可接受(与编辑器自写抑制同款),Phase 2 升级为「最近写入路径集合(带 TTL)」。
           const now = Date.now();
           const paths = filterSelfWritePaths(payload.paths, lastSelfWriteRef.current, now);
-          if (paths.length === 0) return;
+          const artifactPaths = paths.filter((path) => pathStartsWith(path, outputRoot));
+          if (artifactPaths.length === 0) return;
           setAgentChangedPaths((prev) => {
             const next = new Map(prev);
-            for (const path of paths) {
+            for (const path of artifactPaths) {
               next.set(path, now);
             }
             return next;
           });
-          setRightPanelMode('flow');
-          setFlowRightTab('preview');
           // 新建/删除/重命名都会让顶层 entries 变化,触发文件树重读
           if (payload.kind === 'create' || payload.kind === 'remove' || payload.kind === 'rename') {
             setWorkspaceTreeVersion((version) => version + 1);
@@ -1287,10 +1312,10 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
       void import('../services/workspaceWatchService')
-        .then(({ unwatchWorkspace }) => unwatchWorkspace(aiWorkspaceRoot))
+        .then(({ unwatchWorkspace }) => unwatchWorkspace(watchRoot))
         .catch((error) => console.warn('Failed to unwatch workspace:', error));
     };
-  }, [isTauriRuntime, settings.aiWorkspaceRoot]);
+  }, [agentOutputRoot, isTauriRuntime, settings.aiWorkspaceRoot]);
 
   // 写竞争:三选项
   const handleViewDiff = useCallback(async () => {
@@ -1356,6 +1381,40 @@ export function AppLayout() {
   const handleClearArtifacts = useCallback(() => {
     setAgentChangedPaths(new Map());
   }, []);
+
+  const handleAgentArtifactFile = useCallback((artifact: { path: string }) => {
+    const outputRoot = agentOutputRoot;
+    const path = artifact.path;
+    if (!outputRoot || !pathStartsWith(path, outputRoot)) return;
+    setAgentChangedPaths((prev) => {
+      const next = new Map(prev);
+      next.set(path, Date.now());
+      return next;
+    });
+  }, [agentOutputRoot]);
+
+  const handleArchiveArtifact = useCallback(async (artifactPath: string) => {
+    const workspaceRoot = settings.aiWorkspaceRoot;
+    if (!workspaceRoot) {
+      await messageDialog('请先在 AI 工作台选择工作区，再保存产物。', { title: '保存产物' });
+      return;
+    }
+    try {
+      const archivedPath = await invoke<string>('archive_artifact_to_workspace', {
+        request: { artifactPath, workspaceRoot },
+      });
+      setAgentChangedPaths((prev) => {
+        const next = new Map(prev);
+        next.delete(artifactPath);
+        return next;
+      });
+      setWorkspaceTreeVersion((version) => version + 1);
+      await handleOpenPath(archivedPath);
+      setTransientMessage(`已保存到工作区：${pathBasename(archivedPath)}`);
+    } catch (error) {
+      await messageDialog(String(error), { title: '保存产物失败' });
+    }
+  }, [handleOpenPath, settings.aiWorkspaceRoot]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1602,15 +1661,7 @@ export function AppLayout() {
             />
           </Suspense>
         ) : (
-          <Suspense fallback={<div className="scenario-panel-skeleton">加载产物...</div>}>
-            <ArtifactPreview
-              artifacts={artifactItems}
-              onOpenFile={(path) => {
-                void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
-              }}
-              onClose={handleClearArtifacts}
-            />
-          </Suspense>
+          <div className="scenario-panel-skeleton">AI 产物会以右下角文件 chips 显示，点击后在中间编辑器打开。</div>
         )}
       </div>
     </aside>
@@ -1712,6 +1763,7 @@ export function AppLayout() {
                   hasEditorSelection={hasEditorSelection}
                   onInsertToEditor={handleInsertToEditor}
                   onReplaceEditorSelection={handleReplaceEditorSelection}
+                  onArtifactFile={handleAgentArtifactFile}
                   onClose={() => setLeftRailMode('none')}
                 />
               ) : (
@@ -1859,6 +1911,20 @@ export function AppLayout() {
         onInsertImage={(alt, path) => insertMarkdown(createImageMarkdown(alt, path))}
         onInsertTable={(rows, columns) => insertMarkdown(`\n${createTableMarkdown(rows, columns)}\n`)}
       />
+      {artifactItems.length > 0 && (
+        <Suspense fallback={null}>
+          <ArtifactPreview
+            artifacts={artifactItems}
+            onOpenFile={(path) => {
+              void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
+            }}
+            onArchiveFile={(path) => {
+              void handleArchiveArtifact(path);
+            }}
+            onClose={handleClearArtifacts}
+          />
+        </Suspense>
+      )}
       {settingsVisible && (
         <Suspense fallback={<SettingsPageFallback />}>
           <SettingsPage

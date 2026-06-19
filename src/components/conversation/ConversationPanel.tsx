@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSettings } from '../../hooks/useSettings';
@@ -20,8 +21,21 @@ type ConversationPanelProps = {
   hasEditorSelection?: boolean;
   onInsertToEditor?: (text: string) => void;
   onReplaceEditorSelection?: (text: string) => void;
+  onArtifactFile?: (artifact: { path: string; content?: string; toolName: string }) => void;
   onClose: () => void;
 };
+
+function joinPath(root: string, ...parts: string[]): string {
+  const separator = root.includes('\\') ? '\\' : '/';
+  return [
+    root.replace(/[\\/]+$/u, ''),
+    ...parts.map((part) => part.replace(/^[\\/]+|[\\/]+$/gu, '')),
+  ].filter(Boolean).join(separator);
+}
+
+function safeSegment(value: string): string {
+  return value.replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '') || 'conversation';
+}
 
 function UserMessage({ message }: { message: Extract<AgentMessage, { role: 'user' }> }) {
   return (
@@ -42,16 +56,23 @@ export function ConversationPanel({
   hasEditorSelection = false,
   onInsertToEditor,
   onReplaceEditorSelection,
+  onArtifactFile,
   onClose,
 }: ConversationPanelProps) {
   const settings = useSettings();
   const cwd = settings.aiWorkspaceRoot || undefined;
+  const agentCwd = useMemo(() => (
+    cwd ? joinPath(cwd, '.typola-output', safeSegment(conversationId)) : undefined
+  ), [conversationId, cwd]);
+  const extraAllowedDirs = useMemo(() => (cwd ? [cwd] : undefined), [cwd]);
   const { messages, runState, lastError, send, cancel, reset } = useAgentSession({
     conversationId,
-    cwd,
+    cwd: agentCwd,
     agentPath,
     model,
     pluginDirs,
+    extraAllowedDirs,
+    onArtifactFile,
   });
   const running = runState === 'running' || runState === 'stalled';
   const hasHistory = messages.length > 0;

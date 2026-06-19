@@ -72,7 +72,15 @@ struct AgentSessionStartRequest {
     agent_path: Option<String>,
     model: Option<String>,
     plugin_dirs: Option<Vec<String>>,
+    extra_allowed_dirs: Option<Vec<String>>,
     stall_timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ArchiveArtifactRequest {
+    artifact_path: String,
+    workspace_root: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -350,6 +358,30 @@ fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
             error: Some(error),
         },
     }
+}
+
+#[tauri::command]
+fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<String, String> {
+    let artifact_path = PathBuf::from(request.artifact_path);
+    if !artifact_path.is_file() {
+        return Err("artifact file not found".into());
+    }
+    if !is_openable_document_path(&artifact_path) {
+        return Err("unsupported artifact type".into());
+    }
+
+    let workspace_root = PathBuf::from(request.workspace_root);
+    if !workspace_root.is_dir() {
+        return Err("workspace root not found".into());
+    }
+    let file_name = artifact_path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| "invalid artifact file name".to_string())?;
+    let target = unique_file_path(&workspace_root, file_name);
+    std::fs::rename(&artifact_path, &target)
+        .map_err(|error| format!("failed to archive artifact: {error}"))?;
+    Ok(target.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -874,6 +906,7 @@ pub fn run() {
             read_opened_document,
             write_opened_document,
             rename_opened_document,
+            archive_artifact_to_workspace,
             write_attachment_file,
             agent_detect,
             agent_session_start,
@@ -1057,6 +1090,29 @@ fn unique_attachment_path(dir: &Path, file_name: &str) -> PathBuf {
     candidate
 }
 
+fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
+    let original = Path::new(file_name);
+    let stem = original
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("artifact");
+    let extension = original.extension().and_then(OsStr::to_str);
+    let format_name = |index: Option<usize>| match (index, extension) {
+        (Some(index), Some(extension)) => format!("{stem}-{index}.{extension}"),
+        (Some(index), None) => format!("{stem}-{index}"),
+        (None, Some(extension)) => format!("{stem}.{extension}"),
+        (None, None) => stem.to_string(),
+    };
+    let mut candidate = dir.join(format_name(None));
+    let mut index = 2;
+    while candidate.exists() {
+        candidate = dir.join(format_name(Some(index)));
+        index += 1;
+    }
+    candidate
+}
+
 fn normalize_agent_path(path: Option<&str>) -> String {
     if let Some(path) = path.map(str::trim).filter(|value| !value.is_empty()) {
         // Windows: 裸命令名(无路径分隔符、无扩展名)必须回退到 PATH/npm 全局扫描,
@@ -1121,6 +1177,7 @@ fn start_agent_headless_run(
         resumed,
         request.model.as_deref(),
         request.plugin_dirs.as_deref().unwrap_or(&[]),
+        request.extra_allowed_dirs.as_deref().unwrap_or(&[]),
     );
     let mut command = create_agent_command(&agent_path, &args);
     command
@@ -1129,9 +1186,9 @@ fn start_agent_headless_run(
         .stderr(Stdio::piped());
     if let Some(cwd) = request.cwd.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
         let cwd_path = PathBuf::from(cwd);
-        if cwd_path.is_dir() {
-            command.current_dir(cwd_path);
-        }
+        std::fs::create_dir_all(&cwd_path)
+            .map_err(|error| format!("failed to create Claude cwd: {error}"))?;
+        command.current_dir(cwd_path);
     }
 
     let mut child = command
@@ -1212,6 +1269,7 @@ fn build_claude_headless_args(
     resumed: bool,
     model: Option<&str>,
     plugin_dirs: &[String],
+    extra_allowed_dirs: &[String],
 ) -> Vec<String> {
     let mut args = vec![
         "-p".to_string(),
@@ -1235,6 +1293,14 @@ fn build_claude_headless_args(
     }
     for dir in plugin_dirs.iter().map(|value| value.trim()).filter(|value| !value.is_empty()) {
         args.push("--plugin-dir".to_string());
+        args.push(dir.to_string());
+    }
+    for dir in extra_allowed_dirs
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--add-dir".to_string());
         args.push(dir.to_string());
     }
     args
@@ -1683,7 +1749,14 @@ mod tests {
     #[test]
     fn claude_headless_args_use_text_stdin_and_stream_json_output() {
         let plugin_dirs = vec!["D:\\plugins\\one".to_string(), "D:\\plugins\\two".to_string()];
-        let args = build_claude_headless_args("session-123", false, Some("sonnet"), &plugin_dirs);
+        let extra_allowed_dirs = vec!["D:\\workspace".to_string()];
+        let args = build_claude_headless_args(
+            "session-123",
+            false,
+            Some("sonnet"),
+            &plugin_dirs,
+            &extra_allowed_dirs,
+        );
 
         assert!(args.windows(2).any(|pair| pair == ["--input-format", "text"]));
         assert!(args.windows(2).any(|pair| pair == ["--output-format", "stream-json"]));
@@ -1691,12 +1764,13 @@ mod tests {
         assert!(args.windows(2).any(|pair| pair == ["--model", "sonnet"]));
         assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\one"]));
         assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\two"]));
+        assert!(args.windows(2).any(|pair| pair == ["--add-dir", "D:\\workspace"]));
         assert!(!args.contains(&"--resume".to_string()));
     }
 
     #[test]
     fn claude_headless_resume_args_reuse_session_uuid() {
-        let args = build_claude_headless_args("session-123", true, None, &[]);
+        let args = build_claude_headless_args("session-123", true, None, &[], &[]);
 
         assert!(args.windows(2).any(|pair| pair == ["--resume", "session-123"]));
         assert!(!args.contains(&"--session-id".to_string()));

@@ -17,6 +17,8 @@ type UseAgentSessionOptions = {
   agentPath?: string;
   model?: string;
   pluginDirs?: string[];
+  extraAllowedDirs?: string[];
+  onArtifactFile?: (artifact: { path: string; content?: string; toolName: string }) => void;
 };
 
 function createAssistantMessage(): AgentMessage & { role: 'assistant' } {
@@ -46,7 +48,15 @@ function upsertTool(tools: AgentToolCall[], next: AgentToolCall): AgentToolCall[
   ));
 }
 
-export function useAgentSession({ conversationId, cwd, agentPath, model, pluginDirs }: UseAgentSessionOptions) {
+export function useAgentSession({
+  conversationId,
+  cwd,
+  agentPath,
+  model,
+  pluginDirs,
+  extraAllowedDirs,
+  onArtifactFile,
+}: UseAgentSessionOptions) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [runState, setRunState] = useState<AgentRunState>('idle');
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -84,6 +94,14 @@ export function useAgentSession({ conversationId, cwd, agentPath, model, pluginD
   }, [cwd, reset]);
 
   const appendAssistantEvent = useCallback((event: AgentEvent) => {
+    if (event.type === 'artifact_file') {
+      onArtifactFile?.({
+        path: event.path,
+        content: event.content,
+        toolName: event.toolName,
+      });
+      return;
+    }
     setMessages((current) => {
       const last = current[current.length - 1];
       const assistant = last?.role === 'assistant' ? last : createAssistantMessage();
@@ -146,7 +164,7 @@ export function useAgentSession({ conversationId, cwd, agentPath, model, pluginD
 
       return [...base, next];
     });
-  }, []);
+  }, [onArtifactFile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +233,7 @@ export function useAgentSession({ conversationId, cwd, agentPath, model, pluginD
     ]);
     handlerRef.current = createClaudeStreamHandler((event) => appendAssistantEvent(event as AgentEvent));
     try {
-      const request = { conversationId, prompt: trimmed, cwd, agentPath, model, pluginDirs };
+      const request = { conversationId, prompt: trimmed, cwd, agentPath, model, pluginDirs, extraAllowedDirs };
       const result = sessionStartedRef.current
         ? await resumeAgentSession(request)
         : await startAgentSession(request);
@@ -227,7 +245,7 @@ export function useAgentSession({ conversationId, cwd, agentPath, model, pluginD
       setLastError(message);
       appendAssistantEvent({ type: 'error', message });
     }
-  }, [agentPath, appendAssistantEvent, conversationId, cwd, model, pluginDirs]);
+  }, [agentPath, appendAssistantEvent, conversationId, cwd, extraAllowedDirs, model, pluginDirs]);
 
   const cancel = useCallback(async () => {
     const runId = activeRunIdRef.current;

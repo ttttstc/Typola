@@ -9,6 +9,7 @@ export type AgentSessionStartRequest = {
   agentPath?: string;
   model?: string;
   pluginDirs?: string[];
+  extraAllowedDirs?: string[];
   stallTimeoutMs?: number;
 };
 
