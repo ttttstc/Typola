@@ -388,7 +388,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
         console.warn('sendText called without active agent terminal');
         return;
       }
-      // 写裸文本:bracketed paste 包裹由 agentBridge.injectText 单一出口负责(spec §10),不在此层重复包裹
+      // 写裸文本:bracketed paste 包裹由调用方负责(spec §10),不在此层重复包裹
       void writeTerminal(agentTab.termId, text);
     },
     hasAgentTerminal: () => {

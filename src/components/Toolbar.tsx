@@ -8,7 +8,6 @@ import {
   Save,
   SaveAll,
   SlidersHorizontal,
-  WandSparkles,
   Terminal,
   Sparkles,
   LayoutPanelLeft,
@@ -46,7 +45,6 @@ type ToolbarProps = {
   onSave: () => void;
   onSaveAs: () => void;
   onRename?: () => void;
-  onOpenEditAssist: () => void;
   onOpenSettings: () => void;
   onPreloadSettings?: () => void;
   updateStatus?: UpdateToolbarStatus;
@@ -58,7 +56,7 @@ export function Toolbar({
   editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, flowMode, aiPanelVisible,
   onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
   onToggleTerminal, onToggleFlowMode, onToggleAiPanel,
-  onNew, onOpen, onSave, onSaveAs, onRename, onOpenEditAssist, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  onNew, onOpen, onSave, onSaveAs, onRename, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -200,15 +198,6 @@ export function Toolbar({
             aria-label={t('toolbarFlowModeLabel')}
           >
             <Sparkles size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button
-            onClick={onOpenEditAssist}
-            disabled={editingDisabled}
-            data-no-window-drag="true"
-            data-tooltip={t('toolbarEditAssistTitle')}
-            aria-label={t('toolbarEditAssistLabel')}
-          >
-            <WandSparkles size={iconSize} strokeWidth={strokeWidth} />
           </button>
         </div>
         <div className="toolbar-group toolbar-navigation-actions" aria-label={t('toolbarNavGroup')}>

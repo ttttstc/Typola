@@ -34,6 +34,15 @@ export async function messageDialog(message: string, options: { title?: string }
   window.alert(message);
 }
 
+export async function saveFileDialog(defaultPath?: string): Promise<string | null> {
+  if (isTauriRuntime()) {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const result = await save({ defaultPath });
+    return result ?? null;
+  }
+  return null;
+}
+
 export type UnsavedChoice = 'save' | 'discard' | 'cancel';
 
 // 关闭含未保存修改的文档时的三选一：保存并关闭 / 放弃并关闭 / 取消。

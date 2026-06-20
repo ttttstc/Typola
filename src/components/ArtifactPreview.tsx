@@ -1,4 +1,4 @@
-import { FileText, FolderInput, Presentation, X } from 'lucide-react';
+import { FileText, FolderInput, Presentation, Trash2, X } from 'lucide-react';
 
 export type ArtifactItem = {
   path: string;
@@ -11,6 +11,7 @@ type ArtifactPreviewProps = {
   artifacts: ArtifactItem[];
   onOpenFile: (path: string) => void;
   onArchiveFile?: (path: string) => void;
+  onDeleteFile?: (path: string) => void;
   onClose?: () => void;
 };
 
@@ -19,7 +20,7 @@ function iconFor(kind: ArtifactItem['kind']) {
   return <FileText size={13} />;
 }
 
-export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onClose }: ArtifactPreviewProps) {
+export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onDeleteFile, onClose }: ArtifactPreviewProps) {
   if (artifacts.length === 0) return null;
 
   return (
@@ -56,6 +57,17 @@ export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onClose 
                 aria-label={`保存 ${item.name} 到工作区`}
               >
                 <FolderInput size={13} />
+              </button>
+            )}
+            {onDeleteFile && (
+              <button
+                type="button"
+                className="artifact-delete"
+                onClick={() => onDeleteFile(item.path)}
+                title="删除暂存文件"
+                aria-label={`删除 ${item.name}`}
+              >
+                <Trash2 size={13} />
               </button>
             )}
           </div>
