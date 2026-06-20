@@ -6,19 +6,52 @@ import { resolveLocalImages } from '../services/localImageResolver';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
+import type { SelectionActionId } from '../services/agent/selectionActions';
+import { findUniqueAnchor } from '../services/agent/selectionActions';
+import type { SelectionAnchor } from '../services/agent/types';
 
 type WysiwygEditorPaneProps = {
   source: string;
   onChange: (value: string) => void;
   filePath?: string;
   onScrollRatio?: (ratio: number) => void;
+  // 选区 AI 动作回调（由 AppLayout 注入；不传则不渲染 AI 菜单组）
+  onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor) => void;
 };
 
 const IR_MARKER_COLLAPSE_DELAY_MS = 220;
+const ANCHOR_PREFIX_MAX = 80;
 
 function getIrElement(editor: import('vditor').default): HTMLElement | null {
   const vditor = (editor as unknown as { vditor?: { ir?: { element?: HTMLElement } } }).vditor;
   return vditor?.ir?.element ?? null;
+}
+
+// 从 ir 根到 range.startContainer 收集 textContent,取最后 ANCHOR_PREFIX_MAX 字符。
+// 用于在 source markdown 中唯一定位选区(原文本多处出现时也能找到正确那次)。
+function computePrefixHint(ir: HTMLElement, range: Range): string {
+  const preRange = ir.ownerDocument?.createRange();
+  if (!preRange) return '';
+  preRange.setStart(ir, 0);
+  try {
+    preRange.setEnd(range.startContainer, range.startOffset);
+  } catch {
+    return '';
+  }
+  const preText = preRange.toString();
+  if (preText.length <= ANCHOR_PREFIX_MAX) return preText;
+  return preText.slice(-ANCHOR_PREFIX_MAX);
+}
+
+// 选区在视口里的中心坐标(用于键盘触发的菜单定位)。
+function selectionViewportPos(range: Range): { x: number; y: number } | null {
+  const rects = range.getClientRects();
+  if (rects.length === 0) {
+    const r = range.getBoundingClientRect();
+    return { x: r.left, y: r.top };
+  }
+  const first = rects[0];
+  return { x: first.left, y: first.top };
 }
 
 function collapseExpandedMarkers(editor: import('vditor').default | null): void {
@@ -67,7 +100,7 @@ type WindowWithFind = Window & {
 };
 
 export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
-  { source, onChange, filePath, onScrollRatio },
+  { source, onChange, filePath, onScrollRatio, onAIAction },
   ref,
 ) {
   const settings = useSettings();
@@ -84,6 +117,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const onScrollRatioRef = useRef(onScrollRatio);
   // 记录最近一次真实选区,用于 AI 回复的“替换选区”操作。
   const lastSelectionRangeRef = useRef<Range | null>(null);
+  // 记录最近一次被校验通过的 anchor.originalText,Vditor 模式按文本搜索替换。
+  const lastValidatedAnchorTextRef = useRef<string | null>(null);
+  // 记录最近一次被校验通过的 anchor.prefixHint,Vditor 模式用 prefixHint+originalText 唯一定位。
+  const lastValidatedPrefixHintRef = useRef<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
 
   const getSavedOrCurrentSelection = useCallback((): Range | null => {
@@ -130,7 +167,42 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     void applyVditorFormat(editor, action);
   }, []);
 
+  const handleAIPick = useCallback((action: SelectionActionId) => {
+    if (!onAIAction || !filePath) return;
+    const editor = editorRef.current;
+    const range = getSavedOrCurrentSelection();
+    const text = range?.toString() ?? '';
+    if (!text && action !== 'custom') return;
+    const ir = editor ? getIrElement(editor) : null;
+    const prefixHint = range && ir ? computePrefixHint(ir, range) : '';
+    const anchor: SelectionAnchor = {
+      filePath,
+      from: 0,
+      to: text.length,
+      originalText: text,
+      prefixHint,
+    };
+    onAIAction(action, anchor);
+  }, [filePath, getSavedOrCurrentSelection, onAIAction]);
+
   const handleMenuClose = useCallback(() => setContextMenu(null), []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
+    if (!onAIAction || !filePath) return;
+    const range = getSavedOrCurrentSelection();
+    const text = range?.toString() ?? '';
+    if (!text) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // 弹起 5+1 菜单(对齐右键的动线),用选区位置作为菜单位置;不直接触发 custom。
+    const pos = range ? selectionViewportPos(range) : null;
+    setContextMenu({
+      x: pos?.x ?? 0,
+      y: pos?.y ?? 0,
+      hasSelection: true,
+    });
+  }, [filePath, getSavedOrCurrentSelection, onAIAction]);
 
   useEffect(() => {
     onScrollRatioRef.current = onScrollRatio;
@@ -328,6 +400,37 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       lastEmittedValue.current = value;
       onChange(value);
     },
+    replaceRange(_from: number, _to: number, text: string) {
+      const editor = editorRef.current;
+      if (!editor) return false;
+      const anchorText = lastValidatedAnchorTextRef.current;
+      const prefixHint = lastValidatedPrefixHintRef.current;
+      const value = editor.getValue();
+      if (!anchorText) return false;
+      const hit = findUniqueAnchor(value, anchorText, prefixHint);
+      if (!hit) return false;
+      const next = value.slice(0, hit.start) + text + value.slice(hit.start + hit.length);
+      editor.setValue(next, true);
+      lastSelectionRangeRef.current = null;
+      lastValidatedAnchorTextRef.current = null;
+      lastValidatedPrefixHintRef.current = null;
+      lastEmittedValue.current = next;
+      onChange(next);
+      return true;
+    },
+    validateAnchor(anchorFilePath: string, _from: number, _to: number, originalText: string, prefixHint?: string) {
+      if (!filePath || filePath !== anchorFilePath) return 'wrong-file';
+      const editor = editorRef.current;
+      if (!editor) return 'wrong-file';
+      const value = editor.getValue();
+      // findUniqueAnchor 同时校验存在性 + 唯一性（prefixHint+originalText 或纯 originalText）
+      // 多处匹配时返回 null → 'stale'，前端展示「文档已变更」并提示重新选区
+      const hit = findUniqueAnchor(value, originalText, prefixHint);
+      if (!hit) return 'stale';
+      lastValidatedAnchorTextRef.current = originalText;
+      lastValidatedPrefixHintRef.current = prefixHint ?? '';
+      return 'valid';
+    },
     revealRange() {
       editorRef.current?.focus();
     },
@@ -337,11 +440,16 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       if (!text || typeof find !== 'function') return;
       find(text, false, backwards, true, false, false, false);
     },
-  }), [getSavedOrCurrentSelection, onChange, restoreSelectionRange]);
+  }), [filePath, getSavedOrCurrentSelection, onChange, restoreSelectionRange]);
 
   return (
     <div className="wysiwyg-editor-pane" aria-label="即时渲染编辑器">
-      <div ref={hostRef} className="wysiwyg-editor-host" onContextMenu={handleContextMenu} />
+      <div
+        ref={hostRef}
+        className="wysiwyg-editor-host"
+        onContextMenu={handleContextMenu}
+        onKeyDown={handleKeyDown}
+      />
       <EditorContextMenu
         open={contextMenu !== null}
         x={contextMenu?.x ?? 0}
@@ -349,6 +457,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         hasSelection={contextMenu?.hasSelection ?? false}
         onPick={handleMenuPick}
         onClose={handleMenuClose}
+        onPickAI={onAIAction ? handleAIPick : undefined}
       />
     </div>
   );

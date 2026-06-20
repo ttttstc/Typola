@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { SELECTION_ACTIONS, type SelectionActionId } from '../services/agent/selectionActions';
 
 export type HeadingLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -15,9 +16,13 @@ type Props = {
   hasSelection: boolean;
   onPick: (action: FormatAction) => void;
   onClose: () => void;
+  // 选区 AI 动作（可选，渲染在菜单底部）。仅 hasSelection 时可点。
+  onPickAI?: (action: SelectionActionId) => void;
 };
 
-export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose }: Props) {
+const AI_ACTION_IDS: SelectionActionId[] = ['polish', 'rewrite', 'shorten', 'expand', 'explain', 'custom'];
+
+export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose, onPickAI }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const adjustedRef = useRef({ left: x, top: y });
 
@@ -103,6 +108,34 @@ export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose }:
       <MenuItem label="复制" hint="Ctrl+C" disabled={!hasSelection} onClick={() => pick({ type: 'copy' })} />
       <MenuItem label="粘贴" hint="Ctrl+V" onClick={() => pick({ type: 'paste' })} />
       <MenuItem label="全选" hint="Ctrl+A" onClick={() => pick({ type: 'select-all' })} />
+
+      {onPickAI && (
+        <>
+          <div className="editor-ctx-separator" />
+          <div className="selection-ai-section-title" role="presentation">AI</div>
+          {AI_ACTION_IDS.map((id) => {
+            const action = SELECTION_ACTIONS[id];
+            const disabled = !hasSelection && id !== 'custom';
+            return (
+              <button
+                key={id}
+                type="button"
+                role="menuitem"
+                className="editor-ctx-item"
+                disabled={disabled}
+                onClick={() => { onPickAI(id); onClose(); }}
+                title={disabled ? '请先选中文字' : ''}
+              >
+                <span className="selection-ai-item-label">
+                  <span className="selection-ai-item-icon" aria-hidden="true">{action.icon}</span>
+                  {action.label}
+                </span>
+                {id === 'custom' ? <kbd>自定义</kbd> : null}
+              </button>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

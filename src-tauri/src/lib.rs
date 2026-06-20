@@ -10,7 +10,6 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::{Duration, Instant},
 };
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -42,7 +41,14 @@ struct AgentHeadlessStore(Arc<Mutex<AgentHeadlessRegistry>>);
 #[derive(Default)]
 struct AgentHeadlessRegistry {
     sessions: HashMap<String, String>,
-    runs: HashMap<String, Arc<Mutex<Child>>>,
+    runs: HashMap<String, AgentRunHandle>,
+}
+
+#[derive(Clone)]
+struct AgentRunHandle {
+    #[allow(dead_code)]
+    child: Arc<Mutex<Child>>,
+    pid: u32,
 }
 
 #[derive(Default)]
@@ -73,7 +79,6 @@ struct AgentSessionStartRequest {
     model: Option<String>,
     plugin_dirs: Option<Vec<String>>,
     extra_allowed_dirs: Option<Vec<String>>,
-    stall_timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,16 +195,6 @@ struct AgentExitPayload {
     session_uuid: String,
     exit_code: Option<i32>,
     cancelled: bool,
-    stderr_tail: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct AgentStallPayload {
-    run_id: String,
-    conversation_id: String,
-    session_uuid: String,
-    idle_ms: u64,
     stderr_tail: String,
 }
 
@@ -384,6 +379,48 @@ fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<Stri
     Ok(target.to_string_lossy().to_string())
 }
 
+#[derive(Debug, Deserialize)]
+struct DeleteArtifactRequest {
+    path: String,
+    workspace_root: Option<String>,
+}
+
+#[tauri::command]
+fn delete_artifact_file(request: DeleteArtifactRequest) -> Result<(), String> {
+    let artifact_path = PathBuf::from(&request.path);
+    if !artifact_path.is_file() {
+        return Err("artifact file not found".into());
+    }
+    let canonical = artifact_path
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve path: {error}"))?;
+    // 安全约束：优先用调用方传入的工作区定位 .typola-output；没有工作区或工作区已切换时，
+    // 从文件路径自身向上寻找 .typola-output，避免误删工作区外文件。
+    let inferred_output_dir = canonical
+        .ancestors()
+        .find(|path| path.file_name().and_then(OsStr::to_str) == Some(".typola-output"))
+        .map(PathBuf::from);
+    let mut candidate_output_dirs = Vec::new();
+    if let Some(workspace_root) = request.workspace_root.as_deref().filter(|root| !root.is_empty()) {
+        candidate_output_dirs.push(PathBuf::from(workspace_root).join(".typola-output"));
+    }
+    if let Some(output_dir) = inferred_output_dir {
+        candidate_output_dirs.push(output_dir);
+    }
+
+    let is_inside_output = candidate_output_dirs.iter().any(|output_dir| {
+        output_dir
+            .canonicalize()
+            .map(|canonical_output| canonical.starts_with(canonical_output))
+            .unwrap_or(false)
+    });
+    if !is_inside_output {
+        return Err("refused: path is outside .typola-output directory".into());
+    }
+    std::fs::remove_file(&artifact_path)
+        .map_err(|error| format!("failed to delete artifact: {error}"))
+}
+
 #[tauri::command]
 fn agent_session_start(
     app: tauri::AppHandle,
@@ -407,7 +444,7 @@ fn agent_session_cancel(
     state: tauri::State<'_, AgentHeadlessStore>,
     request: AgentSessionCancelRequest,
 ) -> Result<(), String> {
-    let child = {
+    let run = {
         let registry = state
             .0
             .lock()
@@ -419,12 +456,7 @@ fn agent_session_cancel(
             .ok_or_else(|| "agent run not found".to_string())?
     };
 
-    let mut child = child
-        .lock()
-        .map_err(|_| "agent child process poisoned".to_string())?;
-    child
-        .kill()
-        .map_err(|error| format!("failed to cancel agent run: {error}"))
+    kill_agent_process_tree(&run)
 }
 
 #[tauri::command]
@@ -907,6 +939,7 @@ pub fn run() {
             write_opened_document,
             rename_opened_document,
             archive_artifact_to_workspace,
+            delete_artifact_file,
             write_attachment_file,
             agent_detect,
             agent_session_start,
@@ -924,9 +957,9 @@ pub fn run() {
             terminal_resize,
             terminal_kill,
             terminal_clear,
-            read_flow_scenarios,
-            write_flow_scenarios,
-            open_flow_scenarios_file
+            list_local_skills,
+            read_skill_hub,
+            write_skill_hub
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -1213,37 +1246,32 @@ fn start_agent_headless_run(
         .map_err(|error| format!("failed to write Claude prompt: {error}"))?;
     drop(stdin);
 
+    let pid = child.id();
     let child = Arc::new(Mutex::new(child));
     {
         let mut registry = state
             .0
             .lock()
             .map_err(|_| "agent headless store poisoned".to_string())?;
-        registry.runs.insert(run_id.clone(), Arc::clone(&child));
+        registry.runs.insert(
+            run_id.clone(),
+            AgentRunHandle {
+                child: Arc::clone(&child),
+                pid,
+            },
+        );
     }
 
     let stderr_tail = Arc::new(Mutex::new(String::new()));
     spawn_agent_stderr_collector(stderr, Arc::clone(&stderr_tail));
-    let last_output_at = Arc::new(Mutex::new(Instant::now()));
     spawn_agent_stdout_forwarder(
         app.clone(),
         run_id.clone(),
         conversation_id.to_string(),
         session_uuid.clone(),
         stdout,
-        Arc::clone(&last_output_at),
     );
     let done = Arc::new(AtomicBool::new(false));
-    spawn_agent_stall_monitor(
-        app.clone(),
-        run_id.clone(),
-        conversation_id.to_string(),
-        session_uuid.clone(),
-        Arc::clone(&last_output_at),
-        Arc::clone(&stderr_tail),
-        Arc::clone(&done),
-        request.stall_timeout_ms.unwrap_or(30_000),
-    );
     spawn_agent_waiter(
         app,
         child,
@@ -1262,6 +1290,31 @@ fn start_agent_headless_run(
         resumed,
         agent_path,
     })
+}
+
+fn kill_agent_process_tree(run: &AgentRunHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let status = Command::new("taskkill")
+            .args(["/PID", &run.pid.to_string(), "/T", "/F"])
+            .creation_flags(0x08000000)
+            .status()
+            .map_err(|error| format!("failed to run taskkill: {error}"))?;
+        if status.success() {
+            return Ok(());
+        }
+        return Err(format!("taskkill failed with status: {status}"));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        run.child
+            .lock()
+            .map_err(|_| "agent child process poisoned".to_string())?
+            .kill()
+            .map_err(|error| format!("failed to cancel agent run: {error}"))
+    }
 }
 
 fn build_claude_headless_args(
@@ -1312,15 +1365,11 @@ fn spawn_agent_stdout_forwarder(
     conversation_id: String,
     session_uuid: String,
     stdout: impl Read + Send + 'static,
-    last_output_at: Arc<Mutex<Instant>>,
 ) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             let Ok(line) = line else { break };
-            if let Ok(mut last) = last_output_at.lock() {
-                *last = Instant::now();
-            }
             let _ = app.emit(
                 "agent-stdout",
                 AgentStdoutPayload {
@@ -1352,49 +1401,6 @@ fn spawn_agent_stderr_collector(stderr: impl Read + Send + 'static, stderr_tail:
                     }
                 }
                 Err(_) => break,
-            }
-        }
-    });
-}
-
-fn spawn_agent_stall_monitor(
-    app: tauri::AppHandle,
-    run_id: String,
-    conversation_id: String,
-    session_uuid: String,
-    last_output_at: Arc<Mutex<Instant>>,
-    stderr_tail: Arc<Mutex<String>>,
-    done: Arc<AtomicBool>,
-    stall_timeout_ms: u64,
-) {
-    thread::spawn(move || {
-        let timeout = Duration::from_millis(stall_timeout_ms.max(5_000));
-        let mut emitted = false;
-        while !done.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(1_000));
-            if emitted {
-                continue;
-            }
-            let idle = last_output_at
-                .lock()
-                .map(|last| last.elapsed())
-                .unwrap_or_default();
-            if idle >= timeout {
-                emitted = true;
-                let stderr_tail = stderr_tail
-                    .lock()
-                    .map(|tail| tail.clone())
-                    .unwrap_or_default();
-                let _ = app.emit(
-                    "agent-stall",
-                    AgentStallPayload {
-                        run_id: run_id.clone(),
-                        conversation_id: conversation_id.clone(),
-                        session_uuid: session_uuid.clone(),
-                        idle_ms: idle.as_millis().min(u128::from(u64::MAX)) as u64,
-                        stderr_tail,
-                    },
-                );
             }
         }
     });
@@ -1617,39 +1623,105 @@ fn find_on_path(executable: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-fn flow_scenarios_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+// SkillHub：分类+skill 引用文件，存 Tauri app config dir
+fn skill_hub_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_config_dir()
         .map_err(|error| format!("failed to resolve app config dir: {error}"))?
         .join("typola");
     std::fs::create_dir_all(&dir).map_err(|error| format!("failed to create config dir: {error}"))?;
-    Ok(dir.join("flow-scenarios.json"))
+    Ok(dir.join("skill-hub.json"))
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SkillInfo {
+    name: String,
+    description: Option<String>,
+    source: String, // "local"
+    path: String,
+}
+
+// 解析 SKILL.md 的 YAML frontmatter 里的 description 字段。
+// 简化版:只看 `description: <value>` 一行(支持单行引号字符串),不做完整 YAML。
+// 失败返回 None,UI 仍按 name 展示。
+fn parse_skill_md_description(content: &str) -> Option<String> {
+    let trimmed = content.trim_start();
+    let after_open = trimmed.strip_prefix("---")?;
+    let close_idx = after_open.find("\n---")?;
+    let yaml = &after_open[..close_idx];
+    for line in yaml.lines() {
+        let line = line.trim_start();
+        if let Some(rest) = line.strip_prefix("description:") {
+            let value = rest.trim();
+            // 去引号
+            let unquoted = if (value.starts_with('"') && value.ends_with('"') && value.len() >= 2)
+                || (value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2)
+            {
+                &value[1..value.len() - 1]
+            } else {
+                value
+            };
+            if !unquoted.is_empty() {
+                return Some(unquoted.to_string());
+            }
+        }
+    }
+    None
 }
 
 #[tauri::command]
-fn read_flow_scenarios(app: tauri::AppHandle) -> Result<String, String> {
-    let path = flow_scenarios_file(&app)?;
+fn list_local_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|error| format!("failed to resolve home dir: {error}"))?;
+    let skills_dir = home.join(".claude").join("skills");
+    if !skills_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let entries = std::fs::read_dir(&skills_dir)
+        .map_err(|error| format!("failed to read skills dir: {error}"))?;
+    let mut skills = Vec::new();
+    for entry in entries {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()).map(|s| s.to_string()) else {
+            continue;
+        };
+        let skill_md = path.join("SKILL.md");
+        let description = std::fs::read_to_string(&skill_md)
+            .ok()
+            .and_then(|c| parse_skill_md_description(&c));
+        skills.push(SkillInfo {
+            name: name.clone(),
+            description,
+            source: "local".to_string(),
+            path: path.to_string_lossy().to_string(),
+        });
+    }
+    skills.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(skills)
+}
+
+#[tauri::command]
+fn read_skill_hub(app: tauri::AppHandle) -> Result<String, String> {
+    let path = skill_hub_file(&app)?;
     match std::fs::read_to_string(&path) {
         Ok(content) => Ok(content),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(error) => Err(format!("failed to read flow scenarios: {error}")),
+        Err(error) => Err(format!("failed to read skill hub: {error}")),
     }
 }
 
 #[tauri::command]
-fn write_flow_scenarios(app: tauri::AppHandle, content: String) -> Result<(), String> {
-    let path = flow_scenarios_file(&app)?;
-    std::fs::write(&path, content).map_err(|error| format!("failed to write flow scenarios: {error}"))
-}
-
-#[tauri::command]
-fn open_flow_scenarios_file(app: tauri::AppHandle) -> Result<String, String> {
-    let path = flow_scenarios_file(&app)?;
-    if !path.exists() {
-        std::fs::write(&path, "[]").map_err(|error| format!("failed to seed flow scenarios: {error}"))?;
-    }
-    Ok(path.to_string_lossy().to_string())
+fn write_skill_hub(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let path = skill_hub_file(&app)?;
+    std::fs::write(&path, content).map_err(|error| format!("failed to write skill hub: {error}"))
 }
 
 #[cfg(test)]
@@ -1777,6 +1849,30 @@ mod tests {
     }
 
     #[test]
+    fn skill_md_frontmatter_description_basic() {
+        let content = "---\nname: my-skill\ndescription: Writes polished docs.\n---\n\n# body\n";
+        assert_eq!(
+            parse_skill_md_description(content).as_deref(),
+            Some("Writes polished docs.")
+        );
+    }
+
+    #[test]
+    fn skill_md_frontmatter_description_quoted() {
+        let content = "---\ndescription: \"Multi line \\\"quoted\\\" skill\"\n---\n";
+        assert_eq!(
+            parse_skill_md_description(content).as_deref(),
+            Some("Multi line \\\"quoted\\\" skill")
+        );
+    }
+
+    #[test]
+    fn skill_md_frontmatter_description_missing() {
+        assert_eq!(parse_skill_md_description("# no frontmatter\n").is_none(), true);
+        assert_eq!(parse_skill_md_description("---\nname: x\n---\n").is_none(), true);
+    }
+
+    #[test]
     fn opened_paths_from_args_filters_supported_documents() {
         let cwd = std::env::temp_dir();
         let paths = opened_paths_from_args(
@@ -1792,5 +1888,81 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert!(paths.iter().any(|path| path.ends_with("notes.md")));
         assert!(paths.iter().any(|path| path.ends_with("page.html")));
+    }
+
+    #[test]
+    fn delete_artifact_file_removes_file_in_output_dir() {
+        let workspace = temp_path("ws-delete-ok");
+        let output_dir = workspace.join(".typola-output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let artifact = output_dir.join("test.md");
+        std::fs::write(&artifact, b"content").unwrap();
+
+        let result = delete_artifact_file(DeleteArtifactRequest {
+            path: artifact.to_string_lossy().to_string(),
+            workspace_root: Some(workspace.to_string_lossy().to_string()),
+        });
+
+        assert!(result.is_ok());
+        assert!(!artifact.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn delete_artifact_file_rejects_path_outside_output_dir() {
+        let workspace = temp_path("ws-delete-reject");
+        let output_dir = workspace.join(".typola-output");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let outside_file = workspace.join("important.md");
+        std::fs::write(&outside_file, b"keep me").unwrap();
+
+        let result = delete_artifact_file(DeleteArtifactRequest {
+            path: outside_file.to_string_lossy().to_string(),
+            workspace_root: Some(workspace.to_string_lossy().to_string()),
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("outside .typola-output"));
+        assert!(outside_file.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn delete_artifact_file_can_infer_output_dir_from_path() {
+        let workspace = temp_path("ws-delete-infer");
+        let output_dir = workspace.join(".typola-output").join("conv");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let artifact = output_dir.join("test.html");
+        std::fs::write(&artifact, b"content").unwrap();
+
+        let result = delete_artifact_file(DeleteArtifactRequest {
+            path: artifact.to_string_lossy().to_string(),
+            workspace_root: None,
+        });
+
+        assert!(result.is_ok());
+        assert!(!artifact.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn delete_artifact_file_falls_back_when_workspace_changed() {
+        let workspace = temp_path("ws-delete-old");
+        let other_workspace = temp_path("ws-delete-new");
+        let output_dir = workspace.join(".typola-output").join("conv");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::create_dir_all(other_workspace.join(".typola-output")).unwrap();
+        let artifact = output_dir.join("test.md");
+        std::fs::write(&artifact, b"content").unwrap();
+
+        let result = delete_artifact_file(DeleteArtifactRequest {
+            path: artifact.to_string_lossy().to_string(),
+            workspace_root: Some(other_workspace.to_string_lossy().to_string()),
+        });
+
+        assert!(result.is_ok());
+        assert!(!artifact.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+        let _ = std::fs::remove_dir_all(&other_workspace);
     }
 }

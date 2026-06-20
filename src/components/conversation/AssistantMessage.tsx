@@ -1,15 +1,21 @@
+import { useMemo } from 'react';
 import { PreviewPane } from '../PreviewPane';
-import type { AgentMessage } from '../../services/agent/types';
+import type { AgentMessage, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
 import { ThoughtCard } from './ThoughtCard';
 import { ToolCard } from './ToolCard';
 import { DoneBar } from './DoneBar';
 import { ErrorRetryCard } from './ErrorRetryCard';
+import { formatAbsoluteTime, formatRelativeTime } from '../../services/timeFormat';
+import { saveFileDialog, messageDialog } from '../../services/dialogService';
 
 type AssistantMessageProps = {
   message: Extract<AgentMessage, { role: 'assistant' }>;
   hasSelection?: boolean;
+  selectionAnchor?: SelectionAnchor;
   onInsertText?: (text: string) => void;
   onReplaceSelection?: (text: string) => void;
+  onReplaceAnchor?: (text: string, anchor: SelectionAnchor) => void;
+  validateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
 };
 
 function extractCodeBlocks(markdown: string): Array<{ lang: string; code: string }> {
@@ -17,21 +23,58 @@ function extractCodeBlocks(markdown: string): Array<{ lang: string; code: string
   const regex = /```([^\n`]*)\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(markdown)) !== null) {
-    blocks.push({ lang: match[1].trim(), code: match[2].trimEnd() });
+    const code = match[2].trimEnd();
+    if (code.trim()) blocks.push({ lang: match[1].trim(), code });
   }
   return blocks;
+}
+
+function extForLang(lang: string): string {
+  const map: Record<string, string> = {
+    html: '.html', htm: '.html',
+    python: '.py', py: '.py',
+    javascript: '.js', js: '.js',
+    typescript: '.ts', ts: '.ts',
+    css: '.css',
+    json: '.json',
+    markdown: '.md', md: '.md',
+    rust: '.rs', rs: '.rs',
+    go: '.go',
+    bash: '.sh', sh: '.sh', shell: '.sh',
+    sql: '.sql',
+  };
+  return map[lang.toLowerCase()] ?? '.txt';
+}
+
+async function handleSaveAs(lang: string, code: string) {
+  const ext = extForLang(lang);
+  const savedPath = await saveFileDialog(`snippet${ext}`);
+  if (!savedPath) return;
+  try {
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+    await writeTextFile(savedPath, code);
+    await messageDialog(`已保存：${savedPath}`, { title: '另存为' });
+  } catch (error) {
+    await messageDialog(`保存失败：${String(error)}`, { title: '另存为' });
+  }
 }
 
 function MessageActions({
   text,
   hasSelection,
+  selectionAnchor,
   onInsertText,
   onReplaceSelection,
+  onReplaceAnchor,
+  validateAnchor,
 }: {
   text: string;
   hasSelection?: boolean;
+  selectionAnchor?: SelectionAnchor;
   onInsertText?: (text: string) => void;
   onReplaceSelection?: (text: string) => void;
+  onReplaceAnchor?: (text: string, anchor: SelectionAnchor) => void;
+  validateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
 }) {
   const copy = () => {
     void navigator.clipboard?.writeText(text).catch((error) => {
@@ -39,15 +82,35 @@ function MessageActions({
     });
   };
 
+  const anchorStatus: AnchorStatus | null = useMemo(() => {
+    if (!selectionAnchor || !validateAnchor) return null;
+    return validateAnchor(selectionAnchor);
+  }, [selectionAnchor, validateAnchor]);
+
+  // 优先用 anchor 替换；fallback 走当前选区
+  const canReplaceAnchor = !!selectionAnchor && anchorStatus === 'valid' && !!onReplaceAnchor;
+  const canReplaceSelection = !selectionAnchor && !!onReplaceSelection && hasSelection;
+  const replaceDisabled = !(canReplaceAnchor || canReplaceSelection);
+  const replaceTitle = anchorStatus === 'wrong-file'
+    ? '原文档已切换，请回到原文档'
+    : anchorStatus === 'stale'
+      ? '原选区已变，请手动定位'
+      : !hasSelection && !selectionAnchor
+        ? '无选区时不可替换'
+        : '';
+
   return (
     <div className="conversation-message-actions">
       <button type="button" onClick={copy}>复制</button>
       <button type="button" onClick={() => onInsertText?.(text)} disabled={!onInsertText}>插入光标处</button>
       <button
         type="button"
-        onClick={() => onReplaceSelection?.(text)}
-        disabled={!onReplaceSelection || !hasSelection}
-        title={hasSelection ? '替换当前选区' : '无选区时不可替换'}
+        onClick={() => {
+          if (canReplaceAnchor && selectionAnchor) onReplaceAnchor?.(text, selectionAnchor);
+          else if (canReplaceSelection) onReplaceSelection?.(text);
+        }}
+        disabled={replaceDisabled}
+        title={replaceTitle}
       >
         替换选区
       </button>
@@ -58,35 +121,60 @@ function MessageActions({
 export function AssistantMessage({
   message,
   hasSelection = false,
+  selectionAnchor,
   onInsertText,
   onReplaceSelection,
+  onReplaceAnchor,
+  validateAnchor,
 }: AssistantMessageProps) {
   const codeBlocks = extractCodeBlocks(message.content);
   return (
     <article className="conversation-message assistant">
-      <ThoughtCard text={message.thinking} />
+      <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>
+        {formatRelativeTime(message.createdAt)}
+      </span>
+      <ThoughtCard text={message.thinking} done={message.done ?? false} />
       {message.content ? (
         <>
           <div className="conversation-assistant-markdown">
             <PreviewPane source={message.content} tocIds={[]} />
           </div>
-          <MessageActions
-            text={message.content}
-            hasSelection={hasSelection}
-            onInsertText={onInsertText}
-            onReplaceSelection={onReplaceSelection}
-          />
+          {message.done && (
+            <MessageActions
+              text={message.content}
+              hasSelection={hasSelection}
+              selectionAnchor={selectionAnchor}
+              onInsertText={onInsertText}
+              onReplaceSelection={onReplaceSelection}
+              onReplaceAnchor={onReplaceAnchor}
+              validateAnchor={validateAnchor}
+            />
+          )}
           {codeBlocks.length > 0 && (
             <div className="conversation-code-actions">
               {codeBlocks.map((block, index) => (
                 <div key={`${block.lang}-${index}`} className="conversation-code-action-row">
                   <span>{block.lang || 'code'} #{index + 1}</span>
-                  <MessageActions
-                    text={block.code}
-                    hasSelection={hasSelection}
-                    onInsertText={onInsertText}
-                    onReplaceSelection={onReplaceSelection}
-                  />
+                  {message.done && (
+                    <>
+                      <MessageActions
+                        text={block.code}
+                        hasSelection={hasSelection}
+                        selectionAnchor={selectionAnchor}
+                      onInsertText={onInsertText}
+                      onReplaceSelection={onReplaceSelection}
+                      onReplaceAnchor={onReplaceAnchor}
+                      validateAnchor={validateAnchor}
+                    />
+                      <button
+                        type="button"
+                        className="conversation-code-save"
+                        onClick={() => void handleSaveAs(block.lang, block.code)}
+                      >
+                        另存为
+                      </button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

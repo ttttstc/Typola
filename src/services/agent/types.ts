@@ -14,7 +14,7 @@ export type AgentEvent =
   | { type: 'raw'; line: string };
 
 export type AgentMessage =
-  | { id: string; role: 'user'; content: string; createdAt: number }
+  | { id: string; role: 'user'; content: string; createdAt: number; selectionAnchor?: SelectionAnchor }
   | {
       id: string;
       role: 'assistant';
@@ -26,6 +26,19 @@ export type AgentMessage =
       createdAt: number;
       done?: boolean;
     };
+
+export type SelectionAnchor = {
+  filePath: string;
+  from: number;
+  to: number;
+  originalText: string;
+  // Vditor WYSIWYG 模式下使用:从选区起点往前 N 个字符的快照文本。
+  // Vditor IR 没有稳定的字符 from/to,用 prefixHint + originalText 在 source 中定位唯一匹配,
+  // 避免同文本多处出现时 indexOf 撞到错误位置。
+  prefixHint?: string;
+};
+
+export type AnchorStatus = 'valid' | 'stale' | 'wrong-file';
 
 export type AgentToolCall = {
   id: string;
@@ -43,7 +56,7 @@ export type AgentUsageSummary = {
   stopReason: unknown;
 };
 
-export type AgentRunState = 'idle' | 'running' | 'stalled' | 'error';
+export type AgentRunState = 'idle' | 'running' | 'error';
 
 export type AgentStdoutPayload = {
   runId: string;
@@ -58,13 +71,5 @@ export type AgentExitPayload = {
   sessionUuid: string;
   exitCode?: number | null;
   cancelled: boolean;
-  stderrTail: string;
-};
-
-export type AgentStallPayload = {
-  runId: string;
-  conversationId: string;
-  sessionUuid: string;
-  idleMs: number;
   stderrTail: string;
 };

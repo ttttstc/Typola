@@ -1,36 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { diagnoseClaudeCliFailure } from '../services/agent/claudeDiagnostics';
 import { createClaudeStreamHandler } from '../services/agent/claudeStream';
+import type { ConversationData, PendingInjection } from '../services/agent/conversationStore';
+import { createConversationData } from '../services/agent/conversationStore';
 import {
   cancelAgentSession,
   onAgentExit,
-  onAgentStall,
   onAgentStdout,
   resumeAgentSession,
   startAgentSession,
 } from '../services/agent/headlessService';
-import type { AgentEvent, AgentMessage, AgentRunState, AgentToolCall } from '../services/agent/types';
+import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
 
-type UseAgentSessionOptions = {
-  conversationId: string;
-  cwd?: string;
+type UseConversationManagerOptions = {
+  workspaceRoot?: string;
   agentPath?: string;
   model?: string;
   pluginDirs?: string[];
-  extraAllowedDirs?: string[];
   onArtifactFile?: (artifact: { path: string; content?: string; toolName: string }) => void;
 };
-
-function createAssistantMessage(): AgentMessage & { role: 'assistant' } {
-  return {
-    id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    role: 'assistant',
-    content: '',
-    thinking: '',
-    tools: [],
-    createdAt: Date.now(),
-  };
-}
 
 function toolId(value: unknown): string {
   return typeof value === 'string' && value ? value : `tool-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -48,212 +36,390 @@ function upsertTool(tools: AgentToolCall[], next: AgentToolCall): AgentToolCall[
   ));
 }
 
-export function useAgentSession({
-  conversationId,
-  cwd,
+function appendEventToMessages(messages: AgentMessage[], event: AgentEvent): AgentMessage[] {
+  if (event.type !== 'text_delta' &&
+      event.type !== 'thinking_delta' &&
+      event.type !== 'tool_use' &&
+      event.type !== 'tool_input_delta' &&
+      event.type !== 'tool_result' &&
+      event.type !== 'usage' &&
+      event.type !== 'error' &&
+      event.type !== 'fabricated_role_marker') {
+    return messages;
+  }
+
+  const last = messages[messages.length - 1];
+  const assistant: AgentMessage = last?.role === 'assistant'
+    ? last
+    : { id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`, role: 'assistant', content: '', thinking: '', tools: [], createdAt: Date.now() };
+  const base = last?.role === 'assistant' ? messages.slice(0, -1) : messages;
+  let next = assistant;
+
+  if (event.type === 'text_delta') {
+    next = { ...assistant, content: assistant.content + event.delta };
+  } else if (event.type === 'thinking_delta') {
+    next = { ...assistant, thinking: assistant.thinking + event.delta };
+  } else if (event.type === 'tool_use') {
+    next = { ...assistant, tools: upsertTool(assistant.tools, { id: toolId(event.id), name: toolName(event.name), input: event.input }) };
+  } else if (event.type === 'tool_input_delta') {
+    const id = toolId(event.id);
+    const prev = assistant.tools.find((t) => t.id === id);
+    next = { ...assistant, tools: upsertTool(assistant.tools, { id, name: toolName(event.name), inputDelta: `${prev?.inputDelta ?? ''}${event.delta}` }) };
+  } else if (event.type === 'tool_result') {
+    const id = toolId(event.toolUseId);
+    const prev = assistant.tools.find((t) => t.id === id);
+    next = { ...assistant, tools: upsertTool(assistant.tools, { id, name: prev?.name ?? 'Tool', result: event.content, isError: event.isError }) };
+  } else if (event.type === 'usage') {
+    next = { ...assistant, done: true, usage: { usage: event.usage, costUsd: event.costUsd, durationMs: event.durationMs, stopReason: event.stopReason } };
+  } else if (event.type === 'error' || event.type === 'fabricated_role_marker') {
+    next = { ...assistant, error: event.type === 'error' ? event.message : `检测到可疑角色标记：${event.marker}` };
+  }
+
+  return [...base, next];
+}
+
+function joinPath(root: string, ...parts: string[]): string {
+  const separator = root.includes('\\') ? '\\' : '/';
+  return [root.replace(/[\\/]+$/u, ''), ...parts.map((p) => p.replace(/^[\\/]+|[\\/]+$/gu, ''))].filter(Boolean).join(separator);
+}
+
+function safeSegment(value: string): string {
+  return value.replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '') || 'conversation';
+}
+
+function summarizeTitle(text: string): string {
+  const clean = text.replace(/\s+/gu, ' ').trim();
+  return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || '自由对话';
+}
+
+let nextConvCounter = 1;
+
+export function useConversationManager({
+  workspaceRoot,
   agentPath,
   model,
   pluginDirs,
-  extraAllowedDirs,
   onArtifactFile,
-}: UseAgentSessionOptions) {
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [runState, setRunState] = useState<AgentRunState>('idle');
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
-  const [lastError, setLastError] = useState<string>('');
-  const sessionStartedRef = useRef(false);
-  const activeRunIdRef = useRef<string | null>(null);
-  const handlerRef = useRef<ReturnType<typeof createClaudeStreamHandler> | null>(null);
-  const cwdRef = useRef(cwd);
+}: UseConversationManagerOptions) {
+  const defaultId = `conv-${nextConvCounter++}`;
+  const [conversations, setConversations] = useState<Map<string, ConversationData>>(
+    () => new Map([[defaultId, createConversationData(defaultId, '自由对话')]]),
+  );
+  const [activeConvId, setActiveConvId] = useState(defaultId);
+  const conversationsRef = useRef(conversations);
+  const activeConvIdRef = useRef(activeConvId);
+  const artifactFileRef = useRef(onArtifactFile);
+  const handlersRef = useRef(new Map<string, ReturnType<typeof createClaudeStreamHandler>>());
+  const eventQueueRef = useRef(new Map<string, AgentEvent[]>());
+  const eventFrameRef = useRef<number | null>(null);
+  // 选区注入暂存触发通知：每次 onAgentExit 让 active 从 running 退出且 conv 上有待投递的
+  // pendingInjection，bump 一次让 ConversationPanel 显示"已停下"提示。
+  const [injectionReadyTick, setInjectionReadyTick] = useState(0);
+  // 最近一次投递的 convId（用于面板按 convId 监听）
+  const [injectionReadyConvId, setInjectionReadyConvId] = useState<string | null>(null);
+
+  conversationsRef.current = conversations;
+  artifactFileRef.current = onArtifactFile;
 
   useEffect(() => {
-    activeRunIdRef.current = activeRunId;
-  }, [activeRunId]);
+    activeConvIdRef.current = activeConvId;
+  }, [activeConvId]);
 
-  const reset = useCallback(() => {
-    handlerRef.current?.flush();
-    handlerRef.current = null;
-    sessionStartedRef.current = false;
-    activeRunIdRef.current = null;
-    setActiveRunId(null);
-    setMessages([]);
-    setRunState('idle');
-    setLastError('');
+  const updateConv = useCallback((convId: string, patch: Partial<ConversationData>) => {
+    setConversations((prev) => {
+      const current = prev.get(convId);
+      if (!current) return prev;
+      const next = new Map(prev);
+      next.set(convId, { ...current, ...patch });
+      return next;
+    });
   }, []);
 
-  useEffect(() => {
-    if (cwdRef.current === cwd) return;
-    const runId = activeRunIdRef.current;
-    if (runId) {
-      void cancelAgentSession(runId).catch((error) => {
-        console.warn('Failed to cancel agent session after cwd change:', error);
-      });
-    }
-    cwdRef.current = cwd;
-    reset();
-  }, [cwd, reset]);
-
-  const appendAssistantEvent = useCallback((event: AgentEvent) => {
+  const appendAssistantEvent = useCallback((convId: string, event: AgentEvent) => {
     if (event.type === 'artifact_file') {
-      onArtifactFile?.({
-        path: event.path,
-        content: event.content,
-        toolName: event.toolName,
-      });
+      artifactFileRef.current?.({ path: event.path, content: event.content, toolName: event.toolName });
       return;
     }
-    setMessages((current) => {
-      const last = current[current.length - 1];
-      const assistant = last?.role === 'assistant' ? last : createAssistantMessage();
-      const base = last?.role === 'assistant' ? current.slice(0, -1) : current;
-      let next = assistant;
-
-      if (event.type === 'text_delta') {
-        next = { ...assistant, content: assistant.content + event.delta };
-      } else if (event.type === 'thinking_delta') {
-        next = { ...assistant, thinking: assistant.thinking + event.delta };
-      } else if (event.type === 'tool_use') {
-        next = {
-          ...assistant,
-          tools: upsertTool(assistant.tools, {
-            id: toolId(event.id),
-            name: toolName(event.name),
-            input: event.input,
-          }),
-        };
-      } else if (event.type === 'tool_input_delta') {
-        const id = toolId(event.id);
-        const previous = assistant.tools.find((tool) => tool.id === id);
-        next = {
-          ...assistant,
-          tools: upsertTool(assistant.tools, {
-            id,
-            name: toolName(event.name),
-            inputDelta: `${previous?.inputDelta ?? ''}${event.delta}`,
-          }),
-        };
-      } else if (event.type === 'tool_result') {
-        const id = toolId(event.toolUseId);
-        const previous = assistant.tools.find((tool) => tool.id === id);
-        next = {
-          ...assistant,
-          tools: upsertTool(assistant.tools, {
-            id,
-            name: previous?.name ?? 'Tool',
-            result: event.content,
-            isError: event.isError,
-          }),
-        };
-      } else if (event.type === 'usage') {
-        next = {
-          ...assistant,
-          done: true,
-          usage: {
-            usage: event.usage,
-            costUsd: event.costUsd,
-            durationMs: event.durationMs,
-            stopReason: event.stopReason,
-          },
-        };
-      } else if (event.type === 'error' || event.type === 'fabricated_role_marker') {
-        next = {
-          ...assistant,
-          error: event.type === 'error' ? event.message : `检测到可疑角色标记：${event.marker}`,
-        };
+    // status 事件携带 claude 进程实际跑的模型 → 落到 ConversationData,Composer 显示
+    if (event.type === 'status' && event.model && typeof event.model === 'string') {
+      const conv = conversationsRef.current.get(convId);
+      if (conv && conv.currentModel !== event.model) {
+        updateConv(convId, { currentModel: event.model });
       }
+    }
+    updateConv(convId, { messages: appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? [], event) });
+  }, [updateConv]);
 
-      return [...base, next];
+  const flushQueuedEvents = useCallback(() => {
+    eventFrameRef.current = null;
+    const queued = eventQueueRef.current;
+    eventQueueRef.current = new Map();
+    queued.forEach((events, convId) => {
+      const current = conversationsRef.current.get(convId)?.messages ?? [];
+      const messages = events.reduce(appendEventToMessages, current);
+      updateConv(convId, { messages });
     });
-  }, [onArtifactFile]);
+  }, [updateConv]);
 
+  const queueAssistantEvent = useCallback((convId: string, event: AgentEvent) => {
+    // status 事件携带模型/session 元数据,必须立即走 appendAssistantEvent 走 currentModel 更新分支,
+    // 否则进 rAF 队列 → flushQueuedEvents 只 reduce 进 messages(appendEventToMessages 不处理 status)→
+    // 模型名永远 null,Composer/Header 显示"默认模型"。
+    if (
+      event.type === 'artifact_file' ||
+      event.type === 'error' ||
+      event.type === 'fabricated_role_marker' ||
+      event.type === 'status'
+    ) {
+      appendAssistantEvent(convId, event);
+      return;
+    }
+    const events = eventQueueRef.current.get(convId) ?? [];
+    events.push(event);
+    eventQueueRef.current.set(convId, events);
+    if (eventFrameRef.current !== null) return;
+    eventFrameRef.current = window.requestAnimationFrame(flushQueuedEvents);
+  }, [appendAssistantEvent, flushQueuedEvents]);
+
+  // Global listeners — set up once, route by payload.conversationId
   useEffect(() => {
     let cancelled = false;
     let unlistenStdout: (() => void) | undefined;
     let unlistenExit: (() => void) | undefined;
-    let unlistenStall: (() => void) | undefined;
 
     void onAgentStdout((payload) => {
-      if (payload.runId !== activeRunIdRef.current) return;
-      if (!handlerRef.current) {
-        handlerRef.current = createClaudeStreamHandler((event) => appendAssistantEvent(event as AgentEvent));
+      const convId = payload.conversationId;
+      let handler = handlersRef.current.get(convId);
+      if (!handler) {
+        handler = createClaudeStreamHandler((event) => queueAssistantEvent(convId, event as AgentEvent));
+        handlersRef.current.set(convId, handler);
       }
-      handlerRef.current.feed(`${payload.line}\n`);
+      handler.feed(`${payload.line}\n`);
     }).then((unlisten) => {
-      if (cancelled) unlisten();
-      else unlistenStdout = unlisten;
+      if (cancelled) unlisten(); else unlistenStdout = unlisten;
     });
 
     void onAgentExit((payload) => {
-      if (payload.runId !== activeRunIdRef.current) return;
-      handlerRef.current?.flush();
-      handlerRef.current = null;
-      setActiveRunId(null);
-      setRunState(payload.exitCode === 0 || payload.cancelled ? 'idle' : 'error');
-      if (payload.exitCode !== 0 && !payload.cancelled) {
-        const diagnostic = diagnoseClaudeCliFailure({
-          agentId: 'claude',
-          exitCode: payload.exitCode,
-          stderrTail: payload.stderrTail,
-        });
-        const message = diagnostic?.detail || payload.stderrTail || 'Claude 执行失败。';
-        setLastError(message);
-        appendAssistantEvent({ type: 'error', message });
+      const convId = payload.conversationId;
+      const handler = handlersRef.current.get(convId);
+      handler?.flush();
+      handlersRef.current.delete(convId);
+      const conv = conversationsRef.current.get(convId);
+      if (!conv) return;
+      const wasActive = conv.runState === 'running';
+      const wasCancelled = payload.cancelled || conv.cancelRequested;
+      const patch: Partial<ConversationData> = {
+        runState: payload.exitCode === 0 || wasCancelled ? 'idle' : 'error',
+        cancelRequested: false,
+      };
+      if (payload.exitCode !== 0 && !wasCancelled) {
+        const diagnostic = diagnoseClaudeCliFailure({ agentId: 'claude', exitCode: payload.exitCode, stderrTail: payload.stderrTail });
+        patch.lastError = diagnostic?.detail || payload.stderrTail || 'Claude 执行失败。';
+        updateConv(convId, patch);
+        appendAssistantEvent(convId, { type: 'error', message: patch.lastError });
+      } else {
+        // 成功/取消：清掉残留的错误信息
+        updateConv(convId, { ...patch, lastError: '' });
+      }
+      // 若该 conv 刚退出 running 且有待投递的选区注入，bump 通知让面板去取
+      if (wasActive && patch.runState === 'idle') {
+        const updated = conversationsRef.current.get(convId);
+        if (updated?.pendingInjection) {
+          setInjectionReadyConvId(convId);
+          setInjectionReadyTick((tick) => tick + 1);
+        }
       }
     }).then((unlisten) => {
-      if (cancelled) unlisten();
-      else unlistenExit = unlisten;
-    });
-
-    void onAgentStall((payload) => {
-      if (payload.runId !== activeRunIdRef.current) return;
-      setRunState('stalled');
-      setLastError(`Claude 已 ${Math.round(payload.idleMs / 1000)} 秒没有输出。`);
-    }).then((unlisten) => {
-      if (cancelled) unlisten();
-      else unlistenStall = unlisten;
+      if (cancelled) unlisten(); else unlistenExit = unlisten;
     });
 
     return () => {
       cancelled = true;
       unlistenStdout?.();
       unlistenExit?.();
-      unlistenStall?.();
+      if (eventFrameRef.current !== null) {
+        window.cancelAnimationFrame(eventFrameRef.current);
+        eventFrameRef.current = null;
+      }
+      eventQueueRef.current.clear();
+      for (const handler of handlersRef.current.values()) handler.flush();
+      handlersRef.current.clear();
     };
-  }, [appendAssistantEvent]);
+  }, [appendAssistantEvent, flushQueuedEvents, queueAssistantEvent, updateConv]);
+
+  const cwd = useMemo(() => (
+    workspaceRoot ? joinPath(workspaceRoot, '.typola-output', safeSegment(activeConvId)) : undefined
+  ), [workspaceRoot, activeConvId]);
+  const extraAllowedDirs = useMemo(() => (workspaceRoot ? [workspaceRoot] : undefined), [workspaceRoot]);
 
   const send = useCallback(async (prompt: string) => {
+    const convId = activeConvIdRef.current;
     const trimmed = prompt.trim();
-    if (!trimmed || activeRunIdRef.current) return;
-    setLastError('');
-    setRunState('running');
-    setMessages((current) => [
-      ...current,
-      { id: `user-${Date.now()}`, role: 'user', content: trimmed, createdAt: Date.now() },
-      createAssistantMessage(),
-    ]);
-    handlerRef.current = createClaudeStreamHandler((event) => appendAssistantEvent(event as AgentEvent));
+    if (!trimmed) return;
+    const conv = conversationsRef.current.get(convId);
+    if (!conv || conv.runState === 'running') return;
+    // 首条消息且仍是默认标题 → 用首句自动命名（skill 会话/已手动改名的不动）
+    const nextTitle = conv.messages.length === 0 && conv.title === '自由对话'
+      ? summarizeTitle(trimmed)
+      : conv.title;
+    updateConv(convId, {
+      title: nextTitle,
+      lastError: '',
+      runState: 'running',
+      cancelRequested: false,
+      messages: [
+        ...conv.messages,
+        { id: `user-${Date.now()}`, role: 'user', content: trimmed, createdAt: Date.now(), selectionAnchor: conv.lastDeliveredAnchor },
+        { id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`, role: 'assistant', content: '', thinking: '', tools: [], createdAt: Date.now() },
+      ],
+      lastDeliveredAnchor: undefined,
+    });
+    const handler = createClaudeStreamHandler((event) => queueAssistantEvent(convId, event as AgentEvent));
+    handlersRef.current.set(convId, handler);
+    const request = { conversationId: convId, prompt: trimmed, cwd, agentPath, model, pluginDirs, extraAllowedDirs };
     try {
-      const request = { conversationId, prompt: trimmed, cwd, agentPath, model, pluginDirs, extraAllowedDirs };
-      const result = sessionStartedRef.current
+      // 首轮 start（Rust 建新 session-id）；后续 resume（Rust 按 conversationId 复用 uuid + --resume），保多轮上下文延续
+      const result = conv.sessionStarted
         ? await resumeAgentSession(request)
         : await startAgentSession(request);
-      sessionStartedRef.current = true;
-      setActiveRunId(result.runId);
+      const latest = conversationsRef.current.get(convId);
+      // 首条 send 成功后 fileContextInjected: true → Composer 后续 send 不再重复拼"参考以下文件"
+      updateConv(convId, { sessionStarted: true, runId: result.runId, fileContextInjected: true });
+      if (latest?.cancelRequested) {
+        await cancelAgentSession(result.runId).catch((error) => {
+          console.warn('Failed to cancel pending agent run:', error);
+        });
+      }
     } catch (error) {
       const message = String(error);
-      setRunState('error');
-      setLastError(message);
-      appendAssistantEvent({ type: 'error', message });
+      updateConv(convId, { runState: 'error', lastError: message });
+      appendAssistantEvent(convId, { type: 'error', message });
     }
-  }, [agentPath, appendAssistantEvent, conversationId, cwd, extraAllowedDirs, model, pluginDirs]);
+  }, [agentPath, appendAssistantEvent, cwd, extraAllowedDirs, model, pluginDirs, queueAssistantEvent, updateConv]);
 
   const cancel = useCallback(async () => {
-    const runId = activeRunIdRef.current;
-    if (!runId) return;
-    await cancelAgentSession(runId).catch((error) => {
-      console.warn('Failed to cancel agent session:', error);
+    const convId = activeConvIdRef.current;
+    const conv = conversationsRef.current.get(convId);
+    if (!conv || conv.runState !== 'running') return;
+    updateConv(convId, { cancelRequested: true });
+    const handler = handlersRef.current.get(convId);
+    handler?.flush();
+    handlersRef.current.delete(convId);
+    if (conv.runId) {
+      await cancelAgentSession(conv.runId).catch((error) => {
+        console.warn('Failed to cancel agent session:', error);
+      });
+    }
+  }, [updateConv]);
+
+  const reset = useCallback(() => {
+    const convId = activeConvIdRef.current;
+    const handler = handlersRef.current.get(convId);
+    handler?.flush();
+    handlersRef.current.delete(convId);
+    updateConv(convId, {
+      messages: [],
+      runState: 'idle',
+      lastError: '',
+      sessionStarted: false,
+      cancelRequested: false,
+      pendingInjection: undefined,
+      lastDeliveredAnchor: undefined,
+    });
+  }, [updateConv]);
+
+  // 选区注入：写到 conv.pendingInjection 上。running 期间面板靠 injectionReadyTick 监听取出。
+  const queueInjection = useCallback((convId: string, text: string, anchor: SelectionAnchor) => {
+    const injection: PendingInjection = { text, anchor, queuedAt: Date.now() };
+    updateConv(convId, { pendingInjection: injection });
+    // 如果当前 idle 状态（无 running），直接 bump 让面板取
+    const conv = conversationsRef.current.get(convId);
+    if (conv && conv.runState !== 'running') {
+      setInjectionReadyConvId(convId);
+      setInjectionReadyTick((tick) => tick + 1);
+    }
+  }, [updateConv]);
+
+  const consumePendingInjection = useCallback((convId: string): PendingInjection | undefined => {
+    const conv = conversationsRef.current.get(convId);
+    const pending = conv?.pendingInjection;
+    if (pending) {
+      updateConv(convId, { pendingInjection: undefined, lastDeliveredAnchor: pending.anchor });
+    }
+    return pending;
+  }, [updateConv]);
+
+  const createConversation = useCallback((title = '自由对话', skillRef?: string) => {
+    const id = `conv-${nextConvCounter++}`;
+    const conv = createConversationData(id, title, skillRef);
+    setConversations((prev) => {
+      const next = new Map(prev);
+      next.set(id, conv);
+      return next;
+    });
+    setActiveConvId(id);
+    return id;
+  }, []);
+
+  const switchConversation = useCallback((id: string) => {
+    if (conversationsRef.current.has(id)) setActiveConvId(id);
+  }, []);
+
+  const renameConversation = useCallback((id: string, title: string) => {
+    const trimmed = title.trim();
+    if (trimmed) updateConv(id, { title: trimmed });
+  }, [updateConv]);
+
+  const closeConversation = useCallback((id: string) => {
+    // Flush handler
+    const handler = handlersRef.current.get(id);
+    handler?.flush();
+    handlersRef.current.delete(id);
+    // Cancel run if active
+    const conv = conversationsRef.current.get(id);
+    if (conv && conv.runState === 'running' && conv.runId) {
+      void cancelAgentSession(conv.runId);
+    }
+    setConversations((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      if (next.size === 0) {
+        const fallback = createConversationData(`conv-${nextConvCounter++}`, '自由对话');
+        next.set(fallback.id, fallback);
+        setActiveConvId(fallback.id);
+      } else if (id === activeConvIdRef.current) {
+        const first = next.keys().next().value!;
+        setActiveConvId(first);
+      }
+      return next;
     });
   }, []);
 
-  return { messages, runState, lastError, send, cancel, reset, activeRunId };
+  const activeConv = conversations.get(activeConvId);
+
+  return {
+    conversations,
+    activeConvId,
+    activeConv,
+    // Per-active-conv state (for ConversationPanel backward compat)
+    messages: activeConv?.messages ?? [],
+    runState: activeConv?.runState ?? 'idle',
+    lastError: activeConv?.lastError ?? '',
+    // Actions
+    send,
+    cancel,
+    reset,
+    createConversation,
+    switchConversation,
+    renameConversation,
+    closeConversation,
+    setActiveConvId,
+    cwd,
+    extraAllowedDirs,
+    // 选区注入暂存
+    queueInjection,
+    consumePendingInjection,
+    injectionReadyTick,
+    injectionReadyConvId,
+  };
 }

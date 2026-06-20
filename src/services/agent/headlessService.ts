@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { AgentExitPayload, AgentStallPayload, AgentStdoutPayload } from './types';
+import type { AgentExitPayload, AgentStdoutPayload } from './types';
 
 export type AgentSessionStartRequest = {
   conversationId: string;
@@ -10,7 +10,6 @@ export type AgentSessionStartRequest = {
   model?: string;
   pluginDirs?: string[];
   extraAllowedDirs?: string[];
-  stallTimeoutMs?: number;
 };
 
 export type AgentSessionStartResult = {
@@ -39,8 +38,4 @@ export function onAgentStdout(handler: (payload: AgentStdoutPayload) => void): P
 
 export function onAgentExit(handler: (payload: AgentExitPayload) => void): Promise<UnlistenFn> {
   return listen<AgentExitPayload>('agent-exit', (event) => handler(event.payload));
-}
-
-export function onAgentStall(handler: (payload: AgentStallPayload) => void): Promise<UnlistenFn> {
-  return listen<AgentStallPayload>('agent-stall', (event) => handler(event.payload));
 }
