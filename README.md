@@ -1,8 +1,8 @@
 # Typola
 
-Typola 是一个轻量、专注、跨平台的 Markdown 桌面编辑器。它面向日常写作、技术文档、长文整理、HTML/Word 交付和本地开发工作流，提供接近 Typora 的所见即所得编辑体验，同时保留源码模式、Word/HTML 预览导出和集成终端。
+> 中文 · [English](./README.en.md)
 
-English documentation is available below: [English](#typola-english).
+Typola 是一个轻量、专注、跨平台的 Markdown 桌面编辑器。它面向日常写作、技术文档、长文整理、HTML/Word 交付和本地开发工作流，提供接近 Typora 的所见即所得编辑体验，同时保留源码模式、Word/HTML 预览导出和集成终端。
 
 ## 核心能力
 
@@ -23,6 +23,32 @@ English documentation is available below: [English](#typola-english).
 - 数据安全：tab 关闭与窗口关闭命中未保存改动时弹出「保存 / 不保存 / 取消」三按钮确认；外部文件变更监听会在状态栏提示。
 - 设置与主题：支持主题、字体、编码、语言、自动保存、自动更新检查、Word/HTML 预设等配置。
 - 桌面原生能力：支持系统文件关联、拖拽打开、单实例打开转发、外部文件变更提示和自动更新。
+
+## 文档形态与 AI 协作
+
+Typola 把同一份文档围绕「阅读 / 心流 / 检视」三种形态展开，工具栏右上的凹槽分段切换器一键切换，左右栏跟随平滑收放。
+
+- **阅读模式**：默认形态。专注阅读和写作，左栏可按需开关文件树，右栏可按需开 Word / 微信预览。
+- **心流模式**：左栏展开 AI 工作台对话，右栏挂出技能场景模板（日报、总结报告、PPT、HTML、公众号、数据分析），并自动最大化窗口。AI 产出物（HTML / Markdown / 演示稿）自动落到工作区 `.typola-output/<会话>/`，并以 chip 形态出现在右栏，可一键在主编辑器打开、归档到工作区或删除。
+- **检视模式**：把文档当作待审稿，右栏挂出「检视意见」面板。选中段落 → 浮条加意见 → 汇总列表点击跳转 → 「导出 review 版」生成行内段后注入的 Markdown 副本（每段后跟 `> **检视意见，请处理**：…`），或「发 AI 改」把全文 + 全部意见拼成 prompt 交给 AI 产出修订稿。
+
+### 选区浮条与原地闭环
+
+选中正文时浮条自动出现在选区上方，提供以下动作：
+
+- **润色 / 缩写 / 扩写 / 校对 / 解释术语**：走 oneshot 静默调用 Claude，结果以「原文 vs 新版本」对比卡贴在选区旁，点「采纳替换」直接落回文档，不离开编辑器。润色支持在调用前先输入要求（如「更口语」「更精简」），其他动作走默认模板。
+- **自定义**：把选区作为引用拼到 AI 工作台对话框，让你自由提需求。
+- **加检视意见**：开浮卡输入意见后写入右栏检视面板。
+
+浮条可在「设置 → 编辑器 → 选区浮条」关掉，右键菜单与 `Ctrl+K` 仍可触达同一组动作。
+
+### AI 修改可撤销
+
+任何 AI 替换执行前会自动快照编辑器内容。`Ctrl+Z` 在编辑器内拦截：若文档没有被手动改动过，直接回退 AI 改动；若你在 AI 改动后又手动改了几处，先按系统原生 undo 撤销手动改动，再撤销 AI 改动，互不冲突。栈式逐步回退，跨文件自动清空，最多保留 50 条 AI 快照。
+
+### Claude CLI 与 Skill
+
+AI 工作台直接驱动本机已安装的 `claude` CLI（headless 模式），技能场景接入 `~/.claude/skills/` 下的 skill。无需在 Typola 里配置 API Key，所有调用走你自己的 CLI 环境与权限。
 
 ## 产品优势
 
@@ -83,6 +109,9 @@ Windows 仍需要系统中可用的 Microsoft Edge WebView2 Runtime。现代 Win
 - `Cmd/Ctrl + Alt + S`：切换源码模式
 - `Cmd/Ctrl + Alt + P`：切换 Word 预览
 - `Cmd/Ctrl + Alt + M`：切换 HTML 预览
+- `Cmd/Ctrl + K`：对选区唤起 AI 动作菜单
+- `Cmd/Ctrl + Z`：撤销（含 AI 修改撤销）
+- `Shift + A`：切换心流模式
 - `Cmd/Ctrl + ,`：打开设置
 
 ## 开发与构建
@@ -168,174 +197,3 @@ macOS CI 会产出 `.dmg`，并为对应 target 生成 portable zip：
 ## 许可证
 
 Typola 使用 Apache License 2.0。
-
----
-
-# Typola English
-
-Typola is a lightweight, focused, cross-platform desktop Markdown editor. It is built for everyday writing, technical documentation, long-form editing, HTML/Word delivery, and local development workflows. It offers a Typora-like WYSIWYG editing experience while keeping source mode, Word/HTML preview and export, and an integrated terminal close at hand.
-
-## Capabilities
-
-- WYSIWYG Markdown editing: powered by Vditor IR mode, balancing Markdown control with a clean reading-like surface.
-- Source mode: powered by CodeMirror 6 for precise Markdown, HTML, and table edits.
-- File open and save: supports `.md`, `.markdown`, `.html`, `.htm`, and read-only `.docx` preview.
-- Multi-file tabs: opening multiple documents from the file tree, recents, OS file association, or drag-and-drop creates lightweight tabs; dirty tabs show a leading `*`, and the tab bar hides automatically when only one file is open.
-- Left workspace file tree: open a directory, lazily expand subfolders, and open supported documents straight from the tree; dirty files are marked with `*`.
-- Word paper preview: open an A4-style preview panel on demand, inspect multi-page output, and export `.docx`.
-- HTML preview and export: preview article-style HTML, export full HTML, and copy rich HTML for external editors.
-- Editor-to-preview scroll sync: editor scroll position drives Word / HTML preview by ratio (one-way, rAF-throttled, no extra re-render).
-- Floating outline: extract headings automatically, expand the outline on hover, pin it as a sidebar, and jump to sections.
-- Find/replace and quick open: `Cmd/Ctrl+F` and `Cmd/Ctrl+H` share one panel with case / whole-word / regex options; `Cmd/Ctrl+P` filters recents by filename or path fragment.
-- Editing utilities: insert links / images / Markdown tables in one click; pasted clipboard images are saved to a sibling `assets/` folder and inserted as a relative path.
-- Document statistics: the status bar reports word count, characters, paragraphs, and estimated reading time on debounced updates so typing stays fluid.
-- Integrated terminal: multi-tab bottom terminal with copy, paste, clear, link opening, custom shell, and file-directory startup.
-- Local image resolution: relative Markdown images render correctly in the editor, previews, and export flows.
-- Data safety: closing a tab or window with unsaved changes prompts a single "Save / Discard / Cancel" dialog; external file changes surface in the status bar.
-- Preferences: configure theme, fonts, encoding, language, auto-save, update checks, and Word/HTML export presets.
-- Native desktop behavior: file associations, drag-and-drop open, single-instance forwarding, external file change notices, and auto-update support.
-
-## Strengths
-
-- Direct writing flow: Typola opens into WYSIWYG editing by default, so writing does not require constant preview switching.
-- Complete delivery path: one Markdown document can stay editable, preview as Word pages, export to `.docx`, or become HTML.
-- Safer long-form editing: outline navigation, source mode, external file change notices, and unsaved-change prompts reduce accidental loss.
-- Local-workflow friendly: the integrated terminal starts in the current file directory when possible.
-- Cross-platform packaging: Tauri v2 keeps the app lightweight and supports Windows and macOS.
-- Installer and portable builds: Windows provides both setup packages and portable zip packages.
-
-## Installation
-
-### Windows Installer
-
-Download from GitHub Releases:
-
-- `Typola_*_x64-setup.exe`
-- `Typola_*_x64_*.msi`
-
-Run the installer. This is the best option for regular use, file associations, and auto-updates.
-
-### Windows Portable
-
-Download from GitHub Releases:
-
-- `Typola_*_windows-x64_portable.zip`
-
-Extract the archive and run `Typola.exe`. The portable package does not install into `Program Files`, which makes it useful for temporary testing or portable use.
-
-Windows still needs the Microsoft Edge WebView2 Runtime. Most modern Windows installations already include it.
-
-### macOS
-
-Download the `.dmg` for your chip architecture, open it, and drag `Typola.app` into Applications.
-
-If you download a portable zip, extract it and run `Typola.app`. If macOS shows a security prompt on first launch, allow it from Privacy & Security settings.
-
-## Basic Usage
-
-- Open files with the toolbar button or by dragging Markdown, HTML, or Word files into the window.
-- Edit in WYSIWYG mode by default, and switch to source mode for precise changes.
-- Save with the toolbar or shortcut; use Save As to create a new Markdown or HTML file.
-- Use the floating outline to inspect headings or pin it as a sidebar.
-- Open Word preview to inspect page layout before exporting `.docx`.
-- Open HTML preview to copy rich HTML or export a full HTML file.
-- Open the bottom terminal to run commands from the current file directory.
-- Configure theme, fonts, default encoding, language, auto-save, update checks, and export presets in Settings.
-
-Common shortcuts:
-
-- `Cmd/Ctrl + O`: Open file
-- `Cmd/Ctrl + S`: Save
-- `Cmd/Ctrl + Shift + S`: Save as
-- `Cmd/Ctrl + F`: Find
-- `Cmd/Ctrl + H`: Replace
-- `Cmd/Ctrl + P`: Quick open
-- `Cmd/Ctrl + Shift + I`: Editing utilities
-- `Cmd/Ctrl + Alt + S`: Toggle source mode
-- `Cmd/Ctrl + Alt + P`: Toggle Word preview
-- `Cmd/Ctrl + Alt + M`: Toggle HTML preview
-- `Cmd/Ctrl + ,`: Open Settings
-
-## Development
-
-Prerequisites:
-
-- Node.js and npm
-- Rust stable toolchain
-- Tauri platform prerequisites for Windows/macOS
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Run the desktop app in development:
-
-```bash
-npm run tauri dev
-```
-
-Run frontend-only development:
-
-```bash
-npm run dev
-```
-
-Useful checks:
-
-```bash
-npm test
-npm run typecheck
-npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
-```
-
-## Packaging
-
-Build local installer packages:
-
-```bash
-npm run tauri:build:local
-```
-
-Windows installer outputs:
-
-- `src-tauri/target/release/bundle/msi/*.msi`
-- `src-tauri/target/release/bundle/nsis/*-setup.exe`
-
-Build a local portable package:
-
-```bash
-npm run tauri:build:portable
-```
-
-Windows portable output:
-
-- `src-tauri/target/release/bundle/portable/*_windows-x64_portable.zip`
-
-Build release artifacts with updater signatures:
-
-```bash
-npm run tauri:build:update
-```
-
-macOS CI produces `.dmg` files and portable zip packages for each target:
-
-- `src-tauri/target/aarch64-apple-darwin/release/bundle/portable/*_macos-arm64_portable.zip`
-- `src-tauri/target/x86_64-apple-darwin/release/bundle/portable/*_macos-x64_portable.zip`
-
-## Stack
-
-- Tauri v2
-- React 19
-- TypeScript
-- Vite 8
-- Vditor
-- CodeMirror 6
-- xterm.js
-- portable-pty
-
-## License
-
-Typola is licensed under the Apache License 2.0.

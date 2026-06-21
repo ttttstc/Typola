@@ -8,7 +8,9 @@ import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import { findUniqueAnchor } from '../services/agent/selectionActions';
+import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionAnchor } from '../services/agent/types';
+import type { ReviewComment } from '../services/review/reviewState';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -16,7 +18,10 @@ type WysiwygEditorPaneProps = {
   filePath?: string;
   onScrollRatio?: (ratio: number) => void;
   // 选区 AI 动作回调（由 AppLayout 注入；不传则不渲染 AI 菜单组）
-  onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor) => void;
+  // origin = 触发点视口坐标(用于「原地闭环」浮卡定位);无 origin 时退化为对话框路径。
+  onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
+  /** 当前文档的检视意见,用于在编辑器内高亮有意见的段落。 */
+  reviewComments?: ReviewComment[];
 };
 
 const IR_MARKER_COLLAPSE_DELAY_MS = 220;
@@ -27,8 +32,11 @@ function getIrElement(editor: import('vditor').default): HTMLElement | null {
   return vditor?.ir?.element ?? null;
 }
 
-// 从 ir 根到 range.startContainer 收集 textContent,取最后 ANCHOR_PREFIX_MAX 字符。
+// 从 ir 根到 range.startContainer 收集纯文本,取最后 ANCHOR_PREFIX_MAX 字符。
 // 用于在 source markdown 中唯一定位选区(原文本多处出现时也能找到正确那次)。
+// 注意:用 range.toString()(纯文本,不含 markdown 标记)。findUniqueAnchor
+// 的兜底层会 strip source 后匹配 + 反查 source 偏移,所以这里不必拼 marker。
+// 这避开了 Vditor IR DOM textContent 跟 source markdown 不一致的黑盒问题。
 function computePrefixHint(ir: HTMLElement, range: Range): string {
   const preRange = ir.ownerDocument?.createRange();
   if (!preRange) return '';
@@ -100,7 +108,7 @@ type WindowWithFind = Window & {
 };
 
 export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
-  { source, onChange, filePath, onScrollRatio, onAIAction },
+  { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
   ref,
 ) {
   const settings = useSettings();
@@ -121,7 +129,28 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const lastValidatedAnchorTextRef = useRef<string | null>(null);
   // 记录最近一次被校验通过的 anchor.prefixHint,Vditor 模式用 prefixHint+originalText 唯一定位。
   const lastValidatedPrefixHintRef = useRef<string | null>(null);
+  // AI 替换撤销栈。每条带:
+  //   before  = AI 替换前的 source(撤销时还原成这个)
+  //   after   = AI 替换后立刻的 source(handler 用它判定"用户有没有再改过")
+  //   selRange = AI 替换前的选区(尽力恢复)
+  // Ctrl+Z 拦截策略:只有 editor.getValue() === top.after 才用栈(用户没在 AI 改后手改),
+  // 否则放行给 Vditor 原生 undo,让原生先消化用户的手改。
+  // cap 50:避免长跑内存堆积;先到先丢。
+  const UNDO_STACK_CAP = 50;
+  const undoStackRef = useRef<Array<{ before: string; after: string; selRange: Range | null }>>([]);
+  const pushUndoSnapshot = useCallback((before: string, after: string, selRange: Range | null) => {
+    const stack = undoStackRef.current;
+    stack.push({ before, after, selRange });
+    while (stack.length > UNDO_STACK_CAP) stack.shift();
+  }, []);
+  // 跨文档:filePath 变化时清栈,避免在 B 文档按 Ctrl+Z 把 A 文档的 before 写进 B
+  useEffect(() => {
+    undoStackRef.current = [];
+  }, [filePath]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
+  // 选区浮条状态:跟着 IR 选区变化重算 rect + hasSelection;由 selectionchange listener 更新。
+  const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
+  const [floatingHasSelection, setFloatingHasSelection] = useState(false);
 
   const getSavedOrCurrentSelection = useCallback((): Range | null => {
     const editor = editorRef.current;
@@ -167,10 +196,13 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     void applyVditorFormat(editor, action);
   }, []);
 
-  const handleAIPick = useCallback((action: SelectionActionId) => {
+  // 抽 triggerAIAction:菜单/浮条/Ctrl+K 都用它,统一组装 anchor + origin。
+  const triggerAIAction = useCallback((action: SelectionActionId, origin?: { x: number; y: number }) => {
     if (!onAIAction || !filePath) return;
     const editor = editorRef.current;
     const range = getSavedOrCurrentSelection();
+    // range.toString() 给纯文本;findUniqueAnchor 兜底层在 source 端 strip 后匹配 +
+    // 反查偏移,所以纯文本足够定位,不依赖 IR DOM textContent 黑盒
     const text = range?.toString() ?? '';
     if (!text && action !== 'custom') return;
     const ir = editor ? getIrElement(editor) : null;
@@ -182,8 +214,14 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       originalText: text,
       prefixHint,
     };
-    onAIAction(action, anchor);
+    onAIAction(action, anchor, origin);
   }, [filePath, getSavedOrCurrentSelection, onAIAction]);
+
+  const handleAIPick = useCallback((action: SelectionActionId) => {
+    // 菜单 origin 用 contextMenu 的坐标(右键/Ctrl+K 弹菜单时已记录)。
+    const origin = contextMenu ? { x: contextMenu.x, y: contextMenu.y } : undefined;
+    triggerAIAction(action, origin);
+  }, [contextMenu, triggerAIAction]);
 
   const handleMenuClose = useCallback(() => setContextMenu(null), []);
 
@@ -203,6 +241,48 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       hasSelection: true,
     });
   }, [filePath, getSavedOrCurrentSelection, onAIAction]);
+
+  // 全局 Ctrl+Z 拦截:AI 替换撤销优先,但仅当用户没在 AI 改后手改过(current === top.after)。
+  // 否则放行 Vditor 原生 undo,让原生先消化手改,等手改全撤完文档值回到 AI 改后状态,再 Ctrl+Z 就匹配栈顶 → 弹 AI。
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'z' || e.shiftKey) return;
+      const stack = undoStackRef.current;
+      if (stack.length === 0) return;
+      const host = hostRef.current;
+      if (!host || !e.target || !host.contains(e.target as Node)) return;
+      const editor = editorRef.current;
+      if (!editor) return;
+      const top = stack[stack.length - 1];
+      // 关键判定:用户改过文档 → 当前值 !== AI 改后值 → 放行 Vditor 原生 undo
+      if (editor.getValue() !== top.after) return;
+      e.preventDefault();
+      e.stopPropagation();
+      stack.pop();
+      applyingExternalValue.current = true;
+      editor.setValue(top.before, true);
+      lastEmittedValue.current = top.before;
+      onChange(top.before);
+      if (top.selRange) {
+        lastSelectionRangeRef.current = top.selRange;
+        const ir = getIrElement(editor);
+        if (ir) {
+          try {
+            const sel = ir.ownerDocument?.defaultView?.getSelection();
+            if (sel) {
+              sel.removeAllRanges();
+              sel.addRange(top.selRange);
+            }
+          } catch { /* 选区恢复失败不影响内容回退;setValue 重建 DOM 后旧 Range 可能 stale */ }
+        }
+      }
+      window.requestAnimationFrame(() => {
+        applyingExternalValue.current = false;
+      });
+    };
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
+  }, [onChange]);
 
   useEffect(() => {
     onScrollRatioRef.current = onScrollRatio;
@@ -243,12 +323,32 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     const handleSelectionChange = () => {
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
-      if (!ir) return;
+      if (!ir) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
       const sel = ir.ownerDocument?.defaultView?.getSelection();
-      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed || sel.toString().length === 0) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
       const range = sel.getRangeAt(0);
-      if (ir.contains(range.commonAncestorContainer)) {
-        lastSelectionRangeRef.current = range.cloneRange();
+      if (!ir.contains(range.commonAncestorContainer)) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
+      lastSelectionRangeRef.current = range.cloneRange();
+      // 浮条 rect:用 range 的 boundingClientRect(覆盖跨行的整体框)
+      const rect = range.getBoundingClientRect();
+      if (rect.width > 0 || rect.height > 0) {
+        setFloatingRect({ selRect: rect });
+        setFloatingHasSelection(true);
+      } else {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
       }
     };
     document.addEventListener('selectionchange', handleSelectionChange);
@@ -368,6 +468,52 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     });
   }, [source]);
 
+  // 在 IR DOM 中高亮有检视意见的段落。
+  // 策略：遍历 reviewComments，用 findUniqueAnchor 在 source 中定位，
+  // 然后在 IR DOM 中用 TreeWalker 找到对应文本节点的祖先段落，加 data-review-mark 属性。
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const ir = getIrElement(editor);
+    if (!ir) return;
+
+    // 先清除旧标记
+    ir.querySelectorAll('[data-review-mark]').forEach((el) => {
+      el.removeAttribute('data-review-mark');
+    });
+
+    if (!reviewComments || reviewComments.length === 0) return;
+
+    const currentSource = editor.getValue();
+    for (const comment of reviewComments) {
+      if (comment.filePath !== filePath) continue;
+      const hit = findUniqueAnchor(currentSource, comment.anchor.originalText, comment.anchor.prefixHint);
+      if (!hit) continue;
+
+      // 用 TreeWalker 在 IR DOM 中找包含这段文本的段落级元素
+      const walker: TreeWalker = ir.ownerDocument.createTreeWalker(ir, NodeFilter.SHOW_TEXT);
+      let matched = false;
+      while (walker.nextNode()) {
+        const node: Node = walker.currentNode;
+        if (!node.textContent?.includes(comment.anchor.originalText.slice(0, 40))) continue;
+        // 找到包含原文的文本节点，向上找段落级祖先
+        let el: HTMLElement | null = node.parentElement;
+        while (el && el !== ir) {
+          const tag = el.tagName;
+          if (tag === 'P' || tag === 'LI' || tag === 'H1' || tag === 'H2' || tag === 'H3' ||
+              tag === 'H4' || tag === 'H5' || tag === 'H6' || tag === 'BLOCKQUOTE' ||
+              el.getAttribute('data-block') !== null) {
+            el.setAttribute('data-review-mark', 'true');
+            matched = true;
+            break;
+          }
+          el = el.parentElement;
+        }
+        if (matched) break;
+      }
+    }
+  }, [reviewComments, source, filePath]);
+
   useImperativeHandle(ref, () => ({
     focus() {
       editorRef.current?.focus();
@@ -392,13 +538,17 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       const editor = editorRef.current;
       if (!editor) return;
       const range = getSavedOrCurrentSelection();
+      const before = editor.getValue();
+      const savedRange = range ? range.cloneRange() : null;
       editor.focus();
       if (range) restoreSelectionRange(range);
       editor.insertValue(text, true);
-      const value = editor.getValue();
+      const after = editor.getValue();
+      // push 在替换之后,带上 before+after,handler 用 after 判抢/放
+      pushUndoSnapshot(before, after, savedRange);
       lastSelectionRangeRef.current = null;
-      lastEmittedValue.current = value;
-      onChange(value);
+      lastEmittedValue.current = after;
+      onChange(after);
     },
     replaceRange(_from: number, _to: number, text: string) {
       const editor = editorRef.current;
@@ -410,7 +560,9 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       const hit = findUniqueAnchor(value, anchorText, prefixHint);
       if (!hit) return false;
       const next = value.slice(0, hit.start) + text + value.slice(hit.start + hit.length);
+      const savedRange = lastSelectionRangeRef.current?.cloneRange() ?? null;
       editor.setValue(next, true);
+      pushUndoSnapshot(value, next, savedRange);
       lastSelectionRangeRef.current = null;
       lastValidatedAnchorTextRef.current = null;
       lastValidatedPrefixHintRef.current = null;
@@ -440,6 +592,34 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       if (!text || typeof find !== 'function') return;
       find(text, false, backwards, true, false, false, false);
     },
+    undoLastAIReplacement() {
+      const editor = editorRef.current;
+      if (!editor) return false;
+      const snapshot = undoStackRef.current.pop();
+      if (!snapshot) return false;
+      applyingExternalValue.current = true;
+      editor.setValue(snapshot.before, true);
+      lastEmittedValue.current = snapshot.before;
+      onChange(snapshot.before);
+      // 恢复选区（尽力而为;setValue 重建 DOM 后旧 Range 可能 stale）
+      if (snapshot.selRange) {
+        lastSelectionRangeRef.current = snapshot.selRange;
+        const ir = getIrElement(editor);
+        if (ir) {
+          try {
+            const sel = ir.ownerDocument?.defaultView?.getSelection();
+            if (sel) {
+              sel.removeAllRanges();
+              sel.addRange(snapshot.selRange);
+            }
+          } catch { /* 选区恢复失败不影响内容回退 */ }
+        }
+      }
+      window.requestAnimationFrame(() => {
+        applyingExternalValue.current = false;
+      });
+      return true;
+    },
   }), [filePath, getSavedOrCurrentSelection, onChange, restoreSelectionRange]);
 
   return (
@@ -459,6 +639,13 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         onClose={handleMenuClose}
         onPickAI={onAIAction ? handleAIPick : undefined}
       />
+      {onAIAction && settings.selectionFloatingBarEnabled && (
+        <SelectionFloatingBar
+          rect={floatingRect}
+          hasSelection={floatingHasSelection}
+          onPick={(action, origin) => triggerAIAction(action, origin)}
+        />
+      )}
     </div>
   );
 });

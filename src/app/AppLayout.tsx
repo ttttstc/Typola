@@ -24,12 +24,21 @@ import { StatusBar } from '../components/StatusBar';
 import { AppLayoutChrome } from '../components/AppLayoutChrome';
 import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
 import { SkillHubPanel } from '../components/SkillHubPanel';
+import { SelectionResultCard } from '../components/selection/SelectionResultCard';
+import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor';
+import { ReviewSidebarPanel } from '../components/review/ReviewSidebarPanel';
+import { runSkillOneshot } from '../services/agent/oneshotService';
+import { useReviewState } from '../hooks/useReviewState';
+import { buildReviewMarkdown, type ReviewComment } from '../services/review/reviewState';
+import { saveFileDialog } from '../services/dialogService';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import type { SelectionAnchor } from '../services/agent/types';
 import { useConversationManager } from '../hooks/useAgentSession';
 import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
 import { useFileTabs } from '../hooks/useFileTabs';
 import { confirmDialog, messageDialog } from '../services/dialogService';
-import { useFlowMode } from '../hooks/useFlowMode';
+import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
 import { useRightPanel } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
@@ -251,7 +260,7 @@ export function AppLayout() {
     minWidth: LEFT_PANEL_MIN_WIDTH,
     maxWidth: LEFT_PANEL_MAX_WIDTH,
   });
-  const { flowMode, handleToggleFlowMode } = useFlowMode({
+  const { docMode, setDocMode } = useDocumentMode({
     enabled: file.fileType !== 'docx',
     isTauriRuntime,
     leftRailMode,
@@ -273,6 +282,33 @@ export function AppLayout() {
     model: settings.aiClaudeModel,
     pluginDirs: settings.aiPluginDirs,
   });
+  // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
+  const reviewStateApi = useReviewState(file.path);
+  const [reviewEditor, setReviewEditor] = useState<{
+    x: number;
+    y: number;
+    anchor: SelectionAnchor;
+    initialText: string;
+    /** 非 null = 编辑现有意见;null = 新增 */
+    editingId: string | null;
+  } | null>(null);
+  const handleReviewRequested = useCallback((anchor: SelectionAnchor, origin: { x: number; y: number }) => {
+    setReviewEditor({ x: origin.x, y: origin.y, anchor, initialText: '', editingId: null });
+  }, []);
+
+  // 选区原地闭环用的 oneshot wrapper:绑好 settings 里的 claude 参数 + 工作区 dirs。
+  // 不传 cwd(oneshot 不产文件,不需要落 .typola-output 子目录),让 claude 默认即可。
+  const runEditorOneshot = useCallback((prompt: string, signal: AbortSignal): Promise<string> => {
+    return runSkillOneshot({
+      prompt,
+      agentPath: settings.aiClaudePath,
+      model: settings.aiClaudeModel,
+      pluginDirs: settings.aiPluginDirs,
+      extraAllowedDirs: settings.aiWorkspaceRoot ? [settings.aiWorkspaceRoot] : undefined,
+      signal,
+    });
+  }, [settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs, settings.aiWorkspaceRoot]);
+
   const {
     hasEditorSelection,
     handleInsertToEditor,
@@ -280,10 +316,18 @@ export function AppLayout() {
     handleEditorAIAction,
     handleReplaceEditorAnchor,
     validateEditorAnchor,
+    resultCard,
+    closeResultCard,
+    acceptResultCard,
+    retryResultCard,
+    copyResultCard,
+    submitResultCardInput,
   } = useEditorSelectionBridge({
     editorCommandRef,
     setLeftRailMode,
     convManager,
+    runOneshot: runEditorOneshot,
+    onReviewRequested: handleReviewRequested,
   });
   const { skillHub, skillHubError, handleSaveSkillHub, handleReloadSkillHub } = useSkillHubState();
   // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
@@ -324,6 +368,79 @@ export function AppLayout() {
        (≈10KB after ISS-126) and runs in parallel with the initial render. */
     void preloadSettingsPage();
   }, []);
+
+  // 任务 #15 发 AI 改用的截断 helper(避免引文太长拖累 prompt)
+  const truncate = useCallback((text: string, max: number): string => (
+    text.length <= max ? text : `${text.slice(0, max)}…`
+  ), []);
+
+  // 任务 #14 导出 review md:把意见按行内段后格式注入原文,另存为新 md。
+  const handleExportReviewMarkdown = useCallback(async () => {
+    if (!file.path) {
+      await messageDialog('请先打开文档再导出 review 版。', { title: '导出 review 版' });
+      return;
+    }
+    const { state, markClean } = reviewStateApi;
+    if (state.comments.length === 0) return;
+    const reviewMd = buildReviewMarkdown(file.content, state.comments);
+    const baseName = file.path.replace(/\\/g, '/').split('/').pop() ?? 'document.md';
+    const stem = baseName.replace(/\.[^.]+$/u, '');
+    const defaultName = `${stem}.review.md`;
+    const dir = file.path.replace(/[\\/][^\\/]+$/u, '');
+    const defaultPath = dir ? `${dir}${file.path.includes('\\') ? '\\' : '/'}${defaultName}` : defaultName;
+    try {
+      const target = await saveFileDialog(defaultPath);
+      if (!target) return;
+      await writeTextFile(target, reviewMd);
+      markClean();
+      setTransientMessage(`已导出 review 版:${target.split(/[\\/]/).pop()}`);
+    } catch (error) {
+      await messageDialog(String(error), { title: '导出失败' });
+    }
+  }, [file.content, file.path, reviewStateApi]);
+
+  // 任务 #15 发 AI 改:把全文 + 所有意见拼成 prompt,新会话发送,走产物回流。
+  const handleSendReviewToAI = useCallback(async () => {
+    if (!file.path) {
+      await messageDialog('请先打开文档再发起 AI 修改。', { title: '发 AI 改' });
+      return;
+    }
+    const { state, markClean } = reviewStateApi;
+    if (state.comments.length === 0) return;
+    const fileName = file.path.replace(/\\/g, '/').split('/').pop() ?? 'document.md';
+    // 拼 prompt:全文 + 编号意见清单 + 明确指令。
+    const commentsBlock = state.comments.map((c, idx) => (
+      `${idx + 1}. 针对片段「${truncate(c.anchor.originalText, 80)}」\n   意见:${c.text}`
+    )).join('\n\n');
+    const prompt = [
+      `请按以下检视意见,修改我的文档《${fileName}》并产出一份完整的、可替换原文的新版本。`,
+      '',
+      '修改原则:',
+      '- 严格按编号意见执行,不要跑题',
+      '- 保留原文风格、章节结构、格式标记',
+      '- 不要把意见本身留在结果里',
+      '- 把修改后的完整 markdown 通过文件写入工具(Write)落到工作区,文件名建议:',
+      `  ${fileName.replace(/\.[^.]+$/u, '')}.revised.md`,
+      '',
+      '## 待修改的全文',
+      '',
+      file.content,
+      '',
+      '## 检视意见清单',
+      '',
+      commentsBlock,
+    ].join('\n');
+    // 创建新会话 + 切左栏,然后立即发送到该 conv(用 send 的 opts.conversationId 兜底 active ref 异步)
+    const newConvId = convManager.createConversation('检视修改');
+    setLeftRailMode('aiWorkbench');
+    try {
+      await convManager.send(prompt, { conversationId: newConvId });
+      markClean();
+      setTransientMessage('已交给 AI 修改,改后版本将作为产物回到编辑器');
+    } catch (error) {
+      await messageDialog(String(error), { title: '发起 AI 修改失败' });
+    }
+  }, [convManager, file.content, file.path, reviewStateApi, setLeftRailMode, truncate]);
 
   const handleExportWord = useCallback(async () => {
     if (!file.path || file.fileType === 'docx') return;
@@ -513,7 +630,7 @@ export function AppLayout() {
       if (e.key === 'm' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleWechatPreview(); return; }
       if (e.code === 'Backquote' && e.shiftKey && !e.altKey) { e.preventDefault(); handleCreateTerminal(); return; }
       if (e.code === 'Backquote' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleToggleTerminal(); return; }
-      if (e.key === 'a' && e.shiftKey && !e.altKey) { e.preventDefault(); void handleToggleFlowMode(); return; }
+      if (e.key === 'a' && e.shiftKey && !e.altKey) { e.preventDefault(); void setDocMode(docMode === 'flow' ? 'read' : 'flow'); return; }
       if (e.key === ',' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         void preloadSettingsPage();
@@ -533,7 +650,8 @@ export function AppLayout() {
     handleToggleWechatPreview,
     handleToggleTerminal,
     handleCreateTerminal,
-    handleToggleFlowMode,
+    docMode,
+    setDocMode,
     openFindPanel,
   ]);
 
@@ -750,6 +868,7 @@ export function AppLayout() {
         filePath={file.path}
         onScrollRatio={handleEditorScrollRatio}
         onAIAction={handleEditorAIAction}
+        reviewComments={reviewStateApi.state.comments}
       />
     </Suspense>
   );
@@ -789,6 +908,28 @@ export function AppLayout() {
         />
       </div>
     </aside>
+  ) : rightPanelMode === 'review' && !isDocx ? (
+    <ReviewSidebarPanel
+      comments={reviewStateApi.state.comments}
+      dirty={reviewStateApi.state.dirty}
+      currentFilePath={file.path}
+      onJump={(comment: ReviewComment) => {
+        editorCommandRef.current?.revealText(comment.anchor.originalText);
+      }}
+      onEdit={(comment: ReviewComment) => {
+        setReviewEditor({
+          x: window.innerWidth / 2 - 180,
+          y: window.innerHeight / 2 - 140,
+          anchor: comment.anchor,
+          initialText: comment.text,
+          editingId: comment.id,
+        });
+      }}
+      onRemove={(commentId) => reviewStateApi.removeComment(commentId)}
+      onExport={() => void handleExportReviewMarkdown()}
+      onSendToAI={() => void handleSendReviewToAI()}
+      onClose={() => setRightPanelMode('none')}
+    />
   ) : null;
 
   const docxPane = (
@@ -813,18 +954,19 @@ export function AppLayout() {
           dirty: file.dirty,
           fileName: file.name,
           editorMode,
+          workspacePanelVisible: leftRailMode === 'workspace',
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
+          reviewDirty: reviewStateApi.state.dirty,
           terminalVisible,
           editingDisabled: isDocx,
-          flowMode,
-          aiPanelVisible: leftRailMode === 'aiWorkbench',
+          docMode,
           onToggleEditorMode: handleToggleEditorMode,
+          onToggleWorkspacePanel: handleToggleWorkspacePanel,
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleTerminal: handleToggleTerminal,
-          onToggleFlowMode: () => void handleToggleFlowMode(),
-          onToggleAiPanel: handleToggleAiPanel,
+          onSetDocMode: (next) => void setDocMode(next),
           onNew: handleNewFile,
           onOpen: handleOpen,
           onSave: handleSave,
@@ -1013,6 +1155,44 @@ export function AppLayout() {
         onConfirmRename={() => void handleConfirmRename()}
         diffPreview={diffPreview}
         setDiffPreview={setDiffPreview}
+      />
+      {/* 选区原地结果对比卡(C 混合 · 4 个固定动作走 oneshot 后弹此卡) */}
+      <SelectionResultCard
+        open={!!resultCard}
+        x={resultCard?.x ?? 0}
+        y={resultCard?.y ?? 0}
+        state={resultCard?.state ?? 'loading'}
+        actionLabel={resultCard?.actionLabel ?? ''}
+        originalText={resultCard?.originalText ?? ''}
+        newText={resultCard?.newText ?? null}
+        error={resultCard?.error ?? null}
+        displayOnly={resultCard?.displayOnly}
+        initialRequirements={resultCard?.requirements ?? ''}
+        onAccept={acceptResultCard}
+        onCancel={closeResultCard}
+        onRetry={retryResultCard}
+        onCopy={copyResultCard}
+        onSubmitInput={submitResultCardInput}
+      />
+      {/* 检视意见输入浮卡(任务 #12 浮条入口) */}
+      <ReviewCommentEditor
+        open={!!reviewEditor}
+        x={reviewEditor?.x ?? 0}
+        y={reviewEditor?.y ?? 0}
+        originalText={reviewEditor?.anchor.originalText ?? ''}
+        initialText={reviewEditor?.initialText ?? ''}
+        onSave={(text) => {
+          if (!reviewEditor) return;
+          if (reviewEditor.editingId) {
+            reviewStateApi.updateComment(reviewEditor.editingId, text);
+          } else {
+            reviewStateApi.addComment(reviewEditor.anchor, text);
+            // 新增检视意见后自动切到右栏 review 面板
+            setRightPanelMode('review');
+          }
+          setReviewEditor(null);
+        }}
+        onCancel={() => setReviewEditor(null)}
       />
     </>
   );

@@ -92,6 +92,17 @@ export function EditorSection() {
           onClick={() => handleChange({ editorSpellCheck: !settings.editorSpellCheck })}
         />
       </div>
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-label">选区浮条</div>
+          <div className="settings-help">关掉后选中文字不自动浮现工具条;右键菜单与 Ctrl+K 仍可用。</div>
+        </div>
+        <button
+          className={`toggle-switch ${settings.selectionFloatingBarEnabled ? 'on' : ''}`}
+          onClick={() => handleChange({ selectionFloatingBarEnabled: !settings.selectionFloatingBarEnabled })}
+        />
+      </div>
     </div>
   );
 }

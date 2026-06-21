@@ -20,7 +20,7 @@ type Props = {
   onPickAI?: (action: SelectionActionId) => void;
 };
 
-const AI_ACTION_IDS: SelectionActionId[] = ['polish', 'rewrite', 'shorten', 'expand', 'explain', 'custom'];
+const AI_ACTION_IDS: SelectionActionId[] = ['polish', 'shorten', 'expand', 'explain', 'custom'];
 
 export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose, onPickAI }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -127,7 +127,9 @@ export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose, o
                 title={disabled ? '请先选中文字' : ''}
               >
                 <span className="selection-ai-item-label">
-                  <span className="selection-ai-item-icon" aria-hidden="true">{action.icon}</span>
+                  <span className="selection-ai-item-icon" aria-hidden="true">
+                    <action.icon size={13} strokeWidth={1.7} />
+                  </span>
                   {action.label}
                 </span>
                 {id === 'custom' ? <kbd>自定义</kbd> : null}

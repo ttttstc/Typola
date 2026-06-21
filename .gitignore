@@ -45,3 +45,9 @@ test-results/
 # Historical website build artifacts
 website/.astro/
 website/dist/
+
+# Stray HTML/JS in repo root (scratch / scraped competitor pages / debug dumps)
+# index.html 是 Vite 入口,显式白名单。
+/*.html
+!/index.html
+/*.js

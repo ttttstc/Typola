@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, MutableRefObject, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 
-export type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow';
+export type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow' | 'review';
 
 type UseRightPanelOptions = {
   containerRef: MutableRefObject<HTMLDivElement | null>;

@@ -10,7 +10,7 @@ type Props = {
   onClose: () => void;
 };
 
-const ACTION_IDS: SelectionActionId[] = ['polish', 'rewrite', 'shorten', 'expand', 'explain', 'custom'];
+const ACTION_IDS: SelectionActionId[] = ['polish', 'shorten', 'expand', 'explain', 'custom', 'review'];
 
 export function SelectionAIMenu({ open, x, y, hasSelection, onPick, onClose }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -75,7 +75,9 @@ export function SelectionAIMenu({ open, x, y, hasSelection, onPick, onClose }: P
             title={hasSelection || id === 'custom' ? '' : '请先选中文字'}
           >
             <span className="selection-ai-item-label">
-              <span className="selection-ai-item-icon" aria-hidden="true">{action.icon}</span>
+              <span className="selection-ai-item-icon" aria-hidden="true">
+                <action.icon size={13} strokeWidth={1.7} />
+              </span>
               {action.label}
             </span>
             {id === 'custom' ? <kbd>自定义</kbd> : null}
