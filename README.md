@@ -24,6 +24,32 @@ English documentation is available below: [English](#typola-english).
 - 设置与主题：支持主题、字体、编码、语言、自动保存、自动更新检查、Word/HTML 预设等配置。
 - 桌面原生能力：支持系统文件关联、拖拽打开、单实例打开转发、外部文件变更提示和自动更新。
 
+## 文档形态与 AI 协作
+
+Typola 把同一份文档围绕「阅读 / 心流 / 检视」三种形态展开，工具栏右上的凹槽分段切换器一键切换，左右栏跟随平滑收放。
+
+- **阅读模式**：默认形态。专注阅读和写作，左栏可按需开关文件树，右栏可按需开 Word / 微信预览。
+- **心流模式**：左栏展开 AI 工作台对话，右栏挂出技能场景模板（日报、总结报告、PPT、HTML、公众号、数据分析），并自动最大化窗口。AI 产出物（HTML / Markdown / 演示稿）自动落到工作区 `.typola-output/<会话>/`，并以 chip 形态出现在右栏，可一键在主编辑器打开、归档到工作区或删除。
+- **检视模式**：把文档当作待审稿，右栏挂出「检视意见」面板。选中段落 → 浮条加意见 → 汇总列表点击跳转 → 「导出 review 版」生成行内段后注入的 Markdown 副本（每段后跟 `> **检视意见，请处理**：…`），或「发 AI 改」把全文 + 全部意见拼成 prompt 交给 AI 产出修订稿。
+
+### 选区浮条与原地闭环
+
+选中正文时浮条自动出现在选区上方，提供以下动作：
+
+- **润色 / 缩写 / 扩写 / 校对 / 解释术语**：走 oneshot 静默调用 Claude，结果以「原文 vs 新版本」对比卡贴在选区旁，点「采纳替换」直接落回文档，不离开编辑器。润色支持在调用前先输入要求（如「更口语」「更精简」），其他动作走默认模板。
+- **自定义**：把选区作为引用拼到 AI 工作台对话框，让你自由提需求。
+- **加检视意见**：开浮卡输入意见后写入右栏检视面板。
+
+浮条可在「设置 → 编辑器 → 选区浮条」关掉，右键菜单与 `Ctrl+K` 仍可触达同一组动作。
+
+### AI 修改可撤销
+
+任何 AI 替换执行前会自动快照编辑器内容。`Ctrl+Z` 在编辑器内拦截：若文档没有被手动改动过，直接回退 AI 改动；若你在 AI 改动后又手动改了几处，先按系统原生 undo 撤销手动改动，再撤销 AI 改动，互不冲突。栈式逐步回退，跨文件自动清空，最多保留 50 条 AI 快照。
+
+### Claude CLI 与 Skill
+
+AI 工作台直接驱动本机已安装的 `claude` CLI（headless 模式），技能场景接入 `~/.claude/skills/` 下的 skill。无需在 Typola 里配置 API Key，所有调用走你自己的 CLI 环境与权限。
+
 ## 产品优势
 
 - 写作体验直接：默认进入 WYSIWYG 编辑，不需要在编辑和预览之间反复切换。
@@ -83,6 +109,9 @@ Windows 仍需要系统中可用的 Microsoft Edge WebView2 Runtime。现代 Win
 - `Cmd/Ctrl + Alt + S`：切换源码模式
 - `Cmd/Ctrl + Alt + P`：切换 Word 预览
 - `Cmd/Ctrl + Alt + M`：切换 HTML 预览
+- `Cmd/Ctrl + K`：对选区唤起 AI 动作菜单
+- `Cmd/Ctrl + Z`：撤销（含 AI 修改撤销）
+- `Shift + A`：切换心流模式
 - `Cmd/Ctrl + ,`：打开设置
 
 ## 开发与构建
@@ -195,6 +224,32 @@ Typola is a lightweight, focused, cross-platform desktop Markdown editor. It is 
 - Preferences: configure theme, fonts, encoding, language, auto-save, update checks, and Word/HTML export presets.
 - Native desktop behavior: file associations, drag-and-drop open, single-instance forwarding, external file change notices, and auto-update support.
 
+## Document modes and AI co-authoring
+
+Typola wraps the same document in three modes — Reading / Flow / Review — switched via a recessed segmented control in the top-right toolbar; left and right panels glide in and out automatically.
+
+- **Reading mode**: the default. Focused reading and writing; toggle the file tree on the left and Word / WeChat preview on the right as needed.
+- **Flow mode**: the left panel opens an AI Workbench chat; the right panel surfaces skill scenarios (daily/weekly report, summary, slide deck, HTML, WeChat article, data analysis); the window auto-maximizes. AI artifacts (HTML / Markdown / decks) land in `<workspace>/.typola-output/<conversation>/` and appear as chips in the right panel — one-click open in the main editor, archive to the workspace, or delete.
+- **Review mode**: treats the document as a draft for review. The right panel shows a Review pane. Select a paragraph, add a comment via the floating bar, jump to it from the summary list, "Export review version" to write an in-paragraph-suffix Markdown copy (each commented segment followed by `> **Review comment, please address**: …`), or "Send to AI" to package the full document plus all comments into a prompt and let AI emit a revised draft.
+
+### Selection floating bar and in-place loop
+
+When you select text, a floating bar appears above the selection with these actions:
+
+- **Polish / Shorten / Expand / Proofread / Explain**: a oneshot Claude call returns a diff card pinned next to the selection ("original vs new"); click "Accept replacement" to apply without leaving the editor. Polish also accepts pre-call instructions (e.g. "more casual", "tighter"); other actions use the default template.
+- **Custom**: drops the selection as a quote into the AI Workbench composer for free-form requests.
+- **Add review comment**: opens an inline editor and saves the comment into the Review pane.
+
+The floating bar can be disabled at Settings → Editor → Selection floating bar. The right-click menu and `Ctrl+K` still reach the same actions.
+
+### AI edits are undoable
+
+Each AI replacement snapshots the editor content first. `Ctrl+Z` inside the editor is intercepted: if the document hasn't been hand-edited since, the AI change is reverted directly; if you've also hand-edited, native undo cleans up your hand edits first, then your next `Ctrl+Z` pops the AI snapshot — they never collide. Stepwise rollback, cleared automatically on file switch, capped at 50 AI snapshots.
+
+### Claude CLI and skills
+
+The AI Workbench drives your locally installed `claude` CLI (headless mode), and skill scenarios reference skills under `~/.claude/skills/`. No API key configuration inside Typola — every call inherits your own CLI environment and permissions.
+
 ## Strengths
 
 - Direct writing flow: Typola opens into WYSIWYG editing by default, so writing does not require constant preview switching.
@@ -254,6 +309,9 @@ Common shortcuts:
 - `Cmd/Ctrl + Alt + S`: Toggle source mode
 - `Cmd/Ctrl + Alt + P`: Toggle Word preview
 - `Cmd/Ctrl + Alt + M`: Toggle HTML preview
+- `Cmd/Ctrl + K`: Open the AI action menu for the current selection
+- `Cmd/Ctrl + Z`: Undo (covers AI replacements too)
+- `Shift + A`: Toggle Flow mode
 - `Cmd/Ctrl + ,`: Open Settings
 
 ## Development

@@ -252,8 +252,10 @@ export function useConversationManager({
   ), [workspaceRoot, activeConvId]);
   const extraAllowedDirs = useMemo(() => (workspaceRoot ? [workspaceRoot] : undefined), [workspaceRoot]);
 
-  const send = useCallback(async (prompt: string) => {
-    const convId = activeConvIdRef.current;
+  // send(prompt, opts?):opts.conversationId 显式指定目标 conv;省略则用当前 active。
+  // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
+  const send = useCallback(async (prompt: string, opts?: { conversationId?: string }) => {
+    const convId = opts?.conversationId ?? activeConvIdRef.current;
     const trimmed = prompt.trim();
     if (!trimmed) return;
     const conv = conversationsRef.current.get(convId);

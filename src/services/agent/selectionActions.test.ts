@@ -15,7 +15,7 @@ describe('fileNameFromPath', () => {
 
 describe('buildInjectionText', () => {
   it('emits 5 fixed templates with the expected shape', () => {
-    const fixed: Array<keyof typeof SELECTION_ACTIONS> = ['polish', 'rewrite', 'shorten', 'expand', 'explain'];
+    const fixed: Array<keyof typeof SELECTION_ACTIONS> = ['polish', 'shorten', 'expand', 'explain'];
     for (const action of fixed) {
       const out = buildInjectionText(action, 'D:\\暂存\\notes.md', '需要润色的一句话');
       // 引用 header 必须包含文件名(不带路径)
@@ -75,9 +75,14 @@ describe('findUniqueAnchor', () => {
     expect(findUniqueAnchor('any source', '', 'hint')).toBeNull();
   });
 
-  it('returns null when needle is missing (stale)', () => {
+  it('returns null when originalText is missing (stale)', () => {
     expect(findUniqueAnchor('hello world', 'foo')).toBeNull();
-    expect(findUniqueAnchor('hello world', 'world', 'hello foo')).toBeNull();
+  });
+
+  it('错的 prefixHint 不阻止 originalText 唯一命中(prefixHint 仅消歧用)', () => {
+    // originalText="world" 在 source 里唯一 → 即使 prefixHint 不匹配,也应直接命中
+    // (旧行为是 stale,但实际语义上 originalText 唯一时根本不需 prefixHint)
+    expect(findUniqueAnchor('hello world', 'world', 'wrong prefix')).toEqual({ start: 6, length: 5 });
   });
 
   it('returns null when needle appears more than once (ambiguous)', () => {
@@ -120,5 +125,64 @@ describe('findUniqueAnchor', () => {
   it('accepts null prefixHint (treats same as undefined)', () => {
     const source = 'xxx SELECTED yyy';
     expect(findUniqueAnchor(source, 'SELECTED', null)).toEqual({ start: 4, length: 8 });
+  });
+
+  // ----- 兜底层:source 含行内 markdown,选区是 range.toString()(纯文本) -----
+  describe('fallback: strip inline markdown then map back', () => {
+    it('粗体内段定位:source 是 `**xx**` 选纯文本 xx', () => {
+      const source = '这段**Agent 的视野被限制在单一代码仓里**,它根本看不到';
+      const hit = findUniqueAnchor(source, 'Agent 的视野被限制在单一代码仓里', '这段');
+      expect(hit).not.toBeNull();
+      // 反查到 source 的位置(刚好 ** 后的 A)和正确长度(只覆盖 Agent...里 18 字)
+      expect(source.slice(hit!.start, hit!.start + hit!.length)).toBe('Agent 的视野被限制在单一代码仓里');
+    });
+
+    it('跨越粗体的选区:plain `段Agent的视野被限制在单一代码仓里的` 应映射到含 ** 的 source 段', () => {
+      const source = '这段**Agent 的视野被限制在单一代码仓里**,后面';
+      // 用户选「段**Agent 的视野被限制在单一代码仓里**,」range.toString() 给纯文本
+      const hit = findUniqueAnchor(source, '段Agent 的视野被限制在单一代码仓里,');
+      expect(hit).not.toBeNull();
+      // length 应覆盖 source 里的 `段**...**,`(含 marker)
+      const replaced = source.slice(hit!.start, hit!.start + hit!.length);
+      expect(replaced).toContain('**');
+      expect(replaced).toContain('Agent 的视野被限制在单一代码仓里');
+    });
+
+    it('行内代码内段定位:`code` 选纯文本 code', () => {
+      const source = '使用 `useState` 这个 hook';
+      const hit = findUniqueAnchor(source, 'useState', '使用 ');
+      expect(hit).not.toBeNull();
+      expect(source.slice(hit!.start, hit!.start + hit!.length)).toBe('useState');
+    });
+
+    it('链接内段定位:[text](url) 选纯文本 text', () => {
+      const source = '看 [这篇文章](https://x.com/a) 的解释';
+      const hit = findUniqueAnchor(source, '这篇文章', '看 ');
+      expect(hit).not.toBeNull();
+      expect(source.slice(hit!.start, hit!.start + hit!.length)).toBe('这篇文章');
+    });
+
+    it('删除线内段定位:~~text~~ 选纯文本 text', () => {
+      const source = '原来 ~~很糟糕~~ 的设计';
+      const hit = findUniqueAnchor(source, '很糟糕', '原来 ');
+      expect(hit).not.toBeNull();
+      expect(source.slice(hit!.start, hit!.start + hit!.length)).toBe('很糟糕');
+    });
+
+    it('strip 后多处匹配 → null(歧义)', () => {
+      const source = '说 **某事**,又说 **某事** 一次';
+      // strip 后 `某事` 在 plain 里出现 2 次 → 拒绝
+      expect(findUniqueAnchor(source, '某事')).toBeNull();
+      // 用更长的 prefixHint 让 needle 真正唯一(区分两处)
+      const hit = findUniqueAnchor(source, '某事', '又说 ');
+      expect(hit).not.toBeNull();
+    });
+
+    it('精确匹配优先于兜底:source 不含 marker 时不动用映射', () => {
+      const source = 'plain 文字 SELECTED 其余';
+      const hit = findUniqueAnchor(source, 'SELECTED');
+      // 精确层就命中,length 等于 originalText.length
+      expect(hit).toEqual({ start: source.indexOf('SELECTED'), length: 'SELECTED'.length });
+    });
   });
 });

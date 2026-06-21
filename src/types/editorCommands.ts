@@ -11,4 +11,6 @@ export type EditorCommandHandle = {
   validateAnchor: (filePath: string, from: number, to: number, originalText: string, prefixHint?: string) => 'valid' | 'stale' | 'wrong-file';
   revealRange: (from: number, to: number) => void;
   revealText: (text: string, backwards?: boolean) => void;
+  /** 撤销最后一次 AI 替换操作（恢复到替换前的编辑器内容）。 */
+  undoLastAIReplacement: () => boolean;
 };

@@ -1,21 +1,22 @@
 import {
-  BookOpenText,
-  Braces,
+  Code2,
   FilePlus,
+  FileText,
   FolderOpen,
   Newspaper,
+  PanelLeft,
   RefreshCw,
   Save,
   SaveAll,
   SlidersHorizontal,
   Terminal,
-  Sparkles,
-  LayoutPanelLeft,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import { handleTitlebarMouseDown } from '../services/titlebarDrag';
+import { DocumentModeSwitcher } from './DocumentModeSwitcher';
+import type { DocMode } from '../hooks/useDocumentMode';
 
 export type EditorMode = 'wysiwyg' | 'source';
 
@@ -28,18 +29,22 @@ type ToolbarProps = {
   dirty: boolean;
   fileName: string;
   editorMode: EditorMode;
+  /** 左栏文件树是否可见(workspace) */
+  workspacePanelVisible: boolean;
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
-  flowMode: boolean;
-  aiPanelVisible: boolean;
+  /** 文档三态(阅读/心流/检视)当前态 */
+  docMode: DocMode;
+  /** 当前文档是否有未保存的检视意见(用于切换器上的小红点) */
+  reviewDirty?: boolean;
   onToggleEditorMode: () => void;
+  onToggleWorkspacePanel: () => void;
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleTerminal: () => void;
-  onToggleFlowMode: () => void;
-  onToggleAiPanel: () => void;
+  onSetDocMode: (next: DocMode) => void;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -53,9 +58,10 @@ type ToolbarProps = {
 
 export function Toolbar({
   dirty, fileName,
-  editorMode, wordPreviewVisible, wechatPreviewVisible, terminalVisible, editingDisabled, flowMode, aiPanelVisible,
-  onToggleEditorMode, onToggleWordPreview, onToggleWechatPreview,
-  onToggleTerminal, onToggleFlowMode, onToggleAiPanel,
+  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible,
+  terminalVisible, editingDisabled, docMode, reviewDirty,
+  onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview,
+  onToggleTerminal, onSetDocMode,
   onNew, onOpen, onSave, onSaveAs, onRename, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
@@ -78,6 +84,17 @@ export function Toolbar({
       onMouseDownCapture={handleMouseDown}
     >
       <div className="toolbar-left">
+        <div className="toolbar-group toolbar-nav-actions" aria-label="导航">
+          <button
+            data-no-window-drag="true"
+            className={workspacePanelVisible ? 'active' : ''}
+            onClick={onToggleWorkspacePanel}
+            data-tooltip={workspacePanelVisible ? '收起文件树' : '打开文件树'}
+            aria-label={workspacePanelVisible ? '收起文件树' : '打开文件树'}
+          >
+            <PanelLeft size={iconSize} strokeWidth={strokeWidth} />
+          </button>
+        </div>
         <div className="toolbar-group toolbar-file-actions" aria-label={t('toolbarFileGroup')}>
           <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewTitle')} aria-label={t('toolbarNewLabel')}>
             <FilePlus size={iconSize} strokeWidth={strokeWidth} />
@@ -106,6 +123,7 @@ export function Toolbar({
           >
             {fileName}
           </span>
+          {reviewDirty && <span className="dirty-dot" title="有未保存的检视意见" aria-label="未保存的检视意见" />}
         </span>
       </div>
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
@@ -148,7 +166,7 @@ export function Toolbar({
             data-tooltip={t('toolbarSourceTitle')}
             aria-label={t('toolbarSourceLabel')}
           >
-            <Braces size={iconSize} strokeWidth={strokeWidth} />
+            <Code2 size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
             className={wordPreviewVisible ? 'active' : ''}
@@ -158,7 +176,7 @@ export function Toolbar({
             data-tooltip={t('toolbarWordPreviewTitle')}
             aria-label={t('toolbarWordPreviewLabel')}
           >
-            <BookOpenText size={iconSize} strokeWidth={strokeWidth} />
+            <FileText size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
             className={wechatPreviewVisible ? 'active' : ''}
@@ -168,6 +186,7 @@ export function Toolbar({
             data-tooltip={t('toolbarWechatPreviewTitle')}
             aria-label={t('toolbarWechatPreviewLabel')}
           >
+            {/* lucide 无 wechat 品牌图标,沿用 Newspaper(评审已确认) */}
             <Newspaper size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
@@ -178,26 +197,6 @@ export function Toolbar({
             aria-label={t('toolbarTerminalLabel')}
           >
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button
-            className={aiPanelVisible ? 'active' : ''}
-            onClick={onToggleAiPanel}
-            disabled={editingDisabled}
-            data-no-window-drag="true"
-            data-tooltip={t('toolbarAiPanelTitle')}
-            aria-label={t('toolbarAiPanelLabel')}
-          >
-            <LayoutPanelLeft size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button
-            className={flowMode ? 'active' : ''}
-            onClick={onToggleFlowMode}
-            disabled={editingDisabled}
-            data-no-window-drag="true"
-            data-tooltip={t('toolbarFlowModeTitle')}
-            aria-label={t('toolbarFlowModeLabel')}
-          >
-            <Sparkles size={iconSize} strokeWidth={strokeWidth} />
           </button>
         </div>
         <div className="toolbar-group toolbar-navigation-actions" aria-label={t('toolbarNavGroup')}>
@@ -213,7 +212,15 @@ export function Toolbar({
             <SlidersHorizontal size={iconSize} strokeWidth={strokeWidth} />
           </button>
         </div>
+        <div className="toolbar-group toolbar-mode-group" aria-label="文档模式">
+          <DocumentModeSwitcher
+            mode={docMode}
+            onChange={onSetDocMode}
+            disabled={editingDisabled}
+          />
+        </div>
       </div>
     </div>
   );
 }
+

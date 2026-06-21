@@ -185,6 +185,8 @@ export interface AppSettings {
   editorWordWrap: boolean;
   editorLineNumbers: boolean;
   editorSpellCheck: boolean;
+  /** 选区浮条(选中即现)开关。关掉后右键菜单 / Ctrl+K 仍在,只是不自动浮现。 */
+  selectionFloatingBarEnabled: boolean;
   // 预览
   previewFontFamily: PreviewFontFamily;
   previewChineseFontFamily: PreviewChineseFontFamily;
@@ -238,6 +240,7 @@ const defaults: AppSettings = {
   editorWordWrap: true,
   editorLineNumbers: true,
   editorSpellCheck: false,
+  selectionFloatingBarEnabled: true,
   previewFontFamily: 'Default',
   previewChineseFontFamily: 'Default',
   previewLatinFontFamily: 'Default',

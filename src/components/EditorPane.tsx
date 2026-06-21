@@ -6,6 +6,7 @@ import { EditorView, keymap } from '@codemirror/view';
 import { useSettings } from '../hooks/useSettings';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import { SelectionAIMenu } from './selection/SelectionAIMenu';
+import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import type { SelectionAnchor } from '../services/agent/types';
 
@@ -21,7 +22,8 @@ type EditorPaneProps = {
   onScrollRatio?: (ratio: number) => void;
   filePath?: string;
   // 选区 AI 动作回调（由 AppLayout 注入；不传则不渲染 AI 菜单）
-  onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor) => void;
+  // origin 是触发点的视口坐标(用于「原地闭环」浮卡定位);无 origin 时退化为对话框路径。
+  onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
 };
 
 function findHeadingPosition(source: string, targetIndex: number): number | null {
@@ -57,8 +59,9 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
   useEffect(() => { filePathRef.current = filePath; }, [filePath]);
   useEffect(() => { editorViewRef.current = editorView; }, [editorView]);
 
-  const handleAIPick = useCallback((action: SelectionActionId) => {
-    const editor = editorView;
+  // 抽 triggerAIAction:菜单/浮条/Ctrl+K 都用它,统一组装 anchor + origin。
+  const triggerAIAction = useCallback((action: SelectionActionId, origin?: { x: number; y: number }) => {
+    const editor = editorViewRef.current;
     const path = filePathRef.current;
     const cb = onAIActionRef.current;
     if (!editor || !path || !cb) return;
@@ -71,7 +74,52 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       to: sel.to,
       originalText: text,
     };
-    cb(action, anchor);
+    cb(action, anchor, origin);
+  }, []);
+
+  const handleAIPick = useCallback((action: SelectionActionId) => {
+    // 菜单 origin 用菜单当前位置;菜单 state 在 onClose 才被清,这里仍可读。
+    const origin = aiMenu ? { x: aiMenu.x, y: aiMenu.y } : undefined;
+    triggerAIAction(action, origin);
+  }, [aiMenu, triggerAIAction]);
+
+  // 选区浮条状态:跟着 CodeMirror 选区变化重算 rect + hasSelection。
+  const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
+  const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  useEffect(() => {
+    if (!editorView) return;
+    const computeFromSelection = () => {
+      const sel = editorView.state.selection.main;
+      if (sel.empty) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
+      const fromCoords = editorView.coordsAtPos(sel.from);
+      const toCoords = editorView.coordsAtPos(sel.to);
+      if (!fromCoords || !toCoords) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
+      const left = Math.min(fromCoords.left, toCoords.left);
+      const right = Math.max(fromCoords.right, toCoords.right);
+      const top = Math.min(fromCoords.top, toCoords.top);
+      const bottom = Math.max(fromCoords.bottom, toCoords.bottom);
+      const rect = new DOMRect(left, top, right - left, bottom - top);
+      setFloatingRect({ selRect: rect });
+      setFloatingHasSelection(true);
+    };
+    // CodeMirror 没有 selectionChange 事件,用 document selectionchange 兜底
+    const onChange = () => window.requestAnimationFrame(computeFromSelection);
+    document.addEventListener('selectionchange', onChange);
+    window.addEventListener('mouseup', onChange);
+    window.addEventListener('keyup', onChange);
+    return () => {
+      document.removeEventListener('selectionchange', onChange);
+      window.removeEventListener('mouseup', onChange);
+      window.removeEventListener('keyup', onChange);
+    };
   }, [editorView]);
 
   const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -231,6 +279,11 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
     revealText() {
       editorView?.focus();
     },
+    undoLastAIReplacement() {
+      // CodeMirror 的 history 插件已自动追踪所有 dispatch（含 replaceRange），
+      // 原生 Ctrl+Z 直接生效，无需额外撤销栈。
+      return false;
+    },
   }), [editorView]);
 
   return (
@@ -250,14 +303,23 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
         }}
       />
       {onAIAction && (
-        <SelectionAIMenu
-          open={aiMenu !== null}
-          x={aiMenu?.x ?? 0}
-          y={aiMenu?.y ?? 0}
-          hasSelection={aiMenu?.hasSelection ?? false}
-          onPick={handleAIPick}
-          onClose={() => setAiMenu(null)}
-        />
+        <>
+          <SelectionAIMenu
+            open={aiMenu !== null}
+            x={aiMenu?.x ?? 0}
+            y={aiMenu?.y ?? 0}
+            hasSelection={aiMenu?.hasSelection ?? false}
+            onPick={handleAIPick}
+            onClose={() => setAiMenu(null)}
+          />
+          {settings.selectionFloatingBarEnabled && (
+            <SelectionFloatingBar
+              rect={floatingRect}
+              hasSelection={floatingHasSelection}
+              onPick={(action, origin) => triggerAIAction(action, origin)}
+            />
+          )}
+        </>
       )}
     </div>
   );
