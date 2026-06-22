@@ -6,6 +6,8 @@ import { useSettings } from '../../hooks/useSettings';
 import { confirmDialog } from '../../services/dialogService';
 import { updateSettings } from '../../services/settingsService';
 import type { AgentMessage, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
+import type { AgentProvider } from '../../services/agent/provider';
+import { getAgentProviderConfig } from '../../services/agent/provider';
 import type { ConversationData } from '../../services/agent/conversationStore';
 import type { ArtifactItem } from '../ArtifactPreview';
 import { formatAbsoluteTime, formatRelativeTime } from '../../services/timeFormat';
@@ -21,6 +23,7 @@ type ConversationPanelProps = {
   messages: AgentMessage[];
   runState: string;
   lastError: string;
+  activeProvider: AgentProvider;
   workspaceSuggestion?: string;
   currentFileName?: string;
   currentFilePath?: string;
@@ -37,6 +40,7 @@ type ConversationPanelProps = {
   onCreateConversation: () => void;
   onCloseConversation: (id: string) => void;
   onRenameConversation: (id: string, title: string) => void;
+  onSwitchProvider: (provider: AgentProvider) => void;
   onSend: (prompt: string) => void;
   onCancel: () => void;
   onReset: () => void;
@@ -70,6 +74,7 @@ export function ConversationPanel({
   messages,
   runState,
   lastError,
+  activeProvider,
   workspaceSuggestion,
   currentFileName,
   currentFilePath,
@@ -84,6 +89,7 @@ export function ConversationPanel({
   onCreateConversation,
   onCloseConversation,
   onRenameConversation,
+  onSwitchProvider,
   onSend,
   onCancel,
   onReset,
@@ -102,11 +108,13 @@ export function ConversationPanel({
   const running = runState === 'running';
   const hasHistory = messages.length > 0;
   // 优先用 claude 进程实际跑的模型(来自 init 事件),fallback 才是用户在 Typola 设置里填的
+  const providerConfig = getAgentProviderConfig(activeProvider);
+  const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
   const modelLabel = currentModel
-    ? `Claude · ${currentModel}`
-    : settings.aiClaudeModel
-      ? `Claude · ${settings.aiClaudeModel}`
-      : 'Claude · 默认模型';
+    ? `${providerConfig.label} · ${currentModel}`
+    : configuredModel
+      ? `${providerConfig.label} · ${configuredModel}`
+      : `${providerConfig.label} · 默认模型`;
   const composerRef = useRef<ComposerHandle>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -216,6 +224,18 @@ export function ConversationPanel({
     });
   };
 
+  const handleProviderChange = async (provider: AgentProvider) => {
+    if (provider === activeProvider) return;
+    const confirmed = await confirmDialog('切换 AI Provider 会开始新对话，确定继续？', {
+      title: '切换 AI Provider',
+      okLabel: '切换并新建对话',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    if (running) await onCancel();
+    onSwitchProvider(provider);
+  };
+
   const handleWorkspaceChange = async (path: string) => {
     if (!(await confirmWorkspaceChange())) return;
     if (running) await onCancel();
@@ -261,7 +281,7 @@ export function ConversationPanel({
       <div className="conversation-messages">
         {messages.length === 0 && (
           <div className="conversation-empty">
-            <strong>把文档任务交给 Claude</strong>
+            <strong>把文档任务交给 {providerConfig.label}</strong>
             <p>这里会显示思考流、正文、工具调用和完成状态。</p>
           </div>
         )}
@@ -307,10 +327,13 @@ export function ConversationPanel({
         currentFileName={currentFileName}
         currentFilePath={currentFilePath}
         currentModel={currentModel}
+        activeProvider={activeProvider}
+        configuredModel={configuredModel}
         fileContextInjected={fileContextInjected}
         onPickWorkspace={() => void handlePickWorkspace()}
         onSelectWorkspace={(path) => void handleWorkspaceChange(path)}
         onClearWorkspace={() => void handleClearWorkspace()}
+        onSwitchProvider={(provider) => void handleProviderChange(provider)}
         onSend={onSend}
         onCancel={onCancel}
       />

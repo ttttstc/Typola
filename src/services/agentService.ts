@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { AgentProvider } from './agent/provider';
 
 export type AgentDetectResult = {
   available: boolean;
@@ -7,8 +8,8 @@ export type AgentDetectResult = {
   error?: string;
 };
 
-export function detectAgent(agentPath?: string): Promise<AgentDetectResult> {
+export function detectAgent(agentPath?: string, provider?: AgentProvider): Promise<AgentDetectResult> {
   return invoke<AgentDetectResult>('agent_detect', {
-    request: { agentPath: agentPath?.trim() || undefined },
+    request: { provider, agentPath: agentPath?.trim() || undefined },
   });
 }

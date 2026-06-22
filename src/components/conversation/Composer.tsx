@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { Send, Square } from 'lucide-react';
-import { useSettings } from '../../hooks/useSettings';
+import type { AgentProvider } from '../../services/agent/provider';
+import { AGENT_PROVIDERS, getAgentProviderConfig } from '../../services/agent/provider';
 import { ComposerContextChips } from './ComposerContextChips';
 import { ComposerPlusMenu } from './ComposerPlusMenu';
 import { ComposerMcpPanel } from './ComposerMcpPanel';
@@ -18,16 +19,19 @@ type ComposerProps = {
   running?: boolean;
   cwd?: string;
   workspaceSuggestion?: string;
-  workspaceRecents: string[];
+  workspaceRecents?: string[];
   currentFileName?: string;
   currentFilePath?: string;
-  /** claude 进程实际运行的模型(来自 init 事件),Composer 优先显示这个;无则 fallback settings.aiClaudeModel。 */
+  /** AI Provider 进程实际运行的模型(来自 init/status 事件),Composer 优先显示这个。 */
   currentModel?: string;
+  activeProvider: AgentProvider;
+  configuredModel?: string;
   /** 本会话是否已注入过"当前文档"context → 后续 send 不再重复啰嗦。 */
   fileContextInjected?: boolean;
   onPickWorkspace: () => void;
   onSelectWorkspace: (path: string) => void;
   onClearWorkspace: () => void;
+  onSwitchProvider: (provider: AgentProvider) => void;
   onSend: (text: string) => void;
   onCancel: () => void;
 };
@@ -41,14 +45,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   currentFileName,
   currentFilePath,
   currentModel,
+  activeProvider,
+  configuredModel,
   fileContextInjected = false,
   onPickWorkspace,
   onSelectWorkspace,
   onClearWorkspace,
+  onSwitchProvider,
   onSend,
   onCancel,
 }: ComposerProps, ref) {
-  const settings = useSettings();
   const [value, setValue] = useState('');
   const [panel, setPanel] = useState<'mcp' | 'plugins' | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -143,12 +149,23 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             onClear={onClearWorkspace}
             placement="up"
           />
+          <label className="conversation-provider-picker" title="切换 AI Provider 会开始新对话">
+            <span className="sr-only">AI Provider</span>
+            <select
+              value={activeProvider}
+              onChange={(event) => onSwitchProvider(event.target.value as AgentProvider)}
+            >
+              {AGENT_PROVIDERS.map((provider) => (
+                <option key={provider.id} value={provider.id}>{provider.label}</option>
+              ))}
+            </select>
+          </label>
           <span className="conversation-model-placeholder" title="在设置 · AI CLI 配置模型">
             {currentModel
-              ? `Claude · ${currentModel}`
-              : settings.aiClaudeModel
-                ? `Claude · ${settings.aiClaudeModel}`
-                : 'Claude · 默认模型'}
+              ? `${getAgentProviderConfig(activeProvider).label} · ${currentModel}`
+              : configuredModel
+                ? `${getAgentProviderConfig(activeProvider).label} · ${configuredModel}`
+                : `${getAgentProviderConfig(activeProvider).label} · 默认模型`}
           </span>
         </div>
         {running ? (

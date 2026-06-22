@@ -280,8 +280,10 @@ export function AppLayout() {
 
   const convManager = useConversationManager({
     workspaceRoot: settings.aiWorkspaceRoot || undefined,
-    agentPath: settings.aiClaudePath,
-    model: settings.aiClaudeModel,
+    claudePath: settings.aiClaudePath,
+    claudeModel: settings.aiClaudeModel,
+    openCodePath: settings.aiOpenCodePath,
+    openCodeModel: settings.aiOpenCodeModel,
     pluginDirs: settings.aiPluginDirs,
   });
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
@@ -1042,6 +1044,7 @@ export function AppLayout() {
           messages: convManager.messages,
           runState: convManager.runState,
           lastError: convManager.lastError,
+          activeProvider: convManager.activeProvider,
           workspaceSuggestion: workspaceRoot || undefined,
           currentFileName: file.path ? file.name : undefined,
           currentFilePath: file.path || undefined,
@@ -1056,6 +1059,7 @@ export function AppLayout() {
           onCreateConversation: () => convManager.createConversation(),
           onCloseConversation: convManager.closeConversation,
           onRenameConversation: convManager.renameConversation,
+          onSwitchProvider: convManager.switchProvider,
           onSend: convManager.send,
           onCancel: convManager.cancel,
           onReset: convManager.reset,

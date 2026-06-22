@@ -13,7 +13,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 }));
 
 vi.mock('../../hooks/useSettings', () => ({
-  useSettings: () => ({ aiPluginDirs: [] }),
+  useSettings: () => ({ aiPluginDirs: [], aiClaudeModel: '', aiOpenCodeModel: '' }),
 }));
 
 vi.mock('../../services/settingsService', () => ({
@@ -43,8 +43,13 @@ describe('Composer', () => {
     act(() => {
       root.render(
         <Composer
+          activeProvider="claude"
           currentFileName="current.md"
           currentFilePath="D:\\docs\\current.md"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
           onSend={onSend}
           onCancel={() => undefined}
         />,
@@ -90,8 +95,13 @@ describe('Composer', () => {
     act(() => {
       root.render(
         <Composer
+          activeProvider="claude"
           currentFileName="a.md"
           currentFilePath="D:\\docs\\a.md"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
           onSend={() => undefined}
           onCancel={() => undefined}
         />,
@@ -108,8 +118,13 @@ describe('Composer', () => {
     act(() => {
       root.render(
         <Composer
+          activeProvider="claude"
           currentFileName="b.md"
           currentFilePath="D:\\docs\\b.md"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
           onSend={() => undefined}
           onCancel={() => undefined}
         />,
@@ -117,5 +132,31 @@ describe('Composer', () => {
     });
 
     expect(host.textContent).toContain('b.md');
+  });
+
+  it('calls onSwitchProvider from the composer footer provider picker', async () => {
+    const onSwitchProvider = vi.fn();
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="claude"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={onSwitchProvider}
+          onSend={() => undefined}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const picker = host.querySelector<HTMLSelectElement>('.conversation-provider-picker select');
+    expect(picker).toBeTruthy();
+    await act(async () => {
+      picker!.value = 'opencode';
+      picker!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(onSwitchProvider).toHaveBeenCalledWith('opencode');
   });
 });

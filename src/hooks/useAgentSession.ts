@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { diagnoseClaudeCliFailure } from '../services/agent/claudeDiagnostics';
 import { createClaudeStreamHandler } from '../services/agent/claudeStream';
+import { createOpenCodeStreamHandler } from '../services/agent/opencodeStream';
 import type { ConversationData, PendingInjection } from '../services/agent/conversationStore';
 import { createConversationData } from '../services/agent/conversationStore';
+import type { AgentProvider } from '../services/agent/provider';
+import { DEFAULT_AGENT_PROVIDER, getAgentProviderConfig } from '../services/agent/provider';
 import {
   cancelAgentSession,
   onAgentExit,
@@ -14,11 +17,38 @@ import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '.
 
 type UseConversationManagerOptions = {
   workspaceRoot?: string;
-  agentPath?: string;
-  model?: string;
+  agentProvider?: AgentProvider;
+  claudePath?: string;
+  claudeModel?: string;
+  openCodePath?: string;
+  openCodeModel?: string;
   pluginDirs?: string[];
   onArtifactFile?: (artifact: { path: string; content?: string; toolName: string }) => void;
 };
+
+function createProviderStreamHandler(provider: AgentProvider, onEvent: (event: AgentEvent) => void) {
+  return provider === 'opencode'
+    ? createOpenCodeStreamHandler(onEvent)
+    : createClaudeStreamHandler((event) => onEvent(event as AgentEvent));
+}
+
+function providerRuntimeOptions(
+  provider: AgentProvider,
+  options: Pick<UseConversationManagerOptions, 'claudePath' | 'claudeModel' | 'openCodePath' | 'openCodeModel' | 'pluginDirs'>,
+) {
+  if (provider === 'opencode') {
+    return {
+      agentPath: options.openCodePath,
+      model: options.openCodeModel,
+      pluginDirs: undefined,
+    };
+  }
+  return {
+    agentPath: options.claudePath,
+    model: options.claudeModel,
+    pluginDirs: options.pluginDirs,
+  };
+}
 
 function toolId(value: unknown): string {
   return typeof value === 'string' && value ? value : `tool-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -96,20 +126,23 @@ let nextConvCounter = 1;
 
 export function useConversationManager({
   workspaceRoot,
-  agentPath,
-  model,
+  agentProvider = DEFAULT_AGENT_PROVIDER,
+  claudePath,
+  claudeModel,
+  openCodePath,
+  openCodeModel,
   pluginDirs,
   onArtifactFile,
 }: UseConversationManagerOptions) {
   const defaultId = `conv-${nextConvCounter++}`;
   const [conversations, setConversations] = useState<Map<string, ConversationData>>(
-    () => new Map([[defaultId, createConversationData(defaultId, '自由对话')]]),
+    () => new Map([[defaultId, createConversationData(defaultId, '自由对话', undefined, agentProvider)]]),
   );
   const [activeConvId, setActiveConvId] = useState(defaultId);
   const conversationsRef = useRef(conversations);
   const activeConvIdRef = useRef(activeConvId);
   const artifactFileRef = useRef(onArtifactFile);
-  const handlersRef = useRef(new Map<string, ReturnType<typeof createClaudeStreamHandler>>());
+  const handlersRef = useRef(new Map<string, ReturnType<typeof createClaudeStreamHandler> | ReturnType<typeof createOpenCodeStreamHandler>>());
   const eventQueueRef = useRef(new Map<string, AgentEvent[]>());
   const eventFrameRef = useRef<number | null>(null);
   // 选区注入暂存触发通知：每次 onAgentExit 让 active 从 running 退出且 conv 上有待投递的
@@ -191,7 +224,8 @@ export function useConversationManager({
       const convId = payload.conversationId;
       let handler = handlersRef.current.get(convId);
       if (!handler) {
-        handler = createClaudeStreamHandler((event) => queueAssistantEvent(convId, event as AgentEvent));
+        const provider = conversationsRef.current.get(convId)?.provider ?? DEFAULT_AGENT_PROVIDER;
+        handler = createProviderStreamHandler(provider, (event) => queueAssistantEvent(convId, event));
         handlersRef.current.set(convId, handler);
       }
       handler.feed(`${payload.line}\n`);
@@ -213,8 +247,11 @@ export function useConversationManager({
         cancelRequested: false,
       };
       if (payload.exitCode !== 0 && !wasCancelled) {
-        const diagnostic = diagnoseClaudeCliFailure({ agentId: 'claude', exitCode: payload.exitCode, stderrTail: payload.stderrTail });
-        patch.lastError = diagnostic?.detail || payload.stderrTail || 'Claude 执行失败。';
+        const provider = conv.provider ?? DEFAULT_AGENT_PROVIDER;
+        const diagnostic = provider === 'claude'
+          ? diagnoseClaudeCliFailure({ agentId: 'claude', exitCode: payload.exitCode, stderrTail: payload.stderrTail })
+          : null;
+        patch.lastError = diagnostic?.detail || payload.stderrTail || `${getAgentProviderConfig(provider).label} 执行失败。`;
         updateConv(convId, patch);
         appendAssistantEvent(convId, { type: 'error', message: patch.lastError });
       } else {
@@ -276,9 +313,20 @@ export function useConversationManager({
       ],
       lastDeliveredAnchor: undefined,
     });
-    const handler = createClaudeStreamHandler((event) => queueAssistantEvent(convId, event as AgentEvent));
+    const provider = conv.provider ?? DEFAULT_AGENT_PROVIDER;
+    const runtime = providerRuntimeOptions(provider, { claudePath, claudeModel, openCodePath, openCodeModel, pluginDirs });
+    const handler = createProviderStreamHandler(provider, (event) => queueAssistantEvent(convId, event));
     handlersRef.current.set(convId, handler);
-    const request = { conversationId: convId, prompt: trimmed, cwd, agentPath, model, pluginDirs, extraAllowedDirs };
+    const request = {
+      provider,
+      conversationId: convId,
+      prompt: trimmed,
+      cwd,
+      agentPath: runtime.agentPath,
+      model: runtime.model,
+      pluginDirs: runtime.pluginDirs,
+      extraAllowedDirs,
+    };
     try {
       // 首轮 start（Rust 建新 session-id）；后续 resume（Rust 按 conversationId 复用 uuid + --resume），保多轮上下文延续
       const result = conv.sessionStarted
@@ -297,7 +345,7 @@ export function useConversationManager({
       updateConv(convId, { runState: 'error', lastError: message });
       appendAssistantEvent(convId, { type: 'error', message });
     }
-  }, [agentPath, appendAssistantEvent, cwd, extraAllowedDirs, model, pluginDirs, queueAssistantEvent, updateConv]);
+  }, [appendAssistantEvent, claudeModel, claudePath, cwd, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv]);
 
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;
@@ -351,13 +399,29 @@ export function useConversationManager({
     return pending;
   }, [updateConv]);
 
-  const createConversation = useCallback((title = '自由对话', skillRef?: string) => {
+  const createConversation = useCallback((title = '自由对话', skillRef?: string, provider: AgentProvider = agentProvider) => {
     const id = `conv-${nextConvCounter++}`;
-    const conv = createConversationData(id, title, skillRef);
+    const conv = createConversationData(id, title, skillRef, provider);
     setConversations((prev) => {
       const next = new Map(prev);
       next.set(id, conv);
       // 同步刷 ref,避免后续紧跟的 send(opts.conversationId=id) 撞 stale
+      conversationsRef.current = next;
+      return next;
+    });
+    setActiveConvId(id);
+    activeConvIdRef.current = id;
+    return id;
+  }, [agentProvider]);
+
+  const switchProvider = useCallback((provider: AgentProvider) => {
+    const active = conversationsRef.current.get(activeConvIdRef.current);
+    if (active?.provider === provider) return active.id;
+    const id = `conv-${nextConvCounter++}`;
+    const conv = createConversationData(id, `${getAgentProviderConfig(provider).label} 对话`, undefined, provider);
+    setConversations((prev) => {
+      const next = new Map(prev);
+      next.set(id, conv);
       conversationsRef.current = next;
       return next;
     });
@@ -389,7 +453,7 @@ export function useConversationManager({
       const next = new Map(prev);
       next.delete(id);
       if (next.size === 0) {
-        const fallback = createConversationData(`conv-${nextConvCounter++}`, '自由对话');
+        const fallback = createConversationData(`conv-${nextConvCounter++}`, '自由对话', undefined, agentProvider);
         next.set(fallback.id, fallback);
         setActiveConvId(fallback.id);
       } else if (id === activeConvIdRef.current) {
@@ -398,7 +462,7 @@ export function useConversationManager({
       }
       return next;
     });
-  }, []);
+  }, [agentProvider]);
 
   const activeConv = conversations.get(activeConvId);
 
@@ -406,6 +470,7 @@ export function useConversationManager({
     conversations,
     activeConvId,
     activeConv,
+    activeProvider: activeConv?.provider ?? agentProvider,
     // Per-active-conv state (for ConversationPanel backward compat)
     messages: activeConv?.messages ?? [],
     runState: activeConv?.runState ?? 'idle',
@@ -415,6 +480,7 @@ export function useConversationManager({
     cancel,
     reset,
     createConversation,
+    switchProvider,
     switchConversation,
     renameConversation,
     closeConversation,

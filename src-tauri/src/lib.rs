@@ -66,12 +66,50 @@ struct TerminalSession {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentDetectRequest {
+    provider: Option<AgentProvider>,
     agent_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum AgentProvider {
+    Claude,
+    Opencode,
+}
+
+impl Default for AgentProvider {
+    fn default() -> Self {
+        Self::Claude
+    }
+}
+
+impl AgentProvider {
+    fn default_command(self) -> String {
+        match self {
+            Self::Claude => default_agent_command("claude"),
+            Self::Opencode => default_agent_command("opencode"),
+        }
+    }
+
+    fn detect_args(self) -> Vec<String> {
+        match self {
+            Self::Claude => vec!["--version".to_string()],
+            Self::Opencode => vec!["--version".to_string()],
+        }
+    }
+
+    fn display_name(self) -> &'static str {
+        match self {
+            Self::Claude => "Claude",
+            Self::Opencode => "OpenCode",
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentSessionStartRequest {
+    provider: Option<AgentProvider>,
     conversation_id: String,
     prompt: String,
     cwd: Option<String>,
@@ -176,6 +214,7 @@ struct AgentSessionStartResult {
     session_uuid: String,
     resumed: bool,
     agent_path: String,
+    provider: AgentProvider,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -347,8 +386,9 @@ fn write_attachment_file(request: AttachmentWriteRequest) -> Result<String, Stri
 
 #[tauri::command]
 fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
-    let agent_path = normalize_agent_path(request.agent_path.as_deref());
-    match run_agent_version(&agent_path) {
+    let provider = request.provider.unwrap_or_default();
+    let agent_path = normalize_agent_path(provider, request.agent_path.as_deref());
+    match run_agent_version(provider, &agent_path) {
         Ok(version) => AgentDetectResult {
             available: true,
             path: agent_path,
@@ -1156,7 +1196,12 @@ fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
     candidate
 }
 
-fn normalize_agent_path(path: Option<&str>) -> String {
+struct AgentCommandSpec {
+    args: Vec<String>,
+    prompt_stdin: bool,
+}
+
+fn normalize_agent_path(provider: AgentProvider, path: Option<&str>) -> String {
     if let Some(path) = path.map(str::trim).filter(|value| !value.is_empty()) {
         // Windows: 裸命令名(无路径分隔符、无扩展名)必须回退到 PATH/npm 全局扫描,
         // 因为 std::process::Command::new("claude") 不会自动尝试 PATHEXT 上的
@@ -1178,7 +1223,7 @@ fn normalize_agent_path(path: Option<&str>) -> String {
         return path.to_string();
     }
 
-    default_claude_command()
+    provider.default_command()
 }
 
 fn start_agent_headless_run(
@@ -1195,7 +1240,8 @@ fn start_agent_headless_run(
         return Err("prompt is required".into());
     }
 
-    let agent_path = normalize_agent_path(request.agent_path.as_deref());
+    let provider = request.provider.unwrap_or_default();
+    let agent_path = normalize_agent_path(provider, request.agent_path.as_deref());
     let run_id = uuid::Uuid::new_v4().to_string();
     let (session_uuid, resumed) = {
         let mut registry = state
@@ -1215,14 +1261,17 @@ fn start_agent_headless_run(
         }
     };
 
-    let args = build_claude_headless_args(
+    let command_spec = build_agent_headless_command(
+        provider,
         &session_uuid,
         resumed,
         request.model.as_deref(),
+        request.cwd.as_deref(),
         request.plugin_dirs.as_deref().unwrap_or(&[]),
         request.extra_allowed_dirs.as_deref().unwrap_or(&[]),
+        &request.prompt,
     );
-    let mut command = create_agent_command(&agent_path, &args);
+    let mut command = create_agent_command(&agent_path, &command_spec.args);
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1230,30 +1279,32 @@ fn start_agent_headless_run(
     if let Some(cwd) = request.cwd.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
         let cwd_path = PathBuf::from(cwd);
         std::fs::create_dir_all(&cwd_path)
-            .map_err(|error| format!("failed to create Claude cwd: {error}"))?;
+            .map_err(|error| format!("failed to create {} cwd: {error}", provider.display_name()))?;
         command.current_dir(cwd_path);
     }
 
     let mut child = command
         .spawn()
-        .map_err(|error| format!("failed to start Claude headless run: {error}"))?;
+        .map_err(|error| format!("failed to start {} headless run: {error}", provider.display_name()))?;
     let mut stdin = child
         .stdin
         .take()
-        .ok_or_else(|| "failed to open Claude stdin".to_string())?;
+        .ok_or_else(|| format!("failed to open {} stdin", provider.display_name()))?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| "failed to open Claude stdout".to_string())?;
+        .ok_or_else(|| format!("failed to open {} stdout", provider.display_name()))?;
     let stderr = child
         .stderr
         .take()
-        .ok_or_else(|| "failed to open Claude stderr".to_string())?;
+        .ok_or_else(|| format!("failed to open {} stderr", provider.display_name()))?;
 
-    stdin
-        .write_all(request.prompt.as_bytes())
-        .and_then(|_| stdin.flush())
-        .map_err(|error| format!("failed to write Claude prompt: {error}"))?;
+    if command_spec.prompt_stdin {
+        stdin
+            .write_all(request.prompt.as_bytes())
+            .and_then(|_| stdin.flush())
+            .map_err(|error| format!("failed to write {} prompt: {error}", provider.display_name()))?;
+    }
     drop(stdin);
 
     let pid = child.id();
@@ -1299,6 +1350,7 @@ fn start_agent_headless_run(
         session_uuid,
         resumed,
         agent_path,
+        provider,
     })
 }
 
@@ -1367,6 +1419,54 @@ fn build_claude_headless_args(
         args.push(dir.to_string());
     }
     args
+}
+
+fn build_opencode_headless_args(
+    session_uuid: &str,
+    model: Option<&str>,
+    cwd: Option<&str>,
+    prompt: &str,
+) -> Vec<String> {
+    let mut args = vec![
+        "run".to_string(),
+        "--format".to_string(),
+        "json".to_string(),
+        "--session".to_string(),
+        session_uuid.to_string(),
+        "--dangerously-skip-permissions".to_string(),
+    ];
+    if let Some(dir) = cwd.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--dir".to_string());
+        args.push(dir.to_string());
+    }
+    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--model".to_string());
+        args.push(model.to_string());
+    }
+    args.push(prompt.to_string());
+    args
+}
+
+fn build_agent_headless_command(
+    provider: AgentProvider,
+    session_uuid: &str,
+    resumed: bool,
+    model: Option<&str>,
+    cwd: Option<&str>,
+    plugin_dirs: &[String],
+    extra_allowed_dirs: &[String],
+    prompt: &str,
+) -> AgentCommandSpec {
+    match provider {
+        AgentProvider::Claude => AgentCommandSpec {
+            args: build_claude_headless_args(session_uuid, resumed, model, plugin_dirs, extra_allowed_dirs),
+            prompt_stdin: true,
+        },
+        AgentProvider::Opencode => AgentCommandSpec {
+            args: build_opencode_headless_args(session_uuid, model, cwd, prompt),
+            prompt_stdin: false,
+        },
+    }
 }
 
 fn spawn_agent_stdout_forwarder(
@@ -1455,15 +1555,15 @@ fn spawn_agent_waiter(
     });
 }
 
-fn default_claude_command() -> String {
+fn default_agent_command(command_name: &str) -> String {
     #[cfg(target_os = "windows")]
     {
-        if let Some(resolved) = resolve_windows_bare_command("claude") {
+        if let Some(resolved) = resolve_windows_bare_command(command_name) {
             return resolved;
         }
     }
 
-    "claude".to_string()
+    command_name.to_string()
 }
 
 #[cfg(target_os = "windows")]
@@ -1541,17 +1641,17 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     command
 }
 
-fn run_agent_version(agent_path: &str) -> Result<String, String> {
-    let output = create_agent_command(agent_path, &["--version".to_string()])
+fn run_agent_version(provider: AgentProvider, agent_path: &str) -> Result<String, String> {
+    let output = create_agent_command(agent_path, &provider.detect_args())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .map_err(|error| format!("failed to run Claude CLI: {error}"))?;
+        .map_err(|error| format!("failed to run {} CLI: {error}", provider.display_name()))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
-            "Claude CLI exited with an error".into()
+            format!("{} CLI exited with an error", provider.display_name())
         } else {
             stderr
         });
@@ -1804,7 +1904,7 @@ mod tests {
     #[test]
     fn claude_path_accepts_explicit_value() {
         assert_eq!(
-            normalize_agent_path(Some(" custom-claude ")),
+            normalize_agent_path(AgentProvider::Claude, Some(" custom-claude ")),
             "custom-claude"
         );
     }
@@ -1812,13 +1912,14 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn claude_path_defaults_to_path_lookup_on_non_windows() {
-        assert_eq!(normalize_agent_path(None), "claude");
+        assert_eq!(normalize_agent_path(AgentProvider::Claude, None), "claude");
+        assert_eq!(normalize_agent_path(AgentProvider::Opencode, None), "opencode");
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn claude_path_checks_windows_npm_global_directory() {
-        let path = normalize_agent_path(None);
+        let path = normalize_agent_path(AgentProvider::Claude, None);
 
         assert!(
             path == "claude"
@@ -1826,6 +1927,20 @@ mod tests {
                 || path.ends_with("\\npm\\claude.exe"),
             "unexpected default Claude path: {path}"
         );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn opencode_path_checks_windows_npm_global_directory_without_ps1() {
+        let path = normalize_agent_path(AgentProvider::Opencode, None);
+
+        assert!(
+            path == "opencode"
+                || path.ends_with("\\npm\\opencode.cmd")
+                || path.ends_with("\\npm\\opencode.exe"),
+            "unexpected default OpenCode path: {path}"
+        );
+        assert!(!path.ends_with(".ps1"), "OpenCode should not resolve to PowerShell wrapper: {path}");
     }
 
     #[test]
@@ -1856,6 +1971,53 @@ mod tests {
 
         assert!(args.windows(2).any(|pair| pair == ["--resume", "session-123"]));
         assert!(!args.contains(&"--session-id".to_string()));
+    }
+
+    #[test]
+    fn opencode_headless_args_use_run_json_session_and_prompt_arg() {
+        let args = build_opencode_headless_args(
+            "session-123",
+            Some("anthropic/claude-sonnet-4"),
+            Some("D:\\workspace\\.typola-output\\conv-1"),
+            "生成摘要",
+        );
+
+        assert_eq!(args.first().map(String::as_str), Some("run"));
+        assert!(args.windows(2).any(|pair| pair == ["--format", "json"]));
+        assert!(args.windows(2).any(|pair| pair == ["--session", "session-123"]));
+        assert!(args.windows(2).any(|pair| pair == ["--model", "anthropic/claude-sonnet-4"]));
+        assert!(args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
+        assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
+        assert_eq!(args.last().map(String::as_str), Some("生成摘要"));
+    }
+
+    #[test]
+    fn agent_headless_command_keeps_claude_on_stdin_and_opencode_on_argv() {
+        let claude = build_agent_headless_command(
+            AgentProvider::Claude,
+            "session-123",
+            false,
+            None,
+            None,
+            &[],
+            &[],
+            "hello",
+        );
+        let opencode = build_agent_headless_command(
+            AgentProvider::Opencode,
+            "session-123",
+            false,
+            None,
+            None,
+            &[],
+            &[],
+            "hello",
+        );
+
+        assert!(claude.prompt_stdin);
+        assert!(!claude.args.contains(&"hello".to_string()));
+        assert!(!opencode.prompt_stdin);
+        assert_eq!(opencode.args.last().map(String::as_str), Some("hello"));
     }
 
     #[test]
