@@ -89,31 +89,26 @@ export function markReviewClean(state: ReviewStateSnapshot): ReviewStateSnapshot
 
 // 把检视意见按段后注入 markdown 源文,生成 review md(给协作者看 / 给 AI 改)。
 //
-// 策略:对每条意见,在 source 里用 anchor 唯一定位选中片段 → 在那一行(被选中片段所在行)末尾追加
-// `\n> **检视意见，请处理**：<text>`。多条意见在同一段落 → 按出现顺序连续追加。
-// 锚点失效(stale / wrong file)的意见 → 跟在文档最末追加一段 fallback。
+// 双轨保险:
+//   1) 行内段后:对能锚定的意见,在选中片段所在段落末尾追加 `> **检视意见，请处理**：…`
+//   2) 文末汇总:**所有**意见无条件追加到文末「## 检视意见汇总」段,即使 anchor 全失效也不丢
 //
-// 输出格式严格遵循用户决定:不带 emoji + 以 `**检视意见，请处理**` 开头。
+// 输出格式:不带 emoji,以 `**检视意见，请处理**` 开头(行内段后),文末汇总每条带编号 + 引文 + 意见。
 export function buildReviewMarkdown(source: string, comments: ReviewComment[]): string {
   if (comments.length === 0) return source;
 
-  // 收集每条意见在 source 中的"插入点"(行尾偏移),失败的留作 fallback
-  type Hit = { insertAt: number; text: string; order: number };
+  // === 行内段后(尽力)===
+  type Hit = { insertAt: number; text: string };
   const hits: Hit[] = [];
-  const orphans: ReviewComment[] = [];
 
-  comments.forEach((comment, order) => {
+  comments.forEach((comment) => {
     const hit = findUniqueAnchor(source, comment.anchor.originalText, comment.anchor.prefixHint);
-    if (!hit) {
-      orphans.push(comment);
-      return;
-    }
-    // 找到锚点所在段落的末尾(下一个空行前 / 文档末)
+    if (!hit) return; // anchor 失效跳过段后插入,文末汇总仍会兜底
     const segmentEnd = findSegmentEnd(source, hit.start + hit.length);
-    hits.push({ insertAt: segmentEnd, text: comment.text, order });
+    hits.push({ insertAt: segmentEnd, text: comment.text });
   });
 
-  // 按 insertAt 从大到小排序,反向插入避免后续偏移失效
+  // 从大到小排序,反向插入避免偏移失效
   hits.sort((a, b) => b.insertAt - a.insertAt);
 
   let result = source;
@@ -122,12 +117,13 @@ export function buildReviewMarkdown(source: string, comments: ReviewComment[]): 
     result = `${result.slice(0, hit.insertAt)}${marker}${result.slice(hit.insertAt)}`;
   }
 
-  if (orphans.length > 0) {
-    const tail = orphans.map((c) => (
-      `> **检视意见，请处理**：${c.text}\n> (原片段已无法精确定位:${truncate(c.anchor.originalText, 60)})`
-    )).join('\n\n');
-    result = `${result.replace(/\s+$/u, '')}\n\n---\n\n## 失效的检视意见\n\n${tail}\n`;
-  }
+  // === 文末汇总(无条件,永远不丢)===
+  // 即便所有 anchor 都失败、或调用方传错路径,意见仍能从文末完整找回。
+  const summary = comments.map((c, i) => {
+    const quote = truncate(c.anchor.originalText.replace(/\n+/g, ' '), 80);
+    return `### ${i + 1}. 针对片段「${quote}」\n\n${c.text}`;
+  }).join('\n\n');
+  result = `${result.replace(/\s+$/u, '')}\n\n---\n\n## 检视意见汇总\n\n${summary}\n`;
 
   return result;
 }
