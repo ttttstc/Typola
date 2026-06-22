@@ -7,6 +7,7 @@ import { resolvePreviewFontFamily, resolvePreviewHeadingFontFamily, resolvePrevi
 import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { createHtmlReadingPreviewHtml } from '../services/htmlReadingPreviewService';
 import { resolveLocalImages } from '../services/localImageResolver';
+import { renderMermaidIn } from '../services/mermaidRenderer';
 
 type PreviewPaneProps = {
   source: string;
@@ -42,6 +43,7 @@ export function PreviewPane({ source, tocIds, wideTables = false, renderMode = '
     if (renderMode === 'html') {
       el.innerHTML = createHtmlReadingPreviewHtml(deferredSource);
       void resolveLocalImages(el, filePath);
+      void renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
       applyTocIds(el, deferredTocIds);
       return;
     }
@@ -72,9 +74,11 @@ export function PreviewPane({ source, tocIds, wideTables = false, renderMode = '
         },
         after() {
           if (cancelled) return;
-          void resolveLocalImages(el, filePath);
-          if (deferredTocIds.length === 0) return;
-          applyTocIds(el, deferredTocIds);
+          void (async () => {
+            await renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+            await resolveLocalImages(el, filePath);
+            if (deferredTocIds.length > 0) applyTocIds(el, deferredTocIds);
+          })();
         },
       });
     });
@@ -82,7 +86,7 @@ export function PreviewPane({ source, tocIds, wideTables = false, renderMode = '
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, deferredTocIds, filePath, renderFeatures.hasHighlightableCode, renderMode]);
+  }, [deferredSource, deferredTocIds, filePath, renderFeatures.hasHighlightableCode, renderMode, settings.theme]);
 
   return (
     <div

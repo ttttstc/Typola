@@ -1,4 +1,5 @@
 import { detectMarkdownRenderFeatures } from './markdownFeatureDetector';
+import { renderMermaidIn } from './mermaidRenderer';
 import { sanitizeHtml } from './sanitizeService';
 import { VDITOR_PREVIEW_I18N } from './vditorPreviewConfig';
 
@@ -47,11 +48,15 @@ export async function createWordPreviewArtifact(
         markdown: {
           sanitize: true,
         },
-        after: finish,
+        after() {
+          void renderMermaidIn(container)
+            .catch((error) => console.warn('Failed to render Mermaid in Word preview:', error))
+            .finally(finish);
+        },
       });
 
       Promise.resolve(result).then(() => {
-        window.setTimeout(finish, 0);
+        window.setTimeout(finish, 5200);
       }, reject);
     } catch (error) {
       reject(error);

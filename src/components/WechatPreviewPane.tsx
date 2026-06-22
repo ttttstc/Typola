@@ -19,6 +19,7 @@ import {
 import { getHtmlExportPresetDefinition } from '../services/htmlExportPresets';
 import type { HtmlExportPresetId } from '../services/htmlExportPresets';
 import { resolveLocalImages } from '../services/localImageResolver';
+import { renderMermaidIn } from '../services/mermaidRenderer';
 
 type WechatPreviewPaneProps = {
   source: string;
@@ -118,12 +119,16 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
         },
         after() {
           if (cancelled || renderIdRef.current !== renderId) return;
-          void resolveLocalImages(el, filePath);
-          setPreviewResult(createHtmlExportResult(deferredSource, el.innerHTML, {
-            preset: htmlExportPreset,
-            title: fileName,
-          }));
-          setStatus('ready');
+          void (async () => {
+            await renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+            await resolveLocalImages(el, filePath);
+            if (cancelled || renderIdRef.current !== renderId) return;
+            setPreviewResult(createHtmlExportResult(deferredSource, el.innerHTML, {
+              preset: htmlExportPreset,
+              title: fileName,
+            }));
+            setStatus('ready');
+          })();
         },
       });
     }).catch((error) => {
