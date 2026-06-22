@@ -260,6 +260,15 @@ fn force_close_main_window(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|error| format!("failed to close main window: {error}"))
 }
 
+// 动态把目录加入 asset protocol scope:每次打开/另存文档时调,允许 webview 通过
+// convertFileSrc() 读取该目录(递归)的本地图片。幂等;重复 allow 无害。
+#[tauri::command]
+fn allow_asset_directory(app: tauri::AppHandle, dir: String) -> Result<(), String> {
+    app.asset_protocol_scope()
+        .allow_directory(dir, true)
+        .map_err(|error| format!("failed to allow asset directory: {error}"))
+}
+
 #[tauri::command]
 fn read_opened_document(path: String) -> Result<Vec<u8>, String> {
     let path = PathBuf::from(path);
@@ -935,6 +944,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             pending_opened_paths,
             force_close_main_window,
+            allow_asset_directory,
             read_opened_document,
             write_opened_document,
             rename_opened_document,
