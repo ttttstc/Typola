@@ -29,6 +29,7 @@ import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor
 import { ReviewSidebarPanel } from '../components/review/ReviewSidebarPanel';
 import { runSkillOneshot } from '../services/agent/oneshotService';
 import { useReviewState } from '../hooks/useReviewState';
+import { useRevisionList } from '../hooks/useRevisionList';
 import { buildReviewMarkdown, type ReviewComment } from '../services/review/reviewState';
 import { saveFileDialog } from '../services/dialogService';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -54,6 +55,7 @@ import type { SearchMatch } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
 import {
   extractToc,
+  escapeRegExp,
   FLOW_LEFT_PANEL_WIDTH,
   FLOW_RIGHT_PANEL_WIDTH,
   imageExtensionFromMime,
@@ -345,6 +347,13 @@ export function AppLayout() {
     lastSelfWriteRef,
   });
 
+  // AI 改稿列表:跟当前文档相关的 {stem}.ai改{N}.md。Claude 写文件时 agentChangedPaths 变化 → 自动重扫。
+  const { revisions: aiRevisions, refresh: refreshRevisions } = useRevisionList({
+    outputBaseDir,
+    currentFilePath: file.path,
+    agentChangedPaths,
+  });
+
   useEffect(() => {
     const refreshRecentFiles = () => setRecentFiles(getRecentFiles());
     window.addEventListener('typola-recent-files-changed', refreshRecentFiles);
@@ -374,10 +383,11 @@ export function AppLayout() {
     text.length <= max ? text : `${text.slice(0, max)}…`
   ), []);
 
-  // 任务 #14 导出 review md:把意见按行内段后格式注入原文,另存为新 md。
+  // 任务 #14 导出检视版:把意见按行内段后格式注入原文,另存为 {stem}-检视版{N}.md。
+  // 版本号 N = 源文件目录下已有「-检视版{N}.md」的最大值 + 1;扫不到就 N=1。
   const handleExportReviewMarkdown = useCallback(async () => {
     if (!file.path) {
-      await messageDialog('请先打开文档再导出 review 版。', { title: '导出 review 版' });
+      await messageDialog('请先打开文档再导出检视版。', { title: '导出检视版' });
       return;
     }
     const { state, markClean } = reviewStateApi;
@@ -385,21 +395,39 @@ export function AppLayout() {
     const reviewMd = buildReviewMarkdown(file.content, state.comments);
     const baseName = file.path.replace(/\\/g, '/').split('/').pop() ?? 'document.md';
     const stem = baseName.replace(/\.[^.]+$/u, '');
-    const defaultName = `${stem}.review.md`;
+    const sep = file.path.includes('\\') ? '\\' : '/';
     const dir = file.path.replace(/[\\/][^\\/]+$/u, '');
-    const defaultPath = dir ? `${dir}${file.path.includes('\\') ? '\\' : '/'}${defaultName}` : defaultName;
+    // 扫源文件目录下现有版本号,取 max+1;扫不到回退到 1。
+    let nextVersion = 1;
+    try {
+      const { readDir } = await import('@tauri-apps/plugin-fs');
+      const entries = await readDir(dir);
+      const pattern = new RegExp(`^${escapeRegExp(stem)}-检视版(\\d+)\\.md$`, 'u');
+      const versions = entries
+        .filter((e: { name: string; isFile: boolean }) => e.isFile)
+        .map((e: { name: string }) => e.name.match(pattern)?.[1])
+        .filter((v: string | undefined): v is string => !!v)
+        .map((v: string) => Number.parseInt(v, 10))
+        .filter((n: number) => Number.isFinite(n));
+      if (versions.length > 0) nextVersion = Math.max(...versions) + 1;
+    } catch {
+      /* 读不到目录就 N=1,saveDialog 仍可让用户改 */
+    }
+    const defaultName = `${stem}-检视版${nextVersion}.md`;
+    const defaultPath = dir ? `${dir}${sep}${defaultName}` : defaultName;
     try {
       const target = await saveFileDialog(defaultPath);
       if (!target) return;
       await writeTextFile(target, reviewMd);
       markClean();
-      setTransientMessage(`已导出 review 版:${target.split(/[\\/]/).pop()}`);
+      setTransientMessage(`已导出检视版:${target.split(/[\\/]/).pop()}`);
     } catch (error) {
       await messageDialog(String(error), { title: '导出失败' });
     }
   }, [file.content, file.path, reviewStateApi]);
 
   // 任务 #15 发 AI 改:把全文 + 所有意见拼成 prompt,新会话发送,走产物回流。
+  // 文件命名约定:{stem}.ai改{N}.md(N 递增),所以每次发送前先扫一遍现有 N,取 max+1。
   const handleSendReviewToAI = useCallback(async () => {
     if (!file.path) {
       await messageDialog('请先打开文档再发起 AI 修改。', { title: '发 AI 改' });
@@ -408,25 +436,42 @@ export function AppLayout() {
     const { state, markClean } = reviewStateApi;
     if (state.comments.length === 0) return;
     const fileName = file.path.replace(/\\/g, '/').split('/').pop() ?? 'document.md';
-    // 拼 prompt:全文 + 编号意见清单 + 明确指令。
-    const commentsBlock = state.comments.map((c, idx) => (
-      `${idx + 1}. 针对片段「${truncate(c.anchor.originalText, 80)}」\n   意见:${c.text}`
-    )).join('\n\n');
+    const stem = fileName.replace(/\.[^.]+$/u, '');
+    // 现有 N 取 max + 1;列表为空/扫不到 → 1。同步刷一次确保最新。
+    refreshRevisions();
+    const existingVersions = aiRevisions
+      .filter((r: { name: string }) => r.name.startsWith(`${stem}.ai改`))
+      .map((r: { version?: number }) => r.version ?? 0);
+    const nextVersion = (existingVersions.length ? Math.max(...existingVersions) : 0) + 1;
+    const targetFileName = `${stem}.ai改${nextVersion}.md`;
+    // 拼 prompt:每条意见带「prefixHint + originalText」锚点,要求严格按锚点修改,
+    // 找不到/多处重复 → 跳过;不要扩大修改范围。
+    const commentsBlock = state.comments.map((c, idx) => {
+      const original = c.anchor.originalText || '(空)';
+      const hint = c.anchor.prefixHint
+        ? `前缀「${truncate(c.anchor.prefixHint, 40)}」+ `
+        : '';
+      return `${idx + 1}. 锚点 = ${hint}原文「${truncate(original, 160)}」\n   意见:${c.text}`;
+    }).join('\n\n');
     const prompt = [
-      `请按以下检视意见,修改我的文档《${fileName}》并产出一份完整的、可替换原文的新版本。`,
+      `请按以下检视意见,修改我的文档《${fileName}》并产出一份完整的、可替换原文的新版本。正文以当前主屏文章为准(见下方)。`,
       '',
-      '修改原则:',
-      '- 严格按编号意见执行,不要跑题',
+      '**严格修改规则(务必遵守):**',
+      '- 每条意见都附了精确锚点 = 「前缀 prefixHint」+「原文 originalText」共同唯一定位',
+      `- 每条意见**只修改该锚点对应的那一小段原文**,其他位置一律不动`,
+      `- 如果 prefixHint + originalText 在文档中找不到唯一位置(已被改动 / 重复多次),**跳过该条意见,不修改任何内容**`,
+      '- 不要因为「上下文衔接」「行文更顺」等原因扩大修改范围',
+      '- 不要调整未标记意见的段落、标题、列表、引用、代码块',
       '- 保留原文风格、章节结构、格式标记',
       '- 不要把意见本身留在结果里',
-      '- 把修改后的完整 markdown 通过文件写入工具(Write)落到工作区,文件名建议:',
-      `  ${fileName.replace(/\.[^.]+$/u, '')}.revised.md`,
+      `- 把修改后的完整 markdown 通过 Write 工具落到当前工作目录,文件名必须是:`,
+      `  ${targetFileName}`,
       '',
-      '## 待修改的全文',
+      '## 待修改的全文(当前主屏文章)',
       '',
       file.content,
       '',
-      '## 检视意见清单',
+      '## 检视意见清单(每条带唯一锚点 prefixHint + originalText)',
       '',
       commentsBlock,
     ].join('\n');
@@ -436,11 +481,11 @@ export function AppLayout() {
     try {
       await convManager.send(prompt, { conversationId: newConvId });
       markClean();
-      setTransientMessage('已交给 AI 修改,改后版本将作为产物回到编辑器');
+      setTransientMessage(`已交给 AI 修改,改后版本将作为「${targetFileName}」回到右栏列表`);
     } catch (error) {
       await messageDialog(String(error), { title: '发起 AI 修改失败' });
     }
-  }, [convManager, file.content, file.path, reviewStateApi, setLeftRailMode, truncate]);
+  }, [aiRevisions, convManager, file.content, file.path, refreshRevisions, reviewStateApi, setLeftRailMode, truncate]);
 
   const handleExportWord = useCallback(async () => {
     if (!file.path || file.fileType === 'docx') return;
@@ -928,6 +973,9 @@ export function AppLayout() {
       onRemove={(commentId) => reviewStateApi.removeComment(commentId)}
       onExport={() => void handleExportReviewMarkdown()}
       onSendToAI={() => void handleSendReviewToAI()}
+      revisions={aiRevisions}
+      onOpenRevision={(path) => { void handleOpenPath(path).catch((e) => console.warn('Failed to open AI revision:', e)); }}
+      onRefreshRevisions={refreshRevisions}
       onClose={() => setRightPanelMode('none')}
     />
   ) : null;

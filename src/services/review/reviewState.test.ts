@@ -97,13 +97,27 @@ describe('buildReviewMarkdown', () => {
     expect(out).toContain('> **检视意见，请处理**：改 3');
   });
 
-  it('锚点定位失败的意见 → 走文档末「失效的检视意见」fallback,不丢', () => {
+  it('锚点定位失败的意见 → 走文档末「检视意见汇总」兜底,不丢', () => {
     const src = '段落 A。\n\n段落 B。';
     const orphan = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('已经被删掉的片段'), '改 orphan');
     const out = buildReviewMarkdown(src, orphan.comments);
-    expect(out).toContain('## 失效的检视意见');
+    expect(out).toContain('## 检视意见汇总');
     expect(out).toContain('改 orphan');
     expect(out).toContain('已经被删掉的片段');
+  });
+
+  it('双轨保险:即使所有 anchor 都定位成功,文末汇总也照样输出(协作者/AI 兜底参照)', () => {
+    const src = '一二三段落。\n\n四五六段落。';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('一二三段落。'), '改一');
+    state = addReviewComment(state, 'a.md', mkAnchor('四五六段落。'), '改二');
+    const out = buildReviewMarkdown(src, state.comments);
+    // 段后内嵌
+    expect(out).toContain('> **检视意见，请处理**：改一');
+    expect(out).toContain('> **检视意见，请处理**：改二');
+    // 文末汇总(双轨)
+    expect(out).toContain('## 检视意见汇总');
+    expect(out).toMatch(/### 1\. 针对片段「一二三段落。」\n\n改一/);
+    expect(out).toMatch(/### 2\. 针对片段「四五六段落。」\n\n改二/);
   });
 
   it('用 prefixHint 区分多处重复 originalText 的歧义', () => {

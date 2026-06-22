@@ -24,6 +24,10 @@ export function joinLocalPath(root: string, ...parts: string[]): string {
   ].filter(Boolean).join(separator);
 }
 
+export function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
 export function imageExtensionFromMime(type: string): string {
   if (type === 'image/jpeg') return 'jpg';
   if (type === 'image/webp') return 'webp';

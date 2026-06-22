@@ -357,9 +357,12 @@ export function useConversationManager({
     setConversations((prev) => {
       const next = new Map(prev);
       next.set(id, conv);
+      // 同步刷 ref,避免后续紧跟的 send(opts.conversationId=id) 撞 stale
+      conversationsRef.current = next;
       return next;
     });
     setActiveConvId(id);
+    activeConvIdRef.current = id;
     return id;
   }, []);
 
