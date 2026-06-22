@@ -408,6 +408,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
             collapseTimerRef.current = null;
             silenceCodeBlockAssist(editorRef.current);
             collapseExpandedMarkers(editorRef.current);
+            // 粘贴/插入图片后,在 IR 重渲染稳定后,把新出现的 img 解析成可加载的 URL。
+            // resolveLocalImages 幂等(已转过的 img 会跳过),只动新插入的相对路径/远程图。
+            const host = hostRef.current;
+            if (host) void resolveLocalImages(host, filePath);
           }, IR_MARKER_COLLAPSE_DELAY_MS);
 
           onChange(value);

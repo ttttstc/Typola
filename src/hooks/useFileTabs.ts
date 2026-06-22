@@ -76,6 +76,25 @@ function fileTabId(file: OpenedFile, fallback = ''): string {
   return file.path || fallback || `untitled-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function dirname(path: string): string {
+  const normalized = path.replace(/\\/g, '/');
+  const index = normalized.lastIndexOf('/');
+  return index >= 0 ? path.slice(0, index) : '';
+}
+
+// 打开/另存文档时把它的目录加入 asset protocol scope,允许 webview 渲染该目录的本地图片。
+// 失败不阻断流程(权限或非 Tauri 环境)。
+async function allowAssetDirectoryForPath(path: string): Promise<void> {
+  const dir = dirname(path);
+  if (!dir || !('__TAURI_INTERNALS__' in window)) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('allow_asset_directory', { dir });
+  } catch (error) {
+    console.warn('Failed to allow asset directory:', error);
+  }
+}
+
 /**
  * Owns AppLayout's document/tab lifecycle without changing the existing file behaviors.
  */
@@ -184,7 +203,10 @@ export function useFileTabs({
   const handleOpen = useCallback(async () => {
     const { openFile } = await import('../services/fileService');
     const opened = await openFile(defaultEncodingRef.current);
-    if (opened) applyOpenedFile(opened);
+    if (opened) {
+      if (opened.path) await allowAssetDirectoryForPath(opened.path);
+      applyOpenedFile(opened);
+    }
   }, [applyOpenedFile]);
 
   const handleNewFile = useCallback(() => {
@@ -197,6 +219,7 @@ export function useFileTabs({
     const { openPath } = await import('../services/fileService');
     try {
       const opened = await openPath(path, defaultEncodingRef.current);
+      await allowAssetDirectoryForPath(path);
       applyOpenedFile(opened, path);
     } catch (error) {
       removeRecentFile(path);
@@ -412,6 +435,7 @@ export function useFileTabs({
     if (file.fileType === 'docx') return;
     const { saveFile } = await import('../services/fileService');
     const updated = await saveFile(file);
+    if (updated.path) await allowAssetDirectoryForPath(updated.path);
     lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
     autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
     setAutoSaveError('');
@@ -424,6 +448,7 @@ export function useFileTabs({
     if (file.fileType === 'docx') return;
     const { saveFileAs } = await import('../services/fileService');
     const updated = await saveFileAs(file);
+    if (updated.path) await allowAssetDirectoryForPath(updated.path);
     lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
     autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
     setAutoSaveError('');

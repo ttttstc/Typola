@@ -24,7 +24,11 @@ describe('Tauri capabilities', () => {
 
     expect(csp).toContain("script-src 'self' 'unsafe-eval'");
     expect(csp).not.toContain("script-src 'self' 'unsafe-eval' 'unsafe-inline'");
-    expect(csp).toContain("img-src 'self' data: file:");
+    // img-src 放行:本地图(asset/asset.localhost)+ 网络图(https/http)+ 粘贴(data/blob)。
+    expect(csp).toContain("img-src 'self'");
+    expect(csp).toContain('asset:');
+    expect(csp).toContain('asset.localhost');
+    expect(csp).toMatch(/img-src[^;]*\bhttps:\s/);
     expect(csp).toContain("frame-src 'self' data: blob:");
     expect(csp).toContain("connect-src 'self'");
   });
