@@ -37,6 +37,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - File search uses `documentSearchService` with debounced panel input. It supports plain text, regex, case-sensitive, and whole-word matching, with a hard match cap to keep very large documents responsive.
 - Document statistics use `documentStatsService` on a debounced copy of the current document, so typing does not synchronously recompute counts.
 - Source mode exposes precise CodeMirror insert and reveal operations through an editor command handle. WYSIWYG mode uses Vditor's insertion API and browser text find as a best-effort navigation path.
+- Mermaid rendering is centralized in `mermaidRenderer`. It lazy-loads the Mermaid library, converts `language-mermaid` code blocks to SVG after Vditor has rendered Markdown, preserves editable source blocks in WYSIWYG mode, and leaves syntax failures as source plus an inline error message. The same renderer feeds Markdown preview, AI/review previews, HTML preview output, and Word preview artifacts.
 
 ## Terminal
 
