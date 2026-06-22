@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- AI 工作台会持久化当前 AI Provider 选择；空对话切换 Claude Code / OpenCode 时不再弹出“新建对话”确认。
 - 心流模式打开时会主动调整左侧 AI 工作台与右侧场景栏到更接近“三栏工作台”的比例，减少右栏过宽与编辑区被压缩的问题。
 - 左侧文件树窄条切换入口改为更克制的线性图标与细指示条样式，弱化突兀感。
 - 终端新建会话的工作目录优先使用用户当前选择的文件树 workspace；未选择 workspace 时再回退到当前文件目录 / 系统默认目录。

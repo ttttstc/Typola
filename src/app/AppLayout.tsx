@@ -280,6 +280,7 @@ export function AppLayout() {
 
   const convManager = useConversationManager({
     workspaceRoot: settings.aiWorkspaceRoot || undefined,
+    agentProvider: settings.aiActiveProvider,
     claudePath: settings.aiClaudePath,
     claudeModel: settings.aiClaudeModel,
     openCodePath: settings.aiOpenCodePath,

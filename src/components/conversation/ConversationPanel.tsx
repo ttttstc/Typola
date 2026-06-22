@@ -226,13 +226,15 @@ export function ConversationPanel({
 
   const handleProviderChange = async (provider: AgentProvider) => {
     if (provider === activeProvider) return;
-    const confirmed = await confirmDialog('切换 AI Provider 会开始新对话，确定继续？', {
+    const hasConversation = messages.length > 0;
+    const confirmed = !hasConversation || await confirmDialog('切换 AI Provider 会开始新对话，确定继续？', {
       title: '切换 AI Provider',
       okLabel: '切换并新建对话',
       cancelLabel: '取消',
     });
     if (!confirmed) return;
     if (running) await onCancel();
+    updateSettings({ aiActiveProvider: provider });
     onSwitchProvider(provider);
   };
 

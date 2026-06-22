@@ -25,6 +25,8 @@ import {
   type HtmlExportPreset,
   type HtmlExportPresetId,
 } from './htmlExportPresets';
+import type { AgentProvider } from './agent/provider';
+import { normalizeAgentProvider } from './agent/provider';
 import {
   DEFAULT_LICENSE_STATE,
   STANDARD_PRESET_SLOT_LIMIT,
@@ -210,6 +212,7 @@ export interface AppSettings {
   terminalShortcutPreset: TerminalShortcutPreset;
   terminalConfirmMultilinePaste: boolean;
   // AI 工作台
+  aiActiveProvider: AgentProvider;
   aiClaudePath: string;
   aiClaudeModel: string;
   aiOpenCodePath: string;
@@ -262,6 +265,7 @@ const defaults: AppSettings = {
   terminalCursorBlink: true,
   terminalShortcutPreset: 'default',
   terminalConfirmMultilinePaste: true,
+  aiActiveProvider: 'claude',
   aiClaudePath: '',
   aiClaudeModel: '',
   aiOpenCodePath: '',
@@ -788,6 +792,7 @@ export function getSettings(): AppSettings {
       terminalCursorBlink: stored.terminalCursorBlink !== false,
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
+      aiActiveProvider: normalizeAgentProvider(stored.aiActiveProvider),
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
       aiClaudeModel: normalizeModelString(stored.aiClaudeModel),
       aiOpenCodePath: normalizeExecutablePath(stored.aiOpenCodePath),
@@ -873,6 +878,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     terminalConfirmMultilinePaste: (
       patch.terminalConfirmMultilinePaste ?? current.terminalConfirmMultilinePaste
     ) !== false,
+    aiActiveProvider: normalizeAgentProvider(patch.aiActiveProvider ?? current.aiActiveProvider),
     aiClaudePath: normalizeExecutablePath(patch.aiClaudePath ?? current.aiClaudePath),
     aiClaudeModel: normalizeModelString(patch.aiClaudeModel ?? current.aiClaudeModel),
     aiOpenCodePath: normalizeExecutablePath(patch.aiOpenCodePath ?? current.aiOpenCodePath),

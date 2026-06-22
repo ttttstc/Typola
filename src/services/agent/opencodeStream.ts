@@ -31,6 +31,14 @@ function readStopReason(record: Record<string, unknown>): unknown {
   return record.stopReason ?? record.stop_reason ?? record.reason ?? 'done';
 }
 
+function isTextEventType(type: string): boolean {
+  return /^(message|assistant|text|delta|text_delta)$/u.test(type);
+}
+
+function isDoneEventType(type: string): boolean {
+  return /^(done|complete|finished|end)$/u.test(type);
+}
+
 export function createOpenCodeStreamHandler(onEvent: Emit) {
   let buffer = '';
 
@@ -53,12 +61,12 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
 
     const type = firstString(record.type, record.event);
     const text = readAssistantText(record);
-    if (text && (!type || /message|assistant|text|delta/u.test(type))) {
+    if (text && (!type || isTextEventType(type))) {
       onEvent({ type: 'text_delta', delta: text });
       return;
     }
 
-    if (type && /done|complete|finish|end/u.test(type)) {
+    if (type && isDoneEventType(type)) {
       onEvent({
         type: 'usage',
         usage: record.usage,
@@ -69,7 +77,7 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
       return;
     }
 
-    if (type && /error/u.test(type)) {
+    if (type === 'error') {
       onEvent({ type: 'error', message: firstString(record.message, record.error) ?? trimmed });
       return;
     }

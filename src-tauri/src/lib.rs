@@ -1280,7 +1280,11 @@ fn start_agent_headless_run(
         let cwd_path = PathBuf::from(cwd);
         std::fs::create_dir_all(&cwd_path)
             .map_err(|error| format!("failed to create {} cwd: {error}", provider.display_name()))?;
-        command.current_dir(cwd_path);
+        // OpenCode has a first-class `--dir` flag for the project directory. Use that single
+        // path signal to avoid ambiguity between process cwd and provider cwd.
+        if provider != AgentProvider::Opencode {
+            command.current_dir(cwd_path);
+        }
     }
 
     let mut child = command
@@ -1423,10 +1427,14 @@ fn build_claude_headless_args(
 
 fn build_opencode_headless_args(
     session_uuid: &str,
+    _resumed: bool,
     model: Option<&str>,
     cwd: Option<&str>,
     prompt: &str,
 ) -> Vec<String> {
+    // OpenCode documents `--session` as the session id to continue. Typola stores one UUID per
+    // Provider-bound Conversation, so first and later turns pass the same value; OpenCode owns the
+    // create-or-continue behavior for that id and has no Claude-style separate `--resume` flag.
     let mut args = vec![
         "run".to_string(),
         "--format".to_string(),
@@ -1463,7 +1471,7 @@ fn build_agent_headless_command(
             prompt_stdin: true,
         },
         AgentProvider::Opencode => AgentCommandSpec {
-            args: build_opencode_headless_args(session_uuid, model, cwd, prompt),
+            args: build_opencode_headless_args(session_uuid, resumed, model, cwd, prompt),
             prompt_stdin: false,
         },
     }
@@ -1977,6 +1985,7 @@ mod tests {
     fn opencode_headless_args_use_run_json_session_and_prompt_arg() {
         let args = build_opencode_headless_args(
             "session-123",
+            false,
             Some("anthropic/claude-sonnet-4"),
             Some("D:\\workspace\\.typola-output\\conv-1"),
             "生成摘要",
@@ -1989,6 +1998,15 @@ mod tests {
         assert!(args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
         assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
         assert_eq!(args.last().map(String::as_str), Some("生成摘要"));
+    }
+
+    #[test]
+    fn opencode_headless_resume_uses_the_same_session_argument() {
+        let args = build_opencode_headless_args("session-123", true, None, None, "继续");
+
+        assert!(args.windows(2).any(|pair| pair == ["--session", "session-123"]));
+        assert!(!args.contains(&"--resume".to_string()));
+        assert!(!args.contains(&"--continue".to_string()));
     }
 
     #[test]

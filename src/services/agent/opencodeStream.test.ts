@@ -42,4 +42,22 @@ describe('createOpenCodeStreamHandler', () => {
       { type: 'raw', line: JSON.stringify({ type: 'something_new', payload: { value: 1 } }) },
     ]);
   });
+
+  it('does not classify event names by substring matches', () => {
+    const events: AgentEvent[] = [];
+    const handler = createOpenCodeStreamHandler((event) => events.push(event));
+
+    const lines = [
+      { type: 'rendered', content: '不应算完成' },
+      { type: 'suspended', content: '不应算完成' },
+      { type: 'errorDetails', message: '不应算错误' },
+      { type: 'textDocument', content: '不应算正文' },
+    ];
+    for (const line of lines) {
+      handler.feed(JSON.stringify(line) + '\n');
+    }
+    handler.flush();
+
+    expect(events).toEqual(lines.map((line) => ({ type: 'raw', line: JSON.stringify(line) })));
+  });
 });
