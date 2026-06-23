@@ -101,6 +101,7 @@ export type PreviewWidth = 640 | 680 | 720 | 800;
 export type AppLocale = 'zh-CN' | 'en-US' | 'ja-JP';
 export type TerminalCursorStyle = 'block' | 'bar' | 'underline';
 export type TerminalShortcutPreset = 'default' | 'windows';
+export type ImageInsertAction = 'keep' | 'copy' | 'upload';
 
 export const PREVIEW_FONT_FAMILY_OPTIONS: ReadonlyArray<{
   value: PreviewFontFamily;
@@ -187,6 +188,16 @@ export interface AppSettings {
   editorSpellCheck: boolean;
   /** 选区浮条(选中即现)开关。关掉后右键菜单 / Ctrl+K 仍在,只是不自动浮现。 */
   selectionFloatingBarEnabled: boolean;
+  // 图像
+  imageInsertAction: ImageInsertAction;
+  imageCopyDestination: string;
+  imageApplyToLocal: boolean;
+  imageApplyToOnline: boolean;
+  imagePreferRelative: boolean;
+  imageEnsureDotPrefix: boolean;
+  imageEscapeUrl: boolean;
+  imageAllowYamlUpload: boolean;
+  imageUploadCommand: string;
   // 预览
   previewFontFamily: PreviewFontFamily;
   previewChineseFontFamily: PreviewChineseFontFamily;
@@ -241,6 +252,15 @@ const defaults: AppSettings = {
   editorLineNumbers: true,
   editorSpellCheck: false,
   selectionFloatingBarEnabled: true,
+  imageInsertAction: 'copy',
+  imageCopyDestination: 'assets',
+  imageApplyToLocal: true,
+  imageApplyToOnline: false,
+  imagePreferRelative: true,
+  imageEnsureDotPrefix: false,
+  imageEscapeUrl: false,
+  imageAllowYamlUpload: false,
+  imageUploadCommand: '',
   previewFontFamily: 'Default',
   previewChineseFontFamily: 'Default',
   previewLatinFontFamily: 'Default',
@@ -376,6 +396,21 @@ function normalizeTerminalCursorStyle(value: unknown): TerminalCursorStyle {
 
 function normalizeTerminalShortcutPreset(value: unknown): TerminalShortcutPreset {
   return value === 'windows' ? 'windows' : 'default';
+}
+
+function normalizeImageInsertAction(value: unknown): ImageInsertAction {
+  return value === 'keep' || value === 'upload' ? value : 'copy';
+}
+
+function normalizeImageCopyDestination(value: unknown): string {
+  const normalized = typeof value === 'string'
+    ? value.replace(/[\0\r\n]/g, '').trim().slice(0, 260)
+    : '';
+  return normalized || defaults.imageCopyDestination;
+}
+
+function normalizeImageUploadCommand(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/[\0\r\n]/g, ' ').trim().slice(0, 1000) : '';
 }
 
 function quoteFontName(name: string): string {
@@ -780,6 +815,15 @@ export function getSettings(): AppSettings {
       terminalCursorBlink: stored.terminalCursorBlink !== false,
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
+      imageInsertAction: normalizeImageInsertAction(stored.imageInsertAction),
+      imageCopyDestination: normalizeImageCopyDestination(stored.imageCopyDestination),
+      imageApplyToLocal: stored.imageApplyToLocal !== false,
+      imageApplyToOnline: stored.imageApplyToOnline === true,
+      imagePreferRelative: stored.imagePreferRelative !== false,
+      imageEnsureDotPrefix: stored.imageEnsureDotPrefix === true,
+      imageEscapeUrl: stored.imageEscapeUrl === true,
+      imageAllowYamlUpload: stored.imageAllowYamlUpload === true,
+      imageUploadCommand: normalizeImageUploadCommand(stored.imageUploadCommand),
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
       aiClaudeModel: normalizeExecutablePath(stored.aiClaudeModel),
       aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
