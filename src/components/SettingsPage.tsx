@@ -10,6 +10,7 @@ import {
   preloadGeneralSection,
   preloadHtmlExportSection,
   preloadAiCliSection,
+  preloadImageSection,
   preloadPreviewSection,
   preloadTerminalSection,
 } from './settings/preloadSections';
@@ -18,6 +19,7 @@ type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 type SettingsSection =
   | 'general'
   | 'editor'
+  | 'image'
   | 'preview'
   | 'appearance'
   | 'export'
@@ -32,6 +34,7 @@ type SettingsSection =
 // stays a pure component file (required by react-refresh).
 const GeneralSection = lazy(preloadGeneralSection);
 const EditorSection = lazy(preloadEditorSection);
+const ImageSection = lazy(preloadImageSection);
 const PreviewSection = lazy(preloadPreviewSection);
 const AppearanceSection = lazy(preloadAppearanceSection);
 const ExportSection = lazy(preloadExportSection);
@@ -50,6 +53,7 @@ interface SettingsPageProps {
 const NAV_ITEMS: { id: SettingsSection; labelKey: Parameters<typeof translate>[1] }[] = [
   { id: 'general', labelKey: 'navGeneral' },
   { id: 'editor', labelKey: 'navEditor' },
+  { id: 'image', labelKey: 'navImage' },
   { id: 'preview', labelKey: 'navPreview' },
   { id: 'appearance', labelKey: 'navAppearance' },
   { id: 'export', labelKey: 'navExport' },
@@ -114,6 +118,7 @@ export function SettingsPage({ onClose, onUpdateAvailable, initialSection }: Set
           <Suspense fallback={<SectionFallback />}>
             {activeSection === 'general' && <GeneralSection />}
             {activeSection === 'editor' && <EditorSection />}
+            {activeSection === 'image' && <ImageSection />}
             {activeSection === 'preview' && <PreviewSection />}
             {activeSection === 'appearance' && <AppearanceSection />}
             {activeSection === 'export' && <ExportSection />}
