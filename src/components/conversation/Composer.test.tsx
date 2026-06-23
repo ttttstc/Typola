@@ -159,4 +159,25 @@ describe('Composer', () => {
 
     expect(onSwitchProvider).toHaveBeenCalledWith('opencode');
   });
+
+  it('uses OpenCode copy when OpenCode is the active provider', () => {
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="opencode"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
+          onSend={() => undefined}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+    expect(textarea?.placeholder).toContain('OpenCode');
+    expect(textarea?.placeholder).not.toContain('Claude');
+    expect(host.textContent).toContain('OpenCode · 默认模型');
+  });
 });

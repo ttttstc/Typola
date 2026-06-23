@@ -58,6 +58,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [value, setValue] = useState('');
   const [panel, setPanel] = useState<'mcp' | 'plugins' | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const providerLabel = getAgentProviderConfig(activeProvider).label;
   const {
     attachedFiles,
     currentFileDismissed,
@@ -124,7 +125,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       <textarea
         ref={textareaRef}
         value={value}
-        placeholder="让 Claude 帮你润色、总结、生成文档..."
+        placeholder={`让 ${providerLabel} 帮你润色、总结、生成文档...`}
         disabled={disabled}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
@@ -162,10 +163,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </label>
           <span className="conversation-model-placeholder" title="在设置 · AI CLI 配置模型">
             {currentModel
-              ? `${getAgentProviderConfig(activeProvider).label} · ${currentModel}`
+              ? `${providerLabel} · ${currentModel}`
               : configuredModel
-                ? `${getAgentProviderConfig(activeProvider).label} · ${configuredModel}`
-                : `${getAgentProviderConfig(activeProvider).label} · 默认模型`}
+                ? `${providerLabel} · ${configuredModel}`
+                : `${providerLabel} · 默认模型`}
           </span>
         </div>
         {running ? (

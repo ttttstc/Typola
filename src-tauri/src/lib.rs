@@ -1426,23 +1426,21 @@ fn build_claude_headless_args(
 }
 
 fn build_opencode_headless_args(
-    session_uuid: &str,
-    _resumed: bool,
+    _session_uuid: &str,
+    resumed: bool,
     model: Option<&str>,
     cwd: Option<&str>,
     prompt: &str,
 ) -> Vec<String> {
-    // OpenCode documents `--session` as the session id to continue. Typola stores one UUID per
-    // Provider-bound Conversation, so first and later turns pass the same value; OpenCode owns the
-    // create-or-continue behavior for that id and has no Claude-style separate `--resume` flag.
     let mut args = vec![
         "run".to_string(),
         "--format".to_string(),
         "json".to_string(),
-        "--session".to_string(),
-        session_uuid.to_string(),
         "--dangerously-skip-permissions".to_string(),
     ];
+    if resumed {
+        args.push("--continue".to_string());
+    }
     if let Some(dir) = cwd.map(str::trim).filter(|value| !value.is_empty()) {
         args.push("--dir".to_string());
         args.push(dir.to_string());
@@ -1945,7 +1943,9 @@ mod tests {
         assert!(
             path == "opencode"
                 || path.ends_with("\\npm\\opencode.cmd")
-                || path.ends_with("\\npm\\opencode.exe"),
+                || path.ends_with("\\npm\\opencode.exe")
+                || path.ends_with("\\opencode.cmd")
+                || path.ends_with("\\opencode.exe"),
             "unexpected default OpenCode path: {path}"
         );
         assert!(!path.ends_with(".ps1"), "OpenCode should not resolve to PowerShell wrapper: {path}");
@@ -1982,7 +1982,7 @@ mod tests {
     }
 
     #[test]
-    fn opencode_headless_args_use_run_json_session_and_prompt_arg() {
+    fn opencode_headless_args_start_without_session_and_use_prompt_arg() {
         let args = build_opencode_headless_args(
             "session-123",
             false,
@@ -1993,7 +1993,9 @@ mod tests {
 
         assert_eq!(args.first().map(String::as_str), Some("run"));
         assert!(args.windows(2).any(|pair| pair == ["--format", "json"]));
-        assert!(args.windows(2).any(|pair| pair == ["--session", "session-123"]));
+        assert!(!args.contains(&"--session".to_string()));
+        assert!(!args.contains(&"session-123".to_string()));
+        assert!(!args.contains(&"--continue".to_string()));
         assert!(args.windows(2).any(|pair| pair == ["--model", "anthropic/claude-sonnet-4"]));
         assert!(args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
         assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
@@ -2004,9 +2006,10 @@ mod tests {
     fn opencode_headless_resume_uses_the_same_session_argument() {
         let args = build_opencode_headless_args("session-123", true, None, None, "继续");
 
-        assert!(args.windows(2).any(|pair| pair == ["--session", "session-123"]));
+        assert!(args.contains(&"--continue".to_string()));
+        assert!(!args.contains(&"--session".to_string()));
+        assert!(!args.contains(&"session-123".to_string()));
         assert!(!args.contains(&"--resume".to_string()));
-        assert!(!args.contains(&"--continue".to_string()));
     }
 
     #[test]

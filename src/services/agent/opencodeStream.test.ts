@@ -29,6 +29,39 @@ describe('createOpenCodeStreamHandler', () => {
     ]);
   });
 
+  it('maps real OpenCode json text and step_finish events', () => {
+    const events: AgentEvent[] = [];
+    const handler = createOpenCodeStreamHandler((event) => events.push(event));
+
+    handler.feed(JSON.stringify({
+      type: 'text',
+      sessionID: 'ses_10c664a7affepqcABzQGr51nxk',
+      part: { type: 'text', text: 'ok' },
+    }) + '\n');
+    handler.feed(JSON.stringify({
+      type: 'step_finish',
+      sessionID: 'ses_10c664a7affepqcABzQGr51nxk',
+      part: {
+        type: 'step-finish',
+        reason: 'stop',
+        tokens: { total: 11813, input: 11801, output: 2, reasoning: 10 },
+        cost: 0,
+      },
+    }) + '\n');
+    handler.flush();
+
+    expect(events).toEqual([
+      { type: 'text_delta', delta: 'ok' },
+      {
+        type: 'usage',
+        usage: { total: 11813, input: 11801, output: 2, reasoning: 10 },
+        costUsd: 0,
+        durationMs: undefined,
+        stopReason: 'stop',
+      },
+    ]);
+  });
+
   it('keeps unknown or invalid lines as raw events', () => {
     const events: AgentEvent[] = [];
     const handler = createOpenCodeStreamHandler((event) => events.push(event));

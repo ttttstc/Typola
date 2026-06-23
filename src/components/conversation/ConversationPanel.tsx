@@ -107,7 +107,7 @@ export function ConversationPanel({
   const cwd = settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
   const hasHistory = messages.length > 0;
-  // 优先用 claude 进程实际跑的模型(来自 init 事件),fallback 才是用户在 Typola 设置里填的
+  // 优先用 provider 进程实际跑的模型(来自 init 事件),fallback 才是用户在 Typola 设置里填的
   const providerConfig = getAgentProviderConfig(activeProvider);
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
   const modelLabel = currentModel
@@ -264,7 +264,7 @@ export function ConversationPanel({
       <header className="conversation-header">
         <div>
           <strong>AI 工作台</strong>
-          <span className="conversation-model-badge" title="当前使用的 Claude 模型">
+          <span className="conversation-model-badge" title={`当前使用的 ${providerConfig.label} 模型`}>
             {modelLabel}
           </span>
           <ConversationPill

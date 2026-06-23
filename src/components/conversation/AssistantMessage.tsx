@@ -181,7 +181,7 @@ export function AssistantMessage({
           )}
         </>
       ) : (
-        !message.error && message.tools.length === 0 && <p className="conversation-muted">Claude 正在思考...</p>
+        !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
       {message.tools.map((tool) => <ToolCard key={tool.id} tool={tool} />)}
       <ErrorRetryCard message={message.error ?? ''} />

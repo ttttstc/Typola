@@ -28,7 +28,8 @@ function readAssistantText(record: Record<string, unknown>): string | undefined 
 }
 
 function readStopReason(record: Record<string, unknown>): unknown {
-  return record.stopReason ?? record.stop_reason ?? record.reason ?? 'done';
+  const part = asRecord(record.part);
+  return record.stopReason ?? record.stop_reason ?? record.reason ?? part?.reason ?? 'done';
 }
 
 function isTextEventType(type: string): boolean {
@@ -36,7 +37,7 @@ function isTextEventType(type: string): boolean {
 }
 
 function isDoneEventType(type: string): boolean {
-  return /^(done|complete|finished|end)$/u.test(type);
+  return /^(done|complete|finished|end|step_finish|step-finish)$/u.test(type);
 }
 
 export function createOpenCodeStreamHandler(onEvent: Emit) {
@@ -67,10 +68,11 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
     }
 
     if (type && isDoneEventType(type)) {
+      const part = asRecord(record.part);
       onEvent({
         type: 'usage',
-        usage: record.usage,
-        costUsd: record.costUsd ?? record.cost_usd,
+        usage: record.usage ?? part?.tokens,
+        costUsd: record.costUsd ?? record.cost_usd ?? part?.cost,
         durationMs: record.durationMs ?? record.duration_ms,
         stopReason: readStopReason(record),
       });
