@@ -14,7 +14,9 @@ type Props = {
   x: number;
   y: number;
   hasSelection: boolean;
+  hasMermaidSvg?: boolean;
   onPick: (action: FormatAction) => void;
+  onCopyMermaidSvg?: () => void;
   onClose: () => void;
   // 选区 AI 动作（可选，渲染在菜单底部）。仅 hasSelection 时可点。
   onPickAI?: (action: SelectionActionId) => void;
@@ -22,7 +24,17 @@ type Props = {
 
 const AI_ACTION_IDS: SelectionActionId[] = ['polish', 'shorten', 'expand', 'explain', 'custom'];
 
-export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose, onPickAI }: Props) {
+export function EditorContextMenu({
+  open,
+  x,
+  y,
+  hasSelection,
+  hasMermaidSvg = false,
+  onPick,
+  onCopyMermaidSvg,
+  onClose,
+  onPickAI,
+}: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const adjustedRef = useRef({ left: x, top: y });
 
@@ -67,6 +79,11 @@ export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose, o
     onClose();
   };
 
+  const copyMermaidSvg = () => {
+    onCopyMermaidSvg?.();
+    onClose();
+  };
+
   return (
     <div
       ref={menuRef}
@@ -108,6 +125,13 @@ export function EditorContextMenu({ open, x, y, hasSelection, onPick, onClose, o
       <MenuItem label="复制" hint="Ctrl+C" disabled={!hasSelection} onClick={() => pick({ type: 'copy' })} />
       <MenuItem label="粘贴" hint="Ctrl+V" onClick={() => pick({ type: 'paste' })} />
       <MenuItem label="全选" hint="Ctrl+A" onClick={() => pick({ type: 'select-all' })} />
+
+      {hasMermaidSvg && (
+        <>
+          <div className="editor-ctx-separator" />
+          <MenuItem label="复制为 SVG" onClick={copyMermaidSvg} />
+        </>
+      )}
 
       {onPickAI && (
         <>

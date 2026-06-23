@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - AI 工作台新增 M2 产物回流：Claude 写入的生成类产物会暂存到工作区 `.typola-output/`，右下角以文件 chips 展示，点击直接在中间编辑器打开，并可一键保存到工作区。
 - 编辑器与右侧预览同步滚动：编辑器滚动时右侧 Word / 公众号预览按 scroll ratio 单向同步（rAF 节流，零额外重渲染）。
 - 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
+- 新增 Mermaid 图表渲染：阅读、心流、检视、HTML 预览和 Word 预览会把 ` ```mermaid ` 代码块渲染为 SVG 图，语法错误保留源码并显示错误条，WYSIWYG 中右键图表可复制 SVG。
 
 ### Changed
 
@@ -59,6 +60,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 `npm run tauri dev` 在 Windows 上可能因 Vite 监听 `src-tauri/target` Rust 构建产物、撞到被锁定的 `app_lib.dll` 而退出的问题。
 - 修复多个未保存新建文档同名导致关闭 tab 时误关其他“未命名”文档的问题：新建文档会生成可区分名称与稳定内部 tab id。
 - 修复只有一个已打开文档时没有 tab 关闭入口的问题；默认空白初始态仍保持无 tab。
 - 新增当前文件重命名能力：可双击顶部文件名或 tab 文件名打开重命名弹窗，真实重命名磁盘文件并同步 tab / 最近文件。

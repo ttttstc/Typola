@@ -243,6 +243,32 @@
   max-width: 100%;
 }
 
+.typola-mermaid {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
+.typola-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.typola-mermaid-error {
+  margin: 0.5em 0;
+  padding: 8px 12px;
+  border-left: 3px solid #c0392b;
+  border-radius: 4px;
+  background: #fdecea;
+  color: #a93226;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .preview-content hr {
   border: none;
   border-top: 1px solid var(--border);

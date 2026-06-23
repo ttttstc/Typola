@@ -5773,6 +5773,37 @@ html[data-theme='dark'] .terminal-session {
   margin-left: 16px;
 }
 
+.wysiwyg-editor-pane .typola-mermaid {
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+  margin: 1em 0;
+  overflow-x: auto;
+  cursor: pointer;
+}
+
+.wysiwyg-editor-pane .typola-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.wysiwyg-editor-pane .typola-mermaid-source-hidden {
+  display: none !important;
+}
+
+.wysiwyg-editor-pane .typola-mermaid-error {
+  margin: 0.5em 0;
+  padding: 8px 12px;
+  border-left: 3px solid #c0392b;
+  border-radius: 4px;
+  background: #fdecea;
+  color: #a93226;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .selection-ai-section-title {
   padding: 4px 10px 2px;
   font-size: 10.5px;

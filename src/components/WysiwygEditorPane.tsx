@@ -3,6 +3,7 @@ import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import { resolveLocalImages } from '../services/localImageResolver';
+import { renderMermaidIn, serializeMermaidSvg } from '../services/mermaidRenderer';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
@@ -122,6 +123,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const latestSource = useRef(source);
   const lastEmittedValue = useRef(source);
   const collapseTimerRef = useRef<number | null>(null);
+  // 光标在 mermaid 块外 idle 一会后自动收回展开的源码块为图(对齐 Typora 体验)。
+  // selectionchange 触发,debounce 350ms。renderMermaidIn 本身 skip 当前 selection 所在的 pre,
+  // 所以光标停在某块内不会让那块收回,只会让"已展开但用户已离开"的块收回。
+  const mermaidIdleTimerRef = useRef<number | null>(null);
   const onScrollRatioRef = useRef(onScrollRatio);
   // 记录最近一次真实选区,用于 AI 回复的“替换选区”操作。
   const lastSelectionRangeRef = useRef<Range | null>(null);
@@ -147,7 +152,12 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   useEffect(() => {
     undoStackRef.current = [];
   }, [filePath]);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    hasSelection: boolean;
+    mermaidTarget: Element | null;
+  } | null>(null);
   // 选区浮条状态:跟着 IR 选区变化重算 rect + hasSelection;由 selectionchange listener 更新。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
@@ -186,7 +196,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     event.preventDefault();
     const sel = ir.ownerDocument?.defaultView?.getSelection();
     const hasSelection = !!sel && !sel.isCollapsed && (sel.toString().length > 0);
-    setContextMenu({ x: event.clientX, y: event.clientY, hasSelection });
+    const mermaidTarget = event.target instanceof Element ? event.target.closest('.typola-mermaid') : null;
+    setContextMenu({ x: event.clientX, y: event.clientY, hasSelection, mermaidTarget });
   }, []);
 
   const handleMenuPick = useCallback((action: FormatAction) => {
@@ -195,6 +206,16 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     editor.focus();
     void applyVditorFormat(editor, action);
   }, []);
+
+  const handleCopyMermaidSvg = useCallback(async () => {
+    const svg = serializeMermaidSvg(contextMenu?.mermaidTarget ?? null);
+    if (!svg) return;
+    try {
+      await navigator.clipboard?.writeText(svg);
+    } catch (error) {
+      console.warn('Failed to copy Mermaid SVG:', error);
+    }
+  }, [contextMenu?.mermaidTarget]);
 
   // 抽 triggerAIAction:菜单/浮条/Ctrl+K 都用它,统一组装 anchor + origin。
   const triggerAIAction = useCallback((action: SelectionActionId, origin?: { x: number; y: number }) => {
@@ -239,6 +260,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       x: pos?.x ?? 0,
       y: pos?.y ?? 0,
       hasSelection: true,
+      mermaidTarget: null,
     });
   }, [filePath, getSavedOrCurrentSelection, onAIAction]);
 
@@ -320,24 +342,44 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       });
     };
     host.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    const scheduleMermaidIdleRender = () => {
+      if (mermaidIdleTimerRef.current !== null) {
+        window.clearTimeout(mermaidIdleTimerRef.current);
+      }
+      mermaidIdleTimerRef.current = window.setTimeout(() => {
+        mermaidIdleTimerRef.current = null;
+        const host = hostRef.current;
+        if (!host) return;
+        void renderMermaidIn(host, {
+          theme: settings.theme === 'dark' ? 'dark' : 'default',
+          editable: true,
+        });
+      }, 350);
+    };
+
     const handleSelectionChange = () => {
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
       if (!ir) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
+        scheduleMermaidIdleRender();
         return;
       }
       const sel = ir.ownerDocument?.defaultView?.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed || sel.toString().length === 0) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
+        // 即便 collapsed 选区(光标移动到非 mermaid 区),也安排 idle 渲染
+        // —— renderMermaidIn 内部会 skip selection 所在 pre,所以光标停在 mermaid 块内不会收回。
+        scheduleMermaidIdleRender();
         return;
       }
       const range = sel.getRangeAt(0);
       if (!ir.contains(range.commonAncestorContainer)) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
+        scheduleMermaidIdleRender();
         return;
       }
       lastSelectionRangeRef.current = range.cloneRange();
@@ -350,6 +392,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         setFloatingHasSelection(false);
         setFloatingRect(null);
       }
+      scheduleMermaidIdleRender();
     };
     document.addEventListener('selectionchange', handleSelectionChange);
 
@@ -394,7 +437,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         },
         after() {
           const host = hostRef.current;
-          if (host) void resolveLocalImages(host, filePath);
+          if (host) {
+            void resolveLocalImages(host, filePath);
+            void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+          }
         },
         input(value) {
           if (applyingExternalValue.current) return;
@@ -411,7 +457,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
             // 粘贴/插入图片后,在 IR 重渲染稳定后,把新出现的 img 解析成可加载的 URL。
             // resolveLocalImages 幂等(已转过的 img 会跳过),只动新插入的相对路径/远程图。
             const host = hostRef.current;
-            if (host) void resolveLocalImages(host, filePath);
+            if (host) {
+              void resolveLocalImages(host, filePath);
+              void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+            }
           }, IR_MARKER_COLLAPSE_DELAY_MS);
 
           onChange(value);
@@ -447,6 +496,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       if (collapseTimerRef.current !== null) {
         window.clearTimeout(collapseTimerRef.current);
         collapseTimerRef.current = null;
+      }
+      if (mermaidIdleTimerRef.current !== null) {
+        window.clearTimeout(mermaidIdleTimerRef.current);
+        mermaidIdleTimerRef.current = null;
       }
       editorRef.current?.destroy();
       editorRef.current = null;
@@ -639,7 +692,9 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         x={contextMenu?.x ?? 0}
         y={contextMenu?.y ?? 0}
         hasSelection={contextMenu?.hasSelection ?? false}
+        hasMermaidSvg={Boolean(contextMenu?.mermaidTarget)}
         onPick={handleMenuPick}
+        onCopyMermaidSvg={handleCopyMermaidSvg}
         onClose={handleMenuClose}
         onPickAI={onAIAction ? handleAIPick : undefined}
       />

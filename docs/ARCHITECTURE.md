@@ -37,6 +37,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - File search uses `documentSearchService` with debounced panel input. It supports plain text, regex, case-sensitive, and whole-word matching, with a hard match cap to keep very large documents responsive.
 - Document statistics use `documentStatsService` on a debounced copy of the current document, so typing does not synchronously recompute counts.
 - Source mode exposes precise CodeMirror insert and reveal operations through an editor command handle. WYSIWYG mode uses Vditor's insertion API and browser text find as a best-effort navigation path.
+- Mermaid rendering is centralized in `mermaidRenderer`. It lazy-loads the Mermaid library, converts `language-mermaid` code blocks to SVG after Vditor has rendered Markdown, preserves editable source blocks in WYSIWYG mode, and leaves syntax failures as source plus an inline error message. The same renderer feeds Markdown preview, AI/review previews, HTML preview output, and Word preview artifacts.
 
 ## Terminal
 
@@ -78,6 +79,7 @@ The terminal is implemented with Tauri commands plus event streaming:
 
 ## Packaging
 
+- `npm run tauri dev` 运行时，Vite 会忽略 `src-tauri/target/**`，避免前端 dev server 监听 Rust 构建产物并在 Windows 上撞到 `app_lib.dll` 文件锁。
 - Installer builds continue to use `tauri build` and produce Windows `MSI` plus `NSIS` setup packages from `src-tauri/target/release/bundle/`.
 - Portable builds are produced by `scripts/build-portable.mjs`.
 - On Windows, the portable packager copies `typola.exe` plus a small runtime note into a staging folder and emits `bundle/portable/*_windows-x64_portable.zip`.
