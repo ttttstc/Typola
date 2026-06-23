@@ -54,6 +54,14 @@ import { getRecentFiles, type RecentFile } from '../services/recentFilesService'
 import type { SearchMatch } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
 import {
+  formatImageSrc,
+  isImagePath,
+  parseUploadUrls,
+  pathBasenameWithoutExtension,
+  resolveCopyDestination,
+  resolveImageInsertAction,
+} from '../services/imageInsert';
+import {
   extractToc,
   escapeRegExp,
   FLOW_LEFT_PANEL_WIDTH,
@@ -518,6 +526,105 @@ export function AppLayout() {
     editorCommandRef.current?.insertText(markdown);
   }, []);
 
+  // 三入口统一(粘贴 / 拖拽 / 选本地文件)→ 按 settings.imageInsertAction 走 keep/copy/upload
+  // 三态。upload 失败回退本地复制,保证图片不丢。
+  const insertImageFromSource = useCallback(async (source: {
+    localPath?: string;
+    bytes?: Uint8Array;
+    fileName?: string;
+    mime?: string;
+  }) => {
+    const currentFile = fileRef.current;
+    if (currentFile.fileType === 'docx') return;
+    if (!currentFile.path) {
+      setTransientMessage('请先保存文档，再插入图片。');
+      return;
+    }
+
+    const { invoke } = await import('@tauri-apps/api/core');
+    const resolved = resolveImageInsertAction(settings, currentFile.content);
+    let action = resolved.action;
+    if (source.localPath && !settings.imageApplyToLocal) action = 'keep';
+    if (!source.localPath && action === 'keep') action = 'copy';
+
+    const copyDestination = resolveCopyDestination(currentFile.path, resolved.copyDestination);
+    const fileName = source.fileName
+      ?? (source.localPath ? source.localPath.replace(/\\/g, '/').split('/').pop() : undefined)
+      ?? `pasted-${new Date().toISOString().replace(/[:.]/g, '-')}.${imageExtensionFromMime(source.mime ?? 'image/png')}`;
+
+    const copyImage = async () => {
+      const result = await invoke<{ path: string }>('process_inserted_image', {
+        request: {
+          documentPath: currentFile.path,
+          sourceBytes: source.bytes ? Array.from(source.bytes) : undefined,
+          sourcePath: source.localPath,
+          fileName,
+          copyDestination,
+        },
+      });
+      return result.path;
+    };
+
+    try {
+      if (action === 'keep' && source.localPath) {
+        const src = formatImageSrc(source.localPath, currentFile.path, settings);
+        insertMarkdown(createImageMarkdown('图片', src));
+        return;
+      }
+
+      if (action === 'upload' && settings.imageUploadCommand.trim()) {
+        let uploadPath = source.localPath;
+        if (!uploadPath) uploadPath = await copyImage();
+        try {
+          const uploadResult = await invoke<{ urls: string[]; rawStdout: string }>('upload_image_via_command', {
+            request: {
+              command: settings.imageUploadCommand,
+              imagePaths: [uploadPath],
+              documentPath: currentFile.path,
+              documentName: pathBasenameWithoutExtension(currentFile.path),
+            },
+          });
+          const [url] = uploadResult.urls.length > 0
+            ? uploadResult.urls
+            : parseUploadUrls(uploadResult.rawStdout, 1);
+          insertMarkdown(createImageMarkdown('图片', url));
+          setTransientMessage('图片已上传。');
+          return;
+        } catch (error) {
+          console.warn('Image upload failed, falling back to copy:', error);
+          setTransientMessage('图片上传失败，已回退为本地复制。');
+          const copied = source.localPath ? await copyImage() : uploadPath;
+          insertMarkdown(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)));
+          return;
+        }
+      }
+
+      const copiedPath = await copyImage();
+      insertMarkdown(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)));
+      setTransientMessage(`图片已保存到 ${copyDestination}。`);
+    } catch (error) {
+      console.warn('Failed to insert image:', error);
+      setTransientMessage('图片插入失败。');
+    }
+  }, [insertMarkdown, settings]);
+
+  // 工具栏/菜单「插入本地图片」入口:打开系统文件对话框 → 走 insertImageFromSource。
+  const handleSelectLocalImage = useCallback(async () => {
+    if (fileRef.current.fileType === 'docx') return;
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'] }],
+      });
+      if (typeof selected !== 'string') return;
+      await insertImageFromSource({ localPath: selected });
+    } catch (error) {
+      console.warn('Failed to select image:', error);
+      setTransientMessage('选择图片失败。');
+    }
+  }, [insertImageFromSource]);
+
   const openFindPanel = useCallback((focusTarget: 'find' | 'replace') => {
     setFindFocusTarget(focusTarget);
     setFindVisible(true);
@@ -595,24 +702,18 @@ export function AppLayout() {
 
     event.preventDefault();
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const extension = imageExtensionFromMime(blob.type);
       const fileName = `pasted-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
-      const data = Array.from(new Uint8Array(await blob.arrayBuffer()));
-      const relativePath = await invoke<string>('write_attachment_file', {
-        request: {
-          documentPath: fileRef.current.path,
-          fileName,
-          data,
-        },
+      await insertImageFromSource({
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+        fileName,
+        mime: blob.type,
       });
-      insertMarkdown(createImageMarkdown('图片', relativePath));
-      setTransientMessage('图片已保存到 assets。');
     } catch (error) {
       console.warn('Failed to paste image:', error);
       setTransientMessage('图片粘贴失败。');
     }
-  }, [insertMarkdown]);
+  }, [insertImageFromSource]);
 
   const startBackgroundUpdateDownload = useCallback((source: UpdateSource, update: AvailableUpdate) => {
     if (updateDownloadVersionRef.current === update.version) return;
@@ -711,6 +812,19 @@ export function AppLayout() {
       if (!items || items.length === 0) return;
       const f = items[0];
       const path = (f as unknown as { path?: string }).path;
+      // 优先识别图片:本地路径 or mime type
+      if (path && isImagePath(path)) {
+        await insertImageFromSource({ localPath: path });
+        return;
+      }
+      if (f.type.startsWith('image/')) {
+        await insertImageFromSource({
+          bytes: new Uint8Array(await f.arrayBuffer()),
+          fileName: f.name,
+          mime: f.type,
+        });
+        return;
+      }
       if (path && isOpenableDocumentPath(path)) await handleOpenPath(path);
     };
     const prevent = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); };
@@ -720,7 +834,7 @@ export function AppLayout() {
       window.removeEventListener('dragover', prevent);
       window.removeEventListener('drop', handler);
     };
-  }, [handleOpenPath]);
+  }, [handleOpenPath, insertImageFromSource]);
 
   useEffect(() => {
     window.addEventListener('paste', handlePasteImage);
@@ -736,6 +850,11 @@ export function AppLayout() {
     void getCurrentWindow()
       .onDragDropEvent((event) => {
         if (event.payload.type !== 'drop') return;
+        const imagePath = event.payload.paths.find(isImagePath);
+        if (imagePath) {
+          void insertImageFromSource({ localPath: imagePath });
+          return;
+        }
         const path = firstOpenableDocumentPath(event.payload.paths);
         if (path) void handleOpenPath(path);
       })
@@ -1023,6 +1142,7 @@ export function AppLayout() {
           onSave: handleSave,
           onSaveAs: handleSaveAs,
           onRename: () => handleRequestRename(),
+          onInsertImage: handleSelectLocalImage,
           onOpenSettings: () => {
             void preloadSettingsPage();
             setSettingsVisible(true);

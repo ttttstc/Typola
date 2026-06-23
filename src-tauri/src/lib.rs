@@ -197,6 +197,40 @@ struct AttachmentWriteRequest {
     data: Vec<u8>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProcessInsertedImageRequest {
+    document_path: String,
+    source_bytes: Option<Vec<u8>>,
+    source_path: Option<String>,
+    file_name: Option<String>,
+    copy_destination: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProcessInsertedImageResult {
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UploadImageRequest {
+    command: String,
+    image_paths: Vec<String>,
+    document_path: String,
+    document_name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UploadImageResult {
+    urls: Vec<String>,
+    raw_stdout: String,
+    raw_stderr: String,
+    exit_code: Option<i32>,
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct AgentDetectResult {
@@ -382,6 +416,78 @@ fn write_attachment_file(request: AttachmentWriteRequest) -> Result<String, Stri
         .and_then(OsStr::to_str)
         .ok_or_else(|| "invalid attachment file name".to_string())?;
     Ok(format!("./assets/{file_name}"))
+}
+
+#[tauri::command]
+fn process_inserted_image(request: ProcessInsertedImageRequest) -> Result<ProcessInsertedImageResult, String> {
+    let document_path = PathBuf::from(&request.document_path);
+    if !is_writable_document_path(&document_path) {
+        return Err("unsupported document type".into());
+    }
+    let parent = document_path
+        .parent()
+        .ok_or_else(|| "document has no parent directory".to_string())?;
+    let destination = sanitize_relative_dir(&request.copy_destination);
+    let output_dir = parent.join(destination);
+    std::fs::create_dir_all(&output_dir)
+        .map_err(|error| format!("failed to create image directory: {error}"))?;
+
+    let requested_name = request
+        .file_name
+        .as_deref()
+        .or_else(|| request.source_path.as_deref().and_then(|path| Path::new(path).file_name()?.to_str()))
+        .unwrap_or("inserted-image.png");
+    let safe_name = sanitize_attachment_file_name(requested_name);
+    let output_path = unique_attachment_path(&output_dir, &safe_name);
+
+    if let Some(bytes) = request.source_bytes {
+        std::fs::write(&output_path, bytes)
+            .map_err(|error| format!("failed to write inserted image: {error}"))?;
+    } else if let Some(source_path) = request.source_path {
+        std::fs::copy(&source_path, &output_path)
+            .map_err(|error| format!("failed to copy inserted image: {error}"))?;
+    } else {
+        return Err("missing image source".into());
+    }
+
+    Ok(ProcessInsertedImageResult {
+        path: output_path.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+fn upload_image_via_command(request: UploadImageRequest) -> Result<UploadImageResult, String> {
+    if request.image_paths.is_empty() {
+        return Err("no images to upload".into());
+    }
+    let command = request
+        .command
+        .replace("${filename}", &request.document_name)
+        .replace("${filepath}", &request.document_path);
+    let full_command = build_upload_shell_command(&command, &request.image_paths);
+    let output = if cfg!(target_os = "windows") {
+        Command::new("cmd").args(["/C", &full_command]).output()
+    } else {
+        Command::new("sh").args(["-c", &full_command]).output()
+    }
+    .map_err(|error| format!("failed to run upload command: {error}"))?;
+
+    let raw_stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let raw_stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if !output.status.success() {
+        return Err(format!(
+            "upload command failed with exit code {:?}: {}",
+            output.status.code(),
+            raw_stderr.trim()
+        ));
+    }
+    let urls = parse_upload_urls(&raw_stdout, request.image_paths.len())?;
+    Ok(UploadImageResult {
+        urls,
+        raw_stdout,
+        raw_stderr,
+        exit_code: output.status.code(),
+    })
 }
 
 #[tauri::command]
@@ -991,6 +1097,8 @@ pub fn run() {
             archive_artifact_to_workspace,
             delete_artifact_file,
             write_attachment_file,
+            process_inserted_image,
+            upload_image_via_command,
             agent_detect,
             agent_session_start,
             agent_session_resume,
@@ -1151,6 +1259,67 @@ fn sanitize_attachment_file_name(file_name: &str) -> String {
     } else {
         trimmed.chars().take(96).collect()
     }
+}
+
+fn sanitize_relative_dir(dir: &str) -> PathBuf {
+    let cleaned = dir
+        .replace('\\', "/")
+        .split('/')
+        .filter_map(|part| {
+            let trimmed = part.trim();
+            if trimmed.is_empty() || trimmed == "." || trimmed == ".." {
+                None
+            } else {
+                Some(sanitize_attachment_file_name(trimmed))
+            }
+        })
+        .fold(PathBuf::new(), |mut path, part| {
+            path.push(part);
+            path
+        });
+    if cleaned.as_os_str().is_empty() {
+        PathBuf::from("assets")
+    } else {
+        cleaned
+    }
+}
+
+fn build_upload_shell_command(command: &str, image_paths: &[String]) -> String {
+    let mut full = command.trim().to_string();
+    for path in image_paths {
+        full.push(' ');
+        full.push_str(&shell_quote(path));
+    }
+    full
+}
+
+fn shell_quote(value: &str) -> String {
+    if cfg!(target_os = "windows") {
+        format!("\"{}\"", value.replace('"', "\\\""))
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+fn parse_upload_urls(stdout: &str, count: usize) -> Result<Vec<String>, String> {
+    let lines = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if lines.len() < count {
+        return Err("upload command did not output enough URL lines".into());
+    }
+    let urls = lines[lines.len() - count..].to_vec();
+    if urls.iter().any(|url| !is_upload_url(url)) {
+        return Err("upload command output does not end with valid URLs".into());
+    }
+    Ok(urls)
+}
+
+fn is_upload_url(value: &str) -> bool {
+    value.starts_with("http://") || value.starts_with("https://") || value.starts_with("data:image/")
 }
 
 fn unique_attachment_path(dir: &Path, file_name: &str) -> PathBuf {

@@ -12,6 +12,9 @@ export const preloadGeneralSection = () =>
 export const preloadEditorSection = () =>
   import('./EditorSection').then((module) => ({ default: module.EditorSection }));
 
+export const preloadImageSection = () =>
+  import('./ImageSection').then((module) => ({ default: module.ImageSection }));
+
 export const preloadPreviewSection = () =>
   import('./PreviewSection').then((module) => ({ default: module.PreviewSection }));
 

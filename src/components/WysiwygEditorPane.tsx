@@ -63,16 +63,41 @@ function selectionViewportPos(range: Range): { x: number; y: number } | null {
   return { x: first.left, y: first.top };
 }
 
-function collapseExpandedMarkers(editor: import('vditor').default | null): void {
+// keepSelection=true:跳过当前 selection 所在的 expand 节点(用户正在编辑该 token,
+// 不能强制收回,否则把光标弹飞)。selectionchange / 光标空闲场景必须传 true。
+function collapseExpandedMarkers(
+  editor: import('vditor').default | null,
+  options?: { keepSelection?: boolean },
+): void {
   if (!editor) return;
   const ir = getIrElement(editor);
   if (!ir) return;
+  let activeNode: Node | null = null;
+  if (options?.keepSelection) {
+    const sel = ir.ownerDocument?.defaultView?.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      if (ir.contains(range.commonAncestorContainer)) activeNode = range.commonAncestorContainer;
+    }
+  }
   ir.querySelectorAll('.vditor-ir__node--expand').forEach((node) => {
     if (!(node instanceof HTMLElement)) return;
     if (node.closest('[data-type="code-block"], pre, code')) return;
     if (node.querySelector('[data-type="code-block"], pre, code')) return;
+    if (activeNode && node.contains(activeNode)) return;
     node.classList.remove('vditor-ir__node--expand');
   });
+}
+
+// 选区是否落在图片 token 内(双击图片 / 选中 img 等情况)。
+// 用于跳过 AI 选区浮条 — 在图片上弹出"润色 / 缩写"无意义。
+function isSelectionInsideImageToken(range: Range): boolean {
+  const ancestor = range.commonAncestorContainer;
+  const el = ancestor instanceof Element ? ancestor : ancestor.parentElement;
+  if (!el) return false;
+  const token = el.closest('[data-type="img"], img');
+  if (!token) return false;
+  return token.contains(range.startContainer) && token.contains(range.endContainer);
 }
 
 function silenceCodeBlockAssist(editor: import('vditor').default | null): void {
@@ -127,6 +152,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   // selectionchange 触发,debounce 350ms。renderMermaidIn 本身 skip 当前 selection 所在的 pre,
   // 所以光标停在某块内不会让那块收回,只会让"已展开但用户已离开"的块收回。
   const mermaidIdleTimerRef = useRef<number | null>(null);
+  // 光标移出展开的 IR token(图片 / 链接等)后自动收回的 debounce。skip 当前 selection 所在 node。
+  const collapseIdleTimerRef = useRef<number | null>(null);
   const onScrollRatioRef = useRef(onScrollRatio);
   // 记录最近一次真实选区,用于 AI 回复的“替换选区”操作。
   const lastSelectionRangeRef = useRef<Range | null>(null);
@@ -357,6 +384,16 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       }, 350);
     };
 
+    const scheduleCollapseIdle = () => {
+      if (collapseIdleTimerRef.current !== null) {
+        window.clearTimeout(collapseIdleTimerRef.current);
+      }
+      collapseIdleTimerRef.current = window.setTimeout(() => {
+        collapseIdleTimerRef.current = null;
+        collapseExpandedMarkers(editorRef.current, { keepSelection: true });
+      }, 350);
+    };
+
     const handleSelectionChange = () => {
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
@@ -364,15 +401,17 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         setFloatingHasSelection(false);
         setFloatingRect(null);
         scheduleMermaidIdleRender();
+        scheduleCollapseIdle();
         return;
       }
       const sel = ir.ownerDocument?.defaultView?.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed || sel.toString().length === 0) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
-        // 即便 collapsed 选区(光标移动到非 mermaid 区),也安排 idle 渲染
-        // —— renderMermaidIn 内部会 skip selection 所在 pre,所以光标停在 mermaid 块内不会收回。
+        // 光标移动到 mermaid / 图片 / 链接等 token 外,安排 idle 渲染 + 收回展开节点。
+        // 各自内部 skip selection 所在 token,光标停在某块内不会被强制收回。
         scheduleMermaidIdleRender();
+        scheduleCollapseIdle();
         return;
       }
       const range = sel.getRangeAt(0);
@@ -380,9 +419,18 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         setFloatingHasSelection(false);
         setFloatingRect(null);
         scheduleMermaidIdleRender();
+        scheduleCollapseIdle();
         return;
       }
       lastSelectionRangeRef.current = range.cloneRange();
+      // selection 落在图片 token 内时跳过 AI 浮条 — 双击图片 / 选图都不该出"润色"按钮。
+      if (isSelectionInsideImageToken(range)) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        scheduleMermaidIdleRender();
+        scheduleCollapseIdle();
+        return;
+      }
       // 浮条 rect:用 range 的 boundingClientRect(覆盖跨行的整体框)
       const rect = range.getBoundingClientRect();
       if (rect.width > 0 || rect.height > 0) {
@@ -393,6 +441,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         setFloatingRect(null);
       }
       scheduleMermaidIdleRender();
+      scheduleCollapseIdle();
     };
     document.addEventListener('selectionchange', handleSelectionChange);
 
@@ -500,6 +549,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       if (mermaidIdleTimerRef.current !== null) {
         window.clearTimeout(mermaidIdleTimerRef.current);
         mermaidIdleTimerRef.current = null;
+      }
+      if (collapseIdleTimerRef.current !== null) {
+        window.clearTimeout(collapseIdleTimerRef.current);
+        collapseIdleTimerRef.current = null;
       }
       editorRef.current?.destroy();
       editorRef.current = null;
