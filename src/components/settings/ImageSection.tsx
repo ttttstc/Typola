@@ -175,7 +175,8 @@ export function ImageSection() {
           <div>
             <div className="settings-label">上传命令</div>
             <div className="settings-description">
-              图片路径会带引号追加到命令末尾，stdout 最后 N 行会作为图片 URL。
+              执行此命令上传图片,从输出末尾按图片数读取链接(每张一行)。
+              可用 <code>${'${filename}'}</code> / <code>${'${filepath}'}</code> 代表当前文档。
             </div>
           </div>
           <div className="settings-inline-actions">
