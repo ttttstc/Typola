@@ -4848,7 +4848,48 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .settings-row-stacked {
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.settings-row-stacked > :first-child {
+  /* label + description 块 — 撑满,允许描述自然换行 */
+  max-width: 100%;
+}
+
+/* input + 验证按钮一行(input 撑满剩余空间) */
+.settings-inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.settings-inline-actions > .settings-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.settings-inline-actions > .settings-action-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* 验证输出框:等宽字体 + 自动换行 + 限制高度可滚动 */
+.settings-test-output {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--surface-muted, oklch(96% 0.005 80));
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow: auto;
 }
 
 .settings-label {
