@@ -57,6 +57,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 `npm run tauri dev` 在 Windows 上可能因 Vite 监听 `src-tauri/target` Rust 构建产物、撞到被锁定的 `app_lib.dll` 而退出的问题。
 - 修复多个未保存新建文档同名导致关闭 tab 时误关其他“未命名”文档的问题：新建文档会生成可区分名称与稳定内部 tab id。
 - 修复只有一个已打开文档时没有 tab 关闭入口的问题；默认空白初始态仍保持无 tab。
 - 新增当前文件重命名能力：可双击顶部文件名或 tab 文件名打开重命名弹窗，真实重命名磁盘文件并同步 tab / 最近文件。

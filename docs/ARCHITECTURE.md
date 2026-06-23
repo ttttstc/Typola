@@ -76,6 +76,7 @@ The terminal is implemented with Tauri commands plus event streaming:
 
 ## Packaging
 
+- `npm run tauri dev` 运行时，Vite 会忽略 `src-tauri/target/**`，避免前端 dev server 监听 Rust 构建产物并在 Windows 上撞到 `app_lib.dll` 文件锁。
 - Installer builds continue to use `tauri build` and produce Windows `MSI` plus `NSIS` setup packages from `src-tauri/target/release/bundle/`.
 - Portable builds are produced by `scripts/build-portable.mjs`.
 - On Windows, the portable packager copies `typola.exe` plus a small runtime note into a staging folder and emits `bundle/portable/*_windows-x64_portable.zip`.
