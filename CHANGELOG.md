@@ -60,6 +60,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 Windows 自定义 npm global 目录下 `claude.cmd` 会导致 Rust CLI 路径解析测试失败的问题。
 - 修复 AI 工作台切换到 OpenCode 后首轮对话不可用的问题：不再把 Typola 内部 UUID 当作 OpenCode `--session` 传入，后续对话改用 OpenCode `--continue`，并补齐真实 `step_finish` JSON 完成事件解析。
 - 修复 AI 工作台 OpenCode 模式下仍显示 Claude 文案的问题，Composer、模型提示、错误卡和默认工作目录提示现在会使用当前 AI Provider 或中性文案。
 - 修复 `npm run tauri dev` 在 Windows 上可能因 Vite 监听 `src-tauri/target` Rust 构建产物、撞到被锁定的 `app_lib.dll` 而退出的问题。

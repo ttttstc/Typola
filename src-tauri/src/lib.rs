@@ -1930,9 +1930,12 @@ mod tests {
         assert!(
             path == "claude"
                 || path.ends_with("\\npm\\claude.cmd")
-                || path.ends_with("\\npm\\claude.exe"),
+                || path.ends_with("\\npm\\claude.exe")
+                || path.ends_with("\\claude.cmd")
+                || path.ends_with("\\claude.exe"),
             "unexpected default Claude path: {path}"
         );
+        assert!(!path.ends_with(".ps1"), "Claude should not resolve to PowerShell wrapper: {path}");
     }
 
     #[cfg(target_os = "windows")]
