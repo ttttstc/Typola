@@ -175,7 +175,11 @@ export function ImageSection() {
           <div>
             <div className="settings-label">上传命令</div>
             <div className="settings-description">
-              图片路径会带引号追加到命令末尾，stdout 最后 N 行会作为图片 URL。
+              填一条上传图片的命令(或脚本)。插入图片时,Typola 会把图片路径追加到命令后面执行,
+              然后从命令输出的最后几行(一行一个,有几张图就读几行)取回上传后的链接。
+              <br />
+              例如填 <code>picgo upload</code>,插入 2 张图就会跑 <code>picgo upload "图1" "图2"</code>。
+              命令里可用 <code>${'${filename}'}</code> / <code>${'${filepath}'}</code> 代表当前文档的文件名 / 完整路径。
             </div>
           </div>
           <div className="settings-inline-actions">
