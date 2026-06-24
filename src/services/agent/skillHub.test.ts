@@ -3,6 +3,7 @@ import {
   addSkillToScene,
   buildSkillInstallPrompt,
   EMPTY_SKILL_HUB,
+  getSystemSkillScenesForProvider,
   parseSkillHubJson,
   removeCustomSkillFromScene,
   serializeSkillHub,
@@ -110,6 +111,16 @@ describe('skill hub helpers', () => {
       expect(scene.icon, `${scene.id} 缺 icon`).toBeTruthy();
       expect(scene.accent, `${scene.id} 缺 accent`).toMatch(/^oklch\(/);
     }
+  });
+
+  it('filters system templates by supported CLI provider', () => {
+    expect(getSystemSkillScenesForProvider('claude').find((scene) => scene.id === 'ppt')?.skills.map((skill) => skill.name)).toEqual([
+      'huawei-style-ppt-skill',
+      'guizang-ppt-skill',
+      'huashu-slides',
+      'baoyu-slide-deck',
+    ]);
+    expect(getSystemSkillScenesForProvider('opencode').flatMap((scene) => scene.skills)).toEqual([]);
   });
 
   it('builds install prompt with source fallback', () => {

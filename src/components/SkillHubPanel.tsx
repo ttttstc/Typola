@@ -3,12 +3,13 @@ import {
   ArrowLeft, BarChart3, CalendarDays, Check, ClipboardList, Globe, PenLine,
   Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, type LucideProps,
 } from 'lucide-react';
+import type { AgentProvider } from '../services/agent/provider';
 import { listLocalSkills, type Skill } from '../services/agent/skillScanner';
 import {
   addSkillToScene,
   buildSkillInstallPrompt,
+  getSystemSkillScenesForProvider,
   removeCustomSkillFromScene,
-  SYSTEM_SKILL_SCENES,
   type SkillHub,
   type SkillRef,
   type SkillSceneTemplate,
@@ -16,6 +17,7 @@ import {
 } from '../services/agent/skillHub';
 
 type SkillHubPanelProps = {
+  activeProvider: AgentProvider;
   hub: SkillHub;
   loadError?: string;
   onPickSkill: (skillName: string) => void;
@@ -171,6 +173,7 @@ function AddSkillDialog({
 }
 
 export function SkillHubPanel({
+  activeProvider,
   hub,
   loadError,
   onPickSkill,
@@ -184,6 +187,7 @@ export function SkillHubPanel({
   const [selectedSceneId, setSelectedSceneId] = useState<SkillSceneTemplate['id'] | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const systemScenes = useMemo(() => getSystemSkillScenesForProvider(activeProvider), [activeProvider]);
 
   const scanLocal = async () => {
     setScanning(true);
@@ -201,7 +205,7 @@ export function SkillHubPanel({
     void scanLocal();
   }, []);
 
-  const selectedScene = SYSTEM_SKILL_SCENES.find((scene) => scene.id === selectedSceneId) ?? null;
+  const selectedScene = systemScenes.find((scene) => scene.id === selectedSceneId) ?? null;
   const cards = useMemo<SkillCard[]>(() => {
     if (!selectedScene) return [];
     const custom = hub.sceneAdditions[selectedScene.id] ?? [];
@@ -279,7 +283,7 @@ export function SkillHubPanel({
       )}
       {!selectedScene ? (
         <div className="skill-hub-scene-list">
-          {SYSTEM_SKILL_SCENES.map((scene) => {
+          {systemScenes.map((scene) => {
             const customCount = hub.sceneAdditions[scene.id]?.length ?? 0;
             const total = scene.skills.length + customCount;
             const Icon = SCENE_ICONS[scene.icon] ?? Sparkles;
@@ -370,7 +374,7 @@ export function SkillHubPanel({
         </>
       )}
       <div className="skill-hub-footer">
-        <span>{selectedScene ? `${installedCount}/${cards.length} 可用` : `${SYSTEM_SKILL_SCENES.length} 个场景`}</span>
+        <span>{selectedScene ? `${installedCount}/${cards.length} 可用` : `${systemScenes.length} 个场景`}</span>
         {scanning && <span className="skill-hub-footer-meta">扫描中…</span>}
       </div>
       {selectedScene && addDialogOpen && (

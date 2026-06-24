@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { AgentProvider } from './provider';
 
 export type SkillRef = {
   name: string;
@@ -10,6 +11,7 @@ export type SkillTemplateRef = SkillRef & {
   summary: string;
   expectedPath?: string;
   installSource?: string;
+  supportedProviders?: AgentProvider[];
   system: true;
 };
 
@@ -138,6 +140,19 @@ export const EMPTY_SKILL_HUB: SkillHub = {
   sceneAdditions: {},
   hiddenSystemSkills: {},
 };
+
+const DEFAULT_SYSTEM_SKILL_PROVIDERS: AgentProvider[] = ['claude'];
+
+export function supportsSkillProvider(skill: SkillTemplateRef, provider: AgentProvider): boolean {
+  return (skill.supportedProviders ?? DEFAULT_SYSTEM_SKILL_PROVIDERS).includes(provider);
+}
+
+export function getSystemSkillScenesForProvider(provider: AgentProvider): SkillSceneTemplate[] {
+  return SYSTEM_SKILL_SCENES.map((scene) => ({
+    ...scene,
+    skills: scene.skills.filter((skill) => supportsSkillProvider(skill, provider)),
+  }));
+}
 
 function normalizeSkill(raw: unknown): SkillRef | null {
   if (!raw || typeof raw !== 'object') return null;

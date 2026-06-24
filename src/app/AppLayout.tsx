@@ -1072,6 +1072,7 @@ export function AppLayout() {
     <aside className="flow-panel" aria-label="AI 工作流">
       <div className="flow-panel-content">
         <SkillHubPanel
+          activeProvider={convManager.activeProvider}
           hub={skillHub}
           loadError={skillHubError}
           onPickSkill={handlePickSkill}
