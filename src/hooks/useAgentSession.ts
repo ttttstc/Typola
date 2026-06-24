@@ -291,7 +291,10 @@ export function useConversationManager({
 
   // send(prompt, opts?):opts.conversationId 显式指定目标 conv;省略则用当前 active。
   // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
-  const send = useCallback(async (prompt: string, opts?: { conversationId?: string }) => {
+  const send = useCallback(async (
+    prompt: string,
+    opts?: { conversationId?: string; currentFileContextPath?: string },
+  ) => {
     const convId = opts?.conversationId ?? activeConvIdRef.current;
     const trimmed = prompt.trim();
     if (!trimmed) return;
@@ -333,8 +336,13 @@ export function useConversationManager({
         ? await resumeAgentSession(request)
         : await startAgentSession(request);
       const latest = conversationsRef.current.get(convId);
-      // 首条 send 成功后 fileContextInjected: true → Composer 后续 send 不再重复拼"参考以下文件"
-      updateConv(convId, { sessionStarted: true, runId: result.runId, fileContextInjected: true });
+      // 同一路径的当前文档不重复注入；切换到新文档后由 Composer 传入新路径并更新这里。
+      updateConv(convId, {
+        sessionStarted: true,
+        runId: result.runId,
+        fileContextInjected: true,
+        ...(opts?.currentFileContextPath ? { currentFileContextPath: opts.currentFileContextPath } : {}),
+      });
       if (latest?.cancelRequested) {
         await cancelAgentSession(result.runId).catch((error) => {
           console.warn('Failed to cancel pending agent run:', error);
@@ -375,6 +383,7 @@ export function useConversationManager({
       cancelRequested: false,
       pendingInjection: undefined,
       lastDeliveredAnchor: undefined,
+      currentFileContextPath: undefined,
     });
   }, [updateConv]);
 

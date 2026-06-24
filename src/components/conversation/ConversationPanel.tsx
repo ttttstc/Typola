@@ -31,6 +31,7 @@ type ConversationPanelProps = {
   currentModel?: string;
   /** 当前活动会话是否已注入过"当前文档" context → 后续 send 不再重复 */
   fileContextInjected?: boolean;
+  currentFileContextPath?: string;
   hasEditorSelection?: boolean;
   onInsertToEditor?: (text: string) => void;
   onReplaceEditorSelection?: (text: string) => void;
@@ -41,7 +42,7 @@ type ConversationPanelProps = {
   onCloseConversation: (id: string) => void;
   onRenameConversation: (id: string, title: string) => void;
   onSwitchProvider: (provider: AgentProvider) => void;
-  onSend: (prompt: string) => void;
+  onSend: (prompt: string, context?: { currentFileContextPath?: string }) => void;
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
@@ -80,6 +81,7 @@ export function ConversationPanel({
   currentFilePath,
   currentModel,
   fileContextInjected = false,
+  currentFileContextPath,
   hasEditorSelection = false,
   onInsertToEditor,
   onReplaceEditorSelection,
@@ -332,6 +334,7 @@ export function ConversationPanel({
         activeProvider={activeProvider}
         configuredModel={configuredModel}
         fileContextInjected={fileContextInjected}
+        currentFileContextPath={currentFileContextPath}
         onPickWorkspace={() => void handlePickWorkspace()}
         onSelectWorkspace={(path) => void handleWorkspaceChange(path)}
         onClearWorkspace={() => void handleClearWorkspace()}

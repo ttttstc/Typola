@@ -26,6 +26,7 @@ export type ConversationData = {
   // 本会话是否已经把"当前文档"文件路径作为 context 注入过 prompt：首轮注入后置 true,
   // 后续 send 不再重复啰嗦同样的"参考以下文件"。chip 仍然展示供用户参考。
   fileContextInjected?: boolean;
+  currentFileContextPath?: string;
   // 当前 AI Provider 进程实际运行的模型(从 headless init/status 事件拿到),
   // Composer 优先显示这个,fallback 才用 settings 里的 provider 模型。
   // 跟着中转/CC Switch 走,跟用户终端 claude 看到的一致。

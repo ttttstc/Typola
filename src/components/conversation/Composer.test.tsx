@@ -85,10 +85,10 @@ describe('Composer', () => {
       send?.click();
     });
 
-    expect(onSend).toHaveBeenCalledWith(expect.stringContaining('生成摘要'));
-    expect(onSend).toHaveBeenCalledWith(expect.stringContaining('参考以下文件'));
-    expect(onSend.mock.calls[0][0]).toContain('current.md');
-    expect(onSend.mock.calls[0][0]).toContain('brief.md');
+    const [sentPrompt, sentContext] = onSend.mock.calls[0];
+    expect(sentPrompt).toContain('current.md');
+    expect(sentPrompt).toContain('brief.md');
+    expect(sentContext.currentFileContextPath).toContain('current.md');
   });
 
   it('allows dismissing the current document chip and restores it after file changes', async () => {
@@ -132,6 +132,85 @@ describe('Composer', () => {
     });
 
     expect(host.textContent).toContain('b.md');
+  });
+
+  it('appends the newly active document when the conversation previously injected another file', async () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="claude"
+          currentFileName="b.md"
+          currentFilePath="D:\\docs\\b.md"
+          fileContextInjected
+          currentFileContextPath="D:\\docs\\a.md"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
+          onSend={onSend}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+    expect(textarea).toBeTruthy();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, '续写当前文章');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('发送'));
+    await act(async () => {
+      send?.click();
+    });
+
+    const [sentPrompt, sentContext] = onSend.mock.calls[0];
+    expect(sentPrompt).toContain('b.md');
+    expect(sentPrompt).not.toContain('a.md');
+    expect(sentContext.currentFileContextPath).toContain('b.md');
+  });
+
+  it('does not repeat the active document when the same file was already injected', async () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="claude"
+          currentFileName="b.md"
+          currentFilePath="D:\\docs\\b.md"
+          fileContextInjected
+          currentFileContextPath="D:\\docs\\b.md"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
+          onSend={onSend}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+    expect(textarea).toBeTruthy();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, '继续');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('发送'));
+    await act(async () => {
+      send?.click();
+    });
+
+    const [sentPrompt, sentContext] = onSend.mock.calls[0];
+    expect(sentPrompt).not.toContain('b.md');
+    expect(sentContext.currentFileContextPath).toBeUndefined();
   });
 
   it('calls onSwitchProvider from the composer footer provider picker', async () => {

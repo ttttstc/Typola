@@ -1171,6 +1171,7 @@ export function AppLayout() {
           currentFilePath: file.path || undefined,
           currentModel: convManager.activeConv?.currentModel,
           fileContextInjected: convManager.activeConv?.fileContextInjected ?? false,
+          currentFileContextPath: convManager.activeConv?.currentFileContextPath,
           hasEditorSelection,
           onInsertToEditor: handleInsertToEditor,
           onReplaceEditorSelection: handleReplaceEditorSelection,

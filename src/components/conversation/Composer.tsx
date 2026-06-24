@@ -28,11 +28,12 @@ type ComposerProps = {
   configuredModel?: string;
   /** 本会话是否已注入过"当前文档"context → 后续 send 不再重复啰嗦。 */
   fileContextInjected?: boolean;
+  currentFileContextPath?: string;
   onPickWorkspace: () => void;
   onSelectWorkspace: (path: string) => void;
   onClearWorkspace: () => void;
   onSwitchProvider: (provider: AgentProvider) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, context?: { currentFileContextPath?: string }) => void;
   onCancel: () => void;
 };
 
@@ -48,6 +49,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   activeProvider,
   configuredModel,
   fileContextInjected = false,
+  currentFileContextPath,
   onPickWorkspace,
   onSelectWorkspace,
   onClearWorkspace,
@@ -74,6 +76,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     workspaceRecents,
     currentFilePath,
     fileContextInjected,
+    currentFileContextPath,
   });
 
   useImperativeHandle(ref, () => ({
@@ -101,7 +104,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const text = value.trim();
     if (!text || disabled || running) return;
     setValue('');
-    onSend(appendContext(text));
+    const next = appendContext(text);
+    onSend(next.text, { currentFileContextPath: next.currentFileContextPath });
   };
 
   const handleOpenMcp = () => {
