@@ -16,6 +16,7 @@
         "width": 980,
         "height": 680,
         "resizable": true,
+        "visible": true,
         "maximized": true,
         "fullscreen": false,
         "theme": "Light",

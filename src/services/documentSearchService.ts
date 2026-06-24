@@ -181,27 +181,33 @@ export function findIrDomRange(
         si += m[0].length;
         continue;
       }
-      // _斜体_ 或 *斜体* 简化:前后非 \w 才认
-      const before = si > 0 ? source[si - 1] : '';
-      const isWordBefore = /\w/.test(before);
-      if (!isWordBefore) {
-        m = rest.match(/^_([^_\n]+)_/);
-        if (m && !/\w/.test(source[si + m[0].length] ?? '')) {
-          for (let k = 0; k < m[1].length; k++) {
-            plainToSource.push(si + 1 + k);
-            sourceToPlain[si + 1 + k] = plainIdxBefore + k;
+      // _斜体_ 或 *斜体* 简化:前后非 \w 才认。
+      // 用 sourceToPlain 回溯找前一个 plain 字符,避免把已消费的 marker 尾字符
+      // (特别是 _ 本身是 \w)误判为"前面是词字符"导致后续 marker 无法识别。
+      {
+        let bi = si - 1;
+        while (bi >= 0 && sourceToPlain[bi] < 0) bi--;
+        const before = bi >= 0 ? source[bi] : '';
+        const isWordBefore = /\w/.test(before);
+        if (!isWordBefore) {
+          m = rest.match(/^_([^_\n]+)_/);
+          if (m && !/\w/.test(source[si + m[0].length] ?? '')) {
+            for (let k = 0; k < m[1].length; k++) {
+              plainToSource.push(si + 1 + k);
+              sourceToPlain[si + 1 + k] = plainIdxBefore + k;
+            }
+            si += m[0].length;
+            continue;
           }
-          si += m[0].length;
-          continue;
-        }
-        m = rest.match(/^\*([^*\n]+)\*/);
-        if (m && !/\w/.test(source[si + m[0].length] ?? '')) {
-          for (let k = 0; k < m[1].length; k++) {
-            plainToSource.push(si + 1 + k);
-            sourceToPlain[si + 1 + k] = plainIdxBefore + k;
+          m = rest.match(/^\*([^*\n]+)\*/);
+          if (m && !/\w/.test(source[si + m[0].length] ?? '')) {
+            for (let k = 0; k < m[1].length; k++) {
+              plainToSource.push(si + 1 + k);
+              sourceToPlain[si + 1 + k] = plainIdxBefore + k;
+            }
+            si += m[0].length;
+            continue;
           }
-          si += m[0].length;
-          continue;
         }
       }
       // 普通字符。'\n' 不计入 plain:Vditor IR 用 block 元素分隔段,

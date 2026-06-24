@@ -146,6 +146,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const onScrollRatioRef = useRef(onScrollRatio);
   // 记录最近一次真实选区,用于 AI 回复的“替换选区”操作。
   const lastSelectionRangeRef = useRef<Range | null>(null);
+  // 搜索跳转期间临时抑制浮条
+  const suppressFloatingBarRef = useRef(false);
   // 记录最近一次被校验通过的 anchor.originalText,Vditor 模式按文本搜索替换。
   const lastValidatedAnchorTextRef = useRef<string | null>(null);
   // 记录最近一次被校验通过的 anchor.prefixHint,Vditor 模式用 prefixHint+originalText 唯一定位。
@@ -383,6 +385,9 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       }, 350);
     };
 
+    // 搜索跳转期间临时抑制浮条——revealSearchMatch 设 selection 会触发
+    // selectionchange,但搜索高亮不需要浮条。
+    if (suppressFloatingBarRef.current) return;
     const handleSelectionChange = () => {
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
@@ -699,7 +704,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         editor.focus();
         return;
       }
-      // 把 range 套到 IR 选区,触发 Vditor 自带的高亮 + scrollIntoView。
+      // 抑制浮条:搜索跳转不需要浮条,先设 flag 再触发选区变化。
+      suppressFloatingBarRef.current = true;
       try {
         const sel = ir.ownerDocument?.defaultView?.getSelection();
         if (sel) {
@@ -708,9 +714,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         }
       } catch { /* 选区设置失败不致命,DOM 仍然存在 */ }
       range.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'auto' });
-      // 默认 focus=true(检视意见跳转等场景),搜索场景传 focus=false 保持
-      // FindReplacePanel 输入框焦点,避免反复抢焦点导致光标乱飞。
       if (opts?.focus !== false) editor.focus();
+      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, 300);
     },
     undoLastAIReplacement() {
       const editor = editorRef.current;

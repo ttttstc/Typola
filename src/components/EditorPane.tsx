@@ -86,9 +86,13 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
   // 选区浮条状态:跟着 CodeMirror 选区变化重算 rect + hasSelection。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  // 搜索跳转期间临时抑制浮条——revealSearchMatch 设 selection 会触发
+  // selectionchange,但搜索高亮不需要浮条。
+  const suppressFloatingBarRef = useRef(false);
   useEffect(() => {
     if (!editorView) return;
     const computeFromSelection = () => {
+      if (suppressFloatingBarRef.current) return;
       const sel = editorView.state.selection.main;
       if (sel.empty) {
         setFloatingHasSelection(false);
@@ -280,11 +284,13 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       if (!editorView) return;
       // Source 模式:CodeMirror 按 from/to 直接选区 + 滚动。
       // focus 默认 true(检视意见跳转),搜索场景可传 false 保持输入框焦点。
+      suppressFloatingBarRef.current = true;
       editorView.dispatch({
         effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
         selection: { anchor: from, head: to },
       });
       if (opts?.focus !== false) editorView.focus();
+      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, 300);
     },
     undoLastAIReplacement() {
       // CodeMirror 的 history 插件已自动追踪所有 dispatch（含 replaceRange），

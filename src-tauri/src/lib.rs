@@ -1025,6 +1025,15 @@ pub fn run() {
         .manage(AgentHeadlessStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let paths = opened_paths_from_args(args, &cwd);
+
+            // 即使无文件参数也要恢复窗口——用户双击 exe 时如果应用已在后台运行,
+            // 窗口可能被最小化/遮挡,需要 show + focus。
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
             if paths.is_empty() {
                 return;
             }
@@ -1092,7 +1101,8 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {
-            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+            // 移除 #[cfg(target_os)] 限制——Windows 也需要处理文件关联打开事件,
+            // 否则通过文件关联打开 .md 文件时窗口不会自动恢复显示。
             if let tauri::RunEvent::Opened { urls } = _event {
                 let paths = opened_paths_from_urls(urls);
                 if paths.is_empty() {
