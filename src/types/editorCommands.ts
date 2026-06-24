@@ -10,7 +10,13 @@ export type EditorCommandHandle = {
   // WYSIWYG 模式还会校验 prefixHint+originalText 仍能唯一定位。
   validateAnchor: (filePath: string, from: number, to: number, originalText: string, prefixHint?: string) => 'valid' | 'stale' | 'wrong-file';
   revealRange: (from: number, to: number) => void;
-  revealText: (text: string, backwards?: boolean) => void;
+  /**
+   * 在 IR / Source 编辑器里把一个搜索匹配项滚到视口并高亮。
+   * 入参是 source markdown 的字符偏移 [from, to)（与 `SearchMatch` 一致）,
+   * 编辑器内部负责把 source 偏移映射到自身 DOM 选区 + scrollIntoView。
+   * Source 模式直接按 from/to 选中;WYSIWYG 模式走 source→IR 偏移映射。
+   */
+  revealSearchMatch: (from: number, to: number) => void;
   /** 撤销最后一次 AI 替换操作（恢复到替换前的编辑器内容）。 */
   undoLastAIReplacement: () => boolean;
   /** AI 整篇替换(用于 Diff Preview 应用合并结果)。一次性写入新内容,

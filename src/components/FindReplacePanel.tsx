@@ -15,7 +15,7 @@ type FindReplacePanelProps = {
   readOnly: boolean;
   onClose: () => void;
   onReplaceSource: (source: string) => void;
-  onNavigate: (match: SearchMatch, query: string, backwards?: boolean) => void;
+  onNavigate: (match: SearchMatch) => void;
 };
 
 const defaultOptions: SearchOptions = {
@@ -60,11 +60,6 @@ export function FindReplacePanel({
     });
   }, [focusTarget, visible]);
 
-  useEffect(() => {
-    if (!visible || matches.length === 0) return;
-    onNavigate(matches[Math.min(activeIndex, matches.length - 1)], deferredQuery);
-  }, [activeIndex, deferredQuery, matches, onNavigate, visible]);
-
   if (!visible) return null;
 
   const current = matches.length === 0 ? 0 : Math.min(activeIndex + 1, matches.length);
@@ -73,7 +68,7 @@ export function FindReplacePanel({
     if (matches.length === 0) return;
     const next = (activeIndex + direction + matches.length) % matches.length;
     setActiveIndex(next);
-    onNavigate(matches[next], deferredQuery, direction < 0);
+    onNavigate(matches[next]);
   };
 
   const replaceCurrent = () => {

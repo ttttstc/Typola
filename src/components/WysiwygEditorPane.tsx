@@ -9,6 +9,7 @@ import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import { findUniqueAnchor } from '../services/agent/selectionActions';
+import { findIrDomRange } from '../services/documentSearchService';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
@@ -120,18 +121,6 @@ function silenceCodeBlockAssist(editor: import('vditor').default | null): void {
   if (wysiwyg?.popover) wysiwyg.popover.style.display = 'none';
   if (wysiwyg?.selectPopover) wysiwyg.selectPopover.style.display = 'none';
 }
-
-type WindowWithFind = Window & {
-  find?: (
-    text: string,
-    caseSensitive?: boolean,
-    backwards?: boolean,
-    wrapAround?: boolean,
-    wholeWord?: boolean,
-    searchInFrames?: boolean,
-    showDialog?: boolean,
-  ) => boolean;
-};
 
 export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
   { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
@@ -696,11 +685,32 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     revealRange() {
       editorRef.current?.focus();
     },
-    revealText(text: string, backwards = false) {
-      editorRef.current?.focus();
-      const find = (window as WindowWithFind).find;
-      if (!text || typeof find !== 'function') return;
-      find(text, false, backwards, true, false, false, false);
+    revealSearchMatch(from: number, to: number) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const ir = getIrElement(editor);
+      if (!ir) {
+        editor.focus();
+        return;
+      }
+      const value = editor.getValue();
+      const range = findIrDomRange(value, ir, from, to);
+      if (!range) {
+        editor.focus();
+        return;
+      }
+      // 把 range 套到 IR 选区,触发 Vditor 自带的高亮 + scrollIntoView。
+      // 注意:不能直接 editor.focus(),否则抢回焦点,FindReplacePanel 输入会断流。
+      try {
+        const sel = ir.ownerDocument?.defaultView?.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch { /* 选区设置失败不致命,DOM 仍然存在 */ }
+      range.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'auto' });
+      // 暂不 editor.focus():让 FindReplacePanel 的输入框保持焦点,
+      // 下一帧 Vditor 自带的 selChange 会同步到 vditor 内部 model。
     },
     undoLastAIReplacement() {
       const editor = editorRef.current;

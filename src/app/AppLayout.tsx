@@ -559,13 +559,11 @@ export function AppLayout() {
     }
   }, [diffReviewController, file.content, file.path]);
 
-  const handleSearchNavigate = useCallback((match: SearchMatch, query: string, backwards = false) => {
-    if (editorMode === 'source') {
-      editorCommandRef.current?.revealRange(match.index, match.index + match.length);
-      return;
-    }
-    editorCommandRef.current?.revealText(query || match.text, backwards);
-  }, [editorMode]);
+  const handleSearchNavigate = useCallback((match: SearchMatch) => {
+    // SearchMatch.index/length 是 source markdown 偏移,Source / WYSIWYG
+    // 模式都由编辑器内部负责 source→自身 DOM 的映射,AppLayout 不再分模式调不同 API。
+    editorCommandRef.current?.revealSearchMatch(match.index, match.index + match.length);
+  }, []);
 
   const insertMarkdown = useCallback((markdown: string) => {
     if (fileRef.current.fileType === 'docx') return;
@@ -1127,7 +1125,9 @@ export function AppLayout() {
       dirty={reviewStateApi.state.dirty}
       currentFilePath={file.path}
       onJump={(comment: ReviewComment) => {
-        editorCommandRef.current?.revealText(comment.anchor.originalText);
+        // 直接按 anchor.from/to 滚到对应位置 —— 之前用 revealText(originalText) 走 window.find,
+        // 文本多次出现时跳错位置且抢焦点导致光标乱飞。
+        editorCommandRef.current?.revealSearchMatch(comment.anchor.from, comment.anchor.to);
       }}
       onEdit={(comment: ReviewComment) => {
         setReviewEditor({
