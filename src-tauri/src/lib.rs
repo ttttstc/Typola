@@ -117,6 +117,7 @@ struct AgentSessionStartRequest {
     model: Option<String>,
     plugin_dirs: Option<Vec<String>>,
     extra_allowed_dirs: Option<Vec<String>>,
+    prompt_context_paths: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1438,6 +1439,7 @@ fn start_agent_headless_run(
         request.cwd.as_deref(),
         request.plugin_dirs.as_deref().unwrap_or(&[]),
         request.extra_allowed_dirs.as_deref().unwrap_or(&[]),
+        request.prompt_context_paths.as_deref().unwrap_or(&[]),
         &request.prompt,
     );
     let mut command = create_agent_command(&agent_path, &command_spec.args);
@@ -1449,11 +1451,7 @@ fn start_agent_headless_run(
         let cwd_path = PathBuf::from(cwd);
         std::fs::create_dir_all(&cwd_path)
             .map_err(|error| format!("failed to create {} cwd: {error}", provider.display_name()))?;
-        // OpenCode has a first-class `--dir` flag for the project directory. Use that single
-        // path signal to avoid ambiguity between process cwd and provider cwd.
-        if provider != AgentProvider::Opencode {
-            command.current_dir(cwd_path);
-        }
+        command.current_dir(cwd_path);
     }
 
     let mut child = command
@@ -1598,7 +1596,8 @@ fn build_opencode_headless_args(
     _session_uuid: &str,
     resumed: bool,
     model: Option<&str>,
-    cwd: Option<&str>,
+    project_dir: Option<&str>,
+    prompt_context_paths: &[String],
     prompt: &str,
 ) -> Vec<String> {
     let mut args = vec![
@@ -1610,7 +1609,7 @@ fn build_opencode_headless_args(
     if resumed {
         args.push("--continue".to_string());
     }
-    if let Some(dir) = cwd.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(dir) = project_dir.map(str::trim).filter(|value| !value.is_empty()) {
         args.push("--dir".to_string());
         args.push(dir.to_string());
     }
@@ -1619,6 +1618,14 @@ fn build_opencode_headless_args(
         args.push(model.to_string());
     }
     args.push(prompt.to_string());
+    for path in prompt_context_paths
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--file".to_string());
+        args.push(path.to_string());
+    }
     args
 }
 
@@ -1630,6 +1637,7 @@ fn build_agent_headless_command(
     cwd: Option<&str>,
     plugin_dirs: &[String],
     extra_allowed_dirs: &[String],
+    prompt_context_paths: &[String],
     prompt: &str,
 ) -> AgentCommandSpec {
     match provider {
@@ -1638,7 +1646,14 @@ fn build_agent_headless_command(
             prompt_stdin: true,
         },
         AgentProvider::Opencode => AgentCommandSpec {
-            args: build_opencode_headless_args(session_uuid, resumed, model, cwd, prompt),
+            args: build_opencode_headless_args(
+                session_uuid,
+                resumed,
+                model,
+                extra_allowed_dirs.first().map(String::as_str).or(cwd),
+                prompt_context_paths,
+                prompt,
+            ),
             prompt_stdin: false,
         },
     }
@@ -2160,7 +2175,8 @@ mod tests {
             false,
             Some("anthropic/claude-sonnet-4"),
             Some("D:\\workspace\\.typola-output\\conv-1"),
-            "生成摘要",
+            &[],
+            "summarize",
         );
 
         assert_eq!(args.first().map(String::as_str), Some("run"));
@@ -2171,17 +2187,38 @@ mod tests {
         assert!(args.windows(2).any(|pair| pair == ["--model", "anthropic/claude-sonnet-4"]));
         assert!(args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
         assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
-        assert_eq!(args.last().map(String::as_str), Some("生成摘要"));
+        assert_eq!(args.last().map(String::as_str), Some("summarize"));
     }
 
     #[test]
     fn opencode_headless_resume_uses_the_same_session_argument() {
-        let args = build_opencode_headless_args("session-123", true, None, None, "继续");
+        let args = build_opencode_headless_args("session-123", true, None, None, &[], "continue");
 
         assert!(args.contains(&"--continue".to_string()));
         assert!(!args.contains(&"--session".to_string()));
         assert!(!args.contains(&"session-123".to_string()));
         assert!(!args.contains(&"--resume".to_string()));
+    }
+
+    #[test]
+    fn opencode_headless_args_attach_prompt_context_files() {
+        let args = build_opencode_headless_args(
+            "session-123",
+            false,
+            None,
+            Some("D:\\workspace\\.typola-output\\conv-1"),
+            &[
+                "D:\\workspace\\current.md".to_string(),
+                "D:\\workspace\\brief.md".to_string(),
+            ],
+            "summarize",
+        );
+
+        assert!(args.windows(2).any(|pair| pair == ["--file", "D:\\workspace\\current.md"]));
+        assert!(args.windows(2).any(|pair| pair == ["--file", "D:\\workspace\\brief.md"]));
+        let prompt_index = args.iter().position(|arg| arg == "summarize").expect("missing prompt");
+        let first_file_index = args.iter().position(|arg| arg == "--file").expect("missing --file");
+        assert!(prompt_index < first_file_index);
     }
 
     #[test]
@@ -2194,6 +2231,7 @@ mod tests {
             None,
             &[],
             &[],
+            &[],
             "hello",
         );
         let opencode = build_agent_headless_command(
@@ -2204,6 +2242,7 @@ mod tests {
             None,
             &[],
             &[],
+            &[],
             "hello",
         );
 
@@ -2211,6 +2250,24 @@ mod tests {
         assert!(!claude.args.contains(&"hello".to_string()));
         assert!(!opencode.prompt_stdin);
         assert_eq!(opencode.args.last().map(String::as_str), Some("hello"));
+    }
+
+    #[test]
+    fn opencode_headless_command_uses_workspace_as_project_dir() {
+        let opencode = build_agent_headless_command(
+            AgentProvider::Opencode,
+            "session-123",
+            false,
+            None,
+            Some("D:\\workspace\\.typola-output\\conv-1"),
+            &[],
+            &["D:\\workspace".to_string()],
+            &[],
+            "hello",
+        );
+
+        assert!(opencode.args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace"]));
+        assert!(!opencode.args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
     }
 
     #[test]

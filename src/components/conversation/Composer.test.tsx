@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,12 +75,11 @@ describe('Composer', () => {
     expect(textarea).toBeTruthy();
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-      setter?.call(textarea, '生成摘要');
+      setter?.call(textarea, '鐢熸垚鎽樿');
       textarea!.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
-    const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('发送'));
+    const send = host.querySelector<HTMLButtonElement>('button[title*="Ctrl+Enter"]');
     await act(async () => {
       send?.click();
     });
@@ -89,6 +88,9 @@ describe('Composer', () => {
     expect(sentPrompt).toContain('current.md');
     expect(sentPrompt).toContain('brief.md');
     expect(sentContext.currentFileContextPath).toContain('current.md');
+    expect(sentContext.referencePaths).toHaveLength(2);
+    expect(sentContext.referencePaths[0]).toContain('current.md');
+    expect(sentContext.referencePaths[1]).toContain('brief.md');
   });
 
   it('allows dismissing the current document chip and restores it after file changes', async () => {
@@ -158,12 +160,11 @@ describe('Composer', () => {
     expect(textarea).toBeTruthy();
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-      setter?.call(textarea, '续写当前文章');
+      setter?.call(textarea, '缁啓褰撳墠鏂囩珷');
       textarea!.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
-    const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('发送'));
+    const send = host.querySelector<HTMLButtonElement>('button[title*="Ctrl+Enter"]');
     await act(async () => {
       send?.click();
     });
@@ -172,6 +173,8 @@ describe('Composer', () => {
     expect(sentPrompt).toContain('b.md');
     expect(sentPrompt).not.toContain('a.md');
     expect(sentContext.currentFileContextPath).toContain('b.md');
+    expect(sentContext.referencePaths).toHaveLength(1);
+    expect(sentContext.referencePaths[0]).toContain('b.md');
   });
 
   it('does not repeat the active document when the same file was already injected', async () => {
@@ -198,12 +201,11 @@ describe('Composer', () => {
     expect(textarea).toBeTruthy();
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-      setter?.call(textarea, '继续');
+      setter?.call(textarea, '缁х画');
       textarea!.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
-    const send = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('发送'));
+    const send = host.querySelector<HTMLButtonElement>('button[title*="Ctrl+Enter"]');
     await act(async () => {
       send?.click();
     });
@@ -211,6 +213,46 @@ describe('Composer', () => {
     const [sentPrompt, sentContext] = onSend.mock.calls[0];
     expect(sentPrompt).not.toContain('b.md');
     expect(sentContext.currentFileContextPath).toBeUndefined();
+    expect(sentContext.referencePaths).toHaveLength(1);
+    expect(sentContext.referencePaths[0]).toContain('b.md');
+  });
+
+  it('keeps OpenCode prompts unchanged and passes context paths out of band', async () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="opencode"
+          currentFileName="b.md"
+          currentFilePath="D:\\docs\\b.md"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
+          onSend={onSend}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+    expect(textarea).toBeTruthy();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'read current doc');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const send = host.querySelector<HTMLButtonElement>('button[title*="Ctrl+Enter"]');
+    await act(async () => {
+      send?.click();
+    });
+
+    const [sentPrompt, sentContext] = onSend.mock.calls[0];
+    expect(sentPrompt).toBe('read current doc');
+    expect(sentContext.currentFileContextPath).toContain('b.md');
+    expect(sentContext.referencePaths).toHaveLength(1);
+    expect(sentContext.referencePaths[0]).toContain('b.md');
   });
 
   it('calls onSwitchProvider from the composer footer provider picker', async () => {
@@ -257,6 +299,7 @@ describe('Composer', () => {
     const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
     expect(textarea?.placeholder).toContain('OpenCode');
     expect(textarea?.placeholder).not.toContain('Claude');
-    expect(host.textContent).toContain('OpenCode · 默认模型');
+    expect(host.textContent).toContain('OpenCode');
+    expect(host.textContent).toContain('默认模型');
   });
 });

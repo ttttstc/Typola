@@ -12,6 +12,7 @@ export type AgentSessionStartRequest = {
   model?: string;
   pluginDirs?: string[];
   extraAllowedDirs?: string[];
+  promptContextPaths?: string[];
 };
 
 export type AgentSessionStartResult = {

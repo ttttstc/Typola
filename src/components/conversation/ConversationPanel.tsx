@@ -24,6 +24,7 @@ type ConversationPanelProps = {
   runState: string;
   lastError: string;
   activeProvider: AgentProvider;
+  activeWorkspaceRoot?: string;
   workspaceSuggestion?: string;
   currentFileName?: string;
   currentFilePath?: string;
@@ -42,7 +43,7 @@ type ConversationPanelProps = {
   onCloseConversation: (id: string) => void;
   onRenameConversation: (id: string, title: string) => void;
   onSwitchProvider: (provider: AgentProvider) => void;
-  onSend: (prompt: string, context?: { currentFileContextPath?: string }) => void;
+  onSend: (prompt: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
@@ -76,6 +77,7 @@ export function ConversationPanel({
   runState,
   lastError,
   activeProvider,
+  activeWorkspaceRoot,
   workspaceSuggestion,
   currentFileName,
   currentFilePath,
@@ -106,7 +108,7 @@ export function ConversationPanel({
   onArchiveArtifact,
 }: ConversationPanelProps) {
   const settings = useSettings();
-  const cwd = settings.aiWorkspaceRoot || undefined;
+  const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
   const hasHistory = messages.length > 0;
   // 优先用 provider 进程实际跑的模型(来自 init 事件),fallback 才是用户在 Typola 设置里填的

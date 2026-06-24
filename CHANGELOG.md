@@ -60,6 +60,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复未显式选择 AI 工作区时 OpenCode Provider 会继承 Typola 启动目录、导致工作目录显示为 Typola 源码目录的问题；现在会依次回退到文件树目录和当前文档目录。
+- 修复 OpenCode Provider 下当前文档/附件仅作为 prompt 路径文本传递、导致模型可能无法读取当前编辑区文章的问题；现在会把可见上下文 chip 对应的参考文件在每轮发送时同步传给 `opencode run --file`，把 `opencode run --dir` 指向有效工作区而不是会话产物目录，并避免在 OpenCode prompt argv 中追加首轮多行参考文本。
+- 修复 OpenCode Provider 交互时不显示工具调用卡片的问题；现在会把 OpenCode `tool_use` JSON 事件映射到与 Claude Code 一致的工具卡与结果显示，并在存在 reasoning/thinking 文本时显示思考过程。
 - 修复 AI 工作台在同一会话中切换编辑区文章后仍沿用旧“已注入当前文档”状态、导致后续回复无法识别新打开文章的问题。
 
 - 修复 Windows 自定义 npm global 目录下 `claude.cmd` 会导致 Rust CLI 路径解析测试失败的问题。

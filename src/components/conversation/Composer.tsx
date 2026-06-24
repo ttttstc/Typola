@@ -33,7 +33,7 @@ type ComposerProps = {
   onSelectWorkspace: (path: string) => void;
   onClearWorkspace: () => void;
   onSwitchProvider: (provider: AgentProvider) => void;
-  onSend: (text: string, context?: { currentFileContextPath?: string }) => void;
+  onSend: (text: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
   onCancel: () => void;
 };
 
@@ -75,6 +75,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     workspaceSuggestion,
     workspaceRecents,
     currentFilePath,
+    activeProvider,
     fileContextInjected,
     currentFileContextPath,
   });
@@ -105,7 +106,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     if (!text || disabled || running) return;
     setValue('');
     const next = appendContext(text);
-    onSend(next.text, { currentFileContextPath: next.currentFileContextPath });
+    onSend(next.text, {
+      currentFileContextPath: next.currentFileContextPath,
+      referencePaths: next.referencePaths,
+    });
   };
 
   const handleOpenMcp = () => {

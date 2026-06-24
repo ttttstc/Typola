@@ -34,6 +34,7 @@ import { buildReviewMarkdown, type ReviewComment } from '../services/review/revi
 import { saveFileDialog } from '../services/dialogService';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import type { SelectionAnchor } from '../services/agent/types';
+import { resolveWorkbenchWorkspaceRoot } from '../services/agent/workbenchWorkspace';
 import { useConversationManager } from '../hooks/useAgentSession';
 import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
@@ -250,11 +251,16 @@ export function AppLayout() {
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
     [debouncedStatsSource, file.fileType],
   );
+  const effectiveAiWorkspaceRoot = useMemo(() => resolveWorkbenchWorkspaceRoot({
+    configuredWorkspaceRoot: settings.aiWorkspaceRoot,
+    fileTreeRoot: workspaceRoot,
+    currentFilePath: file.path,
+  }), [file.path, settings.aiWorkspaceRoot, workspaceRoot]);
   const outputBaseDir = useMemo(() => (
-    settings.aiWorkspaceRoot
-      ? joinLocalPath(settings.aiWorkspaceRoot, '.typola-output')
+    effectiveAiWorkspaceRoot
+      ? joinLocalPath(effectiveAiWorkspaceRoot, '.typola-output')
       : undefined
-  ), [settings.aiWorkspaceRoot]);
+  ), [effectiveAiWorkspaceRoot]);
   const {
     leftRailMode,
     setLeftRailMode,
@@ -287,7 +293,7 @@ export function AppLayout() {
   });
 
   const convManager = useConversationManager({
-    workspaceRoot: settings.aiWorkspaceRoot || undefined,
+    workspaceRoot: effectiveAiWorkspaceRoot,
     agentProvider: settings.aiActiveProvider,
     claudePath: settings.aiClaudePath,
     claudeModel: settings.aiClaudeModel,
@@ -317,10 +323,10 @@ export function AppLayout() {
       agentPath: settings.aiClaudePath,
       model: settings.aiClaudeModel,
       pluginDirs: settings.aiPluginDirs,
-      extraAllowedDirs: settings.aiWorkspaceRoot ? [settings.aiWorkspaceRoot] : undefined,
+      extraAllowedDirs: effectiveAiWorkspaceRoot ? [effectiveAiWorkspaceRoot] : undefined,
       signal,
     });
-  }, [settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs, settings.aiWorkspaceRoot]);
+  }, [effectiveAiWorkspaceRoot, settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs]);
 
   const {
     hasEditorSelection,
@@ -353,7 +359,7 @@ export function AppLayout() {
     bumpWorkspaceTreeVersion,
   } = useWorkspaceWatch({
     isTauriRuntime,
-    watchRoot: settings.aiWorkspaceRoot || undefined,
+    watchRoot: effectiveAiWorkspaceRoot,
     outputRoot: outputBaseDir,
     lastSelfWriteRef,
   });
@@ -968,7 +974,7 @@ export function AppLayout() {
 
   const { artifactItems, handleArchiveArtifact } = useArtifactState({
     agentChangedPaths,
-    workspaceRoot: settings.aiWorkspaceRoot || undefined,
+    workspaceRoot: effectiveAiWorkspaceRoot,
     onForgetArtifact: forgetArtifact,
     onWorkspaceRefresh: bumpWorkspaceTreeVersion,
     onOpenPath: handleOpenPath,
@@ -1166,6 +1172,7 @@ export function AppLayout() {
           runState: convManager.runState,
           lastError: convManager.lastError,
           activeProvider: convManager.activeProvider,
+          activeWorkspaceRoot: effectiveAiWorkspaceRoot,
           workspaceSuggestion: workspaceRoot || undefined,
           currentFileName: file.path ? file.name : undefined,
           currentFilePath: file.path || undefined,
@@ -1298,7 +1305,7 @@ export function AppLayout() {
                   if (!confirmed) return;
                   try {
                     const { invoke } = await import('@tauri-apps/api/core');
-                    await invoke('delete_artifact_file', { request: { path, workspaceRoot: settings.aiWorkspaceRoot } });
+                    await invoke('delete_artifact_file', { request: { path, workspaceRoot: effectiveAiWorkspaceRoot ?? '' } });
                     forgetArtifact(path);
                     setTransientMessage(`已删除：${path.split(/[\\/]/).pop()}`);
                   } catch (error) {

@@ -27,6 +27,25 @@ function readAssistantText(record: Record<string, unknown>): string | undefined 
   );
 }
 
+function readThinkingText(record: Record<string, unknown>): string | undefined {
+  const part = asRecord(record.part);
+  const delta = asRecord(record.delta);
+  const partType = firstString(part?.type);
+  if (part && partType && /^(thinking|reasoning)$/u.test(partType)) {
+    return firstString(part.text, part.content, part.reasoning, part.reasoning_content, part.reasoningContent);
+  }
+  return firstString(
+    record.reasoning,
+    record.reasoning_content,
+    record.reasoningContent,
+    record.thinking,
+    delta?.reasoning,
+    delta?.reasoning_content,
+    delta?.reasoningContent,
+    delta?.thinking,
+  );
+}
+
 function readStopReason(record: Record<string, unknown>): unknown {
   const part = asRecord(record.part);
   return record.stopReason ?? record.stop_reason ?? record.reason ?? part?.reason ?? 'done';
@@ -40,8 +59,53 @@ function isDoneEventType(type: string): boolean {
   return /^(done|complete|finished|end|step_finish|step-finish)$/u.test(type);
 }
 
+function isThinkingEventType(type: string): boolean {
+  return /^(thinking|reasoning|reasoning_delta|message\.part\.updated)$/u.test(type);
+}
+
+function stringifyToolOutput(output: unknown): string {
+  if (typeof output === 'string') return output;
+  if (output === undefined || output === null) return '';
+  try {
+    return JSON.stringify(output, null, 2);
+  } catch {
+    return String(output);
+  }
+}
+
+function readToolEvent(record: Record<string, unknown>) {
+  const part = asRecord(record.part);
+  const state = asRecord(part?.state) ?? asRecord(record.state);
+  const partType = firstString(part?.type);
+  const id = firstString(record.id, record.callID, record.callId, part?.id, part?.callID, part?.callId);
+  const name = normalizeToolName(firstString(record.name, record.tool, record.toolName, part?.tool, part?.name, part?.toolName));
+  const input = state?.input ?? part?.input ?? record.input;
+  const output = state?.output ?? part?.output ?? record.output ?? record.result;
+  const status = firstString(state?.status, part?.status, record.status);
+  if (!id || !name || (partType && partType !== 'tool' && partType !== 'tool_use')) return null;
+  return { id, name, input, output, status };
+}
+
+function normalizeToolName(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  const aliases: Record<string, string> = {
+    read: 'Read',
+    write: 'Write',
+    edit: 'Edit',
+    bash: 'Bash',
+    glob: 'Glob',
+    grep: 'Grep',
+  };
+  return aliases[name.toLowerCase()] ?? name;
+}
+
+function isToolEventType(type: string): boolean {
+  return /^(tool_use|tool|tool-call|tool_call|message\.part\.updated)$/u.test(type);
+}
+
 export function createOpenCodeStreamHandler(onEvent: Emit) {
   let buffer = '';
+  const emittedToolResults = new Set<string>();
 
   const handleLine = (line: string) => {
     const trimmed = line.trim();
@@ -61,6 +125,34 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
     }
 
     const type = firstString(record.type, record.event);
+    if (type && isToolEventType(type)) {
+      const tool = readToolEvent(record);
+      if (tool) {
+        onEvent({ type: 'tool_use', id: tool.id, name: tool.name, input: tool.input });
+        const hasOutput = tool.output !== undefined && tool.output !== null;
+        const finished = tool.status
+          ? /^(completed|complete|done|success|error|failed|cancelled|canceled)$/u.test(tool.status)
+          : hasOutput;
+        if (finished && hasOutput && !emittedToolResults.has(tool.id)) {
+          emittedToolResults.add(tool.id);
+          const isError = /^(error|failed|cancelled|canceled)$/u.test(tool.status ?? '');
+          onEvent({
+            type: 'tool_result',
+            toolUseId: tool.id,
+            content: stringifyToolOutput(tool.output),
+            isError,
+          });
+        }
+        return;
+      }
+    }
+
+    const thinkingText = readThinkingText(record);
+    if (thinkingText && (!type || isThinkingEventType(type))) {
+      onEvent({ type: 'thinking_delta', delta: thinkingText });
+      return;
+    }
+
     const text = readAssistantText(record);
     if (text && (!type || isTextEventType(type))) {
       onEvent({ type: 'text_delta', delta: text });

@@ -293,7 +293,7 @@ export function useConversationManager({
   // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
   const send = useCallback(async (
     prompt: string,
-    opts?: { conversationId?: string; currentFileContextPath?: string },
+    opts?: { conversationId?: string; currentFileContextPath?: string; referencePaths?: string[] },
   ) => {
     const convId = opts?.conversationId ?? activeConvIdRef.current;
     const trimmed = prompt.trim();
@@ -329,6 +329,7 @@ export function useConversationManager({
       model: runtime.model,
       pluginDirs: runtime.pluginDirs,
       extraAllowedDirs,
+      promptContextPaths: opts?.referencePaths,
     };
     try {
       // 首轮 start（Rust 建新 session-id）；后续 resume（Rust 按 conversationId 复用 uuid + --resume），保多轮上下文延续

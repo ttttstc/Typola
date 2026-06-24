@@ -62,6 +62,52 @@ describe('createOpenCodeStreamHandler', () => {
     ]);
   });
 
+  it('maps real OpenCode tool_use events to tool cards and results', () => {
+    const events: AgentEvent[] = [];
+    const handler = createOpenCodeStreamHandler((event) => events.push(event));
+
+    handler.feed(JSON.stringify({
+      type: 'tool_use',
+      sessionID: 'ses_10c664a7affepqcABzQGr51nxk',
+      part: {
+        type: 'tool',
+        callID: 'toolu_123',
+        tool: 'read',
+        state: {
+          status: 'completed',
+          input: { filePath: 'README.md' },
+          output: 'file contents',
+        },
+      },
+    }) + '\n');
+    handler.flush();
+
+    expect(events).toEqual([
+      { type: 'tool_use', id: 'toolu_123', name: 'Read', input: { filePath: 'README.md' } },
+      { type: 'tool_result', toolUseId: 'toolu_123', content: 'file contents', isError: false },
+    ]);
+  });
+
+  it('maps OpenCode reasoning-like json fields to thinking deltas when present', () => {
+    const events: AgentEvent[] = [];
+    const handler = createOpenCodeStreamHandler((event) => events.push(event));
+
+    handler.feed(JSON.stringify({
+      type: 'reasoning',
+      part: { type: 'reasoning', text: 'I should inspect the file first.' },
+    }) + '\n');
+    handler.feed(JSON.stringify({
+      type: 'message.part.updated',
+      part: { type: 'thinking', text: 'Then summarize the result.' },
+    }) + '\n');
+    handler.flush();
+
+    expect(events).toEqual([
+      { type: 'thinking_delta', delta: 'I should inspect the file first.' },
+      { type: 'thinking_delta', delta: 'Then summarize the result.' },
+    ]);
+  });
+
   it('keeps unknown or invalid lines as raw events', () => {
     const events: AgentEvent[] = [];
     const handler = createOpenCodeStreamHandler((event) => events.push(event));

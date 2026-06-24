@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import type { AgentProvider } from '../../services/agent/provider';
 
 type UseComposerContextStateOptions = {
   cwd?: string;
   workspaceSuggestion?: string;
   workspaceRecents: string[];
   currentFilePath?: string;
+  activeProvider: AgentProvider;
   fileContextInjected?: boolean;
   currentFileContextPath?: string;
 };
@@ -13,6 +15,7 @@ type UseComposerContextStateOptions = {
 type AppendedContext = {
   text: string;
   currentFileContextPath?: string;
+  referencePaths: string[];
 };
 
 /**
@@ -23,6 +26,7 @@ export function useComposerContextState({
   workspaceSuggestion,
   workspaceRecents,
   currentFilePath,
+  activeProvider,
   fileContextInjected = false,
   currentFileContextPath,
 }: UseComposerContextStateOptions) {
@@ -50,15 +54,27 @@ export function useComposerContextState({
   );
 
   const appendContext = (prompt: string): AppendedContext => {
+    const referencePaths = [
+      ...(!currentFileDismissed && currentFilePath ? [currentFilePath] : []),
+      ...attachedFiles,
+    ];
     const contextPaths = [
       ...(shouldAppendCurrentFile && currentFilePath ? [currentFilePath] : []),
       ...attachedFiles,
     ];
-    if (contextPaths.length === 0) return { text: prompt };
+    if (activeProvider === 'opencode') {
+      return {
+        text: prompt,
+        currentFileContextPath: shouldAppendCurrentFile ? currentFilePath : undefined,
+        referencePaths,
+      };
+    }
+    if (contextPaths.length === 0) return { text: prompt, referencePaths };
     const references = contextPaths.map((path) => `- ${path}`).join('\n');
     return {
       text: `${prompt}\n\n参考以下文件：\n${references}`,
       currentFileContextPath: shouldAppendCurrentFile ? currentFilePath : undefined,
+      referencePaths,
     };
   };
 
