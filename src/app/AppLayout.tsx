@@ -157,6 +157,10 @@ export function AppLayout() {
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
+  const [pdfExportStatus, setPdfExportStatus] = useState<{
+    phase: 'preparing' | 'exporting';
+    savePath: string;
+  } | null>(null);
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
   const [transientMessage, setTransientMessage] = useState('');
@@ -508,6 +512,38 @@ export function AppLayout() {
     }
   }, [file]);
 
+  const handleExportPdf = useCallback(async () => {
+    if (pdfExportStatus) return;
+    if (file.fileType === 'docx') {
+      await messageDialog('暂不支持直接从 Word 预览导出 PDF，请先将内容保存为 Markdown 或 HTML 后再导出。', {
+        title: '导出 PDF',
+      });
+      return;
+    }
+    try {
+      const { exportToPdf } = await import('../services/pdfExport');
+      const result = await exportToPdf({
+        content: file.content,
+        fileName: file.name,
+        filePath: file.path || undefined,
+        theme: settings.theme,
+        resolvedPreviewFontFamily: resolvePreviewFontFamily(settings),
+        resolvedPreviewHeadingFontFamily: resolvePreviewHeadingFontFamily(settings),
+        previewFontSize: settings.previewFontSize,
+        previewLineHeight: settings.previewLineHeight,
+        onStatusChange: setPdfExportStatus,
+      });
+      if (result.status === 'saved') {
+        setTransientMessage(`PDF 已导出：${result.savePath}`);
+      }
+    } catch (error) {
+      console.error('PDF export failed:', error);
+      await messageDialog(String(error), { title: '导出 PDF 失败' });
+    } finally {
+      setPdfExportStatus(null);
+    }
+  }, [file.content, file.fileType, file.name, file.path, pdfExportStatus, settings]);
+
   const replaceCurrentContent = useCallback((value: string) => {
     handleContentChange(value);
     editorCommandRef.current?.focus();
@@ -809,9 +845,14 @@ export function AppLayout() {
         openFindPanel('replace');
         return;
       }
-      if (e.key === 'p' && !e.shiftKey && !e.altKey) {
+      if (e.key === 'p' && e.shiftKey && !e.altKey) {
         e.preventDefault();
         setQuickOpenVisible(true);
+        return;
+      }
+      if (e.key === 'p' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        void handleExportPdf();
         return;
       }
       if (e.key === 's' && e.shiftKey && !e.altKey) { e.preventDefault(); handleSaveAs(); return; }
@@ -840,6 +881,7 @@ export function AppLayout() {
     handleSave,
     handleSaveAs,
     handleExportWord,
+    handleExportPdf,
     handleToggleEditorMode,
     handleToggleWordPreview,
     handleToggleWechatPreview,
@@ -1192,6 +1234,8 @@ export function AppLayout() {
           onSaveAs: handleSaveAs,
           onRename: () => handleRequestRename(),
           onInsertImage: handleSelectLocalImage,
+          onExportPdf: handleExportPdf,
+          pdfExporting: pdfExportStatus !== null,
           onOpenSettings: () => {
             void preloadSettingsPage();
             setSettingsVisible(true);
@@ -1378,6 +1422,15 @@ export function AppLayout() {
         diffPreview={diffPreview}
         setDiffPreview={setDiffPreview}
       />
+      {pdfExportStatus && (
+        <div className="pdf-export-overlay" role="status" aria-live="polite">
+          <div className="pdf-export-overlay-card">
+            <strong>正在导出 PDF</strong>
+            <span>{pdfExportStatus.phase === 'preparing' ? '准备离屏渲染内容…' : '正在生成 PDF 文件…'}</span>
+            <code>{pdfExportStatus.savePath}</code>
+          </div>
+        </div>
+      )}
       {/* 选区原地结果对比卡(C 混合 · 4 个固定动作走 oneshot 后弹此卡) */}
       <SelectionResultCard
         open={!!resultCard}

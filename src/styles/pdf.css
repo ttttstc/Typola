@@ -1,0 +1,70 @@
+.typola-pdf-document {
+  --font-display: 'Iowan Old Style', 'Charter', 'Songti SC', 'STSong',
+    'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun',
+    Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI',
+    'PingFang SC', 'Hiragino Sans GB', system-ui, sans-serif;
+  --font-reading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Microsoft YaHei UI',
+    'Noto Sans CJK SC', 'Source Han Sans SC', 'Noto Sans SC', sans-serif;
+  --font-serif-reading: 'Songti SC', 'STSong', 'Noto Serif CJK SC',
+    'Source Han Serif SC', 'Noto Serif SC', 'SimSun', 'Times New Roman', serif;
+  min-height: 100vh;
+  background: #ffffff;
+  color: #111111;
+  font-family: var(--typola-pdf-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-size: var(--typola-pdf-font-size, 15px);
+  line-height: var(--typola-pdf-line-height, 1.7);
+}
+
+.typola-pdf-document[data-theme='dark'] {
+  background: #1f2329;
+  color: #f3f4f6;
+}
+
+.typola-pdf-print-article {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  background: inherit;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.typola-pdf-print-article,
+.typola-pdf-print-article p,
+.typola-pdf-print-article li,
+.typola-pdf-print-article td,
+.typola-pdf-print-article th,
+.typola-pdf-print-article blockquote {
+  font-family: inherit;
+}
+
+.typola-pdf-print-article h1,
+.typola-pdf-print-article h2,
+.typola-pdf-print-article h3,
+.typola-pdf-print-article h4,
+.typola-pdf-print-article h5,
+.typola-pdf-print-article h6 {
+  font-family: var(--typola-pdf-heading-font-family, var(--typola-pdf-font-family, inherit));
+  color: inherit;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.typola-pdf-print-article img,
+.typola-pdf-print-article svg,
+.typola-pdf-print-article canvas {
+  max-width: 100%;
+}
+
+.typola-pdf-print-article pre,
+.typola-pdf-print-article table,
+.typola-pdf-print-article blockquote,
+.typola-pdf-print-article .typola-mermaid {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
