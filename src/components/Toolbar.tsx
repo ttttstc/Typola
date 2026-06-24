@@ -6,6 +6,7 @@ import {
   ImagePlus,
   Newspaper,
   PanelLeft,
+  Printer,
   RefreshCw,
   Save,
   SaveAll,
@@ -53,6 +54,7 @@ type ToolbarProps = {
   onRename?: () => void;
   /** 工具栏「插入图片」按钮:打开系统文件对话框选本地图片插入。 */
   onInsertImage?: () => void;
+  onExportPdf?: () => void;
   onOpenSettings: () => void;
   onPreloadSettings?: () => void;
   updateStatus?: UpdateToolbarStatus;
@@ -65,7 +67,7 @@ export function Toolbar({
   terminalVisible, editingDisabled, docMode, reviewDirty,
   onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview,
   onToggleTerminal, onSetDocMode,
-  onNew, onOpen, onSave, onSaveAs, onRename, onInsertImage, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  onNew, onOpen, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -120,6 +122,17 @@ export function Toolbar({
               aria-label="插入图片"
             >
               <ImagePlus size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
+          {onExportPdf && (
+            <button
+              data-no-window-drag="true"
+              onClick={onExportPdf}
+              disabled={editingDisabled}
+              data-tooltip="导出 PDF"
+              aria-label="导出 PDF"
+            >
+              <Printer size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}
         </div>

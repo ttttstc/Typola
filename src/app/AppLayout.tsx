@@ -508,6 +508,20 @@ export function AppLayout() {
     }
   }, [file]);
 
+  const handleExportPdf = useCallback(async () => {
+    if (file.fileType === 'docx') return;
+    try {
+      const { exportToPdf } = await import('../services/pdfExport');
+      const result = await exportToPdf(file.content, file.name, file.path || undefined);
+      if (result === 'saved') {
+        setTransientMessage('PDF 已导出。');
+      }
+    } catch (error) {
+      console.error('PDF export failed:', error);
+      await messageDialog(String(error), { title: '导出 PDF 失败' });
+    }
+  }, [file.content, file.fileType, file.name, file.path]);
+
   const replaceCurrentContent = useCallback((value: string) => {
     handleContentChange(value);
     editorCommandRef.current?.focus();
@@ -809,9 +823,14 @@ export function AppLayout() {
         openFindPanel('replace');
         return;
       }
-      if (e.key === 'p' && !e.shiftKey && !e.altKey) {
+      if (e.key === 'p' && e.shiftKey && !e.altKey) {
         e.preventDefault();
         setQuickOpenVisible(true);
+        return;
+      }
+      if (e.key === 'p' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        void handleExportPdf();
         return;
       }
       if (e.key === 's' && e.shiftKey && !e.altKey) { e.preventDefault(); handleSaveAs(); return; }
@@ -840,6 +859,7 @@ export function AppLayout() {
     handleSave,
     handleSaveAs,
     handleExportWord,
+    handleExportPdf,
     handleToggleEditorMode,
     handleToggleWordPreview,
     handleToggleWechatPreview,
@@ -1190,6 +1210,7 @@ export function AppLayout() {
           onSaveAs: handleSaveAs,
           onRename: () => handleRequestRename(),
           onInsertImage: handleSelectLocalImage,
+          onExportPdf: handleExportPdf,
           onOpenSettings: () => {
             void preloadSettingsPage();
             setSettingsVisible(true);

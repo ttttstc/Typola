@@ -86,6 +86,86 @@ html, body, #root {
   background: var(--bg);
 }
 
+.typola-pdf-print-root {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  width: 794px;
+  min-height: 1123px;
+  background: #ffffff;
+  color: #111111;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.typola-pdf-print-article {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  background: #ffffff;
+  color: #111111;
+  font-size: 12pt;
+  line-height: 1.6;
+}
+
+.typola-pdf-print-article img,
+.typola-pdf-print-article svg {
+  max-width: 100%;
+}
+
+@page {
+  size: A4;
+  margin: 2cm;
+}
+
+@media print {
+  html,
+  body {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  body > :not(.typola-pdf-print-root) {
+    display: none !important;
+  }
+
+  .typola-pdf-print-root {
+    position: static !important;
+    width: auto !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+    color: #111111 !important;
+    pointer-events: auto !important;
+    z-index: auto !important;
+  }
+
+  .typola-pdf-print-article {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    font-size: 12pt !important;
+    line-height: 1.6 !important;
+  }
+
+  .typola-pdf-print-article pre,
+  .typola-pdf-print-article table,
+  .typola-pdf-print-article blockquote,
+  .typola-pdf-print-article .typola-mermaid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .typola-pdf-print-article h1,
+  .typola-pdf-print-article h2,
+  .typola-pdf-print-article h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}
+
 /* ===== App Layout ===== */
 
 .app-layout {

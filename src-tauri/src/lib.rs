@@ -7,11 +7,14 @@ use std::{
     process::{Child, Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
+        mpsc,
         Arc, Mutex,
     },
     thread,
+    time::Duration,
 };
 
+use base64::{engine::general_purpose, Engine as _};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
@@ -182,6 +185,12 @@ struct UploadImageRequest {
     image_paths: Vec<String>,
     document_path: String,
     document_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PdfExportRequest {
+    save_path: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -449,6 +458,97 @@ fn upload_image_via_command(request: UploadImageRequest) -> Result<UploadImageRe
         raw_stderr,
         exit_code: output.status.code(),
     })
+}
+
+#[tauri::command]
+fn export_pdf(app: tauri::AppHandle, request: PdfExportRequest) -> Result<(), String> {
+    let save_path = PathBuf::from(request.save_path.trim());
+    if save_path.as_os_str().is_empty() {
+        return Err("missing PDF save path".into());
+    }
+    if save_path.extension().and_then(OsStr::to_str).map(|ext| !ext.eq_ignore_ascii_case("pdf")).unwrap_or(true) {
+        return Err("PDF export path must end with .pdf".into());
+    }
+    if let Some(parent) = save_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create PDF output directory: {error}"))?;
+    }
+
+    let pdf = export_pdf_from_main_webview(&app)?;
+    std::fs::write(&save_path, pdf).map_err(|error| format!("failed to write PDF: {error}"))
+}
+
+#[cfg(windows)]
+fn export_pdf_from_main_webview(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
+    use webview2_com::{CallDevToolsProtocolMethodCompletedHandler, CoTaskMemPWSTR};
+
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    let (tx, rx) = mpsc::channel::<Result<String, String>>();
+
+    window
+        .with_webview(move |platform_webview| {
+            let tx = tx.clone();
+            let result = (|| -> Result<(), String> {
+                let controller = platform_webview.controller();
+                let webview = unsafe {
+                    controller
+                        .CoreWebView2()
+                        .map_err(|error| format!("failed to access WebView2: {error}"))?
+                };
+                let method = CoTaskMemPWSTR::from("Page.printToPDF");
+                let params = CoTaskMemPWSTR::from(
+                    r#"{"printBackground":true,"preferCSSPageSize":true,"marginTop":0,"marginBottom":0,"marginLeft":0,"marginRight":0}"#,
+                );
+                let handler_tx = tx.clone();
+                let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
+                    move |error_code, result| {
+                        let outcome = error_code
+                            .map(|_| result)
+                            .map_err(|error| format!("Page.printToPDF failed: {error}"));
+                        let _ = handler_tx.send(outcome);
+                        Ok(())
+                    },
+                ));
+                unsafe {
+                    webview
+                        .CallDevToolsProtocolMethod(
+                            *method.as_ref().as_pcwstr(),
+                            *params.as_ref().as_pcwstr(),
+                            &handler,
+                        )
+                        .map_err(|error| format!("failed to call Page.printToPDF: {error}"))?;
+                }
+                Ok(())
+            })();
+            if let Err(error) = result {
+                let _ = tx.send(Err(error));
+            }
+        })
+        .map_err(|error| format!("failed to access WebView: {error}"))?;
+
+    let result = rx
+        .recv_timeout(Duration::from_secs(60))
+        .map_err(|_| "PDF export timed out".to_string())??;
+    decode_print_to_pdf_result(&result)
+}
+
+#[cfg(not(windows))]
+fn export_pdf_from_main_webview(_app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
+    Err("PDF export is currently implemented for Windows WebView2 only".into())
+}
+
+fn decode_print_to_pdf_result(result: &str) -> Result<Vec<u8>, String> {
+    let value: serde_json::Value = serde_json::from_str(result)
+        .map_err(|error| format!("invalid printToPDF response: {error}"))?;
+    let data = value
+        .get("data")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "printToPDF response did not contain PDF data".to_string())?;
+    general_purpose::STANDARD
+        .decode(data)
+        .map_err(|error| format!("failed to decode PDF data: {error}"))
 }
 
 #[tauri::command]
@@ -1059,6 +1159,7 @@ pub fn run() {
             write_attachment_file,
             process_inserted_image,
             upload_image_via_command,
+            export_pdf,
             agent_detect,
             agent_session_start,
             agent_session_resume,

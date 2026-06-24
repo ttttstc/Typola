@@ -11,6 +11,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/components/FindReplacePanel.tsx`, `QuickOpenPanel.tsx`, and `EditAssistPanel.tsx` provide on-demand editing utilities. Their matching, recent-file, statistics, and snippet logic lives in small service modules so the main editor path stays light.
 - `src/components/WordPaperPreviewPane.tsx` and `src/services/word/*` provide Word-style preview and `.docx` export.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
+- `src/services/pdfExport.ts` builds a print-only Vditor preview DOM for PDF export. The Rust `export_pdf` command prints that DOM through WebView2 `Page.printToPDF` on Windows, keeping the frontend interface ready for later Typst or platform-specific engines.
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
 - `src/components/conversation/ConversationPanel.tsx` provides the left AI Workbench conversation surface for Skill OS M1.
 - `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge Claude headless stdout into typed message state and UI-friendly diagnostics.
