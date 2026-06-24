@@ -2742,6 +2742,29 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.skill-hub-item-source {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  transition: color 0.15s;
+  flex: 0 0 auto;
+}
+
+.skill-hub-item-source:hover,
+.skill-hub-item-source:focus-visible {
+  color: var(--fg);
+}
+
+.skill-hub-item-no-source {
+  display: inline-flex;
+  align-items: center;
+  color: var(--warn, oklch(0.65 0.15 65));
+  flex: 0 0 auto;
 }
 
 .skill-hub-item-main strong {
