@@ -38,6 +38,9 @@ import { useConversationManager } from '../hooks/useAgentSession';
 import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
 import { useFileTabs } from '../hooks/useFileTabs';
+import { useDiffReview } from '../hooks/useDiffReview';
+import { DiffReviewPane } from '../components/diff/DiffReviewPane';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
@@ -509,6 +512,34 @@ export function AppLayout() {
     handleContentChange(value);
     editorCommandRef.current?.focus();
   }, [handleContentChange]);
+
+  // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档(走 handleContentChange,
+  // 自动标 dirty,后续保存走现有未保存逻辑)。
+  const diffReviewController = useDiffReview(useCallback((merged: string) => {
+    replaceCurrentContent(merged);
+    setTransientMessage('AI 改动已应用,记得保存。');
+  }, [replaceCurrentContent]));
+
+  // 检视面板的「以 Diff 审阅」入口:读改稿文件 → diff(当前文档,改稿)→ 开审阅态。
+  // SPEC §2.1 A 类:检视产物已声明"是当前文档修订版",直接进。
+  const handleReviewRevision = useCallback(async (revisionPath: string) => {
+    if (!file.path) {
+      await messageDialog('请先打开原文档再审阅 AI 改稿。', { title: '以 Diff 审阅' });
+      return;
+    }
+    try {
+      const proposedContent = await readTextFile(revisionPath);
+      const revisionName = revisionPath.replace(/\\/g, '/').split('/').pop() ?? '改稿';
+      diffReviewController.open({
+        source: 'review',
+        title: `审阅 AI 改稿:${revisionName}`,
+        originalContent: file.content,
+        proposedContent,
+      });
+    } catch (error) {
+      await messageDialog(`读取改稿失败:${String(error)}`, { title: '以 Diff 审阅' });
+    }
+  }, [diffReviewController, file.content, file.path]);
 
   const handleSearchNavigate = useCallback((match: SearchMatch, query: string, backwards = false) => {
     if (editorMode === 'source') {
@@ -1094,6 +1125,7 @@ export function AppLayout() {
       onSendToAI={() => void handleSendReviewToAI()}
       revisions={aiRevisions}
       onOpenRevision={(path) => { void handleOpenPath(path).catch((e) => console.warn('Failed to open AI revision:', e)); }}
+      onReviewRevision={(path) => { void handleReviewRevision(path); }}
       onRefreshRevisions={refreshRevisions}
       onClose={() => setRightPanelMode('none')}
     />
@@ -1260,6 +1292,7 @@ export function AppLayout() {
           />
         )}
       />
+      <DiffReviewPane controller={diffReviewController} />
       <AppLayoutOverlays
         findVisible={findVisible}
         findFocusTarget={findFocusTarget}
@@ -1279,6 +1312,7 @@ export function AppLayout() {
               onOpenFile={(path) => {
                 void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
               }}
+              onMergeIntoDocument={(path) => { void handleReviewRevision(path); }}
               onArchiveFile={(path) => {
                 void handleArchiveArtifact(path);
               }}

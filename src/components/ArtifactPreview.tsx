@@ -1,4 +1,4 @@
-import { FileText, FolderInput, Presentation, Trash2, X } from 'lucide-react';
+import { FileText, FolderInput, GitCompare, Presentation, Trash2, X } from 'lucide-react';
 
 export type ArtifactItem = {
   path: string;
@@ -12,6 +12,9 @@ type ArtifactPreviewProps = {
   onOpenFile: (path: string) => void;
   onArchiveFile?: (path: string) => void;
   onDeleteFile?: (path: string) => void;
+  /** B 类入口:把产物 markdown 跟当前文档分段 diff 进入审阅态。
+   *  仅 markdown 产物显示该按钮(其他 kind 不可与文档合并)。 */
+  onMergeIntoDocument?: (path: string) => void;
   onClose?: () => void;
 };
 
@@ -20,7 +23,7 @@ function iconFor(kind: ArtifactItem['kind']) {
   return <FileText size={13} />;
 }
 
-export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onDeleteFile, onClose }: ArtifactPreviewProps) {
+export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onDeleteFile, onMergeIntoDocument, onClose }: ArtifactPreviewProps) {
   if (artifacts.length === 0) return null;
 
   return (
@@ -48,6 +51,17 @@ export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onDelete
               <span className="artifact-chip-icon">{iconFor(item.kind)}</span>
               <span className="artifact-chip-name">{item.name}</span>
             </button>
+            {onMergeIntoDocument && item.kind === 'markdown' && (
+              <button
+                type="button"
+                className="artifact-merge"
+                onClick={() => onMergeIntoDocument(item.path)}
+                title="合并到当前文档(分段 diff + 逐段采纳)"
+                aria-label={`合并 ${item.name} 到当前文档`}
+              >
+                <GitCompare size={13} />
+              </button>
+            )}
             {onArchiveFile && (
               <button
                 type="button"
