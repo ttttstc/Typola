@@ -60,6 +60,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复心流模式下 OpenCode 仍显示用户添加的本地 Claude skill、点击后可能卡在不支持的 skill 调用路径的问题；SkillHub 现在按当前 AI Provider 扫描与添加能力，Claude 使用 `.claude/skills`，OpenCode 使用全局/项目级 `.opencode/commands` 或 `opencode.jsonc` command 配置，并通过 `opencode run --command` 调用。
+
 - 修复 SkillHub 系统内置 skill 安装入口不区分 AI Provider 的问题：内置模板现在按当前 CLI provider 过滤，OpenCode 场景不会再展示 Claude-only 的安装项。
 
 - 修复未显式选择 AI 工作区时 OpenCode Provider 会继承 Typola 启动目录、导致工作目录显示为 Typola 源码目录的问题；现在会依次回退到文件树目录和当前文档目录。

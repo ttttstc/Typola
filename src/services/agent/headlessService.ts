@@ -13,6 +13,7 @@ export type AgentSessionStartRequest = {
   pluginDirs?: string[];
   extraAllowedDirs?: string[];
   promptContextPaths?: string[];
+  commandName?: string;
 };
 
 export type AgentSessionStartResult = {

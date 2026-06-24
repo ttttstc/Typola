@@ -118,6 +118,7 @@ struct AgentSessionStartRequest {
     plugin_dirs: Option<Vec<String>>,
     extra_allowed_dirs: Option<Vec<String>>,
     prompt_context_paths: Option<Vec<String>>,
+    command_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1440,6 +1441,7 @@ fn start_agent_headless_run(
         request.plugin_dirs.as_deref().unwrap_or(&[]),
         request.extra_allowed_dirs.as_deref().unwrap_or(&[]),
         request.prompt_context_paths.as_deref().unwrap_or(&[]),
+        request.command_name.as_deref(),
         &request.prompt,
     );
     let mut command = create_agent_command(&agent_path, &command_spec.args);
@@ -1598,6 +1600,7 @@ fn build_opencode_headless_args(
     model: Option<&str>,
     project_dir: Option<&str>,
     prompt_context_paths: &[String],
+    command_name: Option<&str>,
     prompt: &str,
 ) -> Vec<String> {
     let mut args = vec![
@@ -1616,6 +1619,10 @@ fn build_opencode_headless_args(
     if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
         args.push("--model".to_string());
         args.push(model.to_string());
+    }
+    if let Some(command_name) = command_name.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--command".to_string());
+        args.push(command_name.trim_start_matches('/').to_string());
     }
     args.push(prompt.to_string());
     for path in prompt_context_paths
@@ -1638,6 +1645,7 @@ fn build_agent_headless_command(
     plugin_dirs: &[String],
     extra_allowed_dirs: &[String],
     prompt_context_paths: &[String],
+    command_name: Option<&str>,
     prompt: &str,
 ) -> AgentCommandSpec {
     match provider {
@@ -1652,6 +1660,7 @@ fn build_agent_headless_command(
                 model,
                 extra_allowed_dirs.first().map(String::as_str).or(cwd),
                 prompt_context_paths,
+                command_name,
                 prompt,
             ),
             prompt_stdin: false,
@@ -1939,7 +1948,7 @@ fn skill_hub_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 struct SkillInfo {
     name: String,
     description: Option<String>,
-    source: String, // "local"
+    source: String,
     path: String,
 }
 
@@ -1972,7 +1981,18 @@ fn parse_skill_md_description(content: &str) -> Option<String> {
 }
 
 #[tauri::command]
-fn list_local_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
+fn list_local_skills(
+    app: tauri::AppHandle,
+    provider: Option<AgentProvider>,
+    workspace_root: Option<String>,
+) -> Result<Vec<SkillInfo>, String> {
+    match provider.unwrap_or_default() {
+        AgentProvider::Claude => list_claude_skills(app),
+        AgentProvider::Opencode => list_opencode_commands(app, workspace_root.as_deref()),
+    }
+}
+
+fn list_claude_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
     let home = app
         .path()
         .home_dir()
@@ -2000,12 +2020,137 @@ fn list_local_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
         skills.push(SkillInfo {
             name: name.clone(),
             description,
-            source: "local".to_string(),
+            source: "claude".to_string(),
             path: path.to_string_lossy().to_string(),
         });
     }
     skills.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(skills)
+}
+
+fn list_opencode_commands(app: tauri::AppHandle, workspace_root: Option<&str>) -> Result<Vec<SkillInfo>, String> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|error| format!("failed to resolve home dir: {error}"))?;
+    let mut commands = Vec::new();
+    let global_config = home.join(".config").join("opencode");
+    collect_opencode_command_dirs(&mut commands, &global_config);
+    collect_opencode_config_commands(&mut commands, &global_config.join("opencode.jsonc"));
+
+    if let Some(root) = workspace_root.map(str::trim).filter(|value| !value.is_empty()) {
+        let project_config = PathBuf::from(root).join(".opencode");
+        collect_opencode_command_dirs(&mut commands, &project_config);
+        collect_opencode_config_commands(&mut commands, &project_config.join("opencode.jsonc"));
+    }
+
+    commands.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.path.cmp(&b.path)));
+    commands.dedup_by(|a, b| a.name == b.name && a.path == b.path);
+    Ok(commands)
+}
+
+fn collect_opencode_command_dirs(commands: &mut Vec<SkillInfo>, base: &Path) {
+    for dir_name in ["commands", "command"] {
+        let dir = base.join(dir_name);
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries {
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+                continue;
+            }
+            let Some(name) = path.file_stem().and_then(|stem| stem.to_str()).map(|value| value.to_string()) else {
+                continue;
+            };
+            let description = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|content| parse_skill_md_description(&content).or_else(|| parse_markdown_heading(&content)));
+            commands.push(SkillInfo {
+                name,
+                description,
+                source: "opencode".to_string(),
+                path: path.to_string_lossy().to_string(),
+            });
+        }
+    }
+}
+
+fn parse_markdown_heading(content: &str) -> Option<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix("# ").map(str::trim))
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn collect_opencode_config_commands(commands: &mut Vec<SkillInfo>, config_path: &Path) {
+    let Ok(raw) = std::fs::read_to_string(config_path) else { return };
+    let stripped = strip_jsonc_comments(&raw);
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stripped) else { return };
+    let Some(command_map) = parsed.get("command").and_then(|value| value.as_object()) else { return };
+    for (name, value) in command_map {
+        let description = value
+            .as_object()
+            .and_then(|object| object.get("description"))
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| value.trim().to_string());
+        commands.push(SkillInfo {
+            name: name.to_string(),
+            description,
+            source: "opencode".to_string(),
+            path: format!("{}#command.{}", config_path.to_string_lossy(), name),
+        });
+    }
+}
+
+fn strip_jsonc_comments(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    let mut in_string = false;
+    let mut escaped = false;
+    while let Some(ch) = chars.next() {
+        if in_string {
+            output.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        if ch == '"' {
+            in_string = true;
+            output.push(ch);
+            continue;
+        }
+        if ch == '/' && chars.peek() == Some(&'/') {
+            chars.next();
+            for next in chars.by_ref() {
+                if next == '\n' {
+                    output.push('\n');
+                    break;
+                }
+            }
+            continue;
+        }
+        if ch == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            let mut previous = '\0';
+            for next in chars.by_ref() {
+                if previous == '*' && next == '/' {
+                    break;
+                }
+                previous = next;
+            }
+            continue;
+        }
+        output.push(ch);
+    }
+    output
 }
 
 #[tauri::command]
@@ -2176,6 +2321,7 @@ mod tests {
             Some("anthropic/claude-sonnet-4"),
             Some("D:\\workspace\\.typola-output\\conv-1"),
             &[],
+            None,
             "summarize",
         );
 
@@ -2192,7 +2338,7 @@ mod tests {
 
     #[test]
     fn opencode_headless_resume_uses_the_same_session_argument() {
-        let args = build_opencode_headless_args("session-123", true, None, None, &[], "continue");
+        let args = build_opencode_headless_args("session-123", true, None, None, &[], None, "continue");
 
         assert!(args.contains(&"--continue".to_string()));
         assert!(!args.contains(&"--session".to_string()));
@@ -2211,6 +2357,7 @@ mod tests {
                 "D:\\workspace\\current.md".to_string(),
                 "D:\\workspace\\brief.md".to_string(),
             ],
+            None,
             "summarize",
         );
 
@@ -2219,6 +2366,22 @@ mod tests {
         let prompt_index = args.iter().position(|arg| arg == "summarize").expect("missing prompt");
         let first_file_index = args.iter().position(|arg| arg == "--file").expect("missing --file");
         assert!(prompt_index < first_file_index);
+    }
+
+    #[test]
+    fn opencode_headless_args_use_command_flag_for_provider_commands() {
+        let args = build_opencode_headless_args(
+            "session-123",
+            false,
+            None,
+            Some("D:\\workspace"),
+            &[],
+            Some("/write-report"),
+            "use current doc",
+        );
+
+        assert!(args.windows(2).any(|pair| pair == ["--command", "write-report"]));
+        assert_eq!(args.last().map(String::as_str), Some("use current doc"));
     }
 
     #[test]
@@ -2232,6 +2395,7 @@ mod tests {
             &[],
             &[],
             &[],
+            None,
             "hello",
         );
         let opencode = build_agent_headless_command(
@@ -2243,6 +2407,7 @@ mod tests {
             &[],
             &[],
             &[],
+            None,
             "hello",
         );
 
@@ -2263,6 +2428,7 @@ mod tests {
             &[],
             &["D:\\workspace".to_string()],
             &[],
+            None,
             "hello",
         );
 
@@ -2292,6 +2458,43 @@ mod tests {
     fn skill_md_frontmatter_description_missing() {
         assert_eq!(parse_skill_md_description("# no frontmatter\n").is_none(), true);
         assert_eq!(parse_skill_md_description("---\nname: x\n---\n").is_none(), true);
+    }
+
+    #[test]
+    fn opencode_command_dir_scanner_reads_markdown_commands() {
+        let root = temp_path("opencode-commands");
+        let commands_dir = root.join("commands");
+        std::fs::create_dir_all(&commands_dir).unwrap();
+        std::fs::write(commands_dir.join("write-report.md"), "# Write report\nBody").unwrap();
+
+        let mut commands = Vec::new();
+        collect_opencode_command_dirs(&mut commands, &root);
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].name, "write-report");
+        assert_eq!(commands[0].description.as_deref(), Some("Write report"));
+        assert_eq!(commands[0].source, "opencode");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn opencode_config_scanner_reads_jsonc_commands() {
+        let root = temp_path("opencode-config");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("opencode.jsonc"),
+            "{\n  // comment\n  \"command\": { \"ship-it\": { \"description\": \"Ship changes\" } }\n}",
+        )
+        .unwrap();
+
+        let mut commands = Vec::new();
+        collect_opencode_config_commands(&mut commands, &root.join("opencode.jsonc"));
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].name, "ship-it");
+        assert_eq!(commands[0].description.as_deref(), Some("Ship changes"));
+        assert_eq!(commands[0].source, "opencode");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

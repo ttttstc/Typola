@@ -4,6 +4,7 @@ import type { AgentProvider } from './provider';
 export type SkillRef = {
   name: string;
   description?: string;
+  supportedProviders?: AgentProvider[];
 };
 
 export type SkillTemplateRef = SkillRef & {
@@ -11,7 +12,6 @@ export type SkillTemplateRef = SkillRef & {
   summary: string;
   expectedPath?: string;
   installSource?: string;
-  supportedProviders?: AgentProvider[];
   system: true;
 };
 
@@ -154,6 +154,12 @@ export function getSystemSkillScenesForProvider(provider: AgentProvider): SkillS
   }));
 }
 
+export function getSceneAdditionsForProvider(hub: SkillHub, sceneId: string, provider: AgentProvider): SkillRef[] {
+  return (hub.sceneAdditions[sceneId] ?? []).filter((skill) => (
+    skill.supportedProviders ?? DEFAULT_SYSTEM_SKILL_PROVIDERS
+  ).includes(provider));
+}
+
 function normalizeSkill(raw: unknown): SkillRef | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
@@ -165,7 +171,14 @@ function normalizeSkill(raw: unknown): SkillRef | null {
     description: typeof obj.description === 'string' && obj.description.trim()
       ? obj.description.trim()
       : undefined,
+    supportedProviders: normalizeSupportedProviders(obj.supportedProviders),
   };
+}
+
+function normalizeSupportedProviders(raw: unknown): AgentProvider[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const providers = raw.filter((value): value is AgentProvider => value === 'claude' || value === 'opencode');
+  return providers.length > 0 ? [...new Set(providers)] : undefined;
 }
 
 function uniqueSkills(skills: SkillRef[]): SkillRef[] {

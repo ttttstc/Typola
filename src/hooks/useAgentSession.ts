@@ -330,6 +330,7 @@ export function useConversationManager({
       pluginDirs: runtime.pluginDirs,
       extraAllowedDirs,
       promptContextPaths: opts?.referencePaths,
+      commandName: provider === 'opencode' ? conv.skillRef : undefined,
     };
     try {
       // 首轮 start（Rust 建新 session-id）；后续 resume（Rust 按 conversationId 复用 uuid + --resume），保多轮上下文延续

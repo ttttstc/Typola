@@ -3,6 +3,7 @@ import {
   addSkillToScene,
   buildSkillInstallPrompt,
   EMPTY_SKILL_HUB,
+  getSceneAdditionsForProvider,
   getSystemSkillScenesForProvider,
   parseSkillHubJson,
   removeCustomSkillFromScene,
@@ -121,6 +122,21 @@ describe('skill hub helpers', () => {
       'baoyu-slide-deck',
     ]);
     expect(getSystemSkillScenesForProvider('opencode').flatMap((scene) => scene.skills)).toEqual([]);
+  });
+
+  it('filters user-added Claude skills out for OpenCode provider', () => {
+    const hub = addSkillToScene(EMPTY_SKILL_HUB, 'ppt', { name: 'frontend-slides' });
+    expect(getSceneAdditionsForProvider(hub, 'ppt', 'claude')).toEqual([{ name: 'frontend-slides' }]);
+    expect(getSceneAdditionsForProvider(hub, 'ppt', 'opencode')).toEqual([]);
+  });
+
+  it('keeps user-added OpenCode commands visible for OpenCode provider', () => {
+    const hub = addSkillToScene(EMPTY_SKILL_HUB, 'ppt', { name: 'write-report', supportedProviders: ['opencode'] });
+    expect(getSceneAdditionsForProvider(hub, 'ppt', 'claude')).toEqual([]);
+    expect(getSceneAdditionsForProvider(hub, 'ppt', 'opencode')).toEqual([
+      { name: 'write-report', supportedProviders: ['opencode'] },
+    ]);
+    expect(parseSkillHubJson(serializeSkillHub(hub)).hub).toEqual(hub);
   });
 
   it('builds install prompt with source fallback', () => {

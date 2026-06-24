@@ -674,7 +674,9 @@ export function AppLayout() {
   const handlePickSkill = useCallback((skillName: string) => {
     convManager.createConversation(skillName, skillName);
     setLeftRailMode('aiWorkbench');
-    setSkillPrefill({ tick: Date.now(), text: `/${skillName} ` });
+    if (convManager.activeProvider === 'claude') {
+      setSkillPrefill({ tick: Date.now(), text: `/${skillName} ` });
+    }
   }, [convManager]);
 
   const handleInstallSkill = useCallback((prompt: string) => {
@@ -1073,6 +1075,7 @@ export function AppLayout() {
       <div className="flow-panel-content">
         <SkillHubPanel
           activeProvider={convManager.activeProvider}
+          activeWorkspaceRoot={effectiveAiWorkspaceRoot}
           hub={skillHub}
           loadError={skillHubError}
           onPickSkill={handlePickSkill}
