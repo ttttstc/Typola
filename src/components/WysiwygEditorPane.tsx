@@ -730,7 +730,22 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       });
       return true;
     },
-  }), [filePath, getSavedOrCurrentSelection, onChange, restoreSelectionRange]);
+    commitAIReplacement(content: string) {
+      // P0-2:Diff Preview 应用合并结果。压栈让一次 Ctrl+Z 整体回退。
+      const editor = editorRef.current;
+      if (!editor) return;
+      const before = editor.getValue();
+      if (before === content) return;
+      applyingExternalValue.current = true;
+      editor.setValue(content, true);
+      lastEmittedValue.current = content;
+      pushUndoSnapshot(before, content, null);
+      onChange(content);
+      window.requestAnimationFrame(() => {
+        applyingExternalValue.current = false;
+      });
+    },
+  }), [filePath, getSavedOrCurrentSelection, onChange, pushUndoSnapshot, restoreSelectionRange]);
 
   return (
     <div className="wysiwyg-editor-pane" aria-label="即时渲染编辑器">

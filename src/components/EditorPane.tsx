@@ -284,6 +284,15 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       // 原生 Ctrl+Z 直接生效，无需额外撤销栈。
       return false;
     },
+    commitAIReplacement(content: string) {
+      // 一次性整篇替换:走单次 dispatch,CodeMirror history 自动栈,一次 Ctrl+Z 回退。
+      if (!editorView) return;
+      const docLen = editorView.state.doc.length;
+      editorView.dispatch({
+        changes: { from: 0, to: docLen, insert: content },
+      });
+      editorView.focus();
+    },
   }), [editorView]);
 
   return (

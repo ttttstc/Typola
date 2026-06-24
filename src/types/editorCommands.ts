@@ -13,4 +13,8 @@ export type EditorCommandHandle = {
   revealText: (text: string, backwards?: boolean) => void;
   /** 撤销最后一次 AI 替换操作（恢复到替换前的编辑器内容）。 */
   undoLastAIReplacement: () => boolean;
+  /** AI 整篇替换(用于 Diff Preview 应用合并结果)。一次性写入新内容,
+   *  WYSIWYG 模式同步压入 AI 撤销栈,一次 Ctrl+Z 整体回退;Source 模式
+   *  由 CodeMirror history 自动处理。 */
+  commitAIReplacement: (content: string) => void;
 };

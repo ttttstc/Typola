@@ -12,7 +12,7 @@
 // 设计原则:保持与原右栏单模态外观一致(无新增 Tab 抽象),通过 header 切换按钮在
 // 两视图间切。
 
-import { Edit3, FileDown, FileText, MessageSquare, RefreshCw, Send, Trash2, X } from 'lucide-react';
+import { Edit3, FileDown, FileText, GitCompare, MessageSquare, RefreshCw, Send, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import type { ReviewComment } from '../../services/review/reviewState';
 import type { RevisionEntry } from '../../hooks/useRevisionList';
@@ -40,6 +40,8 @@ type Props = {
   revisions: RevisionEntry[];
   /** 点击 AI 改稿 → 中间栏打开 */
   onOpenRevision: (path: string) => void;
+  /** 点击「以 Diff 审阅」→ 把改稿跟当前文档分段 diff,进入审阅态。 */
+  onReviewRevision: (path: string) => void;
   /** 手动刷新 AI 改稿列表 */
   onRefreshRevisions: () => void;
 };
@@ -76,6 +78,7 @@ export function ReviewSidebarPanel({
   onClose,
   revisions,
   onOpenRevision,
+  onReviewRevision,
   onRefreshRevisions,
 }: Props) {
   const hasComments = comments.length > 0;
@@ -145,6 +148,7 @@ export function ReviewSidebarPanel({
           onSendToAI={onSendToAI}
           revisions={revisions}
           onOpenRevision={onOpenRevision}
+          onReviewRevision={onReviewRevision}
           onRefreshRevisions={onRefreshRevisions}
         />
       )}
@@ -247,6 +251,7 @@ function AIRevisionsView({
   onSendToAI,
   revisions,
   onOpenRevision,
+  onReviewRevision,
   onRefreshRevisions,
 }: {
   currentFilePath?: string;
@@ -254,6 +259,7 @@ function AIRevisionsView({
   onSendToAI: () => void;
   revisions: RevisionEntry[];
   onOpenRevision: (path: string) => void;
+  onReviewRevision: (path: string) => void;
   onRefreshRevisions: () => void;
 }) {
   return (
@@ -295,7 +301,7 @@ function AIRevisionsView({
           ) : (
             <ol className="review-sidebar-revisions-list">
               {revisions.map((rev) => (
-                <li key={rev.path}>
+                <li key={rev.path} className="review-sidebar-revisions-item-row">
                   <button
                     type="button"
                     className="review-sidebar-revisions-item"
@@ -304,6 +310,15 @@ function AIRevisionsView({
                   >
                     <span className="review-sidebar-revisions-item-name">{rev.name}</span>
                     <span className="review-sidebar-revisions-item-time">{relativeTime(rev.mtime)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="review-sidebar-revisions-diffbtn"
+                    onClick={() => onReviewRevision(rev.path)}
+                    title="以 Diff 审阅(分段对比 + 逐段采纳)"
+                    aria-label="以 Diff 审阅"
+                  >
+                    <GitCompare size={12} />
                   </button>
                 </li>
               ))}
