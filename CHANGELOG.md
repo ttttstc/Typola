@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - 编辑器与右侧预览同步滚动：编辑器滚动时右侧 Word / 公众号预览按 scroll ratio 单向同步（rAF 节流，零额外重渲染）。
 - 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 - 新增 Mermaid 图表渲染：阅读、心流、检视、HTML 预览和 Word 预览会把 ` ```mermaid ` 代码块渲染为 SVG 图，语法错误保留源码并显示错误条，WYSIWYG 中右键图表可复制 SVG。
+- 新增 PDF 导出：工具栏「导出 PDF」与 `Cmd/Ctrl+P` 会按阅读模式渲染当前文档，生成 A4 / 2cm 页边距的 PDF 文件。
 
 ### Changed
 
@@ -37,7 +38,7 @@ All notable changes to this project will be documented in this file.
 - 右侧 Word / HTML 预览展开时默认改为左侧编辑区与右侧预览区约 `2:1` 宽度比例；双击分隔条会恢复该比例，拖拽时右侧预览最小宽度收窄到 320px。
 - 顶部应用工具栏背景与阅读底色统一，居中文件名字号提升到 13px 并增强对比度，改善窗口顶部的一致性和可读性。
 - 新增文件内查找/替换面板：`Cmd/Ctrl+F` 与 `Cmd/Ctrl+H` 都会同时展示查找和替换输入，分别聚焦查找框或替换框；支持上/下一个、大小写、全词和正则选项，替换逻辑对只读 Word 预览禁用。
-- 新增最近文件与快速打开：打开、拖拽、系统传入或恢复文档后会记录最近文件，`Cmd/Ctrl+P` 可按文件名或路径片段快速过滤并打开。
+- 新增最近文件与快速打开：打开、拖拽、系统传入或恢复文档后会记录最近文件，`Cmd/Ctrl+Shift+P` 可按文件名或路径片段快速过滤并打开。
 - 状态栏新增文档统计：编辑时延迟计算词数、字符数、段落数和预计阅读时间，避免每次输入同步重算。
 - 新增编辑辅助入口：支持插入链接、图片、Markdown 表格，并支持将剪贴板图片异步保存到当前文档同级 `assets/` 后插入相对路径。
 - 底部状态栏新增"状态栏路径"设置项（外观页），可选"完整路径 / 仅文件名 / 首尾保留（推荐）"三种展示策略；默认"首尾保留"模式下，长路径会自动 ellipsis 收缩到 ≤60 字符且始终保留文件名，不会再撑开状态栏。完整路径仍可通过 `title` 提示或双击复制。
@@ -76,6 +77,7 @@ All notable changes to this project will be documented in this file.
 - 新增单实例文件打开转发：Windows / Linux 第二次启动 Typola 并传入文档路径时，会复用已有窗口并通过 `opened-paths` 打开文件，避免同一文档被多个进程分叉编辑。
 - 修复重新打开上次文件失败后路径永远保留的问题；失败一次后会清理过期 `lastOpenedPath`，下次启动不再反复尝试同一路径。
 - 修复 Markdown 文件中通过 `![](./path.webp)` 引用的本地相对路径图片（WebP / PNG / JPG / GIF 等）无法在 Vditor 编辑区、Word 纸张预览、HTML 导出预览中正常渲染的问题：新增 `localImageResolver` 服务，在 Vditor 渲染完成后自动将 `<img src="./relative">` 解析为 Tauri asset 协议 URL（`https://asset.localhost/...`），与已有的 `htmlPresentationService` 共用路径解析逻辑。`.webp` 与 `.png` / `.jpg` 表现一致。
+- 修复 PDF 导出评审问题：导出链路改为离屏 hidden webview 打印，不再复用主窗口；前后端都增加了导出互斥保护，导出中显示遮罩，成功提示包含完整保存路径，`Ctrl/Cmd+P` 的快捷键调整也同步写入按钮提示与文档说明。
 
 - 修复 Vditor WYSIWYG（即时渲染）模式中输入 `**foo**` 后 `**` 字符仍以蓝色 marker 持续可见、加粗看上去未生效的问题：`WysiwygEditorPane` 监听 `keydown` 钩子并在停顿 220ms 后强制清除 IR 节点的 `vditor-ir__node--expand` class，与 Vditor 自身 `blurEvent` 行为对齐；编辑过程中不打断用户，持续键入时 marker 仍可见，停顿后自动折叠。
 
