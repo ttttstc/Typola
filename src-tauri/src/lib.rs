@@ -1377,6 +1377,9 @@ pub fn run() {
         .run(|_app, _event| {
             // 移除 #[cfg(target_os)] 限制——Windows 也需要处理文件关联打开事件,
             // 否则通过文件关联打开 .md 文件时窗口不会自动恢复显示。
+            // 注意:opened_paths_from_urls 目前只在 macOS/iOS/Android 编译,
+            // Windows 上 RunEvent::Opened 的 urls 需要单独处理。
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
             if let tauri::RunEvent::Opened { urls } = _event {
                 let paths = opened_paths_from_urls(urls);
                 if paths.is_empty() {
