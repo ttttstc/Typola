@@ -276,16 +276,15 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       });
       editorView.focus();
     },
-    revealSearchMatch(from: number, to: number) {
+    revealSearchMatch(from: number, to: number, opts?: { focus?: boolean }) {
       if (!editorView) return;
-      // Source 模式:CodeMirror 按 from/to 直接选区 + 滚动,并把焦点切到编辑器。
-      // 切焦点是必要的 —— 用户按"下一个"后应让编辑区获得输入焦点,
-      // 否则后续方向键 / 输入会卡在 FindReplacePanel 输入框里。
+      // Source 模式:CodeMirror 按 from/to 直接选区 + 滚动。
+      // focus 默认 true(检视意见跳转),搜索场景可传 false 保持输入框焦点。
       editorView.dispatch({
         effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
         selection: { anchor: from, head: to },
       });
-      editorView.focus();
+      if (opts?.focus !== false) editorView.focus();
     },
     undoLastAIReplacement() {
       // CodeMirror 的 history 插件已自动追踪所有 dispatch（含 replaceRange），

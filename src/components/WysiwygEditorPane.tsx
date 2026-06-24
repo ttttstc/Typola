@@ -685,7 +685,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     revealRange() {
       editorRef.current?.focus();
     },
-    revealSearchMatch(from: number, to: number) {
+    revealSearchMatch(from: number, to: number, opts?: { focus?: boolean }) {
       const editor = editorRef.current;
       if (!editor) return;
       const ir = getIrElement(editor);
@@ -700,7 +700,6 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         return;
       }
       // 把 range 套到 IR 选区,触发 Vditor 自带的高亮 + scrollIntoView。
-      // 注意:不能直接 editor.focus(),否则抢回焦点,FindReplacePanel 输入会断流。
       try {
         const sel = ir.ownerDocument?.defaultView?.getSelection();
         if (sel) {
@@ -709,8 +708,9 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         }
       } catch { /* 选区设置失败不致命,DOM 仍然存在 */ }
       range.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'auto' });
-      // 暂不 editor.focus():让 FindReplacePanel 的输入框保持焦点,
-      // 下一帧 Vditor 自带的 selChange 会同步到 vditor 内部 model。
+      // 默认 focus=true(检视意见跳转等场景),搜索场景传 focus=false 保持
+      // FindReplacePanel 输入框焦点,避免反复抢焦点导致光标乱飞。
+      if (opts?.focus !== false) editor.focus();
     },
     undoLastAIReplacement() {
       const editor = editorRef.current;

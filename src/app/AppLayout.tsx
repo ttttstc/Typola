@@ -562,7 +562,9 @@ export function AppLayout() {
   const handleSearchNavigate = useCallback((match: SearchMatch) => {
     // SearchMatch.index/length 是 source markdown 偏移,Source / WYSIWYG
     // 模式都由编辑器内部负责 source→自身 DOM 的映射,AppLayout 不再分模式调不同 API。
-    editorCommandRef.current?.revealSearchMatch(match.index, match.index + match.length);
+    // focus=false:搜索上下/回车要保持 FindReplacePanel 输入框焦点,避免抢焦点
+    // 导致光标乱飞 + 阻碍继续输入。
+    editorCommandRef.current?.revealSearchMatch(match.index, match.index + match.length, { focus: false });
   }, []);
 
   const insertMarkdown = useCallback((markdown: string) => {
