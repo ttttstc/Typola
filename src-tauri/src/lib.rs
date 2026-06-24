@@ -22,12 +22,19 @@ use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use tauri::Emitter as _;
 use tauri::Manager;
+#[cfg(windows)]
+use tauri::{
+    webview::PageLoadEvent,
+    WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 struct OpenedPaths(Mutex<Vec<String>>);
 #[derive(Default)]
 struct TerminalStore(Mutex<TerminalRegistry>);
 #[derive(Default)]
 struct DocumentWatcherStore(Mutex<HashMap<String, RecommendedWatcher>>);
+#[derive(Default)]
+struct PdfExportStore(Mutex<bool>);
 
 #[derive(Default)]
 struct WorkspaceWatcherStore(Mutex<HashMap<String, WorkspaceWatcherEntry>>);
@@ -191,7 +198,15 @@ struct UploadImageRequest {
 #[serde(rename_all = "camelCase")]
 struct PdfExportRequest {
     save_path: String,
+    html: String,
 }
+
+const PDF_EXPORT_WINDOW_WIDTH: f64 = 840.0;
+const PDF_EXPORT_WINDOW_HEIGHT: f64 = 1188.0;
+const PDF_EXPORT_WINDOW_BOOT_TIMEOUT_SECS: u64 = 15;
+const PDF_EXPORT_RENDER_TIMEOUT_SECS: u64 = 45;
+const PDF_EXPORT_PRINT_TIMEOUT_SECS: u64 = 60;
+const PDF_EXPORT_IMAGE_WAIT_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -461,30 +476,176 @@ fn upload_image_via_command(request: UploadImageRequest) -> Result<UploadImageRe
 }
 
 #[tauri::command]
-fn export_pdf(app: tauri::AppHandle, request: PdfExportRequest) -> Result<(), String> {
-    let save_path = PathBuf::from(request.save_path.trim());
-    if save_path.as_os_str().is_empty() {
-        return Err("missing PDF save path".into());
-    }
-    if save_path.extension().and_then(OsStr::to_str).map(|ext| !ext.eq_ignore_ascii_case("pdf")).unwrap_or(true) {
-        return Err("PDF export path must end with .pdf".into());
-    }
-    if let Some(parent) = save_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("failed to create PDF output directory: {error}"))?;
+fn export_pdf(
+    app: tauri::AppHandle,
+    export_store: tauri::State<PdfExportStore>,
+    request: PdfExportRequest,
+) -> Result<String, String> {
+    {
+        let mut exporting = export_store.0.lock().unwrap();
+        if *exporting {
+            return Err("PDF 正在导出，请等待当前任务完成。".into());
+        }
+        *exporting = true;
     }
 
-    let pdf = export_pdf_from_main_webview(&app)?;
-    std::fs::write(&save_path, pdf).map_err(|error| format!("failed to write PDF: {error}"))
+    let result = (|| -> Result<String, String> {
+        let save_path = normalize_pdf_save_path(&request.save_path)?;
+        if let Some(parent) = save_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("failed to create PDF output directory: {error}"))?;
+        }
+
+        let pdf = render_html_to_pdf(&app, &request.html)?;
+        std::fs::write(&save_path, pdf).map_err(|error| format!("failed to write PDF: {error}"))?;
+        Ok(save_path.to_string_lossy().to_string())
+    })();
+
+    *export_store.0.lock().unwrap() = false;
+    result
 }
 
 #[cfg(windows)]
-fn export_pdf_from_main_webview(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
-    use webview2_com::{CallDevToolsProtocolMethodCompletedHandler, CoTaskMemPWSTR};
+fn render_html_to_pdf(app: &tauri::AppHandle, html: &str) -> Result<Vec<u8>, String> {
+    let label = format!("pdf-print-{}", uuid::Uuid::new_v4());
+    let (load_tx, load_rx) = mpsc::channel::<Result<(), String>>();
+    let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
+    let app_handle = app.clone();
+    let label_for_thread = label.clone();
+
+    thread::spawn(move || {
+        let build_result = (|| -> Result<(), String> {
+            let ready_tx = ready_tx.clone();
+            let load_tx = load_tx.clone();
+            WebviewWindowBuilder::new(&app_handle, &label_for_thread, WebviewUrl::App("pdf-print-shell.html".into()))
+                .title("Typola PDF Export")
+                // A4 @ 96 DPI with a little extra headroom for initial layout before printToPDF.
+                .inner_size(PDF_EXPORT_WINDOW_WIDTH, PDF_EXPORT_WINDOW_HEIGHT)
+                .visible(false)
+                .focused(false)
+                .focusable(false)
+                .decorations(false)
+                .resizable(false)
+                .skip_taskbar(true)
+                .on_navigation(move |url| {
+                    if url.scheme() != "typola-pdf" {
+                        return true;
+                    }
+
+                    let result = match url.host_str().unwrap_or_default() {
+                        "ready" => Ok(()),
+                        "error" => {
+                            let message = url
+                                .query_pairs()
+                                .find(|(key, _)| key == "message")
+                                .map(|(_, value)| value.into_owned())
+                                .filter(|value| !value.trim().is_empty())
+                                .unwrap_or_else(|| "hidden PDF webview failed to render content".to_string());
+                            Err(message)
+                        }
+                        _ => Err("hidden PDF webview reported an unknown state".to_string()),
+                    };
+                    let _ = ready_tx.send(result);
+                    false
+                })
+                .on_page_load(move |_window, payload| {
+                    if payload.event() == PageLoadEvent::Finished {
+                        let _ = load_tx.send(Ok(()));
+                    }
+                })
+                .build()
+                .map_err(|error| format!("failed to create hidden PDF webview: {error}"))?;
+            Ok(())
+        })();
+
+        if let Err(error) = build_result {
+            let _ = load_tx.send(Err(error));
+        }
+    });
+
+    load_rx
+        .recv_timeout(Duration::from_secs(PDF_EXPORT_WINDOW_BOOT_TIMEOUT_SECS))
+        .map_err(|_| "离屏 PDF 渲染窗口启动超时。".to_string())??;
 
     let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "main window not found".to_string())?;
+        .get_webview_window(&label)
+        .ok_or_else(|| "failed to acquire hidden PDF webview".to_string())?;
+    let inject_result = inject_pdf_html_and_wait(&window, html, ready_rx);
+    let pdf_result = inject_result.and_then(|_| render_hidden_webview_to_pdf(&window));
+    let _ = window.destroy();
+    pdf_result
+}
+
+#[cfg(not(windows))]
+fn render_html_to_pdf(_app: &tauri::AppHandle, _html: &str) -> Result<Vec<u8>, String> {
+    Err("当前仅 Windows WebView2 版本支持 PDF 导出。".into())
+}
+
+#[cfg(windows)]
+fn inject_pdf_html_and_wait(
+    window: &WebviewWindow,
+    html: &str,
+    ready_rx: mpsc::Receiver<Result<(), String>>,
+) -> Result<(), String> {
+    let html_json = serde_json::to_string(html)
+        .map_err(|error| format!("failed to serialize PDF HTML: {error}"))?;
+    let script = format!(
+        r#"
+(() => {{
+  const root = document.getElementById('pdf-root') || document.body;
+  const html = {html_json};
+  const notify = (status, message) => {{
+    const suffix = message ? `?message=${{encodeURIComponent(message)}}` : '';
+    window.location.href = `typola-pdf://${{status}}${{suffix}}`;
+  }};
+  const waitForImages = (timeoutMs) => {{
+    const images = Array.from(document.querySelectorAll('img'));
+    if (images.length === 0) return Promise.resolve();
+    return Promise.race([
+      Promise.all(images.map((image) => image.complete
+        ? Promise.resolve()
+        : new Promise((resolve) => {{
+            image.addEventListener('load', () => resolve(), {{ once: true }});
+            image.addEventListener('error', () => resolve(), {{ once: true }});
+          }}))),
+      new Promise((resolve) => window.setTimeout(resolve, timeoutMs)),
+    ]);
+  }};
+
+  (async () => {{
+    root.innerHTML = html;
+    if (document.fonts && document.fonts.ready) {{
+      try {{
+        await document.fonts.ready;
+      }} catch (_error) {{
+        // fonts.ready failure should not block export
+      }}
+    }}
+    await waitForImages({PDF_EXPORT_IMAGE_WAIT_TIMEOUT_MS});
+    await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+    notify('ready', '');
+  }})().catch((error) => {{
+    const message = error instanceof Error ? error.message : String(error ?? 'unknown error');
+    notify('error', message);
+  }});
+}})();
+"#
+    );
+
+    window
+        .eval(script)
+        .map_err(|error| format!("failed to inject PDF content: {error}"))?;
+
+    ready_rx
+        .recv_timeout(Duration::from_secs(PDF_EXPORT_RENDER_TIMEOUT_SECS))
+        .map_err(|_| "等待 PDF 内容渲染超时。".to_string())??;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn render_hidden_webview_to_pdf(window: &WebviewWindow) -> Result<Vec<u8>, String> {
+    use webview2_com::{CallDevToolsProtocolMethodCompletedHandler, CoTaskMemPWSTR};
+
     let (tx, rx) = mpsc::channel::<Result<String, String>>();
 
     window
@@ -529,14 +690,25 @@ fn export_pdf_from_main_webview(app: &tauri::AppHandle) -> Result<Vec<u8>, Strin
         .map_err(|error| format!("failed to access WebView: {error}"))?;
 
     let result = rx
-        .recv_timeout(Duration::from_secs(60))
+        .recv_timeout(Duration::from_secs(PDF_EXPORT_PRINT_TIMEOUT_SECS))
         .map_err(|_| "PDF export timed out".to_string())??;
     decode_print_to_pdf_result(&result)
 }
 
-#[cfg(not(windows))]
-fn export_pdf_from_main_webview(_app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
-    Err("PDF export is currently implemented for Windows WebView2 only".into())
+fn normalize_pdf_save_path(raw: &str) -> Result<PathBuf, String> {
+    let save_path = PathBuf::from(raw.trim());
+    if save_path.as_os_str().is_empty() {
+        return Err("missing PDF save path".into());
+    }
+    if save_path
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(|ext| !ext.eq_ignore_ascii_case("pdf"))
+        .unwrap_or(true)
+    {
+        return Err("PDF export path must end with .pdf".into());
+    }
+    Ok(save_path)
 }
 
 fn decode_print_to_pdf_result(result: &str) -> Result<Vec<u8>, String> {
@@ -1121,6 +1293,7 @@ pub fn run() {
         .manage(OpenedPaths(Mutex::new(collect_initial_open_paths())))
         .manage(TerminalStore::default())
         .manage(DocumentWatcherStore::default())
+        .manage(PdfExportStore::default())
         .manage(WorkspaceWatcherStore::default())
         .manage(AgentHeadlessStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
@@ -2244,5 +2417,23 @@ mod tests {
         assert!(!artifact.exists());
         let _ = std::fs::remove_dir_all(&workspace);
         let _ = std::fs::remove_dir_all(&other_workspace);
+    }
+
+    #[test]
+    fn normalize_pdf_save_path_accepts_pdf_extension() {
+        let path = normalize_pdf_save_path("C:\\temp\\draft.pdf").unwrap();
+        assert!(path.ends_with("draft.pdf"));
+    }
+
+    #[test]
+    fn normalize_pdf_save_path_rejects_empty_path() {
+        let error = normalize_pdf_save_path("   ").unwrap_err();
+        assert!(error.contains("missing PDF save path"));
+    }
+
+    #[test]
+    fn normalize_pdf_save_path_rejects_non_pdf_extension() {
+        let error = normalize_pdf_save_path("C:\\temp\\draft.md").unwrap_err();
+        assert!(error.contains("must end with .pdf"));
     }
 }

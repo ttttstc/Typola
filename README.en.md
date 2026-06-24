@@ -57,7 +57,8 @@ The AI Workbench drives your locally installed `claude` CLI (headless mode), and
 - Word paper preview (A4) + `.docx` export
 - HTML preview + rich-text copy + full HTML export
 - Editor-to-preview scroll sync by ratio (rAF-throttled, no extra render)
-- Find/replace (`Cmd/Ctrl+F` / `Cmd/Ctrl+H`, case / whole-word / regex) + quick open (`Cmd/Ctrl+P`)
+- Find/replace (`Cmd/Ctrl+F` / `Cmd/Ctrl+H`, case / whole-word / regex) + quick open (`Cmd/Ctrl+Shift+P`)
+- PDF export (`Cmd/Ctrl+P`, Windows WebView2)
 - Editing utilities: insert links / images / Markdown tables in one click; pasted clipboard images save to a sibling `assets/` and insert as a relative path
 - Document statistics (word count / chars / paragraphs / reading time, debounced, never blocks typing)
 - Integrated terminal (multi-tab at the bottom, starts in the current file directory)
@@ -97,7 +98,8 @@ Common shortcuts:
 - `Cmd/Ctrl + S` — Save
 - `Cmd/Ctrl + Shift + S` — Save as
 - `Cmd/Ctrl + F` / `H` — Find / Replace
-- `Cmd/Ctrl + P` — Quick open
+- `Cmd/Ctrl + P` — Export PDF
+- `Cmd/Ctrl + Shift + P` — Quick open
 - `Cmd/Ctrl + Shift + I` — Editing utilities
 - `Cmd/Ctrl + Alt + S` / `P` / `M` — Toggle source / Word preview / HTML preview
 - `Cmd/Ctrl + K` — Open the AI action menu for the current selection

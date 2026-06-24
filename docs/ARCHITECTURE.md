@@ -11,7 +11,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/components/FindReplacePanel.tsx`, `QuickOpenPanel.tsx`, and `EditAssistPanel.tsx` provide on-demand editing utilities. Their matching, recent-file, statistics, and snippet logic lives in small service modules so the main editor path stays light.
 - `src/components/WordPaperPreviewPane.tsx` and `src/services/word/*` provide Word-style preview and `.docx` export.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
-- `src/services/pdfExport.ts` builds a print-only Vditor preview DOM for PDF export. The Rust `export_pdf` command prints that DOM through WebView2 `Page.printToPDF` on Windows, keeping the frontend interface ready for later Typst or platform-specific engines.
+- `src/services/pdfExport.ts` renders the current Markdown into a PDF-specific HTML fragment, applies theme/font settings, and sends it to Rust. The Rust `export_pdf` command creates a hidden offscreen WebView2 window, injects that HTML into `public/pdf-print-shell.html`, waits for fonts/images to settle, and only then calls `Page.printToPDF` on Windows.
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
 - `src/components/conversation/ConversationPanel.tsx` provides the left AI Workbench conversation surface for Skill OS M1.
 - `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge Claude headless stdout into typed message state and UI-friendly diagnostics.
@@ -30,7 +30,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `tauri-plugin-single-instance` forwards secondary process argv paths to the running window through the existing `opened-paths` event.
 - The active file is watched by Rust `notify` through `watch_opened_document` / `unwatch_opened_document`. External changes emit `file-changed`; the frontend suppresses events that arrive within 1.5s of a known self-write.
 - If reopen-last-file fails, the stale path is cleared so the next launch does not retry a permanently missing document.
-- Recently opened files are stored as lightweight local metadata in `localStorage` and filtered in memory for `Cmd/Ctrl+P`; Typola does not scan the filesystem or workspace during quick open.
+- Recently opened files are stored as lightweight local metadata in `localStorage` and filtered in memory for `Cmd/Ctrl+Shift+P`; Typola does not scan the filesystem or workspace during quick open.
 - Pasted clipboard images are written through the Rust `write_attachment_file` command into a sibling `assets/` directory for the current document, returning a relative Markdown image path to the editor.
 
 ## Editing Utilities
