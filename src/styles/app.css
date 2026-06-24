@@ -3017,8 +3017,19 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   cursor: pointer;
 }
 
+/* P0-4:产物合并按钮(GitCompare)样式跟 archive/delete 同款 hover 显现 */
+.artifact-merge {
+  padding: 4px 6px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
 .artifact-archive,
-.artifact-delete {
+.artifact-delete,
+.artifact-merge {
   opacity: 0;
   pointer-events: none;
   transform: translateX(2px);
@@ -3027,8 +3038,10 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .artifact-chip-row:hover .artifact-archive,
 .artifact-chip-row:hover .artifact-delete,
+.artifact-chip-row:hover .artifact-merge,
 .artifact-chip-row:focus-within .artifact-archive,
-.artifact-chip-row:focus-within .artifact-delete {
+.artifact-chip-row:focus-within .artifact-delete,
+.artifact-chip-row:focus-within .artifact-merge {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
@@ -3039,7 +3052,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-color: var(--danger);
 }
 
-.artifact-archive:hover {
+.artifact-archive:hover,
+.artifact-merge:hover {
   color: var(--accent);
   border-color: color-mix(in oklch, var(--accent) 40%, var(--border-soft));
   background: color-mix(in oklch, var(--accent) 8%, var(--surface));
@@ -6810,14 +6824,16 @@ html[data-theme='dark'] .terminal-session {
   display: none !important;
 }
 
-/* ===== Toolbar custom tooltip ===== */
+/* ===== Custom tooltip(P0-5:全局可用,不限于 toolbar) ===== */
+/* 任何带 data-tooltip 的 button 都自动获得 hover 提示,DiffReviewBar /
+   DiffGutterMap 这种非 toolbar 子树的 UI 也能用。 */
 
-.app-toolbar button[data-tooltip] {
+button[data-tooltip] {
   position: relative;
 }
 
-.app-toolbar button[data-tooltip]::after,
-.app-toolbar button[data-tooltip]::before {
+button[data-tooltip]::after,
+button[data-tooltip]::before {
   position: absolute;
   top: calc(100% + 6px);
   left: 50%;
@@ -6828,7 +6844,7 @@ html[data-theme='dark'] .terminal-session {
   z-index: 200;
 }
 
-.app-toolbar button[data-tooltip]::after {
+button[data-tooltip]::after {
   content: attr(data-tooltip);
   padding: 4px 8px;
   border-radius: 5px;
@@ -6840,7 +6856,7 @@ html[data-theme='dark'] .terminal-session {
   box-shadow: 0 4px 12px color-mix(in oklch, var(--shadow-soft) 60%, transparent);
 }
 
-.app-toolbar button[data-tooltip]::before {
+button[data-tooltip]::before {
   content: '';
   top: calc(100% + 1px);
   width: 0;
@@ -6850,16 +6866,16 @@ html[data-theme='dark'] .terminal-session {
   border-bottom: 5px solid color-mix(in oklch, var(--fg) 92%, transparent);
 }
 
-.app-toolbar button[data-tooltip]:hover:not(:disabled)::after,
-.app-toolbar button[data-tooltip]:hover:not(:disabled)::before,
-.app-toolbar button[data-tooltip]:focus-visible::after,
-.app-toolbar button[data-tooltip]:focus-visible::before {
+button[data-tooltip]:hover:not(:disabled)::after,
+button[data-tooltip]:hover:not(:disabled)::before,
+button[data-tooltip]:focus-visible::after,
+button[data-tooltip]:focus-visible::before {
   opacity: 1;
   transform: translate(-50%, 0);
 }
 
-.app-toolbar button[data-tooltip]:disabled::after,
-.app-toolbar button[data-tooltip]:disabled::before {
+button[data-tooltip]:disabled::after,
+button[data-tooltip]:disabled::before {
   display: none;
 }
 
@@ -7025,7 +7041,7 @@ html[data-theme='dark'] .terminal-session {
 }
 .diff-hunk--focused {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px oklch(58% 0.16 35 / 0.18);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 18%, transparent);
 }
 .diff-hunk-body {
   flex: 1;
@@ -7037,32 +7053,33 @@ html[data-theme='dark'] .terminal-session {
   padding: 2px 4px;
   border-radius: 3px;
 }
+/* P0-3:用 token 派生,light/dark 自动跟随 */
 .diff-hunk-line--before {
   text-decoration: line-through;
-  background: oklch(95% 0.04 25);
-  color: oklch(40% 0.10 25);
+  background: color-mix(in oklch, var(--danger) 14%, transparent);
+  color: color-mix(in oklch, var(--danger) 70%, var(--fg));
   margin-bottom: 4px;
 }
 .diff-hunk-line--after {
-  background: oklch(95% 0.05 150);
-  color: oklch(30% 0.10 150);
+  background: color-mix(in oklch, var(--success) 14%, transparent);
+  color: color-mix(in oklch, var(--success) 60%, var(--fg));
 }
 /* 被拒绝时 after 变灰、before 高亮 */
 .diff-hunk--rejected .diff-hunk-line--after {
-  background: var(--surface-muted, oklch(96% 0.005 80));
+  background: var(--surface-muted, color-mix(in oklch, var(--surface) 90%, var(--fg)));
   color: var(--muted);
   text-decoration: line-through;
   opacity: 0.6;
 }
 .diff-hunk--rejected .diff-hunk-line--before {
   text-decoration: none;
-  background: oklch(95% 0.05 150);
-  color: oklch(30% 0.10 150);
+  background: color-mix(in oklch, var(--success) 14%, transparent);
+  color: color-mix(in oklch, var(--success) 60%, var(--fg));
 }
 /* removed:accept 表示采纳删除,reject 表示保留 */
 .diff-hunk--removed.diff-hunk--rejected .diff-hunk-line--before {
-  background: oklch(95% 0.05 150);
-  color: oklch(30% 0.10 150);
+  background: color-mix(in oklch, var(--success) 14%, transparent);
+  color: color-mix(in oklch, var(--success) 60%, var(--fg));
   text-decoration: none;
 }
 .diff-hunk-actions {
@@ -7107,18 +7124,18 @@ html[data-theme='dark'] .terminal-session {
   border-radius: 2px;
   border: 0;
   padding: 0;
-  background: oklch(70% 0.10 25);
+  background: color-mix(in oklch, var(--accent) 70%, transparent);
   cursor: pointer;
   pointer-events: auto;
   transform: translateY(-50%);
 }
-.diff-gutter-tick--modified { background: oklch(60% 0.12 250); }
-.diff-gutter-tick--added { background: oklch(55% 0.14 150); }
-.diff-gutter-tick--removed { background: oklch(55% 0.16 25); }
+.diff-gutter-tick--modified { background: color-mix(in oklch, var(--accent) 75%, transparent); }
+.diff-gutter-tick--added { background: color-mix(in oklch, var(--success) 75%, transparent); }
+.diff-gutter-tick--removed { background: color-mix(in oklch, var(--danger) 75%, transparent); }
 .diff-gutter-tick--reject { opacity: 0.4; }
 .diff-gutter-tick--active {
   width: 12px;
   height: 10px;
   right: 1px;
-  box-shadow: 0 0 0 2px oklch(58% 0.16 35 / 0.30);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 30%, transparent);
 }
