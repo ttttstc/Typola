@@ -1,4 +1,3 @@
-import { save } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import vditorBaseCss from 'vditor/dist/index.css?raw';
 import hljsGithubCss from 'vditor/dist/js/highlight.js/styles/github.min.css?raw';
@@ -9,10 +8,11 @@ import { VDITOR_PREVIEW_I18N } from './vditorPreviewConfig';
 import { resolveLocalImages } from './localImageResolver';
 import { renderMermaidIn } from './mermaidRenderer';
 import type { AppSettings } from './settingsService';
+import { createExportFileName, resolveDefaultExportPath } from './exportPathService';
 
 const PDF_RENDER_HOST_WIDTH_PX = 794;
 const PDF_RENDER_HOST_MIN_HEIGHT_PX = 1123;
-const PDF_IMAGE_WAIT_TIMEOUT_MS = 30_000;
+const PDF_IMAGE_WAIT_TIMEOUT_MS = 3_500;
 const DEFAULT_PDF_PAGE_SIZE = 'A4';
 const DEFAULT_PDF_PAGE_MARGIN = '2cm';
 
@@ -51,20 +51,15 @@ export async function exportToPdf(options: PdfExportOptions): Promise<PdfExportR
 }
 
 export function createPdfExportFileName(input: string): string {
-  const fallback = input.trim() || 'document.md';
-  if (/\.(md|markdown|html|htm)$/i.test(fallback)) {
-    return fallback.replace(/\.(md|markdown|html|htm)$/i, '.pdf');
-  }
-  if (/\.pdf$/i.test(fallback)) return fallback;
-  return `${fallback}.pdf`;
+  return createExportFileName(input, 'pdf');
 }
 
 async function runPdfExport(options: PdfExportOptions): Promise<PdfExportResult> {
-  const savePath = await save({
-    defaultPath: createPdfExportFileName(options.filePath || options.fileName),
-    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  const savePath = await resolveDefaultExportPath({
+    fileName: options.fileName,
+    filePath: options.filePath,
+    extension: 'pdf',
   });
-  if (!savePath) return { status: 'cancelled' };
 
   options.onStatusChange?.({ phase: 'preparing', savePath });
   const html = await renderPdfHtml(options);

@@ -9,9 +9,9 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/components/WysiwygEditorPane.tsx` wraps Vditor IR mode for WYSIWYG Markdown editing.
 - `src/components/EditorPane.tsx` provides CodeMirror source editing.
 - `src/components/FindReplacePanel.tsx`, `QuickOpenPanel.tsx`, and `EditAssistPanel.tsx` provide on-demand editing utilities. Their matching, recent-file, statistics, and snippet logic lives in small service modules so the main editor path stays light.
-- `src/components/WordPaperPreviewPane.tsx` and `src/services/word/*` provide Word-style preview and `.docx` export.
+- `src/components/WordPaperPreviewPane.tsx`, `src/services/word/*`, and `src/services/wordExportService.ts` provide Word-style preview and background `.docx` export. Export paths are derived automatically from the current document path, with unsaved documents falling back to the user downloads directory.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
-- `src/services/pdfExport.ts` renders the current Markdown into a PDF-specific HTML fragment, applies theme/font settings, and sends it to Rust. The Rust `export_pdf` command creates a hidden offscreen WebView2 window, injects that HTML into `public/pdf-print-shell.html`, waits for fonts/images to settle, and only then calls `Page.printToPDF` on Windows.
+- `src/services/pdfExport.ts` renders the current Markdown into a PDF-specific HTML fragment, applies theme/font settings, derives an output path without opening a save dialog, and sends it to Rust. The Rust `export_pdf` command creates a hidden offscreen WebView2 window, injects that HTML into `public/pdf-print-shell.html`, waits briefly for fonts/images on a fail-open path, and then calls `Page.printToPDF` on Windows. Export progress and results are reported through a non-blocking top-right toast.
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
 - `src/components/conversation/ConversationPanel.tsx` provides the left AI Workbench conversation surface for Skill OS M1.
 - `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge Claude headless stdout into typed message state and UI-friendly diagnostics.

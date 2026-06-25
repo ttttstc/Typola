@@ -201,12 +201,19 @@ struct PdfExportRequest {
     html: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportFileWriteRequest {
+    path: String,
+    data: Vec<u8>,
+}
+
 const PDF_EXPORT_WINDOW_WIDTH: f64 = 840.0;
 const PDF_EXPORT_WINDOW_HEIGHT: f64 = 1188.0;
 const PDF_EXPORT_WINDOW_BOOT_TIMEOUT_SECS: u64 = 15;
-const PDF_EXPORT_RENDER_TIMEOUT_SECS: u64 = 45;
+const PDF_EXPORT_RENDER_TIMEOUT_SECS: u64 = 20;
 const PDF_EXPORT_PRINT_TIMEOUT_SECS: u64 = 60;
-const PDF_EXPORT_IMAGE_WAIT_TIMEOUT_MS: u64 = 30_000;
+const PDF_EXPORT_IMAGE_WAIT_TIMEOUT_MS: u64 = 3_500;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -503,6 +510,29 @@ fn export_pdf(
 
     *export_store.0.lock().unwrap() = false;
     result
+}
+
+#[tauri::command]
+fn write_export_file(request: ExportFileWriteRequest) -> Result<String, String> {
+    let path = PathBuf::from(request.path.trim());
+    if path.as_os_str().is_empty() {
+        return Err("missing export path".into());
+    }
+    if path
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(|ext| !matches!(ext.to_ascii_lowercase().as_str(), "docx"))
+        .unwrap_or(true)
+    {
+        return Err("export path must end with .docx".into());
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create export directory: {error}"))?;
+    }
+    std::fs::write(&path, request.data)
+        .map_err(|error| format!("failed to write export file: {error}"))?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 #[cfg(windows)]
@@ -1342,6 +1372,7 @@ pub fn run() {
             process_inserted_image,
             upload_image_via_command,
             export_pdf,
+            write_export_file,
             agent_detect,
             agent_session_start,
             agent_session_resume,
@@ -2444,5 +2475,31 @@ mod tests {
     fn normalize_pdf_save_path_rejects_non_pdf_extension() {
         let error = normalize_pdf_save_path("C:\\temp\\draft.md").unwrap_err();
         assert!(error.contains("must end with .pdf"));
+    }
+
+    #[test]
+    fn write_export_file_writes_docx_bytes() {
+        let path = temp_path("export.docx");
+        let result = write_export_file(ExportFileWriteRequest {
+            path: path.to_string_lossy().to_string(),
+            data: vec![1, 2, 3],
+        })
+        .unwrap();
+
+        assert!(result.ends_with("export.docx"));
+        assert_eq!(std::fs::read(&path).unwrap(), vec![1, 2, 3]);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn write_export_file_rejects_non_docx_extension() {
+        let path = temp_path("export.pdf");
+        let error = write_export_file(ExportFileWriteRequest {
+            path: path.to_string_lossy().to_string(),
+            data: vec![1, 2, 3],
+        })
+        .unwrap_err();
+
+        assert!(error.contains("must end with .docx"));
     }
 }

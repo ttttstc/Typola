@@ -86,50 +86,44 @@ html, body, #root {
   background: var(--bg);
 }
 
-.pdf-export-overlay {
+.export-toast {
   position: fixed;
-  inset: 0;
+  top: 54px;
+  right: 18px;
   z-index: 130;
   display: grid;
-  place-items: center;
-  background: color-mix(in oklch, var(--overlay-bg) 94%, transparent);
-  backdrop-filter: blur(4px);
-}
-
-.pdf-export-overlay-card {
-  width: min(520px, calc(100vw - 48px));
-  display: grid;
-  gap: 8px;
-  padding: 18px 20px;
+  gap: 5px;
+  width: min(360px, calc(100vw - 36px));
+  padding: 12px 14px;
   border: 1px solid var(--border-soft);
-  border-radius: 16px;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
   background: var(--panel-bg);
-  box-shadow: 0 24px 64px color-mix(in oklch, var(--shadow-soft) 70%, transparent);
+  box-shadow: 0 14px 40px color-mix(in oklch, var(--shadow-soft) 70%, transparent);
+  animation: conversation-toast-in 160ms ease-out;
 }
 
-.pdf-export-overlay-card strong {
-  font-size: 16px;
+.export-toast strong {
   color: var(--fg);
-}
-
-.pdf-export-overlay-card span {
-  color: var(--muted);
   font-size: 13px;
 }
 
-.pdf-export-overlay-card code {
-  display: block;
-  max-width: 100%;
+.export-toast span {
   overflow: hidden;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border-soft);
-  background: var(--control-bg);
-  color: var(--fg);
-  font-family: var(--font-mono);
-  font-size: 12px;
+}
+
+.export-toast-success {
+  border-left-color: var(--success, #2f9e44);
+}
+
+.export-toast-error {
+  border-left-color: var(--danger, #d9480f);
 }
 
 /* ===== App Layout ===== */

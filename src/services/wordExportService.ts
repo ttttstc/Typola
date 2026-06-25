@@ -1,27 +1,25 @@
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_PRESET_ID, getPreset, markdownToDocx, type PresetConfig, type PresetId } from './word';
+import { createExportFileName, resolveDefaultExportPath } from './exportPathService';
 
 export async function exportToWord(
   content: string,
   fileName: string,
+  filePath: string | undefined,
   preset: PresetId | PresetConfig = DEFAULT_PRESET_ID,
-): Promise<void> {
+): Promise<string> {
   const presetConfig = typeof preset === 'string' ? getPreset(preset) : preset;
   // 1. Get the blob from the conversion engine
   const blob = await markdownToDocx(content, presetConfig, { fileName });
 
-  // 2. Derive default output path (replace .md/.markdown/.html with .docx)
-  const defaultName = fileName.replace(/\.(md|markdown|html)$/i, '.docx') || 'document.docx';
-
-  // 3. Show save dialog
-  const path = await save({
-    defaultPath: defaultName,
-    filters: [{ name: 'Word 文档', extensions: ['docx'] }],
+  const path = await resolveDefaultExportPath({
+    fileName: createExportFileName(fileName, 'docx'),
+    filePath,
+    extension: 'docx',
   });
-  if (!path) return; // user cancelled
 
-  // 4. Write the blob to file
   const buffer = await blob.arrayBuffer();
-  await writeFile(path, new Uint8Array(buffer));
+  return invoke<string>('write_export_file', {
+    request: { path, data: Array.from(new Uint8Array(buffer)) },
+  });
 }

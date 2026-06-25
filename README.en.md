@@ -54,11 +54,11 @@ The AI Workbench drives your locally installed `claude` CLI (headless mode), and
 - WYSIWYG Markdown editing (Vditor IR mode) + source mode (CodeMirror 6), switchable
 - Files: `.md` / `.markdown` / `.html` / `.htm`, plus read-only `.docx` preview
 - Multi-file tabs, left workspace file tree, floating outline (hover / pin as sidebar / click to jump)
-- Word paper preview (A4) + `.docx` export
+- Word paper preview (A4) + background `.docx` export
 - HTML preview + rich-text copy + full HTML export
 - Editor-to-preview scroll sync by ratio (rAF-throttled, no extra render)
 - Find/replace (`Cmd/Ctrl+F` / `Cmd/Ctrl+H`, case / whole-word / regex) + quick open (`Cmd/Ctrl+Shift+P`)
-- PDF export (`Cmd/Ctrl+P`, Windows WebView2)
+- Background PDF export (`Cmd/Ctrl+P`, Windows WebView2)
 - Editing utilities: insert links / images / Markdown tables in one click; pasted clipboard images save to a sibling `assets/` and insert as a relative path
 - Document statistics (word count / chars / paragraphs / reading time, debounced, never blocks typing)
 - Integrated terminal (multi-tab at the bottom, starts in the current file directory)
