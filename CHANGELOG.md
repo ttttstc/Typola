@@ -50,6 +50,7 @@ All notable changes to this project will be documented in this file.
 ### Performance
 
 - 设置页拆分为按 Tab 懒加载：`SettingsPage` 模块不再一次性 import 所有子 section；切换 Tab 时只下载对应 section chunk，GeneralSection 与 SettingsPage 在 `preloadSettingsPage` 中并行预热。`ExportSection` / `WechatSection` 等较重的子组件不再拖累首次打开设置页的耗时。骨架屏行数同步从 9 减为 8 以匹配新的导航数。
+- Diff 审阅面板改为按需懒加载 chunk，避免与首屏编辑器一起进入启动主包。
 
 ### Removed
 
@@ -78,6 +79,7 @@ All notable changes to this project will be documented in this file.
 - 修复重新打开上次文件失败后路径永远保留的问题；失败一次后会清理过期 `lastOpenedPath`，下次启动不再反复尝试同一路径。
 - 修复 Markdown 文件中通过 `![](./path.webp)` 引用的本地相对路径图片（WebP / PNG / JPG / GIF 等）无法在 Vditor 编辑区、Word 纸张预览、HTML 导出预览中正常渲染的问题：新增 `localImageResolver` 服务，在 Vditor 渲染完成后自动将 `<img src="./relative">` 解析为 Tauri asset 协议 URL（`https://asset.localhost/...`），与已有的 `htmlPresentationService` 共用路径解析逻辑。`.webp` 与 `.png` / `.jpg` 表现一致。
 - 修复 PDF 导出评审问题：导出链路改为离屏 hidden webview 打印，不再复用主窗口；前后端都增加了导出互斥保护，导出中显示遮罩，成功提示包含完整保存路径，`Ctrl/Cmd+P` 的快捷键调整也同步写入按钮提示与文档说明。
+- 修复 WYSIWYG 模式查找跳转可能选中错误文本并弹出 AI 选区浮条的问题：搜索命中现在按可见文本的出现序号定位，跳转期间会抑制选区浮条。
 
 - 修复 Vditor WYSIWYG（即时渲染）模式中输入 `**foo**` 后 `**` 字符仍以蓝色 marker 持续可见、加粗看上去未生效的问题：`WysiwygEditorPane` 监听 `keydown` 钩子并在停顿 220ms 后强制清除 IR 节点的 `vditor-ir__node--expand` class，与 Vditor 自身 `blurEvent` 行为对齐；编辑过程中不打断用户，持续键入时 marker 仍可见，停顿后自动折叠。
 

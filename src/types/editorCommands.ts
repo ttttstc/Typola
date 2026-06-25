@@ -9,7 +9,7 @@ export type EditorCommandHandle = {
   // 校验 anchor 是否仍可安全替换。返回 valid / stale（内容被改）/ wrong-file（已切到其他文件）。
   // WYSIWYG 模式还会校验 prefixHint+originalText 仍能唯一定位。
   validateAnchor: (filePath: string, from: number, to: number, originalText: string, prefixHint?: string) => 'valid' | 'stale' | 'wrong-file';
-  revealRange: (from: number, to: number) => void;
+  revealRange: (from: number, to: number, text?: string) => void;
   revealText: (text: string, backwards?: boolean) => void;
   /** 撤销最后一次 AI 替换操作（恢复到替换前的编辑器内容）。 */
   undoLastAIReplacement: () => boolean;

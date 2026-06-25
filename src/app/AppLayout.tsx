@@ -39,7 +39,6 @@ import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
 import { useFileTabs } from '../hooks/useFileTabs';
 import { useDiffReview } from '../hooks/useDiffReview';
-import { DiffReviewPane } from '../components/diff/DiffReviewPane';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
@@ -117,6 +116,9 @@ const TerminalPanel = lazy(() =>
 type TerminalPanelHandle = import('../components/TerminalPanel').TerminalPanelHandle;
 const ArtifactPreview = lazy(() =>
   import('../components/ArtifactPreview').then((module) => ({ default: module.ArtifactPreview })),
+);
+const DiffReviewPane = lazy(() =>
+  import('../components/diff/DiffReviewPane').then((module) => ({ default: module.DiffReviewPane })),
 );
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
@@ -595,12 +597,12 @@ export function AppLayout() {
     }
   }, [diffReviewController, file.content, file.path]);
 
-  const handleSearchNavigate = useCallback((match: SearchMatch, query: string, backwards = false) => {
+  const handleSearchNavigate = useCallback((match: SearchMatch, query: string, _backwards = false) => {
     if (editorMode === 'source') {
-      editorCommandRef.current?.revealRange(match.index, match.index + match.length);
+      editorCommandRef.current?.revealRange(match.index, match.index + match.length, match.text);
       return;
     }
-    editorCommandRef.current?.revealText(query || match.text, backwards);
+    editorCommandRef.current?.revealRange(match.index, match.index + match.length, query || match.text);
   }, [editorMode]);
 
   const insertMarkdown = useCallback((markdown: string) => {
@@ -1354,7 +1356,9 @@ export function AppLayout() {
           />
         )}
       />
-      <DiffReviewPane controller={diffReviewController} />
+      <Suspense fallback={null}>
+        <DiffReviewPane controller={diffReviewController} />
+      </Suspense>
       <AppLayoutOverlays
         findVisible={findVisible}
         findFocusTarget={findFocusTarget}

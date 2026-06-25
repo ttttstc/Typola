@@ -12,6 +12,7 @@ import { findUniqueAnchor } from '../services/agent/selectionActions';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
+import { getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -121,6 +122,42 @@ function silenceCodeBlockAssist(editor: import('vditor').default | null): void {
   if (wysiwyg?.selectPopover) wysiwyg.selectPopover.style.display = 'none';
 }
 
+function findTextNodeRange(root: HTMLElement, text: string, occurrenceIndex: number): Range | null {
+  if (!text) return null;
+  const ownerDocument = root.ownerDocument;
+  const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Array<{ node: Text; start: number; end: number }> = [];
+  let fullText = '';
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (!(node instanceof Text)) continue;
+    const start = fullText.length;
+    fullText += node.data;
+    nodes.push({ node, start, end: fullText.length });
+  }
+
+  const lowerFullText = fullText.toLocaleLowerCase();
+  const lowerText = text.toLocaleLowerCase();
+  let cursor = 0;
+  let foundAt = -1;
+  for (let i = 0; i <= occurrenceIndex; i += 1) {
+    foundAt = lowerFullText.indexOf(lowerText, cursor);
+    if (foundAt < 0) return null;
+    cursor = foundAt + lowerText.length;
+  }
+
+  const foundEnd = foundAt + text.length;
+  const startNode = nodes.find((entry) => foundAt >= entry.start && foundAt <= entry.end);
+  const endNode = nodes.find((entry) => foundEnd >= entry.start && foundEnd <= entry.end);
+  if (!startNode || !endNode) return null;
+
+  const range = ownerDocument.createRange();
+  range.setStart(startNode.node, Math.max(0, foundAt - startNode.start));
+  range.setEnd(endNode.node, Math.max(0, foundEnd - endNode.start));
+  return range;
+}
+
 type WindowWithFind = Window & {
   find?: (
     text: string,
@@ -188,6 +225,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   // 选区浮条状态:跟着 IR 选区变化重算 rect + hasSelection;由 selectionchange listener 更新。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  const suppressFloatingBarRef = useRef(false);
 
   const getSavedOrCurrentSelection = useCallback((): Range | null => {
     const editor = editorRef.current;
@@ -395,6 +433,11 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     };
 
     const handleSelectionChange = () => {
+      if (suppressFloatingBarRef.current) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
       if (!ir) {
@@ -693,8 +736,33 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       lastValidatedPrefixHintRef.current = prefixHint ?? '';
       return 'valid';
     },
-    revealRange() {
-      editorRef.current?.focus();
+    revealRange(from: number, to: number, text?: string) {
+      const editor = editorRef.current;
+      const ir = editor ? getIrElement(editor) : null;
+      if (!editor || !ir) return;
+
+      const matchText = text || latestSource.current.slice(from, to);
+      const occurrenceIndex = getSearchMatchOccurrenceIndex(latestSource.current, {
+        index: from,
+        length: Math.max(0, to - from),
+        text: matchText,
+      });
+      const range = findTextNodeRange(ir, matchText, occurrenceIndex);
+      editor.focus();
+      if (!range) return;
+
+      suppressFloatingBarRef.current = true;
+      const sel = ir.ownerDocument.defaultView?.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      lastSelectionRangeRef.current = range.cloneRange();
+      const element = range.startContainer instanceof Element
+        ? range.startContainer
+        : range.startContainer.parentElement;
+      element?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      window.setTimeout(() => {
+        suppressFloatingBarRef.current = false;
+      }, 250);
     },
     revealText(text: string, backwards = false) {
       editorRef.current?.focus();

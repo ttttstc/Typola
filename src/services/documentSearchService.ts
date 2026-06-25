@@ -72,3 +72,17 @@ export function replaceAllSearchMatches(source: string, matches: readonly Search
   next += source.slice(cursor);
   return next;
 }
+
+export function getSearchMatchOccurrenceIndex(source: string, match: SearchMatch): number {
+  if (!match.text) return 0;
+
+  let count = 0;
+  let cursor = 0;
+  while (cursor < match.index) {
+    const next = source.indexOf(match.text, cursor);
+    if (next < 0 || next >= match.index) break;
+    count += 1;
+    cursor = next + Math.max(match.text.length, 1);
+  }
+  return count;
+}
