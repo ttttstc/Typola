@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { Send, Square } from 'lucide-react';
-import { useSettings } from '../../hooks/useSettings';
+import type { AgentProvider } from '../../services/agent/provider';
+import { AGENT_PROVIDERS, getAgentProviderConfig } from '../../services/agent/provider';
 import { ComposerContextChips } from './ComposerContextChips';
 import { ComposerPlusMenu } from './ComposerPlusMenu';
 import { ComposerMcpPanel } from './ComposerMcpPanel';
@@ -18,17 +19,21 @@ type ComposerProps = {
   running?: boolean;
   cwd?: string;
   workspaceSuggestion?: string;
-  workspaceRecents: string[];
+  workspaceRecents?: string[];
   currentFileName?: string;
   currentFilePath?: string;
-  /** claude 进程实际运行的模型(来自 init 事件),Composer 优先显示这个;无则 fallback settings.aiClaudeModel。 */
+  /** AI Provider 进程实际运行的模型(来自 init/status 事件),Composer 优先显示这个。 */
   currentModel?: string;
+  activeProvider: AgentProvider;
+  configuredModel?: string;
   /** 本会话是否已注入过"当前文档"context → 后续 send 不再重复啰嗦。 */
   fileContextInjected?: boolean;
+  currentFileContextPath?: string;
   onPickWorkspace: () => void;
   onSelectWorkspace: (path: string) => void;
   onClearWorkspace: () => void;
-  onSend: (text: string) => void;
+  onSwitchProvider: (provider: AgentProvider) => void;
+  onSend: (text: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
   onCancel: () => void;
 };
 
@@ -41,17 +46,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   currentFileName,
   currentFilePath,
   currentModel,
+  activeProvider,
+  configuredModel,
   fileContextInjected = false,
+  currentFileContextPath,
   onPickWorkspace,
   onSelectWorkspace,
   onClearWorkspace,
+  onSwitchProvider,
   onSend,
   onCancel,
 }: ComposerProps, ref) {
-  const settings = useSettings();
   const [value, setValue] = useState('');
   const [panel, setPanel] = useState<'mcp' | 'plugins' | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const providerLabel = getAgentProviderConfig(activeProvider).label;
   const {
     attachedFiles,
     currentFileDismissed,
@@ -66,7 +75,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     workspaceSuggestion,
     workspaceRecents,
     currentFilePath,
+    activeProvider,
     fileContextInjected,
+    currentFileContextPath,
   });
 
   useImperativeHandle(ref, () => ({
@@ -94,7 +105,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const text = value.trim();
     if (!text || disabled || running) return;
     setValue('');
-    onSend(appendContext(text));
+    const next = appendContext(text);
+    onSend(next.text, {
+      currentFileContextPath: next.currentFileContextPath,
+      referencePaths: next.referencePaths,
+    });
   };
 
   const handleOpenMcp = () => {
@@ -118,7 +133,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       <textarea
         ref={textareaRef}
         value={value}
-        placeholder="让 Claude 帮你润色、总结、生成文档..."
+        placeholder={`让 ${providerLabel} 帮你润色、总结、生成文档...`}
         disabled={disabled}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
@@ -143,12 +158,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             onClear={onClearWorkspace}
             placement="up"
           />
+          <div
+            className="conversation-provider-picker"
+            role="group"
+            aria-label="AI Provider"
+            title="切换 AI Provider 会开始新对话"
+          >
+            {AGENT_PROVIDERS.map((provider) => (
+              <button
+                key={provider.id}
+                type="button"
+                className={provider.id === activeProvider ? 'active' : ''}
+                aria-pressed={provider.id === activeProvider}
+                onClick={() => onSwitchProvider(provider.id)}
+              >
+                {provider.label}
+              </button>
+            ))}
+          </div>
           <span className="conversation-model-placeholder" title="在设置 · AI CLI 配置模型">
             {currentModel
-              ? `Claude · ${currentModel}`
-              : settings.aiClaudeModel
-                ? `Claude · ${settings.aiClaudeModel}`
-                : 'Claude · 默认模型'}
+              ? `${providerLabel} · ${currentModel}`
+              : configuredModel
+                ? `${providerLabel} · ${configuredModel}`
+                : `${providerLabel} · 默认模型`}
           </span>
         </div>
         {running ? (

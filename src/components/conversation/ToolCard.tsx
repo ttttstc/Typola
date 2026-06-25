@@ -1,6 +1,6 @@
 import type { AgentToolCall } from '../../services/agent/types';
 
-const KNOWN_TOOLS = new Set(['Write', 'Edit', 'Read', 'Bash', 'Glob']);
+const KNOWN_TOOLS = new Set(['Write', 'Edit', 'Read', 'Bash', 'Glob', 'Grep']);
 
 export function ToolCard({ tool }: { tool: AgentToolCall }) {
   const known = KNOWN_TOOLS.has(tool.name);

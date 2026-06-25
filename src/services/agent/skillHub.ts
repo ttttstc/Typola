@@ -1,8 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { AgentProvider } from './provider';
 
 export type SkillRef = {
   name: string;
   description?: string;
+  supportedProviders?: AgentProvider[];
 };
 
 export type SkillTemplateRef = SkillRef & {
@@ -177,6 +179,25 @@ export const EMPTY_SKILL_HUB: SkillHub = {
   hiddenSystemSkills: {},
 };
 
+const DEFAULT_SYSTEM_SKILL_PROVIDERS: AgentProvider[] = ['claude'];
+
+export function supportsSkillProvider(skill: SkillTemplateRef, provider: AgentProvider): boolean {
+  return (skill.supportedProviders ?? DEFAULT_SYSTEM_SKILL_PROVIDERS).includes(provider);
+}
+
+export function getSystemSkillScenesForProvider(provider: AgentProvider): SkillSceneTemplate[] {
+  return SYSTEM_SKILL_SCENES.map((scene) => ({
+    ...scene,
+    skills: scene.skills.filter((skill) => supportsSkillProvider(skill, provider)),
+  }));
+}
+
+export function getSceneAdditionsForProvider(hub: SkillHub, sceneId: string, provider: AgentProvider): SkillRef[] {
+  return (hub.sceneAdditions[sceneId] ?? []).filter((skill) => (
+    skill.supportedProviders ?? DEFAULT_SYSTEM_SKILL_PROVIDERS
+  ).includes(provider));
+}
+
 function normalizeSkill(raw: unknown): SkillRef | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
@@ -188,7 +209,14 @@ function normalizeSkill(raw: unknown): SkillRef | null {
     description: typeof obj.description === 'string' && obj.description.trim()
       ? obj.description.trim()
       : undefined,
+    supportedProviders: normalizeSupportedProviders(obj.supportedProviders),
   };
+}
+
+function normalizeSupportedProviders(raw: unknown): AgentProvider[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const providers = raw.filter((value): value is AgentProvider => value === 'claude' || value === 'opencode');
+  return providers.length > 0 ? [...new Set(providers)] : undefined;
 }
 
 function uniqueSkills(skills: SkillRef[]): SkillRef[] {

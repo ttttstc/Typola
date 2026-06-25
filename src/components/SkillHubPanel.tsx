@@ -3,12 +3,14 @@ import {
   ArrowLeft, BarChart3, CalendarDays, Check, ClipboardList, Globe, PenLine,
   Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, TriangleAlert, type LucideProps,
 } from 'lucide-react';
+import type { AgentProvider } from '../services/agent/provider';
 import { listLocalSkills, type Skill } from '../services/agent/skillScanner';
 import {
   addSkillToScene,
   buildSkillInstallPrompt,
+  getSceneAdditionsForProvider,
+  getSystemSkillScenesForProvider,
   removeCustomSkillFromScene,
-  SYSTEM_SKILL_SCENES,
   type SkillHub,
   type SkillRef,
   type SkillSceneTemplate,
@@ -16,6 +18,8 @@ import {
 } from '../services/agent/skillHub';
 
 type SkillHubPanelProps = {
+  activeProvider: AgentProvider;
+  activeWorkspaceRoot?: string;
   hub: SkillHub;
   loadError?: string;
   onPickSkill: (skillName: string) => void;
@@ -81,6 +85,7 @@ function AddSkillDialog({
   scene,
   hub,
   localSkills,
+  activeProvider,
   saving,
   onClose,
   onSaveHub,
@@ -88,6 +93,7 @@ function AddSkillDialog({
   scene: SkillSceneTemplate;
   hub: SkillHub;
   localSkills: Skill[];
+  activeProvider: AgentProvider;
   saving: boolean;
   onClose: () => void;
   onSaveHub: (hub: SkillHub) => Promise<void>;
@@ -108,7 +114,7 @@ function AddSkillDialog({
   const addSkill = async (skill: SkillRef) => {
     try {
       setError('');
-      await onSaveHub(addSkillToScene(hub, scene.id, skill));
+      await onSaveHub(addSkillToScene(hub, scene.id, { ...skill, supportedProviders: [activeProvider] }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -117,7 +123,7 @@ function AddSkillDialog({
   const addManual = async () => {
     const name = manualName.trim().replace(/^\/+/u, '');
     if (!name) return;
-    await addSkill({ name });
+    await addSkill({ name, supportedProviders: [activeProvider] });
     setManualName('');
   };
 
@@ -180,6 +186,8 @@ function AddSkillDialog({
 }
 
 export function SkillHubPanel({
+  activeProvider,
+  activeWorkspaceRoot,
   hub,
   loadError,
   onPickSkill,
@@ -193,11 +201,12 @@ export function SkillHubPanel({
   const [selectedSceneId, setSelectedSceneId] = useState<SkillSceneTemplate['id'] | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const systemScenes = useMemo(() => getSystemSkillScenesForProvider(activeProvider), [activeProvider]);
 
   const scanLocal = async () => {
     setScanning(true);
     try {
-      setLocalSkills(await listLocalSkills());
+      setLocalSkills(await listLocalSkills(activeProvider, activeWorkspaceRoot));
       setScanError('');
     } catch (error) {
       setScanError(error instanceof Error ? error.message : String(error));
@@ -208,12 +217,12 @@ export function SkillHubPanel({
 
   useEffect(() => {
     void scanLocal();
-  }, []);
+  }, [activeProvider, activeWorkspaceRoot]);
 
-  const selectedScene = SYSTEM_SKILL_SCENES.find((scene) => scene.id === selectedSceneId) ?? null;
+  const selectedScene = systemScenes.find((scene) => scene.id === selectedSceneId) ?? null;
   const cards = useMemo<SkillCard[]>(() => {
     if (!selectedScene) return [];
-    const custom = hub.sceneAdditions[selectedScene.id] ?? [];
+    const custom = getSceneAdditionsForProvider(hub, selectedScene.id, activeProvider);
     return [
       ...selectedScene.skills.map((skill) => {
         const local = resolveSystemLocal(skill, localSkills);
@@ -239,7 +248,7 @@ export function SkillHubPanel({
         };
       }),
     ];
-  }, [hub.sceneAdditions, localSkills, selectedScene]);
+  }, [activeProvider, hub, localSkills, selectedScene]);
 
   const saveHub = async (nextHub: SkillHub) => {
     setSaving(true);
@@ -288,8 +297,8 @@ export function SkillHubPanel({
       )}
       {!selectedScene ? (
         <div className="skill-hub-scene-list">
-          {SYSTEM_SKILL_SCENES.map((scene) => {
-            const customCount = hub.sceneAdditions[scene.id]?.length ?? 0;
+          {systemScenes.map((scene) => {
+            const customCount = getSceneAdditionsForProvider(hub, scene.id, activeProvider).length;
             const total = scene.skills.length + customCount;
             const Icon = SCENE_ICONS[scene.icon] ?? Sparkles;
             return (
@@ -402,7 +411,7 @@ export function SkillHubPanel({
         </>
       )}
       <div className="skill-hub-footer">
-        <span>{selectedScene ? `${installedCount}/${cards.length} 可用` : `${SYSTEM_SKILL_SCENES.length} 个场景`}</span>
+        <span>{selectedScene ? `${installedCount}/${cards.length} 可用` : `${systemScenes.length} 个场景`}</span>
         {scanning && <span className="skill-hub-footer-meta">扫描中…</span>}
       </div>
       {selectedScene && addDialogOpen && (
@@ -410,6 +419,7 @@ export function SkillHubPanel({
           scene={selectedScene}
           hub={hub}
           localSkills={localSkills}
+          activeProvider={activeProvider}
           saving={saving}
           onClose={() => setAddDialogOpen(false)}
           onSaveHub={saveHub}

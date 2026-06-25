@@ -35,6 +35,7 @@ import { buildReviewMarkdown, type ReviewComment } from '../services/review/revi
 import { saveFileDialog } from '../services/dialogService';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import type { SelectionAnchor } from '../services/agent/types';
+import { resolveWorkbenchWorkspaceRoot } from '../services/agent/workbenchWorkspace';
 import { useConversationManager } from '../hooks/useAgentSession';
 import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
@@ -264,11 +265,16 @@ export function AppLayout() {
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
     [debouncedStatsSource, file.fileType],
   );
+  const effectiveAiWorkspaceRoot = useMemo(() => resolveWorkbenchWorkspaceRoot({
+    configuredWorkspaceRoot: settings.aiWorkspaceRoot,
+    fileTreeRoot: workspaceRoot,
+    currentFilePath: file.path,
+  }), [file.path, settings.aiWorkspaceRoot, workspaceRoot]);
   const outputBaseDir = useMemo(() => (
-    settings.aiWorkspaceRoot
-      ? joinLocalPath(settings.aiWorkspaceRoot, '.typola-output')
+    effectiveAiWorkspaceRoot
+      ? joinLocalPath(effectiveAiWorkspaceRoot, '.typola-output')
       : undefined
-  ), [settings.aiWorkspaceRoot]);
+  ), [effectiveAiWorkspaceRoot]);
   const {
     leftRailMode,
     setLeftRailMode,
@@ -301,9 +307,12 @@ export function AppLayout() {
   });
 
   const convManager = useConversationManager({
-    workspaceRoot: settings.aiWorkspaceRoot || undefined,
-    agentPath: settings.aiClaudePath,
-    model: settings.aiClaudeModel,
+    workspaceRoot: effectiveAiWorkspaceRoot,
+    agentProvider: settings.aiActiveProvider,
+    claudePath: settings.aiClaudePath,
+    claudeModel: settings.aiClaudeModel,
+    openCodePath: settings.aiOpenCodePath,
+    openCodeModel: settings.aiOpenCodeModel,
     pluginDirs: settings.aiPluginDirs,
   });
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
@@ -328,10 +337,10 @@ export function AppLayout() {
       agentPath: settings.aiClaudePath,
       model: settings.aiClaudeModel,
       pluginDirs: settings.aiPluginDirs,
-      extraAllowedDirs: settings.aiWorkspaceRoot ? [settings.aiWorkspaceRoot] : undefined,
+      extraAllowedDirs: effectiveAiWorkspaceRoot ? [effectiveAiWorkspaceRoot] : undefined,
       signal,
     });
-  }, [settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs, settings.aiWorkspaceRoot]);
+  }, [effectiveAiWorkspaceRoot, settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs]);
 
   const {
     hasEditorSelection,
@@ -364,7 +373,7 @@ export function AppLayout() {
     bumpWorkspaceTreeVersion,
   } = useWorkspaceWatch({
     isTauriRuntime,
-    watchRoot: settings.aiWorkspaceRoot || undefined,
+    watchRoot: effectiveAiWorkspaceRoot,
     outputRoot: outputBaseDir,
     lastSelfWriteRef,
   });
@@ -805,7 +814,9 @@ export function AppLayout() {
   const handlePickSkill = useCallback((skillName: string) => {
     convManager.createConversation(skillName, skillName);
     setLeftRailMode('aiWorkbench');
-    setSkillPrefill({ tick: Date.now(), text: `/${skillName} ` });
+    if (convManager.activeProvider === 'claude') {
+      setSkillPrefill({ tick: Date.now(), text: `/${skillName} ` });
+    }
   }, [convManager]);
 
   const handleInstallSkill = useCallback((prompt: string) => {
@@ -1128,7 +1139,7 @@ export function AppLayout() {
 
   const { artifactItems, handleArchiveArtifact } = useArtifactState({
     agentChangedPaths,
-    workspaceRoot: settings.aiWorkspaceRoot || undefined,
+    workspaceRoot: effectiveAiWorkspaceRoot,
     onForgetArtifact: forgetArtifact,
     onWorkspaceRefresh: bumpWorkspaceTreeVersion,
     onOpenPath: handleOpenPath,
@@ -1226,6 +1237,8 @@ export function AppLayout() {
     <aside className="flow-panel" aria-label="AI 工作流">
       <div className="flow-panel-content">
         <SkillHubPanel
+          activeProvider={convManager.activeProvider}
+          activeWorkspaceRoot={effectiveAiWorkspaceRoot}
           hub={skillHub}
           loadError={skillHubError}
           onPickSkill={handlePickSkill}
@@ -1328,11 +1341,14 @@ export function AppLayout() {
           messages: convManager.messages,
           runState: convManager.runState,
           lastError: convManager.lastError,
+          activeProvider: convManager.activeProvider,
+          activeWorkspaceRoot: effectiveAiWorkspaceRoot,
           workspaceSuggestion: workspaceRoot || undefined,
           currentFileName: file.path ? file.name : undefined,
           currentFilePath: file.path || undefined,
           currentModel: convManager.activeConv?.currentModel,
           fileContextInjected: convManager.activeConv?.fileContextInjected ?? false,
+          currentFileContextPath: convManager.activeConv?.currentFileContextPath,
           hasEditorSelection,
           onInsertToEditor: handleInsertToEditor,
           onReplaceEditorSelection: handleReplaceEditorSelection,
@@ -1342,6 +1358,7 @@ export function AppLayout() {
           onCreateConversation: () => convManager.createConversation(),
           onCloseConversation: convManager.closeConversation,
           onRenameConversation: convManager.renameConversation,
+          onSwitchProvider: convManager.switchProvider,
           onSend: convManager.send,
           onCancel: convManager.cancel,
           onReset: convManager.reset,
@@ -1462,7 +1479,7 @@ export function AppLayout() {
                   if (!confirmed) return;
                   try {
                     const { invoke } = await import('@tauri-apps/api/core');
-                    await invoke('delete_artifact_file', { request: { path, workspaceRoot: settings.aiWorkspaceRoot } });
+                    await invoke('delete_artifact_file', { request: { path, workspaceRoot: effectiveAiWorkspaceRoot ?? '' } });
                     forgetArtifact(path);
                     setTransientMessage(`已删除：${path.split(/[\\/]/).pop()}`);
                   } catch (error) {

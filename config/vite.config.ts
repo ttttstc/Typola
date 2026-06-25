@@ -10,6 +10,11 @@ export default defineConfig({
   root: projectRoot,
   base: './',
   plugins: [react()],
+  server: {
+    watch: {
+      ignored: ['**/src-tauri/target/**'],
+    },
+  },
   build: {
     rolldownOptions: {
       output: {

@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- 新增 AI Workbench OpenCode Provider 规划文档：沉淀 AI Provider 术语、ADR、PRD 与 GitHub issue 拆分，用于跟踪在同一左侧 AI 工作台中接入 OpenCode CLI。
+- AI 工作台新增 OpenCode Provider 主链路：Composer 底部可切换 Claude Code / OpenCode，设置页可配置 OpenCode CLI 路径与模型，OpenCode 使用 `opencode run` 接入同一 headless 会话与产物回流流程。
 - 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
 - 新增左侧目录文件树：支持打开一个目录、展开/折叠子目录、从文件树打开支持的文档，未保存文件会在文件树名称前显示 `*`。
 - 设置页新增 `AI CLI` 分区：可配置 Claude CLI 路径并检测 `claude --version`，供后续 AI 集成功能使用。
@@ -23,6 +25,8 @@ All notable changes to this project will be documented in this file.
 
 - PDF / Word 导出改为后台自动保存：已保存文档默认导出到源文件同目录，未保存文档导出到系统下载目录；不再弹出保存对话框，完成或失败通过右上角 toast 提示。
 - PDF 导出缩短图片等待并采用 fail-open 渲染策略，远程图片加载慢时不再长时间阻塞整次导出。
+- AI 工作台的 Provider 切换器改为底部 pill 按钮组，并补齐亮暗主题共用的细边框 token，避免原生下拉控件和未定义 CSS 变量带来的视觉割裂。
+- AI 工作台会持久化当前 AI Provider 选择；空对话切换 Claude Code / OpenCode 时不再弹出”新建对话”确认。
 - 心流模式打开时会主动调整左侧 AI 工作台与右侧场景栏到更接近“三栏工作台”的比例，减少右栏过宽与编辑区被压缩的问题。
 - 左侧文件树窄条切换入口改为更克制的线性图标与细指示条样式，弱化突兀感。
 - 终端新建会话的工作目录优先使用用户当前选择的文件树 workspace；未选择 workspace 时再回退到当前文件目录 / 系统默认目录。
@@ -60,6 +64,21 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 Windows 下通过 npm `.cmd` wrapper 启动 OpenCode 时，用户 prompt 中的 shell 特殊字符可能被 `cmd.exe` 重新解析的问题；现在会优先解析 wrapper 指向的真实可执行文件，并在取消后等待旧 run 退出、丢弃 late stdout，再切换到新 Provider 对话。
+- 改进 OpenCode 新手诊断：设置页增加安装提示与文档入口，检测或运行失败时会区分未安装/路径不可执行/模型格式/认证问题，而不是只显示泛化的执行失败。
+- 修复心流模式下 OpenCode 仍显示用户添加的本地 Claude skill、点击后可能卡在不支持的 skill 调用路径的问题；SkillHub 现在按当前 AI Provider 扫描与添加能力，Claude 使用 `.claude/skills`，OpenCode 使用全局/项目级 `.opencode/commands` 或 `opencode.jsonc` command 配置，并通过 `opencode run --command` 调用。
+
+- 修复 SkillHub 系统内置 skill 安装入口不区分 AI Provider 的问题：内置模板现在按当前 CLI provider 过滤，OpenCode 场景不会再展示 Claude-only 的安装项。
+
+- 修复未显式选择 AI 工作区时 OpenCode Provider 会继承 Typola 启动目录、导致工作目录显示为 Typola 源码目录的问题；现在会依次回退到文件树目录和当前文档目录。
+- 修复 OpenCode Provider 下当前文档/附件仅作为 prompt 路径文本传递、导致模型可能无法读取当前编辑区文章的问题；现在会把可见上下文 chip 对应的参考文件在每轮发送时同步传给 `opencode run --file`，把 `opencode run --dir` 指向有效工作区而不是会话产物目录，并避免在 OpenCode prompt argv 中追加首轮多行参考文本。
+- 修复 OpenCode Provider 交互时不显示工具调用卡片的问题；现在会把 OpenCode `tool_use` JSON 事件映射到与 Claude Code 一致的工具卡与结果显示，并在存在 reasoning/thinking 文本时显示思考过程。
+- 修复 AI 工作台在同一会话中切换编辑区文章后仍沿用旧“已注入当前文档”状态、导致后续回复无法识别新打开文章的问题。
+
+- 修复 Windows 自定义 npm global 目录下 `claude.cmd` 会导致 Rust CLI 路径解析测试失败的问题。
+- 修复 AI 工作台切换到 OpenCode 后首轮对话不可用的问题：不再把 Typola 内部 UUID 当作 OpenCode `--session` 传入，后续对话改用 OpenCode `--continue`，并补齐真实 `step_finish` JSON 完成事件解析。
+- 修复 AI 工作台 OpenCode 模式下仍显示 Claude 文案的问题，Composer、模型提示、错误卡和默认工作目录提示现在会使用当前 AI Provider 或中性文案。
+- 修复 `npm run tauri dev` 在 Windows 上可能因 Vite 监听 `src-tauri/target` Rust 构建产物、撞到被锁定的 `app_lib.dll` 而退出的问题。
 - 修复多个未保存新建文档同名导致关闭 tab 时误关其他“未命名”文档的问题：新建文档会生成可区分名称与稳定内部 tab id。
 - 修复只有一个已打开文档时没有 tab 关闭入口的问题；默认空白初始态仍保持无 tab。
 - 新增当前文件重命名能力：可双击顶部文件名或 tab 文件名打开重命名弹窗，真实重命名磁盘文件并同步 tab / 最近文件。

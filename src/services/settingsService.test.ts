@@ -127,6 +127,34 @@ describe('settingsService', () => {
     });
   });
 
+  it('persists AI provider CLI settings and normalizes model strings as model strings', () => {
+    const settings = updateSettings({
+      aiClaudePath: ' claude.cmd ',
+      aiClaudeModel: ' sonnet ',
+      aiOpenCodePath: ' opencode.cmd ',
+      aiOpenCodeModel: ' anthropic/claude-sonnet-4 ',
+    });
+
+    expect(settings).toMatchObject({
+      aiClaudePath: 'claude.cmd',
+      aiClaudeModel: 'sonnet',
+      aiOpenCodePath: 'opencode.cmd',
+      aiOpenCodeModel: 'anthropic/claude-sonnet-4',
+    });
+    expect(getSettings().aiOpenCodePath).toBe('opencode.cmd');
+    expect(getSettings().aiOpenCodeModel).toBe('anthropic/claude-sonnet-4');
+  });
+
+  it('persists the active AI Provider and falls back to Claude for invalid values', () => {
+    expect(getSettings().aiActiveProvider).toBe('claude');
+
+    updateSettings({ aiActiveProvider: 'opencode' });
+    expect(getSettings().aiActiveProvider).toBe('opencode');
+
+    localStorage.setItem('typola-settings', JSON.stringify({ aiActiveProvider: 'unknown' }));
+    expect(getSettings().aiActiveProvider).toBe('claude');
+  });
+
   it('serializes rapid partial settings updates against the latest in-memory snapshot', () => {
     updateSettings({ editorFontSize: 16 });
     updateSettings({ terminalFontSize: 15 });

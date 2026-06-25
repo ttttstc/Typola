@@ -1,8 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AgentExitPayload, AgentStdoutPayload } from './types';
+import type { AgentProvider } from './provider';
 
 export type AgentSessionStartRequest = {
+  provider?: AgentProvider;
   conversationId: string;
   prompt: string;
   cwd?: string;
@@ -10,6 +12,8 @@ export type AgentSessionStartRequest = {
   model?: string;
   pluginDirs?: string[];
   extraAllowedDirs?: string[];
+  promptContextPaths?: string[];
+  commandName?: string;
 };
 
 export type AgentSessionStartResult = {
@@ -18,6 +22,7 @@ export type AgentSessionStartResult = {
   sessionUuid: string;
   resumed: boolean;
   agentPath: string;
+  provider: AgentProvider;
 };
 
 export function startAgentSession(request: AgentSessionStartRequest): Promise<AgentSessionStartResult> {

@@ -49,6 +49,7 @@ struct AgentRunHandle {
     #[allow(dead_code)]
     child: Arc<Mutex<Child>>,
     pid: u32,
+    cancel_requested: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -66,12 +67,50 @@ struct TerminalSession {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentDetectRequest {
+    provider: Option<AgentProvider>,
     agent_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum AgentProvider {
+    Claude,
+    Opencode,
+}
+
+impl Default for AgentProvider {
+    fn default() -> Self {
+        Self::Claude
+    }
+}
+
+impl AgentProvider {
+    fn default_command(self) -> String {
+        match self {
+            Self::Claude => default_agent_command("claude"),
+            Self::Opencode => default_agent_command("opencode"),
+        }
+    }
+
+    fn detect_args(self) -> Vec<String> {
+        match self {
+            Self::Claude => vec!["--version".to_string()],
+            Self::Opencode => vec!["--version".to_string()],
+        }
+    }
+
+    fn display_name(self) -> &'static str {
+        match self {
+            Self::Claude => "Claude",
+            Self::Opencode => "OpenCode",
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentSessionStartRequest {
+    provider: Option<AgentProvider>,
     conversation_id: String,
     prompt: String,
     cwd: Option<String>,
@@ -79,6 +118,8 @@ struct AgentSessionStartRequest {
     model: Option<String>,
     plugin_dirs: Option<Vec<String>>,
     extra_allowed_dirs: Option<Vec<String>>,
+    prompt_context_paths: Option<Vec<String>>,
+    command_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,6 +252,7 @@ struct AgentSessionStartResult {
     session_uuid: String,
     resumed: bool,
     agent_path: String,
+    provider: AgentProvider,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -454,8 +496,9 @@ fn upload_image_via_command(request: UploadImageRequest) -> Result<UploadImageRe
 
 #[tauri::command]
 fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
-    let agent_path = normalize_agent_path(request.agent_path.as_deref());
-    match run_agent_version(&agent_path) {
+    let provider = request.provider.unwrap_or_default();
+    let agent_path = normalize_agent_path(provider, request.agent_path.as_deref());
+    match run_agent_version(provider, &agent_path) {
         Ok(version) => AgentDetectResult {
             available: true,
             path: agent_path,
@@ -572,6 +615,7 @@ fn agent_session_cancel(
             .ok_or_else(|| "agent run not found".to_string())?
     };
 
+    run.cancel_requested.store(true, Ordering::Relaxed);
     kill_agent_process_tree(&run)
 }
 
@@ -1338,7 +1382,12 @@ fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
     candidate
 }
 
-fn normalize_agent_path(path: Option<&str>) -> String {
+struct AgentCommandSpec {
+    args: Vec<String>,
+    prompt_stdin: bool,
+}
+
+fn normalize_agent_path(provider: AgentProvider, path: Option<&str>) -> String {
     if let Some(path) = path.map(str::trim).filter(|value| !value.is_empty()) {
         // Windows: 裸命令名(无路径分隔符、无扩展名)必须回退到 PATH/npm 全局扫描,
         // 因为 std::process::Command::new("claude") 不会自动尝试 PATHEXT 上的
@@ -1360,7 +1409,7 @@ fn normalize_agent_path(path: Option<&str>) -> String {
         return path.to_string();
     }
 
-    default_claude_command()
+    provider.default_command()
 }
 
 fn start_agent_headless_run(
@@ -1377,7 +1426,8 @@ fn start_agent_headless_run(
         return Err("prompt is required".into());
     }
 
-    let agent_path = normalize_agent_path(request.agent_path.as_deref());
+    let provider = request.provider.unwrap_or_default();
+    let agent_path = normalize_agent_path(provider, request.agent_path.as_deref());
     let run_id = uuid::Uuid::new_v4().to_string();
     let (session_uuid, resumed) = {
         let mut registry = state
@@ -1397,14 +1447,19 @@ fn start_agent_headless_run(
         }
     };
 
-    let args = build_claude_headless_args(
+    let command_spec = build_agent_headless_command(
+        provider,
         &session_uuid,
         resumed,
         request.model.as_deref(),
+        request.cwd.as_deref(),
         request.plugin_dirs.as_deref().unwrap_or(&[]),
         request.extra_allowed_dirs.as_deref().unwrap_or(&[]),
+        request.prompt_context_paths.as_deref().unwrap_or(&[]),
+        request.command_name.as_deref(),
+        &request.prompt,
     );
-    let mut command = create_agent_command(&agent_path, &args);
+    let mut command = create_agent_command(&agent_path, &command_spec.args);
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1412,34 +1467,37 @@ fn start_agent_headless_run(
     if let Some(cwd) = request.cwd.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
         let cwd_path = PathBuf::from(cwd);
         std::fs::create_dir_all(&cwd_path)
-            .map_err(|error| format!("failed to create Claude cwd: {error}"))?;
+            .map_err(|error| format!("failed to create {} cwd: {error}", provider.display_name()))?;
         command.current_dir(cwd_path);
     }
 
     let mut child = command
         .spawn()
-        .map_err(|error| format!("failed to start Claude headless run: {error}"))?;
+        .map_err(|error| format!("failed to start {} headless run: {error}", provider.display_name()))?;
     let mut stdin = child
         .stdin
         .take()
-        .ok_or_else(|| "failed to open Claude stdin".to_string())?;
+        .ok_or_else(|| format!("failed to open {} stdin", provider.display_name()))?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| "failed to open Claude stdout".to_string())?;
+        .ok_or_else(|| format!("failed to open {} stdout", provider.display_name()))?;
     let stderr = child
         .stderr
         .take()
-        .ok_or_else(|| "failed to open Claude stderr".to_string())?;
+        .ok_or_else(|| format!("failed to open {} stderr", provider.display_name()))?;
 
-    stdin
-        .write_all(request.prompt.as_bytes())
-        .and_then(|_| stdin.flush())
-        .map_err(|error| format!("failed to write Claude prompt: {error}"))?;
+    if command_spec.prompt_stdin {
+        stdin
+            .write_all(request.prompt.as_bytes())
+            .and_then(|_| stdin.flush())
+            .map_err(|error| format!("failed to write {} prompt: {error}", provider.display_name()))?;
+    }
     drop(stdin);
 
     let pid = child.id();
     let child = Arc::new(Mutex::new(child));
+    let cancel_requested = Arc::new(AtomicBool::new(false));
     {
         let mut registry = state
             .0
@@ -1450,6 +1508,7 @@ fn start_agent_headless_run(
             AgentRunHandle {
                 child: Arc::clone(&child),
                 pid,
+                cancel_requested: Arc::clone(&cancel_requested),
             },
         );
     }
@@ -1463,7 +1522,6 @@ fn start_agent_headless_run(
         session_uuid.clone(),
         stdout,
     );
-    let done = Arc::new(AtomicBool::new(false));
     spawn_agent_waiter(
         app,
         child,
@@ -1472,7 +1530,7 @@ fn start_agent_headless_run(
         conversation_id.to_string(),
         session_uuid.clone(),
         stderr_tail,
-        done,
+        cancel_requested,
     );
 
     Ok(AgentSessionStartResult {
@@ -1481,6 +1539,7 @@ fn start_agent_headless_run(
         session_uuid,
         resumed,
         agent_path,
+        provider,
     })
 }
 
@@ -1551,6 +1610,80 @@ fn build_claude_headless_args(
     args
 }
 
+fn build_opencode_headless_args(
+    _session_uuid: &str,
+    resumed: bool,
+    model: Option<&str>,
+    project_dir: Option<&str>,
+    prompt_context_paths: &[String],
+    command_name: Option<&str>,
+    prompt: &str,
+) -> Vec<String> {
+    let mut args = vec![
+        "run".to_string(),
+        "--format".to_string(),
+        "json".to_string(),
+        "--dangerously-skip-permissions".to_string(),
+    ];
+    if resumed {
+        args.push("--continue".to_string());
+    }
+    if let Some(dir) = project_dir.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--dir".to_string());
+        args.push(dir.to_string());
+    }
+    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--model".to_string());
+        args.push(model.to_string());
+    }
+    if let Some(command_name) = command_name.map(str::trim).filter(|value| !value.is_empty()) {
+        args.push("--command".to_string());
+        args.push(command_name.trim_start_matches('/').to_string());
+    }
+    args.push(prompt.to_string());
+    for path in prompt_context_paths
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        args.push("--file".to_string());
+        args.push(path.to_string());
+    }
+    args
+}
+
+fn build_agent_headless_command(
+    provider: AgentProvider,
+    session_uuid: &str,
+    resumed: bool,
+    model: Option<&str>,
+    cwd: Option<&str>,
+    plugin_dirs: &[String],
+    extra_allowed_dirs: &[String],
+    prompt_context_paths: &[String],
+    command_name: Option<&str>,
+    prompt: &str,
+) -> AgentCommandSpec {
+    match provider {
+        AgentProvider::Claude => AgentCommandSpec {
+            args: build_claude_headless_args(session_uuid, resumed, model, plugin_dirs, extra_allowed_dirs),
+            prompt_stdin: true,
+        },
+        AgentProvider::Opencode => AgentCommandSpec {
+            args: build_opencode_headless_args(
+                session_uuid,
+                resumed,
+                model,
+                extra_allowed_dirs.first().map(String::as_str).or(cwd),
+                prompt_context_paths,
+                command_name,
+                prompt,
+            ),
+            prompt_stdin: false,
+        },
+    }
+}
+
 fn spawn_agent_stdout_forwarder(
     app: tauri::AppHandle,
     run_id: String,
@@ -1606,7 +1739,7 @@ fn spawn_agent_waiter(
     conversation_id: String,
     session_uuid: String,
     stderr_tail: Arc<Mutex<String>>,
-    done: Arc<AtomicBool>,
+    cancel_requested: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
         let exit_code = child
@@ -1617,12 +1750,11 @@ fn spawn_agent_waiter(
         if let Ok(mut registry) = registry.lock() {
             registry.runs.remove(&run_id);
         }
-        done.store(true, Ordering::Relaxed);
         let stderr_tail = stderr_tail
             .lock()
             .map(|tail| tail.clone())
             .unwrap_or_default();
-        let cancelled = exit_code.is_none();
+        let cancelled = cancel_requested.load(Ordering::Relaxed) || exit_code.is_none();
         let _ = app.emit(
             "agent-exit",
             AgentExitPayload {
@@ -1637,15 +1769,15 @@ fn spawn_agent_waiter(
     });
 }
 
-fn default_claude_command() -> String {
+fn default_agent_command(command_name: &str) -> String {
     #[cfg(target_os = "windows")]
     {
-        if let Some(resolved) = resolve_windows_bare_command("claude") {
+        if let Some(resolved) = resolve_windows_bare_command(command_name) {
             return resolved;
         }
     }
 
-    "claude".to_string()
+    command_name.to_string()
 }
 
 #[cfg(target_os = "windows")]
@@ -1700,13 +1832,19 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     let lower = command_path.to_ascii_lowercase();
     if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+        if let Some(target) = resolve_windows_cmd_wrapper_target(command_path) {
+            let mut command = Command::new(target);
+            command.args(args);
+            command.creation_flags(CREATE_NO_WINDOW);
+            return command;
+        }
         let mut command = Command::new("cmd");
+        let command_line = build_windows_cmd_invocation(command_path, args);
         command
             .arg("/d")
             .arg("/s")
             .arg("/c")
-            .arg(command_path)
-            .args(args);
+            .raw_arg(command_line);
         command.creation_flags(CREATE_NO_WINDOW);
         return command;
     }
@@ -1716,6 +1854,66 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     command
 }
 
+#[cfg(target_os = "windows")]
+fn build_windows_cmd_invocation(command_path: &str, args: &[String]) -> String {
+    let parts = std::iter::once(command_path)
+        .map(quote_windows_cmd_arg)
+        .chain(args.iter().map(|arg| quote_windows_cmd_arg(arg)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("\"{parts}\"")
+}
+
+#[cfg(target_os = "windows")]
+fn quote_windows_cmd_arg(value: &str) -> String {
+    let mut quoted = String::from("\"");
+    for ch in value.chars() {
+        match ch {
+            '"' => quoted.push_str("\\\""),
+            '%' => quoted.push_str("%%"),
+            _ => quoted.push(ch),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_windows_cmd_wrapper_target(command_path: &str) -> Option<PathBuf> {
+    let command_path = Path::new(command_path);
+    let base_dir = command_path.parent()?;
+    let content = std::fs::read_to_string(command_path).ok()?;
+    for line in content.lines() {
+        let Some(marker_index) = line.find("%dp0%\\").or_else(|| line.find("%dp0%/")) else {
+            continue;
+        };
+        let marker_len = "%dp0%\\".len();
+        let after_marker = &line[marker_index + marker_len..];
+        let Some(end_quote) = after_marker.find('"') else {
+            continue;
+        };
+        let relative = after_marker[..end_quote].trim_start_matches(['\\', '/']);
+        if relative.is_empty() {
+            continue;
+        }
+        let target = base_dir.join(relative);
+        let target_name = target
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let is_direct_executable = target
+            .extension()
+            .and_then(OsStr::to_str)
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+            && target_name != "node.exe";
+        if is_direct_executable && target.is_file() {
+            return Some(target);
+        }
+    }
+    None
+}
+
 #[cfg(not(target_os = "windows"))]
 fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     let mut command = Command::new(command_path);
@@ -1723,17 +1921,17 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     command
 }
 
-fn run_agent_version(agent_path: &str) -> Result<String, String> {
-    let output = create_agent_command(agent_path, &["--version".to_string()])
+fn run_agent_version(provider: AgentProvider, agent_path: &str) -> Result<String, String> {
+    let output = create_agent_command(agent_path, &provider.detect_args())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .map_err(|error| format!("failed to run Claude CLI: {error}"))?;
+        .map_err(|error| format!("failed to run {} CLI: {error}", provider.display_name()))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
-            "Claude CLI exited with an error".into()
+            format!("{} CLI exited with an error", provider.display_name())
         } else {
             stderr
         });
@@ -1831,7 +2029,7 @@ fn skill_hub_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 struct SkillInfo {
     name: String,
     description: Option<String>,
-    source: String, // "local"
+    source: String,
     path: String,
 }
 
@@ -1864,7 +2062,18 @@ fn parse_skill_md_description(content: &str) -> Option<String> {
 }
 
 #[tauri::command]
-fn list_local_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
+fn list_local_skills(
+    app: tauri::AppHandle,
+    provider: Option<AgentProvider>,
+    workspace_root: Option<String>,
+) -> Result<Vec<SkillInfo>, String> {
+    match provider.unwrap_or_default() {
+        AgentProvider::Claude => list_claude_skills(app),
+        AgentProvider::Opencode => list_opencode_commands(app, workspace_root.as_deref()),
+    }
+}
+
+fn list_claude_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
     let home = app
         .path()
         .home_dir()
@@ -1892,12 +2101,137 @@ fn list_local_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
         skills.push(SkillInfo {
             name: name.clone(),
             description,
-            source: "local".to_string(),
+            source: "claude".to_string(),
             path: path.to_string_lossy().to_string(),
         });
     }
     skills.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(skills)
+}
+
+fn list_opencode_commands(app: tauri::AppHandle, workspace_root: Option<&str>) -> Result<Vec<SkillInfo>, String> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|error| format!("failed to resolve home dir: {error}"))?;
+    let mut commands = Vec::new();
+    let global_config = home.join(".config").join("opencode");
+    collect_opencode_command_dirs(&mut commands, &global_config);
+    collect_opencode_config_commands(&mut commands, &global_config.join("opencode.jsonc"));
+
+    if let Some(root) = workspace_root.map(str::trim).filter(|value| !value.is_empty()) {
+        let project_config = PathBuf::from(root).join(".opencode");
+        collect_opencode_command_dirs(&mut commands, &project_config);
+        collect_opencode_config_commands(&mut commands, &project_config.join("opencode.jsonc"));
+    }
+
+    commands.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.path.cmp(&b.path)));
+    commands.dedup_by(|a, b| a.name == b.name && a.path == b.path);
+    Ok(commands)
+}
+
+fn collect_opencode_command_dirs(commands: &mut Vec<SkillInfo>, base: &Path) {
+    for dir_name in ["commands", "command"] {
+        let dir = base.join(dir_name);
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries {
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+                continue;
+            }
+            let Some(name) = path.file_stem().and_then(|stem| stem.to_str()).map(|value| value.to_string()) else {
+                continue;
+            };
+            let description = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|content| parse_skill_md_description(&content).or_else(|| parse_markdown_heading(&content)));
+            commands.push(SkillInfo {
+                name,
+                description,
+                source: "opencode".to_string(),
+                path: path.to_string_lossy().to_string(),
+            });
+        }
+    }
+}
+
+fn parse_markdown_heading(content: &str) -> Option<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix("# ").map(str::trim))
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn collect_opencode_config_commands(commands: &mut Vec<SkillInfo>, config_path: &Path) {
+    let Ok(raw) = std::fs::read_to_string(config_path) else { return };
+    let stripped = strip_jsonc_comments(&raw);
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stripped) else { return };
+    let Some(command_map) = parsed.get("command").and_then(|value| value.as_object()) else { return };
+    for (name, value) in command_map {
+        let description = value
+            .as_object()
+            .and_then(|object| object.get("description"))
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| value.trim().to_string());
+        commands.push(SkillInfo {
+            name: name.to_string(),
+            description,
+            source: "opencode".to_string(),
+            path: format!("{}#command.{}", config_path.to_string_lossy(), name),
+        });
+    }
+}
+
+fn strip_jsonc_comments(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    let mut in_string = false;
+    let mut escaped = false;
+    while let Some(ch) = chars.next() {
+        if in_string {
+            output.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        if ch == '"' {
+            in_string = true;
+            output.push(ch);
+            continue;
+        }
+        if ch == '/' && chars.peek() == Some(&'/') {
+            chars.next();
+            for next in chars.by_ref() {
+                if next == '\n' {
+                    output.push('\n');
+                    break;
+                }
+            }
+            continue;
+        }
+        if ch == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            let mut previous = '\0';
+            for next in chars.by_ref() {
+                if previous == '*' && next == '/' {
+                    break;
+                }
+                previous = next;
+            }
+            continue;
+        }
+        output.push(ch);
+    }
+    output
 }
 
 #[tauri::command]
@@ -1986,7 +2320,7 @@ mod tests {
     #[test]
     fn claude_path_accepts_explicit_value() {
         assert_eq!(
-            normalize_agent_path(Some(" custom-claude ")),
+            normalize_agent_path(AgentProvider::Claude, Some(" custom-claude ")),
             "custom-claude"
         );
     }
@@ -1994,20 +2328,87 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn claude_path_defaults_to_path_lookup_on_non_windows() {
-        assert_eq!(normalize_agent_path(None), "claude");
+        assert_eq!(normalize_agent_path(AgentProvider::Claude, None), "claude");
+        assert_eq!(normalize_agent_path(AgentProvider::Opencode, None), "opencode");
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn claude_path_checks_windows_npm_global_directory() {
-        let path = normalize_agent_path(None);
+        let path = normalize_agent_path(AgentProvider::Claude, None);
 
         assert!(
             path == "claude"
                 || path.ends_with("\\npm\\claude.cmd")
-                || path.ends_with("\\npm\\claude.exe"),
+                || path.ends_with("\\npm\\claude.exe")
+                || path.ends_with("\\claude.cmd")
+                || path.ends_with("\\claude.exe"),
             "unexpected default Claude path: {path}"
         );
+        assert!(!path.ends_with(".ps1"), "Claude should not resolve to PowerShell wrapper: {path}");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn opencode_path_checks_windows_npm_global_directory_without_ps1() {
+        let path = normalize_agent_path(AgentProvider::Opencode, None);
+
+        assert!(
+            path == "opencode"
+                || path.ends_with("\\npm\\opencode.cmd")
+                || path.ends_with("\\npm\\opencode.exe")
+                || path.ends_with("\\opencode.cmd")
+                || path.ends_with("\\opencode.exe"),
+            "unexpected default OpenCode path: {path}"
+        );
+        assert!(!path.ends_with(".ps1"), "OpenCode should not resolve to PowerShell wrapper: {path}");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_cmd_wrapper_resolves_real_target() {
+        let root = temp_path("opencode-wrapper");
+        let bin_dir = root.join("node_modules").join("opencode-ai").join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let target = bin_dir.join("opencode.exe");
+        std::fs::write(&target, b"").unwrap();
+        let wrapper = root.join("opencode.cmd");
+        std::fs::write(
+            &wrapper,
+            "@ECHO off\r\n\"%dp0%\\node_modules\\opencode-ai\\bin\\opencode.exe\"   %*\r\n",
+        )
+        .unwrap();
+
+        let resolved = resolve_windows_cmd_wrapper_target(&wrapper.to_string_lossy()).unwrap();
+
+        assert_eq!(resolved, target);
+        let _ = std::fs::remove_file(wrapper);
+        let _ = std::fs::remove_file(target);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_cmd_wrapper_does_not_resolve_node_runtime_only() {
+        let root = temp_path("node-wrapper");
+        let bin_dir = root.join("node_modules").join("example").join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let node = root.join("node.exe");
+        let script = bin_dir.join("example.js");
+        std::fs::write(&node, b"").unwrap();
+        std::fs::write(&script, b"").unwrap();
+        let wrapper = root.join("example.cmd");
+        std::fs::write(
+            &wrapper,
+            "@ECHO off\r\n\"%dp0%\\node.exe\" \"%dp0%\\node_modules\\example\\bin\\example.js\" %*\r\n",
+        )
+        .unwrap();
+
+        assert!(resolve_windows_cmd_wrapper_target(&wrapper.to_string_lossy()).is_none());
+        let _ = std::fs::remove_file(wrapper);
+        let _ = std::fs::remove_file(script);
+        let _ = std::fs::remove_file(node);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -2041,6 +2442,129 @@ mod tests {
     }
 
     #[test]
+    fn opencode_headless_args_start_without_session_and_use_prompt_arg() {
+        let args = build_opencode_headless_args(
+            "session-123",
+            false,
+            Some("anthropic/claude-sonnet-4"),
+            Some("D:\\workspace\\.typola-output\\conv-1"),
+            &[],
+            None,
+            "summarize",
+        );
+
+        assert_eq!(args.first().map(String::as_str), Some("run"));
+        assert!(args.windows(2).any(|pair| pair == ["--format", "json"]));
+        assert!(!args.contains(&"--session".to_string()));
+        assert!(!args.contains(&"session-123".to_string()));
+        assert!(!args.contains(&"--continue".to_string()));
+        assert!(args.windows(2).any(|pair| pair == ["--model", "anthropic/claude-sonnet-4"]));
+        assert!(args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
+        assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
+        assert_eq!(args.last().map(String::as_str), Some("summarize"));
+    }
+
+    #[test]
+    fn opencode_headless_resume_uses_the_same_session_argument() {
+        let args = build_opencode_headless_args("session-123", true, None, None, &[], None, "continue");
+
+        assert!(args.contains(&"--continue".to_string()));
+        assert!(!args.contains(&"--session".to_string()));
+        assert!(!args.contains(&"session-123".to_string()));
+        assert!(!args.contains(&"--resume".to_string()));
+    }
+
+    #[test]
+    fn opencode_headless_args_attach_prompt_context_files() {
+        let args = build_opencode_headless_args(
+            "session-123",
+            false,
+            None,
+            Some("D:\\workspace\\.typola-output\\conv-1"),
+            &[
+                "D:\\workspace\\current.md".to_string(),
+                "D:\\workspace\\brief.md".to_string(),
+            ],
+            None,
+            "summarize",
+        );
+
+        assert!(args.windows(2).any(|pair| pair == ["--file", "D:\\workspace\\current.md"]));
+        assert!(args.windows(2).any(|pair| pair == ["--file", "D:\\workspace\\brief.md"]));
+        let prompt_index = args.iter().position(|arg| arg == "summarize").expect("missing prompt");
+        let first_file_index = args.iter().position(|arg| arg == "--file").expect("missing --file");
+        assert!(prompt_index < first_file_index);
+    }
+
+    #[test]
+    fn opencode_headless_args_use_command_flag_for_provider_commands() {
+        let args = build_opencode_headless_args(
+            "session-123",
+            false,
+            None,
+            Some("D:\\workspace"),
+            &[],
+            Some("/write-report"),
+            "use current doc",
+        );
+
+        assert!(args.windows(2).any(|pair| pair == ["--command", "write-report"]));
+        assert_eq!(args.last().map(String::as_str), Some("use current doc"));
+    }
+
+    #[test]
+    fn agent_headless_command_keeps_claude_on_stdin_and_opencode_on_argv() {
+        let claude = build_agent_headless_command(
+            AgentProvider::Claude,
+            "session-123",
+            false,
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+            None,
+            "hello",
+        );
+        let opencode = build_agent_headless_command(
+            AgentProvider::Opencode,
+            "session-123",
+            false,
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+            None,
+            "hello",
+        );
+
+        assert!(claude.prompt_stdin);
+        assert!(!claude.args.contains(&"hello".to_string()));
+        assert!(!opencode.prompt_stdin);
+        assert_eq!(opencode.args.last().map(String::as_str), Some("hello"));
+    }
+
+    #[test]
+    fn opencode_headless_command_uses_workspace_as_project_dir() {
+        let opencode = build_agent_headless_command(
+            AgentProvider::Opencode,
+            "session-123",
+            false,
+            None,
+            Some("D:\\workspace\\.typola-output\\conv-1"),
+            &[],
+            &["D:\\workspace".to_string()],
+            &[],
+            None,
+            "hello",
+        );
+
+        assert!(opencode.args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace"]));
+        assert!(!opencode.args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
+    }
+
+    #[test]
     fn skill_md_frontmatter_description_basic() {
         let content = "---\nname: my-skill\ndescription: Writes polished docs.\n---\n\n# body\n";
         assert_eq!(
@@ -2062,6 +2586,43 @@ mod tests {
     fn skill_md_frontmatter_description_missing() {
         assert_eq!(parse_skill_md_description("# no frontmatter\n").is_none(), true);
         assert_eq!(parse_skill_md_description("---\nname: x\n---\n").is_none(), true);
+    }
+
+    #[test]
+    fn opencode_command_dir_scanner_reads_markdown_commands() {
+        let root = temp_path("opencode-commands");
+        let commands_dir = root.join("commands");
+        std::fs::create_dir_all(&commands_dir).unwrap();
+        std::fs::write(commands_dir.join("write-report.md"), "# Write report\nBody").unwrap();
+
+        let mut commands = Vec::new();
+        collect_opencode_command_dirs(&mut commands, &root);
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].name, "write-report");
+        assert_eq!(commands[0].description.as_deref(), Some("Write report"));
+        assert_eq!(commands[0].source, "opencode");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn opencode_config_scanner_reads_jsonc_commands() {
+        let root = temp_path("opencode-config");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("opencode.jsonc"),
+            "{\n  // comment\n  \"command\": { \"ship-it\": { \"description\": \"Ship changes\" } }\n}",
+        )
+        .unwrap();
+
+        let mut commands = Vec::new();
+        collect_opencode_config_commands(&mut commands, &root.join("opencode.jsonc"));
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].name, "ship-it");
+        assert_eq!(commands[0].description.as_deref(), Some("Ship changes"));
+        assert_eq!(commands[0].source, "opencode");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

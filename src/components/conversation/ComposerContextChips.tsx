@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+﻿import { X } from 'lucide-react';
 
 type ComposerContextChipsProps = {
   currentFileName?: string;
@@ -40,7 +40,7 @@ export function ComposerContextChips({
           <button
             type="button"
             onClick={() => onRemoveAttachment(path)}
-            aria-label="移除附件"
+            aria-label="绉婚櫎闄勪欢"
           >
             <X size={12} />
           </button>
