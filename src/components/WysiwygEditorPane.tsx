@@ -12,6 +12,8 @@ import { findUniqueAnchor } from '../services/agent/selectionActions';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
+import { buildSearchRegExp, getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
+import type { SearchOptions } from '../services/documentSearchService';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -121,6 +123,69 @@ function silenceCodeBlockAssist(editor: import('vditor').default | null): void {
   if (wysiwyg?.selectPopover) wysiwyg.selectPopover.style.display = 'none';
 }
 
+/**
+ * 在 IR DOM 的 textContent 里找第 occurrenceIndex 次 query 命中,返回精确的 DOM Range。
+ * 必须用与 findSearchMatches 一致的 regex(同 options),否则 case-insensitive / regex /
+ * wholeWord 场景下 IR 找到的位置跟 source 偏移对不上,跳错位置或漏匹配。
+ */
+function findTextNodeRange(
+  root: HTMLElement,
+  query: string,
+  occurrenceIndex: number,
+  options: SearchOptions,
+): Range | null {
+  if (!query) return null;
+  const ownerDocument = root.ownerDocument;
+  const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Array<{ node: Text; start: number; end: number }> = [];
+  let fullText = '';
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (!(node instanceof Text)) continue;
+    const start = fullText.length;
+    fullText += node.data;
+    nodes.push({ node, start, end: fullText.length });
+  }
+
+  const regex = buildSearchRegExp(query, options);
+  if (!regex) return null;
+
+  let foundAt = -1;
+  let foundLen = 0;
+  let count = 0;
+  let exec: RegExpExecArray | null;
+  while ((exec = regex.exec(fullText)) !== null) {
+    if (exec[0].length === 0) {
+      regex.lastIndex += 1;
+      continue;
+    }
+    if (options.wholeWord) {
+      const before = exec.index > 0 ? fullText[exec.index - 1] : '';
+      const after = exec.index + exec[0].length < fullText.length ? fullText[exec.index + exec[0].length] : '';
+      const wordCharRe = /[\p{L}\p{N}_]/u;
+      if ((before && wordCharRe.test(before)) || (after && wordCharRe.test(after))) continue;
+    }
+    if (count === occurrenceIndex) {
+      foundAt = exec.index;
+      foundLen = exec[0].length;
+      break;
+    }
+    count += 1;
+  }
+  if (foundAt < 0) return null;
+
+  const foundEnd = foundAt + foundLen;
+  const startNode = nodes.find((entry) => foundAt >= entry.start && foundAt <= entry.end);
+  const endNode = nodes.find((entry) => foundEnd >= entry.start && foundEnd <= entry.end);
+  if (!startNode || !endNode) return null;
+
+  const range = ownerDocument.createRange();
+  range.setStart(startNode.node, Math.max(0, foundAt - startNode.start));
+  range.setEnd(endNode.node, Math.max(0, foundEnd - endNode.start));
+  return range;
+}
+
 type WindowWithFind = Window & {
   find?: (
     text: string,
@@ -132,6 +197,9 @@ type WindowWithFind = Window & {
     showDialog?: boolean,
   ) => boolean;
 };
+
+// 选区浮条抑制时长 —— 见 revealRange 内注释。
+const FLOATING_BAR_SETTLE_MS = 250;
 
 export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
   { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
@@ -188,6 +256,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   // 选区浮条状态:跟着 IR 选区变化重算 rect + hasSelection;由 selectionchange listener 更新。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  const suppressFloatingBarRef = useRef(false);
 
   const getSavedOrCurrentSelection = useCallback((): Range | null => {
     const editor = editorRef.current;
@@ -395,6 +464,11 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     };
 
     const handleSelectionChange = () => {
+      if (suppressFloatingBarRef.current) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
       if (!ir) {
@@ -693,8 +767,51 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       lastValidatedPrefixHintRef.current = prefixHint ?? '';
       return 'valid';
     },
-    revealRange() {
-      editorRef.current?.focus();
+    revealRange(from: number, to: number, opts?: {
+      text?: string;
+      preserveFocus?: boolean;
+      query?: string;
+      searchOptions?: SearchOptions;
+    }) {
+      const editor = editorRef.current;
+      const ir = editor ? getIrElement(editor) : null;
+      if (!editor || !ir) return;
+
+      const matchText = opts?.text || latestSource.current.slice(from, to);
+      const query = opts?.query || matchText;
+      // 默认 options 仅在调用方未传时兜底(检视意见跳转走这条),走 case-insensitive
+      // 文本匹配,保持原有行为。
+      const searchOptions: SearchOptions = opts?.searchOptions ?? {
+        caseSensitive: false,
+        wholeWord: false,
+        regex: false,
+      };
+      const occurrenceIndex = getSearchMatchOccurrenceIndex(
+        latestSource.current,
+        { index: from, length: Math.max(0, to - from), text: matchText },
+        query,
+        searchOptions,
+      );
+      const range = findTextNodeRange(ir, query, occurrenceIndex, searchOptions);
+      // 搜索导航传 preserveFocus=true 保持 FindReplacePanel 输入框焦点;
+      // 检视意见跳转保留旧行为(focus 编辑器)。
+      if (!opts?.preserveFocus) editor.focus();
+      if (!range) return;
+
+      suppressFloatingBarRef.current = true;
+      const sel = ir.ownerDocument.defaultView?.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      lastSelectionRangeRef.current = range.cloneRange();
+      const element = range.startContainer instanceof Element
+        ? range.startContainer
+        : range.startContainer.parentElement;
+      element?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      // Vditor IR selectionchange 是 microtask async,实测 250ms 足够覆盖 selection
+      // commit + IR collapse/expand markers + DOM 重排;时间越短偶尔会让浮条闪一下。
+      window.setTimeout(() => {
+        suppressFloatingBarRef.current = false;
+      }, FLOATING_BAR_SETTLE_MS);
     },
     revealText(text: string, backwards = false) {
       editorRef.current?.focus();

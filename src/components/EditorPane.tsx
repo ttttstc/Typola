@@ -86,9 +86,19 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
   // 选区浮条状态:跟着 CodeMirror 选区变化重算 rect + hasSelection。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  // 搜索 reveal 期间抑制浮条 —— dispatch 设 selection 会触发同步 updateListener。
+  // CodeMirror 的 selectionchange 在 dispatch 后下一个 microtask 触发,250ms 实测足够
+  // 覆盖 selection commit + 重排;时间越短偶尔会让浮条闪一下,越长会延迟用户主动选区。
+  const suppressFloatingBarRef = useRef(false);
+  const FLOATING_BAR_SETTLE_MS = 250;
   useEffect(() => {
     if (!editorView) return;
     const computeFromSelection = () => {
+      if (suppressFloatingBarRef.current) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
       const sel = editorView.state.selection.main;
       if (sel.empty) {
         setFloatingHasSelection(false);
@@ -268,13 +278,17 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       if (from < 0 || to > docLen) return 'stale';
       return editor.state.doc.sliceString(from, to) === originalText ? 'valid' : 'stale';
     },
-    revealRange(from: number, to: number) {
+    // Source 模式:from/to 直接是 CodeMirror 文档偏移,不需要 opts.text / query /
+    // searchOptions。保留 opts 签名仅是为了实现 EditorCommandHandle 契约。
+    revealRange(from: number, to: number, opts) {
       if (!editorView) return;
+      suppressFloatingBarRef.current = true;
       editorView.dispatch({
         effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
         selection: { anchor: from, head: to },
       });
-      editorView.focus();
+      if (!opts?.preserveFocus) editorView.focus();
+      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     },
     revealText() {
       editorView?.focus();

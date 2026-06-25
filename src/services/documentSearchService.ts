@@ -72,3 +72,36 @@ export function replaceAllSearchMatches(source: string, matches: readonly Search
   next += source.slice(cursor);
   return next;
 }
+
+/**
+ * 在 source 里数 match 是第几次 occurrence(0-based)。必须按用户搜索时的 options 跑,
+ * 否则 case-insensitive / regex / wholeWord 场景下计数会跟 findSearchMatches 的结果脱节,
+ * 导致 IR 里 occurrenceIndex 漂移 → 跳错位置。
+ *
+ * - case-insensitive 搜 "beta" 命中 "Beta":indexOf("Beta") 只数 "Beta" 出现,漏掉其他 "beta"
+ * - regex 搜 "b.t" 命中 "bat":indexOf("bat") 漏掉 "bit" / "but"
+ * - wholeWord 时 indexOf 也数边界外的命中
+ */
+export function getSearchMatchOccurrenceIndex(
+  source: string,
+  match: SearchMatch,
+  query: string,
+  options: SearchOptions,
+): number {
+  if (!query) return 0;
+  const regex = buildSearchRegExp(query, options);
+  if (!regex) return 0;
+
+  let count = 0;
+  let exec: RegExpExecArray | null;
+  while ((exec = regex.exec(source)) !== null) {
+    if (exec.index >= match.index) break;
+    if (exec[0].length === 0) {
+      regex.lastIndex += 1;
+      continue;
+    }
+    if (options.wholeWord && !isWholeWordMatch(source, exec.index, exec[0].length)) continue;
+    count += 1;
+  }
+  return count;
+}

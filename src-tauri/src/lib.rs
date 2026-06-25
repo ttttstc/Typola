@@ -1298,6 +1298,15 @@ pub fn run() {
         .manage(AgentHeadlessStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let paths = opened_paths_from_args(args, &cwd);
+
+            // 用户双击 exe 时如果应用已在后台,窗口可能被最小化/遮挡,
+            // 必须无条件 unminimize + show + focus 把窗口拽回前面。
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
             if paths.is_empty() {
                 return;
             }

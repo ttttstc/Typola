@@ -3232,62 +3232,129 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 /* ===== Find / Quick Open / Edit Assist ===== */
 
+/* VSCode 风格双行查找/替换面板:
+ * 左侧 toggle ▸/▾ 切换替换行;右侧两行各自含输入框 + 按钮组。
+ */
 .find-panel {
   position: fixed;
   top: 54px;
   right: 18px;
   z-index: 60;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: min(760px, calc(100vw - 36px));
-  padding: 7px;
+  align-items: flex-start;
+  gap: 2px;
+  width: min(560px, calc(100vw - 36px));
+  padding: 4px 6px;
   border: 1px solid var(--border-soft);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--panel-bg);
   box-shadow: 0 10px 28px var(--paper-shadow);
   backdrop-filter: blur(14px);
 }
 
+.find-toggle {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 26px;
+  margin-top: 1px;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+}
+.find-toggle:hover {
+  color: var(--fg);
+  background: color-mix(in oklch, var(--fg) 8%, transparent) !important;
+}
+.find-toggle-caret {
+  display: inline-block;
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 120ms ease;
+  color: var(--fg);
+  opacity: 0.7;
+}
+.find-toggle:hover .find-toggle-caret { opacity: 1; }
+.find-toggle-caret.open { transform: rotate(90deg); }
+
+.find-rows {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
 .find-input,
 .quick-open-input,
 .edit-assist-section input {
-  height: 30px;
+  height: 26px;
   min-width: 0;
   border: 1px solid var(--border-soft);
-  border-radius: 5px;
+  border-radius: 3px;
   background: var(--surface);
   color: var(--fg);
   font-family: var(--font-body);
   font-size: 13px;
-  padding: 0 9px;
+  padding: 0 8px;
 }
 
 .find-input {
-  flex: 1 1 180px;
-  width: 180px;
+  flex: 1 1 auto;
+}
+.find-input:focus {
+  outline: none;
+  border-color: color-mix(in oklch, var(--accent) 70%, var(--border-soft));
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 40%, transparent);
 }
 
 .find-count {
-  min-width: 46px;
+  flex: 0 0 auto;
+  min-width: 42px;
+  padding: 0 4px;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 11px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .find-panel button,
 .edit-assist-panel button {
-  height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--border-soft);
-  border-radius: 5px;
-  background: var(--control-bg);
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
   color: var(--fg);
   cursor: pointer;
   font-family: var(--font-body);
   font-size: 12px;
+  flex: 0 0 auto;
+}
+.find-panel .find-opt,
+.find-panel .find-nav,
+.find-panel .find-close {
+  width: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.find-panel .find-action {
+  padding: 0 10px;
 }
 
 /* ===== Workspace File Tree ===== */
@@ -4131,20 +4198,20 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .find-panel button:hover,
 .edit-assist-panel button:hover {
-  background: var(--control-hover-bg);
-  border-color: var(--border-hover);
+  background: color-mix(in oklch, var(--fg) 8%, transparent);
 }
 
-.find-panel button.active {
+.find-panel button.active,
+.find-panel .find-opt.active {
   color: var(--accent);
-  background: var(--control-active-bg);
-  border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
 }
 
 .find-panel button:disabled,
 .edit-assist-panel button:disabled {
   cursor: default;
   opacity: 0.48;
+  background: transparent;
 }
 
 .quick-open-overlay,
@@ -4272,11 +4339,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   .find-panel {
     left: 12px;
     right: 12px;
-    flex-wrap: wrap;
+    width: auto;
   }
 
   .find-input {
-    flex: 1 1 180px;
+    flex: 1 1 140px;
   }
 
   .edit-assist-section,
