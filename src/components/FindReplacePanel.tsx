@@ -39,6 +39,7 @@ export function FindReplacePanel({
   const [replacement, setReplacement] = useState('');
   const [options, setOptions] = useState(defaultOptions);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [replaceExpanded, setReplaceExpanded] = useState(false);
   const deferredQuery = useDebouncedValue(query, 120);
   const deferredSource = useDebouncedValue(source, 120);
   const matches = useMemo(
@@ -53,6 +54,7 @@ export function FindReplacePanel({
 
   useEffect(() => {
     if (!visible) return;
+    setReplaceExpanded(focusTarget === 'replace');
     window.requestAnimationFrame(() => {
       const input = focusTarget === 'replace' ? replaceInputRef.current : findInputRef.current;
       input?.focus();
@@ -95,51 +97,78 @@ export function FindReplacePanel({
   };
 
   return (
-    <div className="find-panel" role="dialog" aria-label="文件内查找替换">
-      <input
-        ref={findInputRef}
-        className="find-input"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            move(event.shiftKey ? -1 : 1);
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            onClose();
-          }
-        }}
-        placeholder="查找"
-      />
-      <input
-        ref={replaceInputRef}
-        className="find-input"
-        value={replacement}
-        onChange={(event) => setReplacement(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            replaceCurrent();
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            onClose();
-          }
-        }}
-        placeholder="替换为"
-        disabled={readOnly}
-      />
-      <span className="find-count">{current}/{matches.length}</span>
-      <button type="button" onClick={() => move(-1)} disabled={matches.length === 0}>上一个</button>
-      <button type="button" onClick={() => move(1)} disabled={matches.length === 0}>下一个</button>
-      <button type="button" onClick={replaceCurrent} disabled={readOnly || matches.length === 0}>替换</button>
-      <button type="button" onClick={replaceAll} disabled={readOnly || matches.length === 0}>全部</button>
-      <button type="button" className={options.caseSensitive ? 'active' : ''} onClick={() => toggleOption('caseSensitive')}>Aa</button>
-      <button type="button" className={options.wholeWord ? 'active' : ''} onClick={() => toggleOption('wholeWord')}>词</button>
-      <button type="button" className={options.regex ? 'active' : ''} onClick={() => toggleOption('regex')}>.*</button>
-      <button type="button" onClick={onClose} aria-label="关闭查找">×</button>
+    <div className={replaceExpanded ? 'find-panel replace-expanded' : 'find-panel'} role="dialog" aria-label="文件内查找替换">
+      <div className="find-row">
+        <button
+          type="button"
+          className="find-mode-toggle"
+          onClick={() => {
+            setReplaceExpanded((expanded) => {
+              const next = !expanded;
+              window.requestAnimationFrame(() => {
+                (next ? replaceInputRef.current : findInputRef.current)?.focus();
+              });
+              return next;
+            });
+          }}
+          title={replaceExpanded ? '收起替换' : '展开替换'}
+          aria-expanded={replaceExpanded}
+        >
+          查找
+          <span aria-hidden="true">{replaceExpanded ? '⌃' : '⌄'}</span>
+        </button>
+        <div className="find-input-shell">
+          <input
+            ref={findInputRef}
+            className="find-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                move(event.shiftKey ? -1 : 1);
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                onClose();
+              }
+            }}
+            placeholder="查找"
+          />
+          <span className="find-count">{current}/{matches.length}</span>
+          <button type="button" className={options.caseSensitive ? 'active' : ''} onClick={() => toggleOption('caseSensitive')} title="区分大小写">Aa</button>
+          <button type="button" className={options.wholeWord ? 'active' : ''} onClick={() => toggleOption('wholeWord')} title="全词匹配">词</button>
+          <button type="button" className={options.regex ? 'active' : ''} onClick={() => toggleOption('regex')} title="正则表达式">.*</button>
+        </div>
+        <button type="button" className="find-icon-button" onClick={() => move(-1)} disabled={matches.length === 0} aria-label="上一个" title="上一个">⌃</button>
+        <button type="button" className="find-icon-button" onClick={() => move(1)} disabled={matches.length === 0} aria-label="下一个" title="下一个">⌄</button>
+        <button type="button" className="find-icon-button find-close-button" onClick={onClose} aria-label="关闭查找" title="关闭">×</button>
+      </div>
+      {replaceExpanded && (
+        <div className="find-row find-replace-row">
+          <span className="find-replace-label">替换</span>
+          <input
+            ref={replaceInputRef}
+            className="find-input replace-input"
+            value={replacement}
+            onChange={(event) => setReplacement(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                replaceCurrent();
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                onClose();
+              }
+            }}
+            placeholder="替换为"
+            disabled={readOnly}
+          />
+          <button type="button" onClick={replaceCurrent} disabled={readOnly || matches.length === 0}>替换</button>
+          <button type="button" onClick={replaceAll} disabled={readOnly || matches.length === 0}>全部</button>
+        </div>
+      )}
     </div>
   );
 }
