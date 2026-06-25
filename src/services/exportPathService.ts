@@ -25,11 +25,18 @@ export function joinPath(dir: string, name: string): string {
   return `${dir.replace(/[\\/]+$/u, '')}${separator}${name}`;
 }
 
+/**
+ * 解析导出文件的默认保存路径。
+ *
+ * 安全约束:Tauri capability fs:scope 只允许 $DESKTOP / $DOCUMENT / $DOWNLOAD /
+ * $PICTURE / $VIDEO 的子路径(避免任意 traversal)。所以默认走 $DOWNLOAD,
+ * 跨 OS 通用、写入权限稳定;不依赖 md 文件父目录是否在 scope 内。
+ * (md 同目录导出会被 P0-1 评论标为攻击面级问题 —— 任意 .md 路径下任意写,绕过最小权限。)
+ */
 export async function resolveDefaultExportPath(options: ExportPathOptions): Promise<string> {
   const fileName = createExportFileName(options.filePath || options.fileName, options.extension);
   const baseName = fileName.replace(/^.*[\\/]/u, '');
-  const dir = options.filePath ? dirname(options.filePath) : null;
-  const baseDir = dir || await downloadDir();
+  const baseDir = await downloadDir();
   return uniqueExportPath(joinPath(baseDir, baseName));
 }
 

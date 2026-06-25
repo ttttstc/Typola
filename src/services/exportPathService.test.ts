@@ -27,15 +27,16 @@ describe('exportPathService', () => {
     expect(joinPath('/Users/me/docs/', 'draft.pdf')).toBe('/Users/me/docs/draft.pdf');
   });
 
-  it('exports saved files next to the source file', async () => {
+  it('always exports to Downloads (capability scope safety)', async () => {
+    // 出于 capability scope 安全考虑,不再用 md 父目录;统一写到 Downloads。
     await expect(resolveDefaultExportPath({
       fileName: 'draft.md',
       filePath: 'C:\\docs\\draft.md',
       extension: 'pdf',
-    })).resolves.toBe('C:\\docs\\draft.pdf');
+    })).resolves.toBe('C:\\Users\\tester\\Downloads\\draft.pdf');
   });
 
-  it('exports unsaved files to downloads', async () => {
+  it('exports unsaved files to Downloads', async () => {
     await expect(resolveDefaultExportPath({
       fileName: 'untitled.md',
       extension: 'pdf',
@@ -51,6 +52,6 @@ describe('exportPathService', () => {
       fileName: 'draft.md',
       filePath: 'C:\\docs\\draft.md',
       extension: 'pdf',
-    })).resolves.toBe('C:\\docs\\draft-1.pdf');
+    })).resolves.toBe('C:\\Users\\tester\\Downloads\\draft-1.pdf');
   });
 });

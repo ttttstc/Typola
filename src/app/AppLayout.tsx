@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { TocItem } from '../types/document';
 import {
@@ -159,10 +160,7 @@ export function AppLayout() {
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
-  const [pdfExportStatus, setPdfExportStatus] = useState<{
-    phase: 'preparing' | 'exporting';
-    savePath: string;
-  } | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
   const [wordExporting, setWordExporting] = useState(false);
   const [exportToast, setExportToast] = useState<{
     type: 'running' | 'success' | 'error';
@@ -547,14 +545,15 @@ export function AppLayout() {
       showExportToast({ type: 'success', title: 'Word 导出完成', detail: savePath });
     } catch (e) {
       console.error('Export failed:', e);
-      showExportToast({ type: 'error', title: 'Word 导出失败', detail: String(e) });
+      const { humanizeExportError } = await import('../services/exportErrors');
+      showExportToast({ type: 'error', title: 'Word 导出失败', detail: humanizeExportError(e, 'Word') });
     } finally {
       setWordExporting(false);
     }
   }, [file.content, file.fileType, file.name, file.path, showExportToast, wordExporting]);
 
   const handleExportPdf = useCallback(async () => {
-    if (pdfExportStatus) return;
+    if (pdfExporting) return;
     if (file.fileType === 'docx') {
       showExportToast({
         type: 'error',
@@ -563,10 +562,11 @@ export function AppLayout() {
       });
       return;
     }
+    setPdfExporting(true);
     showExportToast({ type: 'running', title: '正在后台导出 PDF', detail: file.name });
     try {
       const { exportToPdf } = await import('../services/pdfExport');
-      const result = await exportToPdf({
+      const savePath = await exportToPdf({
         content: file.content,
         fileName: file.name,
         filePath: file.path || undefined,
@@ -575,18 +575,18 @@ export function AppLayout() {
         resolvedPreviewHeadingFontFamily: resolvePreviewHeadingFontFamily(settings),
         previewFontSize: settings.previewFontSize,
         previewLineHeight: settings.previewLineHeight,
-        onStatusChange: setPdfExportStatus,
       });
-      if (result.status === 'saved') {
-        showExportToast({ type: 'success', title: 'PDF 导出完成', detail: result.savePath });
+      if (savePath) {
+        showExportToast({ type: 'success', title: 'PDF 导出完成', detail: savePath });
       }
     } catch (error) {
       console.error('PDF export failed:', error);
-      showExportToast({ type: 'error', title: 'PDF 导出失败', detail: String(error) });
+      const { humanizeExportError } = await import('../services/exportErrors');
+      showExportToast({ type: 'error', title: 'PDF 导出失败', detail: humanizeExportError(error, 'PDF') });
     } finally {
-      setPdfExportStatus(null);
+      setPdfExporting(false);
     }
-  }, [file.content, file.fileType, file.name, file.path, pdfExportStatus, settings, showExportToast]);
+  }, [file.content, file.fileType, file.name, file.path, pdfExporting, settings, showExportToast]);
 
   const replaceCurrentContent = useCallback((value: string) => {
     handleContentChange(value);
@@ -1305,7 +1305,7 @@ export function AppLayout() {
           onRename: () => handleRequestRename(),
           onInsertImage: handleSelectLocalImage,
           onExportPdf: handleExportPdf,
-          pdfExporting: pdfExportStatus !== null,
+          pdfExporting,
           onOpenSettings: () => {
             void preloadSettingsPage();
             setSettingsVisible(true);
@@ -1496,8 +1496,27 @@ export function AppLayout() {
       />
       {exportToast && (
         <div className={`export-toast export-toast-${exportToast.type}`} role="status" aria-live="polite">
-          <strong>{exportToast.title}</strong>
-          {exportToast.detail && <span>{exportToast.detail}</span>}
+          <div className="export-toast-body">
+            {exportToast.type === 'running' && <span className="export-toast-spinner" />}
+            <div className="export-toast-text">
+              <strong>{exportToast.title}</strong>
+              {exportToast.detail && <span>{exportToast.detail}</span>}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="export-toast-close"
+            onClick={() => {
+              if (exportToastTimerRef.current !== null) {
+                window.clearTimeout(exportToastTimerRef.current);
+                exportToastTimerRef.current = null;
+              }
+              setExportToast(null);
+            }}
+            aria-label="关闭导出通知"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
       {/* 选区原地结果对比卡(C 混合 · 4 个固定动作走 oneshot 后弹此卡) */}

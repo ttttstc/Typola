@@ -33,12 +33,7 @@
         "$DOCUMENT/**",
         "$DOWNLOAD/**",
         "$PICTURE/**",
-        "$VIDEO/**",
-        "**/*.docx",
-        "**/*.pdf",
-        "**/*.md",
-        "**/*.markdown",
-        "**/*.html"
+        "$VIDEO/**"
       ]
     },
     "process:allow-restart",

@@ -1,12 +1,12 @@
 import {
   Code2,
+  FileDown,
   FilePlus,
   FileText,
   FolderOpen,
   ImagePlus,
   Newspaper,
   PanelLeft,
-  Printer,
   RefreshCw,
   Save,
   SaveAll,
@@ -133,7 +133,7 @@ export function Toolbar({
               data-tooltip={pdfExporting ? '正在导出 PDF…' : '导出 PDF（Cmd/Ctrl+P，快速打开改为 Cmd/Ctrl+Shift+P）'}
               aria-label="导出 PDF"
             >
-              <Printer size={iconSize} strokeWidth={strokeWidth} />
+              <FileDown size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}
         </div>

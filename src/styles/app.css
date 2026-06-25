@@ -91,21 +91,58 @@ html, body, #root {
   top: 54px;
   right: 18px;
   z-index: 130;
-  display: grid;
-  gap: 5px;
-  width: min(360px, calc(100vw - 36px));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(380px, calc(100vw - 36px));
   padding: 12px 14px;
   border: 1px solid var(--border-soft);
   border-left: 3px solid var(--accent);
   border-radius: 8px;
   background: var(--panel-bg);
   box-shadow: 0 14px 40px color-mix(in oklch, var(--shadow-soft) 70%, transparent);
-  animation: conversation-toast-in 160ms ease-out;
+  animation: export-toast-in 200ms ease-out;
+}
+
+@keyframes export-toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.export-toast-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.export-toast-spinner {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: export-toast-spin 700ms linear infinite;
+  margin-top: 1px;
+}
+
+@keyframes export-toast-spin {
+  to { transform: rotate(360deg); }
+}
+
+.export-toast-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
 }
 
 .export-toast strong {
   color: var(--fg);
   font-size: 13px;
+  line-height: 1.3;
 }
 
 .export-toast span {
@@ -118,12 +155,40 @@ html, body, #root {
   white-space: nowrap;
 }
 
+.export-toast-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  margin: -2px -4px 0 0;
+}
+
+.export-toast-close:hover {
+  background: var(--hover-bg);
+  color: var(--fg);
+}
+
 .export-toast-success {
   border-left-color: var(--success, #2f9e44);
 }
 
+.export-toast-success .export-toast-spinner {
+  display: none;
+}
+
 .export-toast-error {
   border-left-color: var(--danger, #d9480f);
+}
+
+.export-toast-error .export-toast-spinner {
+  display: none;
 }
 
 /* ===== App Layout ===== */
