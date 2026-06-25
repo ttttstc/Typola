@@ -12,7 +12,8 @@ import { createExportFileName, resolveDefaultExportPath } from './exportPathServ
 
 const PDF_RENDER_HOST_WIDTH_PX = 794;
 const PDF_RENDER_HOST_MIN_HEIGHT_PX = 1123;
-const PDF_IMAGE_WAIT_TIMEOUT_MS = 3_500;
+// race 兜底:3.5s 偏激 —— 大图/远程图/多图常被截断进 broken image。12s 平衡。
+const PDF_IMAGE_WAIT_TIMEOUT_MS = 12_000;
 const DEFAULT_PDF_PAGE_SIZE = 'A4';
 const DEFAULT_PDF_PAGE_MARGIN = '2cm';
 

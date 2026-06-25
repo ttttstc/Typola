@@ -211,9 +211,13 @@ struct ExportFileWriteRequest {
 const PDF_EXPORT_WINDOW_WIDTH: f64 = 840.0;
 const PDF_EXPORT_WINDOW_HEIGHT: f64 = 1188.0;
 const PDF_EXPORT_WINDOW_BOOT_TIMEOUT_SECS: u64 = 15;
-const PDF_EXPORT_RENDER_TIMEOUT_SECS: u64 = 20;
+// render timeout 覆盖大文档 + 多图 + Mermaid/LaTeX 二次渲染。砍到 20s 后中等文档
+// (>500 行 + 几张图)就超时,45s 保证大文档不报错;快文档仍秒过。
+const PDF_EXPORT_RENDER_TIMEOUT_SECS: u64 = 45;
 const PDF_EXPORT_PRINT_TIMEOUT_SECS: u64 = 60;
-const PDF_EXPORT_IMAGE_WAIT_TIMEOUT_MS: u64 = 3_500;
+// 图片等待 race 兜底:3.5s 对本地小图够,远程图/大图常被截断 → broken image 进 PDF。
+// 12s 平衡:绝大部分场景能等完,极端情况兜底也不会让导出卡死。
+const PDF_EXPORT_IMAGE_WAIT_TIMEOUT_MS: u64 = 12_000;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
