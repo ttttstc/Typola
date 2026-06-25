@@ -3211,7 +3211,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .find-panel {
   position: fixed;
-  top: 43px;
+  top: 33px;
   left: 0;
   right: 0;
   z-index: 60;
@@ -3220,43 +3220,45 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   align-items: center;
   gap: 0;
   width: 100%;
-  padding: 3px 6px;
+  padding: 4px 0;
   border-bottom: 1px solid var(--border-soft);
-  background: var(--panel-bg);
-  box-shadow: 0 2px 10px color-mix(in oklch, var(--paper-shadow) 55%, transparent);
-  backdrop-filter: blur(10px);
+  background: color-mix(in oklch, var(--panel-bg) 94%, white);
+  box-shadow: 0 1px 4px color-mix(in oklch, var(--paper-shadow) 40%, transparent);
 }
 
 .find-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: min(1120px, calc(100vw - 12px));
-  min-height: 30px;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 0 0 24px;
 }
 
 .find-replace-row {
-  padding-left: 86px;
+  padding: 4px 32px 0 110px;
 }
 
 .find-mode-toggle,
 .find-replace-label {
-  width: 78px;
+  width: 58px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px;
   color: var(--muted);
   font-size: 12px;
 }
 
 .find-mode-toggle {
+  height: 28px !important;
+  padding: 0 0 0 6px !important;
   border-color: transparent !important;
   background: transparent !important;
 }
 
 .find-replace-label {
-  flex: 0 0 78px;
+  flex: 0 0 58px;
 }
 
 .find-input-shell {
@@ -3264,9 +3266,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   min-width: 0;
   display: flex;
   align-items: center;
-  height: 27px;
-  border: 1px solid color-mix(in oklch, var(--accent) 48%, var(--border-soft));
-  border-radius: 2px;
+  height: 28px;
+  border: 1px solid color-mix(in oklch, var(--accent) 68%, var(--border-soft));
+  border-radius: 1px;
   background: var(--surface);
 }
 
@@ -3287,22 +3289,24 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .find-input {
   flex: 1 1 auto;
   width: 100%;
-  height: 25px;
+  height: 26px;
   border: 0;
   border-radius: 0;
   background: transparent;
+  font-size: 13px;
 }
 
 .replace-input {
   flex: 1 1 auto;
-  height: 27px;
+  height: 28px;
   border: 1px solid var(--border-soft);
-  border-radius: 2px;
+  border-radius: 1px;
   background: var(--surface);
 }
 
 .find-count {
-  min-width: 50px;
+  display: none;
+  min-width: 0;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -3324,23 +3328,33 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .find-input-shell button,
 .find-icon-button {
-  width: 28px;
-  min-width: 28px;
+  width: 29px;
+  min-width: 29px;
+  height: 22px;
   padding: 0;
-  border-color: transparent;
-  border-left-color: var(--border-soft);
-  border-radius: 0;
-  background: transparent;
+}
+
+.find-input-shell button {
+  margin-right: 3px;
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--control-bg) 88%, white);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 20px;
 }
 
 .find-icon-button {
+  height: 28px;
   border: 0;
+  background: transparent;
   color: var(--muted);
   font-size: 16px;
 }
 
 .find-close-button {
-  margin-left: 10px;
+  margin-left: 18px;
+  margin-right: 4px;
 }
 
 /* ===== Workspace File Tree ===== */
@@ -4323,12 +4337,14 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 @media (max-width: 720px) {
   .find-panel {
-    top: 43px;
-    padding: 3px 6px;
+    top: 33px;
+    padding: 4px 0;
   }
 
   .find-row {
-    width: calc(100vw - 12px);
+    width: 100%;
+    padding-left: 8px;
+    gap: 4px;
   }
 
   .find-replace-row {

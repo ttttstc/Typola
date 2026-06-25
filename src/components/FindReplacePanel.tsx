@@ -71,8 +71,6 @@ export function FindReplacePanel({
 
   if (!visible) return null;
 
-  const current = matches.length === 0 ? 0 : Math.min(activeIndex + 1, matches.length);
-
   const move = (direction: 1 | -1) => {
     if (matches.length === 0) return;
     const next = (activeIndex + direction + matches.length) % matches.length;
@@ -137,10 +135,8 @@ export function FindReplacePanel({
             }}
             placeholder="查找"
           />
-          <span className="find-count">{current}/{matches.length}</span>
           <button type="button" className={options.caseSensitive ? 'active' : ''} onClick={() => toggleOption('caseSensitive')} title="区分大小写">Aa</button>
-          <button type="button" className={options.wholeWord ? 'active' : ''} onClick={() => toggleOption('wholeWord')} title="全词匹配">词</button>
-          <button type="button" className={options.regex ? 'active' : ''} onClick={() => toggleOption('regex')} title="正则表达式">.*</button>
+          <button type="button" className={options.wholeWord ? 'active' : ''} onClick={() => toggleOption('wholeWord')} title="全词匹配">▥</button>
         </div>
         <button type="button" className="find-icon-button" onClick={() => move(-1)} disabled={matches.length === 0} aria-label="上一个" title="上一个">⌃</button>
         <button type="button" className="find-icon-button" onClick={() => move(1)} disabled={matches.length === 0} aria-label="下一个" title="下一个">⌄</button>
