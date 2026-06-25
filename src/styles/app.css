@@ -17,6 +17,7 @@
   --control-hover-bg: oklch(99% 0.012 80 / 0.76);
   --control-active-bg: oklch(58% 0.16 35 / 0.1);
   --border-soft: oklch(89% 0.012 80 / 0.42);
+  --border-subtle: var(--border-soft);
   --border-hover: oklch(80% 0.014 80 / 0.58);
   --overlay-bg: oklch(20% 0.02 60 / 0.35);
   --shadow-soft: oklch(20% 0.02 60 / 0.18);
@@ -58,6 +59,7 @@ html[data-theme='dark'] {
   --control-hover-bg: oklch(34% 0.014 70 / 0.78);
   --control-active-bg: oklch(70% 0.13 42 / 0.16);
   --border-soft: oklch(42% 0.014 70 / 0.4);
+  --border-subtle: var(--border-soft);
   --border-hover: oklch(52% 0.016 72 / 0.62);
   --overlay-bg: oklch(10% 0.01 70 / 0.58);
   --shadow-soft: oklch(8% 0.01 70 / 0.42);
@@ -3537,6 +3539,18 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   font-size: 12px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .conversation-header button,
 .conversation-composer-actions button,
 .conversation-error-card button,
@@ -3965,6 +3979,41 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
+}
+
+.conversation-provider-picker {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--control-bg);
+  flex: 0 0 auto;
+}
+
+.conversation-provider-picker button {
+  height: 22px;
+  min-height: 22px;
+  padding: 0 9px !important;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.conversation-provider-picker button:hover {
+  background: var(--control-hover-bg);
+  color: var(--fg);
+}
+
+.conversation-provider-picker button.active {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 4px var(--paper-shadow);
 }
 
 .composer-plus-menu {
@@ -5051,6 +5100,16 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   font-size: 12px;
   color: var(--muted);
   margin-top: 3px;
+}
+
+.settings-desc a {
+  margin-left: 8px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.settings-desc a:hover {
+  text-decoration: underline;
 }
 
 .settings-select {

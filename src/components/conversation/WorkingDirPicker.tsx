@@ -52,7 +52,7 @@ export function WorkingDirPicker({
         type="button"
         className="working-dir-trigger"
         aria-expanded={open}
-        title={workingDir ?? '未选择工作区时，Claude 使用默认启动目录'}
+        title={workingDir ?? '未选择工作区时，AI Provider 使用默认启动目录'}
         onClick={() => setOpen((value) => !value)}
       >
         <FolderOpen size={13} />

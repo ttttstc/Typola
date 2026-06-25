@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import type { AgentProvider } from '../../services/agent/provider';
 
 type UseComposerContextStateOptions = {
   cwd?: string;
   workspaceSuggestion?: string;
   workspaceRecents: string[];
   currentFilePath?: string;
-  /** 本会话是否已经把"当前文档"作为 context 注入过 prompt。true 后 appendContext 不再重复拼,chip 仍展示。 */
+  activeProvider: AgentProvider;
   fileContextInjected?: boolean;
+  currentFileContextPath?: string;
+};
+
+type AppendedContext = {
+  text: string;
+  currentFileContextPath?: string;
+  referencePaths: string[];
 };
 
 /**
@@ -18,7 +26,9 @@ export function useComposerContextState({
   workspaceSuggestion,
   workspaceRecents,
   currentFilePath,
+  activeProvider,
   fileContextInjected = false,
+  currentFileContextPath,
 }: UseComposerContextStateOptions) {
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [currentFileDismissed, setCurrentFileDismissed] = useState(false);
@@ -37,25 +47,35 @@ export function useComposerContextState({
     }).slice(0, 8);
   }, [cwd, workspaceRecents, workspaceSuggestion]);
 
-  const contextPaths = [
-    ...(currentFilePath && !currentFileDismissed ? [currentFilePath] : []),
-    ...attachedFiles,
-  ];
+  const shouldAppendCurrentFile = Boolean(
+    currentFilePath &&
+    !currentFileDismissed &&
+    (!fileContextInjected || currentFileContextPath !== currentFilePath),
+  );
 
-  const appendContext = (prompt: string): string => {
-    if (contextPaths.length === 0) return prompt;
-    // 首条 send 后会话级置 fileContextInjected=true → 后续不再重复啰嗦同样的"参考以下文件",
-    // 但保留首条用户主动添加的 attachments(对话中后续新挂的文件应被引用一次)。
-    // 简化规则:本会话已注入过文件 context 且 contextPaths 仅含"当前文档"路径 → 跳过 appendContext;
-    // 用户后续主动加 attachment 时强制再拼一次(因为是新增的)。
-    if (fileContextInjected) {
-      const attachmentOnly = contextPaths.filter((p) => p !== currentFilePath);
-      if (attachmentOnly.length === 0) return prompt;
-      const references = attachmentOnly.map((path) => `- ${path}`).join('\n');
-      return `${prompt}\n\n参考以下文件：\n${references}`;
+  const appendContext = (prompt: string): AppendedContext => {
+    const referencePaths = [
+      ...(!currentFileDismissed && currentFilePath ? [currentFilePath] : []),
+      ...attachedFiles,
+    ];
+    const contextPaths = [
+      ...(shouldAppendCurrentFile && currentFilePath ? [currentFilePath] : []),
+      ...attachedFiles,
+    ];
+    if (activeProvider === 'opencode') {
+      return {
+        text: prompt,
+        currentFileContextPath: shouldAppendCurrentFile ? currentFilePath : undefined,
+        referencePaths,
+      };
     }
+    if (contextPaths.length === 0) return { text: prompt, referencePaths };
     const references = contextPaths.map((path) => `- ${path}`).join('\n');
-    return `${prompt}\n\n参考以下文件：\n${references}`;
+    return {
+      text: `${prompt}\n\n参考以下文件：\n${references}`,
+      currentFileContextPath: shouldAppendCurrentFile ? currentFilePath : undefined,
+      referencePaths,
+    };
   };
 
   const addAttachments = (paths: string[]) => {

@@ -25,6 +25,8 @@ import {
   type HtmlExportPreset,
   type HtmlExportPresetId,
 } from './htmlExportPresets';
+import type { AgentProvider } from './agent/provider';
+import { normalizeAgentProvider } from './agent/provider';
 import {
   DEFAULT_LICENSE_STATE,
   STANDARD_PRESET_SLOT_LIMIT,
@@ -221,8 +223,11 @@ export interface AppSettings {
   terminalShortcutPreset: TerminalShortcutPreset;
   terminalConfirmMultilinePaste: boolean;
   // AI 工作台
+  aiActiveProvider: AgentProvider;
   aiClaudePath: string;
   aiClaudeModel: string;
+  aiOpenCodePath: string;
+  aiOpenCodeModel: string;
   aiWorkspaceRoot: string;
   aiWorkspaceRecents: string[];
   aiPluginDirs: string[];
@@ -280,8 +285,11 @@ const defaults: AppSettings = {
   terminalCursorBlink: true,
   terminalShortcutPreset: 'default',
   terminalConfirmMultilinePaste: true,
+  aiActiveProvider: 'claude',
   aiClaudePath: '',
   aiClaudeModel: '',
+  aiOpenCodePath: '',
+  aiOpenCodeModel: '',
   aiWorkspaceRoot: '',
   aiWorkspaceRecents: [],
   aiPluginDirs: [],
@@ -371,6 +379,10 @@ function normalizeTerminalShellPath(value: unknown): string {
 
 function normalizeExecutablePath(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, 500) : '';
+}
+
+function normalizeModelString(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
 }
 
 function normalizePathList(value: unknown): string[] {
@@ -815,6 +827,7 @@ export function getSettings(): AppSettings {
       terminalCursorBlink: stored.terminalCursorBlink !== false,
       terminalShortcutPreset: normalizeTerminalShortcutPreset(stored.terminalShortcutPreset),
       terminalConfirmMultilinePaste: stored.terminalConfirmMultilinePaste !== false,
+      aiActiveProvider: normalizeAgentProvider(stored.aiActiveProvider),
       imageInsertAction: normalizeImageInsertAction(stored.imageInsertAction),
       imageCopyDestination: normalizeImageCopyDestination(stored.imageCopyDestination),
       imageApplyToLocal: stored.imageApplyToLocal !== false,
@@ -825,7 +838,9 @@ export function getSettings(): AppSettings {
       imageAllowYamlUpload: stored.imageAllowYamlUpload === true,
       imageUploadCommand: normalizeImageUploadCommand(stored.imageUploadCommand),
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
-      aiClaudeModel: normalizeExecutablePath(stored.aiClaudeModel),
+      aiClaudeModel: normalizeModelString(stored.aiClaudeModel),
+      aiOpenCodePath: normalizeExecutablePath(stored.aiOpenCodePath),
+      aiOpenCodeModel: normalizeModelString(stored.aiOpenCodeModel),
       aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
       aiWorkspaceRecents: normalizePathList(stored.aiWorkspaceRecents).slice(0, 8),
       aiPluginDirs: normalizePathList(stored.aiPluginDirs),
@@ -907,8 +922,11 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     terminalConfirmMultilinePaste: (
       patch.terminalConfirmMultilinePaste ?? current.terminalConfirmMultilinePaste
     ) !== false,
+    aiActiveProvider: normalizeAgentProvider(patch.aiActiveProvider ?? current.aiActiveProvider),
     aiClaudePath: normalizeExecutablePath(patch.aiClaudePath ?? current.aiClaudePath),
-    aiClaudeModel: normalizeExecutablePath(patch.aiClaudeModel ?? current.aiClaudeModel),
+    aiClaudeModel: normalizeModelString(patch.aiClaudeModel ?? current.aiClaudeModel),
+    aiOpenCodePath: normalizeExecutablePath(patch.aiOpenCodePath ?? current.aiOpenCodePath),
+    aiOpenCodeModel: normalizeModelString(patch.aiOpenCodeModel ?? current.aiOpenCodeModel),
     aiWorkspaceRoot: normalizeExecutablePath(patch.aiWorkspaceRoot ?? current.aiWorkspaceRoot),
     aiWorkspaceRecents: normalizePathList(patch.aiWorkspaceRecents ?? current.aiWorkspaceRecents).slice(0, 8),
     aiPluginDirs: normalizePathList(patch.aiPluginDirs ?? current.aiPluginDirs),
