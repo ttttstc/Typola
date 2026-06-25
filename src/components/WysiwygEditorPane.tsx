@@ -9,10 +9,10 @@ import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import { findUniqueAnchor } from '../services/agent/selectionActions';
-import { findIrDomRange } from '../services/documentSearchService';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
+import { getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -122,6 +122,54 @@ function silenceCodeBlockAssist(editor: import('vditor').default | null): void {
   if (wysiwyg?.selectPopover) wysiwyg.selectPopover.style.display = 'none';
 }
 
+function findTextNodeRange(root: HTMLElement, text: string, occurrenceIndex: number): Range | null {
+  if (!text) return null;
+  const ownerDocument = root.ownerDocument;
+  const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Array<{ node: Text; start: number; end: number }> = [];
+  let fullText = '';
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (!(node instanceof Text)) continue;
+    const start = fullText.length;
+    fullText += node.data;
+    nodes.push({ node, start, end: fullText.length });
+  }
+
+  const lowerFullText = fullText.toLocaleLowerCase();
+  const lowerText = text.toLocaleLowerCase();
+  let cursor = 0;
+  let foundAt = -1;
+  for (let i = 0; i <= occurrenceIndex; i += 1) {
+    foundAt = lowerFullText.indexOf(lowerText, cursor);
+    if (foundAt < 0) return null;
+    cursor = foundAt + lowerText.length;
+  }
+
+  const foundEnd = foundAt + text.length;
+  const startNode = nodes.find((entry) => foundAt >= entry.start && foundAt <= entry.end);
+  const endNode = nodes.find((entry) => foundEnd >= entry.start && foundEnd <= entry.end);
+  if (!startNode || !endNode) return null;
+
+  const range = ownerDocument.createRange();
+  range.setStart(startNode.node, Math.max(0, foundAt - startNode.start));
+  range.setEnd(endNode.node, Math.max(0, foundEnd - endNode.start));
+  return range;
+}
+
+type WindowWithFind = Window & {
+  find?: (
+    text: string,
+    caseSensitive?: boolean,
+    backwards?: boolean,
+    wrapAround?: boolean,
+    wholeWord?: boolean,
+    searchInFrames?: boolean,
+    showDialog?: boolean,
+  ) => boolean;
+};
+
 export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
   { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
   ref,
@@ -146,8 +194,6 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const onScrollRatioRef = useRef(onScrollRatio);
   // 记录最近一次真实选区,用于 AI 回复的“替换选区”操作。
   const lastSelectionRangeRef = useRef<Range | null>(null);
-  // 搜索跳转期间临时抑制浮条
-  const suppressFloatingBarRef = useRef(false);
   // 记录最近一次被校验通过的 anchor.originalText,Vditor 模式按文本搜索替换。
   const lastValidatedAnchorTextRef = useRef<string | null>(null);
   // 记录最近一次被校验通过的 anchor.prefixHint,Vditor 模式用 prefixHint+originalText 唯一定位。
@@ -179,6 +225,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   // 选区浮条状态:跟着 IR 选区变化重算 rect + hasSelection;由 selectionchange listener 更新。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  const suppressFloatingBarRef = useRef(false);
 
   const getSavedOrCurrentSelection = useCallback((): Range | null => {
     const editor = editorRef.current;
@@ -385,10 +432,12 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       }, 350);
     };
 
-    // 搜索跳转期间临时抑制浮条——revealSearchMatch 设 selection 会触发
-    // selectionchange,但搜索高亮不需要浮条。
-    if (suppressFloatingBarRef.current) return;
     const handleSelectionChange = () => {
+      if (suppressFloatingBarRef.current) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
       if (!ir) {
@@ -687,35 +736,41 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       lastValidatedPrefixHintRef.current = prefixHint ?? '';
       return 'valid';
     },
-    revealRange() {
-      editorRef.current?.focus();
-    },
-    revealSearchMatch(from: number, to: number, opts?: { focus?: boolean }) {
+    revealRange(from: number, to: number, opts?: { text?: string; preserveFocus?: boolean }) {
       const editor = editorRef.current;
-      if (!editor) return;
-      const ir = getIrElement(editor);
-      if (!ir) {
-        editor.focus();
-        return;
-      }
-      const value = editor.getValue();
-      const range = findIrDomRange(value, ir, from, to);
-      if (!range) {
-        editor.focus();
-        return;
-      }
-      // 抑制浮条:搜索跳转不需要浮条,先设 flag 再触发选区变化。
+      const ir = editor ? getIrElement(editor) : null;
+      if (!editor || !ir) return;
+
+      const matchText = opts?.text || latestSource.current.slice(from, to);
+      const occurrenceIndex = getSearchMatchOccurrenceIndex(latestSource.current, {
+        index: from,
+        length: Math.max(0, to - from),
+        text: matchText,
+      });
+      const range = findTextNodeRange(ir, matchText, occurrenceIndex);
+      // 搜索导航传 preserveFocus=true 保持 FindReplacePanel 输入框焦点;
+      // 检视意见跳转保留旧行为(focus 编辑器)。
+      if (!opts?.preserveFocus) editor.focus();
+      if (!range) return;
+
       suppressFloatingBarRef.current = true;
-      try {
-        const sel = ir.ownerDocument?.defaultView?.getSelection();
-        if (sel) {
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      } catch { /* 选区设置失败不致命,DOM 仍然存在 */ }
-      range.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'auto' });
-      if (opts?.focus !== false) editor.focus();
-      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, 300);
+      const sel = ir.ownerDocument.defaultView?.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      lastSelectionRangeRef.current = range.cloneRange();
+      const element = range.startContainer instanceof Element
+        ? range.startContainer
+        : range.startContainer.parentElement;
+      element?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      window.setTimeout(() => {
+        suppressFloatingBarRef.current = false;
+      }, 250);
+    },
+    revealText(text: string, backwards = false) {
+      editorRef.current?.focus();
+      const find = (window as WindowWithFind).find;
+      if (!text || typeof find !== 'function') return;
+      find(text, false, backwards, true, false, false, false);
     },
     undoLastAIReplacement() {
       const editor = editorRef.current;

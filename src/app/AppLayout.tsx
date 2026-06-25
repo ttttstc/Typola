@@ -39,7 +39,6 @@ import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
 import { useFileTabs } from '../hooks/useFileTabs';
 import { useDiffReview } from '../hooks/useDiffReview';
-import { DiffReviewPane } from '../components/diff/DiffReviewPane';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
@@ -117,6 +116,9 @@ const TerminalPanel = lazy(() =>
 type TerminalPanelHandle = import('../components/TerminalPanel').TerminalPanelHandle;
 const ArtifactPreview = lazy(() =>
   import('../components/ArtifactPreview').then((module) => ({ default: module.ArtifactPreview })),
+);
+const DiffReviewPane = lazy(() =>
+  import('../components/diff/DiffReviewPane').then((module) => ({ default: module.DiffReviewPane })),
 );
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
@@ -595,13 +597,15 @@ export function AppLayout() {
     }
   }, [diffReviewController, file.content, file.path]);
 
-  const handleSearchNavigate = useCallback((match: SearchMatch) => {
-    // SearchMatch.index/length 是 source markdown 偏移,Source / WYSIWYG
-    // 模式都由编辑器内部负责 source→自身 DOM 的映射,AppLayout 不再分模式调不同 API。
-    // focus=false:搜索上下/回车要保持 FindReplacePanel 输入框焦点,避免抢焦点
-    // 导致光标乱飞 + 阻碍继续输入。
-    editorCommandRef.current?.revealSearchMatch(match.index, match.index + match.length, { focus: false });
-  }, []);
+  const handleSearchNavigate = useCallback((match: SearchMatch, query: string, _backwards = false) => {
+    // preserveFocus:搜索导航必须不抢焦点,否则 FindReplacePanel 输入框失焦,
+    // 后续按键打进文档(包括 Esc 再 Ctrl+F 后的 type 会破坏文档内容)。
+    const text = editorMode === 'source' ? match.text : (query || match.text);
+    editorCommandRef.current?.revealRange(match.index, match.index + match.length, {
+      text,
+      preserveFocus: true,
+    });
+  }, [editorMode]);
 
   const insertMarkdown = useCallback((markdown: string) => {
     if (fileRef.current.fileType === 'docx') return;
@@ -1169,9 +1173,7 @@ export function AppLayout() {
       dirty={reviewStateApi.state.dirty}
       currentFilePath={file.path}
       onJump={(comment: ReviewComment) => {
-        // 直接按 anchor.from/to 滚到对应位置 —— 之前用 revealText(originalText) 走 window.find,
-        // 文本多次出现时跳错位置且抢焦点导致光标乱飞。
-        editorCommandRef.current?.revealSearchMatch(comment.anchor.from, comment.anchor.to);
+        editorCommandRef.current?.revealText(comment.anchor.originalText);
       }}
       onEdit={(comment: ReviewComment) => {
         setReviewEditor({
@@ -1356,7 +1358,9 @@ export function AppLayout() {
           />
         )}
       />
-      <DiffReviewPane controller={diffReviewController} />
+      <Suspense fallback={null}>
+        <DiffReviewPane controller={diffReviewController} />
+      </Suspense>
       <AppLayoutOverlays
         findVisible={findVisible}
         findFocusTarget={findFocusTarget}

@@ -17,7 +17,7 @@ type AppLayoutOverlaysProps = {
   readOnly: boolean;
   onCloseFind: () => void;
   onReplaceSource: (value: string) => void;
-  onNavigate: (match: SearchMatch) => void;
+  onNavigate: (match: SearchMatch, query: string, backwards?: boolean) => void;
   quickOpenVisible: boolean;
   recentFiles: RecentFile[];
   onCloseQuickOpen: () => void;

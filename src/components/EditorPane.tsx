@@ -86,13 +86,16 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
   // 选区浮条状态:跟着 CodeMirror 选区变化重算 rect + hasSelection。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
-  // 搜索跳转期间临时抑制浮条——revealSearchMatch 设 selection 会触发
-  // selectionchange,但搜索高亮不需要浮条。
+  // 搜索 reveal 期间抑制浮条 —— dispatch 设 selection 会触发同步 updateListener。
   const suppressFloatingBarRef = useRef(false);
   useEffect(() => {
     if (!editorView) return;
     const computeFromSelection = () => {
-      if (suppressFloatingBarRef.current) return;
+      if (suppressFloatingBarRef.current) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
       const sel = editorView.state.selection.main;
       if (sel.empty) {
         setFloatingHasSelection(false);
@@ -272,25 +275,19 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       if (from < 0 || to > docLen) return 'stale';
       return editor.state.doc.sliceString(from, to) === originalText ? 'valid' : 'stale';
     },
-    revealRange(from: number, to: number) {
+    revealRange(from: number, to: number, opts?: { text?: string; preserveFocus?: boolean }) {
       if (!editorView) return;
-      editorView.dispatch({
-        effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
-        selection: { anchor: from, head: to },
-      });
-      editorView.focus();
-    },
-    revealSearchMatch(from: number, to: number, opts?: { focus?: boolean }) {
-      if (!editorView) return;
-      // Source 模式:CodeMirror 按 from/to 直接选区 + 滚动。
-      // focus 默认 true(检视意见跳转),搜索场景可传 false 保持输入框焦点。
+      void opts?.text;
       suppressFloatingBarRef.current = true;
       editorView.dispatch({
         effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
         selection: { anchor: from, head: to },
       });
-      if (opts?.focus !== false) editorView.focus();
-      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, 300);
+      if (!opts?.preserveFocus) editorView.focus();
+      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, 250);
+    },
+    revealText() {
+      editorView?.focus();
     },
     undoLastAIReplacement() {
       // CodeMirror 的 history 插件已自动追踪所有 dispatch（含 replaceRange），
