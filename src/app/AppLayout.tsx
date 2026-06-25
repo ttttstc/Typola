@@ -1319,6 +1319,8 @@ export function AppLayout() {
           onInsertImage: handleSelectLocalImage,
           onExportPdf: handleExportPdf,
           pdfExporting,
+          onExportWord: handleExportWord,
+          wordExporting,
           onOpenSettings: () => {
             void preloadSettingsPage();
             setSettingsVisible(true);
