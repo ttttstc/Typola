@@ -13,6 +13,7 @@ type DiffPreview = {
 type AppLayoutOverlaysProps = {
   findVisible: boolean;
   findFocusTarget: 'find' | 'replace';
+  findOpenRequest: number;
   source: string;
   readOnly: boolean;
   onCloseFind: () => void;
@@ -39,6 +40,7 @@ type AppLayoutOverlaysProps = {
 export function AppLayoutOverlays({
   findVisible,
   findFocusTarget,
+  findOpenRequest,
   source,
   readOnly,
   onCloseFind,
@@ -63,6 +65,7 @@ export function AppLayoutOverlays({
       <FindReplacePanel
         visible={findVisible}
         focusTarget={findFocusTarget}
+        openRequest={findOpenRequest}
         source={source}
         readOnly={readOnly}
         onClose={onCloseFind}

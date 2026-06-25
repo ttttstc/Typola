@@ -149,6 +149,7 @@ export function AppLayout() {
   const [settingsInitialSection, setSettingsInitialSection] = useState<'aiCli' | undefined>(undefined);
   const [findVisible, setFindVisible] = useState(false);
   const [findFocusTarget, setFindFocusTarget] = useState<'find' | 'replace'>('find');
+  const [findOpenRequest, setFindOpenRequest] = useState(0);
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
@@ -711,6 +712,7 @@ export function AppLayout() {
 
   const openFindPanel = useCallback((focusTarget: 'find' | 'replace') => {
     setFindFocusTarget(focusTarget);
+    setFindOpenRequest((request) => request + 1);
     setFindVisible(true);
   }, []);
 
@@ -1362,6 +1364,7 @@ export function AppLayout() {
       <AppLayoutOverlays
         findVisible={findVisible}
         findFocusTarget={findFocusTarget}
+        findOpenRequest={findOpenRequest}
         source={file.content}
         readOnly={isDocx}
         onCloseFind={() => setFindVisible(false)}

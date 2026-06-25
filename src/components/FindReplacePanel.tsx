@@ -11,6 +11,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 type FindReplacePanelProps = {
   visible: boolean;
   focusTarget: 'find' | 'replace';
+  openRequest: number;
   source: string;
   readOnly: boolean;
   onClose: () => void;
@@ -27,6 +28,7 @@ const defaultOptions: SearchOptions = {
 export function FindReplacePanel({
   visible,
   focusTarget,
+  openRequest,
   source,
   readOnly,
   onClose,
@@ -60,7 +62,7 @@ export function FindReplacePanel({
       input?.focus();
       input?.select();
     });
-  }, [focusTarget, visible]);
+  }, [focusTarget, openRequest, visible]);
 
   useEffect(() => {
     if (!visible || matches.length === 0) return;
