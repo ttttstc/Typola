@@ -53,7 +53,7 @@ import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
-import type { SearchMatch } from '../services/documentSearchService';
+import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
 import {
   formatImageSrc,
@@ -597,13 +597,22 @@ export function AppLayout() {
     }
   }, [diffReviewController, file.content, file.path]);
 
-  const handleSearchNavigate = useCallback((match: SearchMatch, query: string, _backwards = false) => {
+  const handleSearchNavigate = useCallback((
+    match: SearchMatch,
+    query: string,
+    searchOptions: SearchOptions,
+    _backwards = false,
+  ) => {
     // preserveFocus:搜索导航必须不抢焦点,否则 FindReplacePanel 输入框失焦,
     // 后续按键打进文档(包括 Esc 再 Ctrl+F 后的 type 会破坏文档内容)。
+    // searchOptions:透传到 WYSIWYG 模式的 findTextNodeRange + getSearchMatchOccurrenceIndex,
+    // 让 IR 里的 case/regex/wholeWord 匹配跟 FindReplacePanel 的 findSearchMatches 完全一致。
     const text = editorMode === 'source' ? match.text : (query || match.text);
     editorCommandRef.current?.revealRange(match.index, match.index + match.length, {
       text,
       preserveFocus: true,
+      query,
+      searchOptions,
     });
   }, [editorMode]);
 
@@ -837,6 +846,22 @@ export function AppLayout() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // F3 / Shift+F3 对齐 Typora:跳下一个 / 上一个匹配。无 modifier,先处理。
+      // matches 状态在 FindReplacePanel 内,这里通过 CustomEvent 桥接到 panel 的
+      // hop listener,避免把整套 search state 上提到 AppLayout。
+      if (e.key === 'F3' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const dir: 1 | -1 = e.shiftKey ? -1 : 1;
+        const dispatch = () => window.dispatchEvent(new CustomEvent('typola:find-hop', { detail: dir }));
+        if (!findVisible) {
+          openFindPanel('find');
+          // panel mount 后 listener 才装好,等一帧再 dispatch。
+          requestAnimationFrame(dispatch);
+        } else {
+          dispatch();
+        }
+        return;
+      }
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       if (e.key === 'f' && !e.shiftKey && !e.altKey) {
@@ -894,6 +919,7 @@ export function AppLayout() {
     docMode,
     setDocMode,
     openFindPanel,
+    findVisible,
   ]);
 
   useEffect(() => {

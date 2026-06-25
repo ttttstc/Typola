@@ -15,7 +15,7 @@ type FindReplacePanelProps = {
   readOnly: boolean;
   onClose: () => void;
   onReplaceSource: (source: string) => void;
-  onNavigate: (match: SearchMatch, query: string, backwards?: boolean) => void;
+  onNavigate: (match: SearchMatch, query: string, options: SearchOptions, backwards?: boolean) => void;
 };
 
 const defaultOptions: SearchOptions = {
@@ -23,6 +23,10 @@ const defaultOptions: SearchOptions = {
   wholeWord: false,
   regex: false,
 };
+
+// 见 focus useEffect 内注释。
+const EARLY_RETRY_MS = 50;
+const LATE_RETRY_MS = 200;
 
 export function FindReplacePanel({
   visible,
@@ -39,12 +43,16 @@ export function FindReplacePanel({
   const [replacement, setReplacement] = useState('');
   const [options, setOptions] = useState(defaultOptions);
   const [activeIndex, setActiveIndex] = useState(0);
-  // 展开状态:Ctrl+H(focusTarget='replace')自动展开,Ctrl+F 折叠;
-  // 用户可手动 toggle;关闭面板下次重新打开时按 focusTarget 重置。
-  const [expanded, setExpanded] = useState(focusTarget === 'replace');
+  // 展开状态(对齐 Typora 范式):面板每次打开默认折叠(只显示查找),Ctrl+H 触发时
+  // 才展开第二行;面板打开期间用户可手动 toggle 且不会被 focusTarget 后续变化覆盖。
+  // 关闭重新打开重置初始状态。
+  const [expanded, setExpanded] = useState(false);
+  const wasVisibleRef = useRef(visible);
   useEffect(() => {
-    if (!visible) return;
-    setExpanded(focusTarget === 'replace');
+    if (visible && !wasVisibleRef.current) {
+      setExpanded(focusTarget === 'replace');
+    }
+    wasVisibleRef.current = visible;
   }, [focusTarget, visible]);
   const deferredQuery = useDebouncedValue(query, 120);
   const deferredSource = useDebouncedValue(source, 120);
@@ -63,6 +71,13 @@ export function FindReplacePanel({
     // 多次 focus 兜底 Vditor IR selectionchange 异步抢回焦点的场景:
     // Esc 关搜索后 IR 抢焦 → 再 Ctrl+F → 必须确保 input 拿到并保持焦点,
     // 否则后续 type 会注入文档(破坏内容)。
+    //
+    // 三段抢焦的时间点是实测推导:
+    // - 立即 + rAF:覆盖 React commit 后第一帧
+    // - EARLY_RETRY_MS = 50ms:覆盖 Vditor selectionchange 在 microtask 回调里
+    //   call editor.focus() 的链路
+    // - LATE_RETRY_MS = 200ms:兜底 Windows WebView2 偶发的 input focus reset
+    //   (实测 Tauri Webview 在快速键盘输入时会丢一次 focus 事件)
     const grab = () => {
       const input = focusTarget === 'replace' ? replaceInputRef.current : findInputRef.current;
       if (!input) return;
@@ -71,8 +86,8 @@ export function FindReplacePanel({
     };
     grab();
     const raf = window.requestAnimationFrame(grab);
-    const t1 = window.setTimeout(grab, 50);
-    const t2 = window.setTimeout(grab, 200);
+    const t1 = window.setTimeout(grab, EARLY_RETRY_MS);
+    const t2 = window.setTimeout(grab, LATE_RETRY_MS);
     return () => {
       window.cancelAnimationFrame(raf);
       window.clearTimeout(t1);
@@ -82,8 +97,24 @@ export function FindReplacePanel({
 
   useEffect(() => {
     if (!visible || matches.length === 0) return;
-    onNavigate(matches[Math.min(activeIndex, matches.length - 1)], deferredQuery);
-  }, [activeIndex, deferredQuery, matches, onNavigate, visible]);
+    onNavigate(matches[Math.min(activeIndex, matches.length - 1)], deferredQuery, options);
+  }, [activeIndex, deferredQuery, matches, onNavigate, options, visible]);
+
+  // F3 / Shift+F3 桥接:AppLayout 全局快捷键 dispatch CustomEvent,
+  // 面板收到后自己 advance activeIndex。比把整套 search state(query/options/matches/index)
+  // 上提到 AppLayout 改动小,不引入新 store。
+  useEffect(() => {
+    if (!visible) return;
+    const onHop = (event: Event) => {
+      const dir = (event as CustomEvent<1 | -1>).detail;
+      if (matches.length === 0) return;
+      const next = (activeIndex + dir + matches.length) % matches.length;
+      setActiveIndex(next);
+      onNavigate(matches[next], deferredQuery, options, dir < 0);
+    };
+    window.addEventListener('typola:find-hop', onHop);
+    return () => window.removeEventListener('typola:find-hop', onHop);
+  }, [activeIndex, deferredQuery, matches, onNavigate, options, visible]);
 
   if (!visible) return null;
 
@@ -93,7 +124,7 @@ export function FindReplacePanel({
     if (matches.length === 0) return;
     const next = (activeIndex + direction + matches.length) % matches.length;
     setActiveIndex(next);
-    onNavigate(matches[next], deferredQuery, direction < 0);
+    onNavigate(matches[next], deferredQuery, options, direction < 0);
   };
 
   const replaceCurrent = () => {

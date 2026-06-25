@@ -3,7 +3,7 @@ import { FindReplacePanel } from './FindReplacePanel';
 import { QuickOpenPanel } from './QuickOpenPanel';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import type { RecentFile } from '../services/recentFilesService';
-import type { SearchMatch } from '../services/documentSearchService';
+import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 
 type DiffPreview = {
   path: string;
@@ -17,7 +17,7 @@ type AppLayoutOverlaysProps = {
   readOnly: boolean;
   onCloseFind: () => void;
   onReplaceSource: (value: string) => void;
-  onNavigate: (match: SearchMatch, query: string, backwards?: boolean) => void;
+  onNavigate: (match: SearchMatch, query: string, options: SearchOptions, backwards?: boolean) => void;
   quickOpenVisible: boolean;
   recentFiles: RecentFile[];
   onCloseQuickOpen: () => void;

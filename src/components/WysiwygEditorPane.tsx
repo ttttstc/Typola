@@ -12,7 +12,8 @@ import { findUniqueAnchor } from '../services/agent/selectionActions';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
-import { getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
+import { buildSearchRegExp, getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
+import type { SearchOptions } from '../services/documentSearchService';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -122,8 +123,18 @@ function silenceCodeBlockAssist(editor: import('vditor').default | null): void {
   if (wysiwyg?.selectPopover) wysiwyg.selectPopover.style.display = 'none';
 }
 
-function findTextNodeRange(root: HTMLElement, text: string, occurrenceIndex: number): Range | null {
-  if (!text) return null;
+/**
+ * 在 IR DOM 的 textContent 里找第 occurrenceIndex 次 query 命中,返回精确的 DOM Range。
+ * 必须用与 findSearchMatches 一致的 regex(同 options),否则 case-insensitive / regex /
+ * wholeWord 场景下 IR 找到的位置跟 source 偏移对不上,跳错位置或漏匹配。
+ */
+function findTextNodeRange(
+  root: HTMLElement,
+  query: string,
+  occurrenceIndex: number,
+  options: SearchOptions,
+): Range | null {
+  if (!query) return null;
   const ownerDocument = root.ownerDocument;
   const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Array<{ node: Text; start: number; end: number }> = [];
@@ -137,17 +148,34 @@ function findTextNodeRange(root: HTMLElement, text: string, occurrenceIndex: num
     nodes.push({ node, start, end: fullText.length });
   }
 
-  const lowerFullText = fullText.toLocaleLowerCase();
-  const lowerText = text.toLocaleLowerCase();
-  let cursor = 0;
-  let foundAt = -1;
-  for (let i = 0; i <= occurrenceIndex; i += 1) {
-    foundAt = lowerFullText.indexOf(lowerText, cursor);
-    if (foundAt < 0) return null;
-    cursor = foundAt + lowerText.length;
-  }
+  const regex = buildSearchRegExp(query, options);
+  if (!regex) return null;
 
-  const foundEnd = foundAt + text.length;
+  let foundAt = -1;
+  let foundLen = 0;
+  let count = 0;
+  let exec: RegExpExecArray | null;
+  while ((exec = regex.exec(fullText)) !== null) {
+    if (exec[0].length === 0) {
+      regex.lastIndex += 1;
+      continue;
+    }
+    if (options.wholeWord) {
+      const before = exec.index > 0 ? fullText[exec.index - 1] : '';
+      const after = exec.index + exec[0].length < fullText.length ? fullText[exec.index + exec[0].length] : '';
+      const wordCharRe = /[\p{L}\p{N}_]/u;
+      if ((before && wordCharRe.test(before)) || (after && wordCharRe.test(after))) continue;
+    }
+    if (count === occurrenceIndex) {
+      foundAt = exec.index;
+      foundLen = exec[0].length;
+      break;
+    }
+    count += 1;
+  }
+  if (foundAt < 0) return null;
+
+  const foundEnd = foundAt + foundLen;
   const startNode = nodes.find((entry) => foundAt >= entry.start && foundAt <= entry.end);
   const endNode = nodes.find((entry) => foundEnd >= entry.start && foundEnd <= entry.end);
   if (!startNode || !endNode) return null;
@@ -169,6 +197,9 @@ type WindowWithFind = Window & {
     showDialog?: boolean,
   ) => boolean;
 };
+
+// 选区浮条抑制时长 —— 见 revealRange 内注释。
+const FLOATING_BAR_SETTLE_MS = 250;
 
 export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
   { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
@@ -736,18 +767,32 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       lastValidatedPrefixHintRef.current = prefixHint ?? '';
       return 'valid';
     },
-    revealRange(from: number, to: number, opts?: { text?: string; preserveFocus?: boolean }) {
+    revealRange(from: number, to: number, opts?: {
+      text?: string;
+      preserveFocus?: boolean;
+      query?: string;
+      searchOptions?: SearchOptions;
+    }) {
       const editor = editorRef.current;
       const ir = editor ? getIrElement(editor) : null;
       if (!editor || !ir) return;
 
       const matchText = opts?.text || latestSource.current.slice(from, to);
-      const occurrenceIndex = getSearchMatchOccurrenceIndex(latestSource.current, {
-        index: from,
-        length: Math.max(0, to - from),
-        text: matchText,
-      });
-      const range = findTextNodeRange(ir, matchText, occurrenceIndex);
+      const query = opts?.query || matchText;
+      // 默认 options 仅在调用方未传时兜底(检视意见跳转走这条),走 case-insensitive
+      // 文本匹配,保持原有行为。
+      const searchOptions: SearchOptions = opts?.searchOptions ?? {
+        caseSensitive: false,
+        wholeWord: false,
+        regex: false,
+      };
+      const occurrenceIndex = getSearchMatchOccurrenceIndex(
+        latestSource.current,
+        { index: from, length: Math.max(0, to - from), text: matchText },
+        query,
+        searchOptions,
+      );
+      const range = findTextNodeRange(ir, query, occurrenceIndex, searchOptions);
       // 搜索导航传 preserveFocus=true 保持 FindReplacePanel 输入框焦点;
       // 检视意见跳转保留旧行为(focus 编辑器)。
       if (!opts?.preserveFocus) editor.focus();
@@ -762,9 +807,11 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
         ? range.startContainer
         : range.startContainer.parentElement;
       element?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      // Vditor IR selectionchange 是 microtask async,实测 250ms 足够覆盖 selection
+      // commit + IR collapse/expand markers + DOM 重排;时间越短偶尔会让浮条闪一下。
       window.setTimeout(() => {
         suppressFloatingBarRef.current = false;
-      }, 250);
+      }, FLOATING_BAR_SETTLE_MS);
     },
     revealText(text: string, backwards = false) {
       editorRef.current?.focus();
