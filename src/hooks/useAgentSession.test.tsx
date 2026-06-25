@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConversationManager } from './useAgentSession';
 import type { AgentProvider } from '../services/agent/provider';
+import type { AgentExitPayload, AgentStdoutPayload } from '../services/agent/types';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,24 +44,34 @@ describe('useConversationManager', () => {
   let host: HTMLDivElement;
   let root: Root;
   let api: HarnessApi | undefined;
+  let stdoutHandler: ((payload: AgentStdoutPayload) => void) | undefined;
+  let exitHandler: ((payload: AgentExitPayload) => void) | undefined;
 
   beforeEach(() => {
     host = document.createElement('div');
     document.body.append(host);
     root = createRoot(host);
     api = undefined;
-    headlessMock.startAgentSession.mockReset().mockResolvedValue({
+    stdoutHandler = undefined;
+    exitHandler = undefined;
+    headlessMock.startAgentSession.mockReset().mockImplementation(async (request) => ({
       runId: 'run-1',
-      conversationId: 'conv-1',
+      conversationId: request.conversationId,
       sessionUuid: 'session-1',
       resumed: false,
       agentPath: 'opencode',
       provider: 'opencode',
-    });
+    }));
     headlessMock.resumeAgentSession.mockReset();
-    headlessMock.cancelAgentSession.mockReset();
-    headlessMock.onAgentStdout.mockReset().mockResolvedValue(() => undefined);
-    headlessMock.onAgentExit.mockReset().mockResolvedValue(() => undefined);
+    headlessMock.cancelAgentSession.mockReset().mockResolvedValue(undefined);
+    headlessMock.onAgentStdout.mockReset().mockImplementation(async (handler) => {
+      stdoutHandler = handler;
+      return () => undefined;
+    });
+    headlessMock.onAgentExit.mockReset().mockImplementation(async (handler) => {
+      exitHandler = handler;
+      return () => undefined;
+    });
   });
 
   afterEach(() => {
@@ -94,5 +105,49 @@ describe('useConversationManager', () => {
       cwd: expect.stringContaining(String.raw`D:\md files\.typola-output\conv-`),
       promptContextPaths: [String.raw`D:\md files\杭州景区.md`],
     });
+  });
+
+  it('drops late stdout from a cancelled run', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('hello');
+    });
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+
+    let cancelPromise: Promise<void> | undefined;
+    act(() => {
+      cancelPromise = api?.cancel();
+    });
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({ type: 'assistant', text: 'late output' }),
+      });
+      exitHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        exitCode: 1,
+        cancelled: true,
+        stderrTail: '',
+      });
+      await cancelPromise;
+    });
+
+    expect(api?.activeConv?.messages.some((message) => (
+      message.role === 'assistant' && message.content.includes('late output')
+    ))).toBe(false);
+    expect(api?.runState).toBe('idle');
   });
 });

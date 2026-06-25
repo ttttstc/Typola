@@ -49,6 +49,7 @@ struct AgentRunHandle {
     #[allow(dead_code)]
     child: Arc<Mutex<Child>>,
     pid: u32,
+    cancel_requested: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -613,6 +614,7 @@ fn agent_session_cancel(
             .ok_or_else(|| "agent run not found".to_string())?
     };
 
+    run.cancel_requested.store(true, Ordering::Relaxed);
     kill_agent_process_tree(&run)
 }
 
@@ -1482,6 +1484,7 @@ fn start_agent_headless_run(
 
     let pid = child.id();
     let child = Arc::new(Mutex::new(child));
+    let cancel_requested = Arc::new(AtomicBool::new(false));
     {
         let mut registry = state
             .0
@@ -1492,6 +1495,7 @@ fn start_agent_headless_run(
             AgentRunHandle {
                 child: Arc::clone(&child),
                 pid,
+                cancel_requested: Arc::clone(&cancel_requested),
             },
         );
     }
@@ -1505,7 +1509,6 @@ fn start_agent_headless_run(
         session_uuid.clone(),
         stdout,
     );
-    let done = Arc::new(AtomicBool::new(false));
     spawn_agent_waiter(
         app,
         child,
@@ -1514,7 +1517,7 @@ fn start_agent_headless_run(
         conversation_id.to_string(),
         session_uuid.clone(),
         stderr_tail,
-        done,
+        cancel_requested,
     );
 
     Ok(AgentSessionStartResult {
@@ -1723,7 +1726,7 @@ fn spawn_agent_waiter(
     conversation_id: String,
     session_uuid: String,
     stderr_tail: Arc<Mutex<String>>,
-    done: Arc<AtomicBool>,
+    cancel_requested: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
         let exit_code = child
@@ -1734,12 +1737,11 @@ fn spawn_agent_waiter(
         if let Ok(mut registry) = registry.lock() {
             registry.runs.remove(&run_id);
         }
-        done.store(true, Ordering::Relaxed);
         let stderr_tail = stderr_tail
             .lock()
             .map(|tail| tail.clone())
             .unwrap_or_default();
-        let cancelled = exit_code.is_none();
+        let cancelled = cancel_requested.load(Ordering::Relaxed) || exit_code.is_none();
         let _ = app.emit(
             "agent-exit",
             AgentExitPayload {
@@ -1817,13 +1819,19 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     let lower = command_path.to_ascii_lowercase();
     if lower.ends_with(".cmd") || lower.ends_with(".bat") {
+        if let Some(target) = resolve_windows_cmd_wrapper_target(command_path) {
+            let mut command = Command::new(target);
+            command.args(args);
+            command.creation_flags(CREATE_NO_WINDOW);
+            return command;
+        }
         let mut command = Command::new("cmd");
+        let command_line = build_windows_cmd_invocation(command_path, args);
         command
             .arg("/d")
             .arg("/s")
             .arg("/c")
-            .arg(command_path)
-            .args(args);
+            .raw_arg(command_line);
         command.creation_flags(CREATE_NO_WINDOW);
         return command;
     }
@@ -1831,6 +1839,66 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     command.args(args);
     command.creation_flags(CREATE_NO_WINDOW);
     command
+}
+
+#[cfg(target_os = "windows")]
+fn build_windows_cmd_invocation(command_path: &str, args: &[String]) -> String {
+    let parts = std::iter::once(command_path)
+        .map(quote_windows_cmd_arg)
+        .chain(args.iter().map(|arg| quote_windows_cmd_arg(arg)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("\"{parts}\"")
+}
+
+#[cfg(target_os = "windows")]
+fn quote_windows_cmd_arg(value: &str) -> String {
+    let mut quoted = String::from("\"");
+    for ch in value.chars() {
+        match ch {
+            '"' => quoted.push_str("\\\""),
+            '%' => quoted.push_str("%%"),
+            _ => quoted.push(ch),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_windows_cmd_wrapper_target(command_path: &str) -> Option<PathBuf> {
+    let command_path = Path::new(command_path);
+    let base_dir = command_path.parent()?;
+    let content = std::fs::read_to_string(command_path).ok()?;
+    for line in content.lines() {
+        let Some(marker_index) = line.find("%dp0%\\").or_else(|| line.find("%dp0%/")) else {
+            continue;
+        };
+        let marker_len = "%dp0%\\".len();
+        let after_marker = &line[marker_index + marker_len..];
+        let Some(end_quote) = after_marker.find('"') else {
+            continue;
+        };
+        let relative = after_marker[..end_quote].trim_start_matches(['\\', '/']);
+        if relative.is_empty() {
+            continue;
+        }
+        let target = base_dir.join(relative);
+        let target_name = target
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let is_direct_executable = target
+            .extension()
+            .and_then(OsStr::to_str)
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+            && target_name != "node.exe";
+        if is_direct_executable && target.is_file() {
+            return Some(target);
+        }
+    }
+    None
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -2281,6 +2349,53 @@ mod tests {
             "unexpected default OpenCode path: {path}"
         );
         assert!(!path.ends_with(".ps1"), "OpenCode should not resolve to PowerShell wrapper: {path}");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_cmd_wrapper_resolves_real_target() {
+        let root = temp_path("opencode-wrapper");
+        let bin_dir = root.join("node_modules").join("opencode-ai").join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let target = bin_dir.join("opencode.exe");
+        std::fs::write(&target, b"").unwrap();
+        let wrapper = root.join("opencode.cmd");
+        std::fs::write(
+            &wrapper,
+            "@ECHO off\r\n\"%dp0%\\node_modules\\opencode-ai\\bin\\opencode.exe\"   %*\r\n",
+        )
+        .unwrap();
+
+        let resolved = resolve_windows_cmd_wrapper_target(&wrapper.to_string_lossy()).unwrap();
+
+        assert_eq!(resolved, target);
+        let _ = std::fs::remove_file(wrapper);
+        let _ = std::fs::remove_file(target);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_cmd_wrapper_does_not_resolve_node_runtime_only() {
+        let root = temp_path("node-wrapper");
+        let bin_dir = root.join("node_modules").join("example").join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let node = root.join("node.exe");
+        let script = bin_dir.join("example.js");
+        std::fs::write(&node, b"").unwrap();
+        std::fs::write(&script, b"").unwrap();
+        let wrapper = root.join("example.cmd");
+        std::fs::write(
+            &wrapper,
+            "@ECHO off\r\n\"%dp0%\\node.exe\" \"%dp0%\\node_modules\\example\\bin\\example.js\" %*\r\n",
+        )
+        .unwrap();
+
+        assert!(resolve_windows_cmd_wrapper_target(&wrapper.to_string_lossy()).is_none());
+        let _ = std::fs::remove_file(wrapper);
+        let _ = std::fs::remove_file(script);
+        let _ = std::fs::remove_file(node);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

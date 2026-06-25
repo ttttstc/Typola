@@ -158,17 +158,24 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             onClear={onClearWorkspace}
             placement="up"
           />
-          <label className="conversation-provider-picker" title="切换 AI Provider 会开始新对话">
-            <span className="sr-only">AI Provider</span>
-            <select
-              value={activeProvider}
-              onChange={(event) => onSwitchProvider(event.target.value as AgentProvider)}
-            >
-              {AGENT_PROVIDERS.map((provider) => (
-                <option key={provider.id} value={provider.id}>{provider.label}</option>
-              ))}
-            </select>
-          </label>
+          <div
+            className="conversation-provider-picker"
+            role="group"
+            aria-label="AI Provider"
+            title="切换 AI Provider 会开始新对话"
+          >
+            {AGENT_PROVIDERS.map((provider) => (
+              <button
+                key={provider.id}
+                type="button"
+                className={provider.id === activeProvider ? 'active' : ''}
+                aria-pressed={provider.id === activeProvider}
+                onClick={() => onSwitchProvider(provider.id)}
+              >
+                {provider.label}
+              </button>
+            ))}
+          </div>
           <span className="conversation-model-placeholder" title="在设置 · AI CLI 配置模型">
             {currentModel
               ? `${providerLabel} · ${currentModel}`

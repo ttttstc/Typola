@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { diagnoseClaudeCliFailure } from '../services/agent/claudeDiagnostics';
+import { diagnoseOpenCodeCliFailure } from '../services/agent/opencodeDiagnostics';
 import { createClaudeStreamHandler } from '../services/agent/claudeStream';
 import { createOpenCodeStreamHandler } from '../services/agent/opencodeStream';
 import type { ConversationData, PendingInjection } from '../services/agent/conversationStore';
@@ -142,9 +143,13 @@ export function useConversationManager({
   const conversationsRef = useRef(conversations);
   const activeConvIdRef = useRef(activeConvId);
   const artifactFileRef = useRef(onArtifactFile);
+  const openCodePathRef = useRef(openCodePath);
+  const openCodeModelRef = useRef(openCodeModel);
   const handlersRef = useRef(new Map<string, ReturnType<typeof createClaudeStreamHandler> | ReturnType<typeof createOpenCodeStreamHandler>>());
   const eventQueueRef = useRef(new Map<string, AgentEvent[]>());
   const eventFrameRef = useRef<number | null>(null);
+  const silencedRunIdsRef = useRef(new Set<string>());
+  const exitWaitersRef = useRef(new Map<string, Array<() => void>>());
   // 选区注入暂存触发通知：每次 onAgentExit 让 active 从 running 退出且 conv 上有待投递的
   // pendingInjection，bump 一次让 ConversationPanel 显示"已停下"提示。
   const [injectionReadyTick, setInjectionReadyTick] = useState(0);
@@ -153,6 +158,8 @@ export function useConversationManager({
 
   conversationsRef.current = conversations;
   artifactFileRef.current = onArtifactFile;
+  openCodePathRef.current = openCodePath;
+  openCodeModelRef.current = openCodeModel;
 
   useEffect(() => {
     activeConvIdRef.current = activeConvId;
@@ -165,6 +172,32 @@ export function useConversationManager({
       const next = new Map(prev);
       next.set(convId, { ...current, ...patch });
       return next;
+    });
+  }, []);
+
+  const resolveExitWaiters = useCallback((convId: string) => {
+    const waiters = exitWaitersRef.current.get(convId);
+    if (!waiters) return;
+    exitWaitersRef.current.delete(convId);
+    waiters.forEach((resolve) => resolve());
+  }, []);
+
+  const waitForConversationExit = useCallback((convId: string, timeoutMs = 5000) => {
+    const conv = conversationsRef.current.get(convId);
+    if (!conv || conv.runState !== 'running') return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve();
+      };
+      timer = window.setTimeout(finish, timeoutMs);
+      const waiters = exitWaitersRef.current.get(convId) ?? [];
+      waiters.push(finish);
+      exitWaitersRef.current.set(convId, waiters);
     });
   }, []);
 
@@ -222,6 +255,9 @@ export function useConversationManager({
 
     void onAgentStdout((payload) => {
       const convId = payload.conversationId;
+      if (silencedRunIdsRef.current.has(payload.runId) || conversationsRef.current.get(convId)?.cancelRequested) {
+        return;
+      }
       let handler = handlersRef.current.get(convId);
       if (!handler) {
         const provider = conversationsRef.current.get(convId)?.provider ?? DEFAULT_AGENT_PROVIDER;
@@ -235,6 +271,7 @@ export function useConversationManager({
 
     void onAgentExit((payload) => {
       const convId = payload.conversationId;
+      silencedRunIdsRef.current.delete(payload.runId);
       const handler = handlersRef.current.get(convId);
       handler?.flush();
       handlersRef.current.delete(convId);
@@ -250,7 +287,12 @@ export function useConversationManager({
         const provider = conv.provider ?? DEFAULT_AGENT_PROVIDER;
         const diagnostic = provider === 'claude'
           ? diagnoseClaudeCliFailure({ agentId: 'claude', exitCode: payload.exitCode, stderrTail: payload.stderrTail })
-          : null;
+          : diagnoseOpenCodeCliFailure({
+            exitCode: payload.exitCode,
+            stderrTail: payload.stderrTail,
+            agentPath: openCodePathRef.current,
+            model: openCodeModelRef.current,
+          });
         patch.lastError = diagnostic?.detail || payload.stderrTail || `${getAgentProviderConfig(provider).label} 执行失败。`;
         updateConv(convId, patch);
         appendAssistantEvent(convId, { type: 'error', message: patch.lastError });
@@ -266,6 +308,7 @@ export function useConversationManager({
           setInjectionReadyTick((tick) => tick + 1);
         }
       }
+      resolveExitWaiters(convId);
     }).then((unlisten) => {
       if (cancelled) unlisten(); else unlistenExit = unlisten;
     });
@@ -279,10 +322,13 @@ export function useConversationManager({
         eventFrameRef.current = null;
       }
       eventQueueRef.current.clear();
+      silencedRunIdsRef.current.clear();
+      exitWaitersRef.current.forEach((waiters) => waiters.forEach((resolve) => resolve()));
+      exitWaitersRef.current.clear();
       for (const handler of handlersRef.current.values()) handler.flush();
       handlersRef.current.clear();
     };
-  }, [appendAssistantEvent, flushQueuedEvents, queueAssistantEvent, updateConv]);
+  }, [appendAssistantEvent, flushQueuedEvents, queueAssistantEvent, resolveExitWaiters, updateConv]);
 
   const cwd = useMemo(() => (
     workspaceRoot ? joinPath(workspaceRoot, '.typola-output', safeSegment(activeConvId)) : undefined
@@ -352,8 +398,16 @@ export function useConversationManager({
       }
     } catch (error) {
       const message = String(error);
-      updateConv(convId, { runState: 'error', lastError: message });
-      appendAssistantEvent(convId, { type: 'error', message });
+      const diagnostic = provider === 'opencode'
+        ? diagnoseOpenCodeCliFailure({
+          error: message,
+          agentPath: runtime.agentPath,
+          model: runtime.model,
+        })
+        : null;
+      const displayMessage = diagnostic?.detail || message;
+      updateConv(convId, { runState: 'error', lastError: displayMessage });
+      appendAssistantEvent(convId, { type: 'error', message: displayMessage });
     }
   }, [appendAssistantEvent, claudeModel, claudePath, cwd, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv]);
 
@@ -365,12 +419,15 @@ export function useConversationManager({
     const handler = handlersRef.current.get(convId);
     handler?.flush();
     handlersRef.current.delete(convId);
+    if (conv.runId) silencedRunIdsRef.current.add(conv.runId);
     if (conv.runId) {
+      const exitWait = waitForConversationExit(convId);
       await cancelAgentSession(conv.runId).catch((error) => {
         console.warn('Failed to cancel agent session:', error);
       });
+      await exitWait;
     }
-  }, [updateConv]);
+  }, [updateConv, waitForConversationExit]);
 
   const reset = useCallback(() => {
     const convId = activeConvIdRef.current;
@@ -428,6 +485,12 @@ export function useConversationManager({
   const switchProvider = useCallback((provider: AgentProvider) => {
     const active = conversationsRef.current.get(activeConvIdRef.current);
     if (active?.provider === provider) return active.id;
+    if (active) {
+      const handler = handlersRef.current.get(active.id);
+      handler?.flush();
+      handlersRef.current.delete(active.id);
+      if (active.runId && active.cancelRequested) silencedRunIdsRef.current.add(active.runId);
+    }
     const id = `conv-${nextConvCounter++}`;
     const conv = createConversationData(id, `${getAgentProviderConfig(provider).label} 对话`, undefined, provider);
     setConversations((prev) => {

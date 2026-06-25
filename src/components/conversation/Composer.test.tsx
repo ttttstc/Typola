@@ -271,11 +271,12 @@ describe('Composer', () => {
       );
     });
 
-    const picker = host.querySelector<HTMLSelectElement>('.conversation-provider-picker select');
-    expect(picker).toBeTruthy();
+    const picker = host.querySelector<HTMLElement>('.conversation-provider-picker');
+    const openCodeButton = Array.from(picker?.querySelectorAll('button') ?? [])
+      .find((button) => button.textContent?.includes('OpenCode'));
+    expect(openCodeButton).toBeTruthy();
     await act(async () => {
-      picker!.value = 'opencode';
-      picker!.dispatchEvent(new Event('change', { bubbles: true }));
+      openCodeButton!.click();
     });
 
     expect(onSwitchProvider).toHaveBeenCalledWith('opencode');

@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- AI 工作台的 Provider 切换器改为底部 pill 按钮组，并补齐亮暗主题共用的细边框 token，避免原生下拉控件和未定义 CSS 变量带来的视觉割裂。
 - AI 工作台会持久化当前 AI Provider 选择；空对话切换 Claude Code / OpenCode 时不再弹出“新建对话”确认。
 - 心流模式打开时会主动调整左侧 AI 工作台与右侧场景栏到更接近“三栏工作台”的比例，减少右栏过宽与编辑区被压缩的问题。
 - 左侧文件树窄条切换入口改为更克制的线性图标与细指示条样式，弱化突兀感。
@@ -60,6 +61,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 Windows 下通过 npm `.cmd` wrapper 启动 OpenCode 时，用户 prompt 中的 shell 特殊字符可能被 `cmd.exe` 重新解析的问题；现在会优先解析 wrapper 指向的真实可执行文件，并在取消后等待旧 run 退出、丢弃 late stdout，再切换到新 Provider 对话。
+- 改进 OpenCode 新手诊断：设置页增加安装提示与文档入口，检测或运行失败时会区分未安装/路径不可执行/模型格式/认证问题，而不是只显示泛化的执行失败。
 - 修复心流模式下 OpenCode 仍显示用户添加的本地 Claude skill、点击后可能卡在不支持的 skill 调用路径的问题；SkillHub 现在按当前 AI Provider 扫描与添加能力，Claude 使用 `.claude/skills`，OpenCode 使用全局/项目级 `.opencode/commands` 或 `opencode.jsonc` command 配置，并通过 `opencode run --command` 调用。
 
 - 修复 SkillHub 系统内置 skill 安装入口不区分 AI Provider 的问题：内置模板现在按当前 CLI provider 过滤，OpenCode 场景不会再展示 Claude-only 的安装项。

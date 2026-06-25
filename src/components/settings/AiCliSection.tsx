@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSettings } from '../../hooks/useSettings';
+import { diagnoseOpenCodeCliFailure } from '../../services/agent/opencodeDiagnostics';
 import { detectAgent, type AgentDetectResult } from '../../services/agentService';
 import { getAgentProviderConfig, type AgentProvider } from '../../services/agent/provider';
 import { updateSettings } from '../../services/settingsService';
@@ -29,13 +30,23 @@ export function AiCliSection() {
     }
   };
 
-  const renderDetectResult = (result?: AgentDetectResult) => result && (
-    <div className={`settings-message ${result.available ? 'ok' : 'error'}`}>
-      {result.available
-        ? `可用：${result.path}${result.version ? `（${result.version}）` : ''}`
-        : `不可用：${result.error || result.path}`}
-    </div>
-  );
+  const renderDetectResult = (provider: AgentProvider, result?: AgentDetectResult) => {
+    if (!result) return null;
+    const diagnostic = !result.available && provider === 'opencode'
+      ? diagnoseOpenCodeCliFailure({
+        error: result.error,
+        agentPath: result.path,
+        model: settings.aiOpenCodeModel,
+      })
+      : null;
+    return (
+      <div className={`settings-message ${result.available ? 'ok' : 'error'}`}>
+        {result.available
+          ? `可用：${result.path}${result.version ? `（${result.version}）` : ''}`
+          : `不可用：${diagnostic?.detail || result.error || result.path}`}
+      </div>
+    );
+  };
 
   return (
     <div className="settings-section">
@@ -73,15 +84,18 @@ export function AiCliSection() {
           {detecting === 'claude' ? '检测中...' : '检测 Claude Code CLI'}
         </button>
       </div>
-      {renderDetectResult(results.claude)}
+      {renderDetectResult('claude', results.claude)}
 
       <label className="settings-field">
         <span className="settings-label">OpenCode CLI 路径</span>
-        <span className="settings-desc">留空时使用系统 PATH 中的 opencode；Windows 可填写 opencode.cmd 或完整 exe 路径。</span>
+        <span className="settings-desc">
+          留空使用 PATH；未安装时先运行 npm install -g opencode-ai。Windows 可填写 opencode.cmd 或完整 exe 路径。
+          <a href="https://opencode.ai/docs/" target="_blank" rel="noreferrer">什么是 OpenCode?</a>
+        </span>
         <input
           className="settings-input"
           value={settings.aiOpenCodePath}
-          placeholder="例如 opencode 或 C:\\Users\\you\\AppData\\Roaming\\npm\\opencode.cmd"
+          placeholder="留空使用 PATH；或填写 C:\\Users\\you\\AppData\\Roaming\\npm\\opencode.cmd"
           onChange={(event) => updateSettings({ aiOpenCodePath: event.target.value })}
         />
       </label>
@@ -107,7 +121,7 @@ export function AiCliSection() {
           {detecting === 'opencode' ? '检测中...' : '检测 OpenCode CLI'}
         </button>
       </div>
-      {renderDetectResult(results.opencode)}
+      {renderDetectResult('opencode', results.opencode)}
     </div>
   );
 }
