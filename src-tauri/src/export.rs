@@ -63,6 +63,7 @@ fn browser_pdf_arguments(source: &Path, target: &Path, profile: &Path) -> Vec<St
     vec![
         "--headless=new".to_string(),
         "--disable-gpu".to_string(),
+        "--no-sandbox".to_string(),
         "--allow-file-access-from-files".to_string(),
         "--disable-background-networking".to_string(),
         "--disable-component-update".to_string(),
@@ -137,8 +138,12 @@ fn pdf_output_file_size(path: &Path) -> Option<u64> {
 }
 
 fn run_pdf_renderer(binary: &Path, args: &[String], target: &Path) -> Result<bool, String> {
+    use std::process::Stdio;
+
     let mut child = Command::new(binary)
         .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to launch PDF renderer: {e}"))?;
 
@@ -150,8 +155,18 @@ fn run_pdf_renderer(binary: &Path, args: &[String], target: &Path) -> Result<boo
     let mut stable_since: Option<Instant> = None;
 
     loop {
-        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-            return Ok(status.success());
+        if let Some(exit_status) = child.try_wait().map_err(|e| e.to_string())? {
+            if !exit_status.success() {
+                let mut stderr_buf = String::new();
+                if let Some(ref mut stderr) = child.stderr {
+                    let _ = std::io::Read::read_to_string(stderr, &mut stderr_buf);
+                }
+                let msg = stderr_buf.trim().to_string();
+                if !msg.is_empty() {
+                    return Err(format!("PDF 渲染器异常退出: {msg}"));
+                }
+            }
+            return Ok(exit_status.success());
         }
 
         let now = Instant::now();

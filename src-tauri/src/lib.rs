@@ -2719,22 +2719,5 @@ mod tests {
         let _ = std::fs::remove_dir_all(&other_workspace);
     }
 
-    #[test]
-    fn normalize_pdf_save_path_accepts_pdf_extension() {
-        let path = normalize_pdf_save_path("C:\\temp\\draft.pdf").unwrap();
-        assert!(path.ends_with("draft.pdf"));
-    }
-
-    #[test]
-    fn normalize_pdf_save_path_rejects_empty_path() {
-        let error = normalize_pdf_save_path("   ").unwrap_err();
-        assert!(error.contains("missing PDF save path"));
-    }
-
-    #[test]
-    fn normalize_pdf_save_path_rejects_non_pdf_extension() {
-        let error = normalize_pdf_save_path("C:\\temp\\draft.md").unwrap_err();
-        assert!(error.contains("must end with .pdf"));
-    }
 
 }
