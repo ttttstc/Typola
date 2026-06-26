@@ -1,4 +1,12 @@
-export type AgentProvider = 'claude' | 'opencode';
+import {
+  getAgentRuntimeDef,
+  isAgentRuntimeId,
+  listAgentRuntimeDefs,
+  normalizeAgentRuntimeId,
+} from './runtime/registry';
+import type { AgentRuntimeId } from './runtime/types';
+
+export type AgentProvider = AgentRuntimeId;
 
 export const DEFAULT_AGENT_PROVIDER: AgentProvider = 'claude';
 
@@ -8,19 +16,25 @@ export type AgentProviderConfig = {
   defaultCommand: string;
 };
 
-export const AGENT_PROVIDERS: AgentProviderConfig[] = [
-  { id: 'claude', label: 'Claude Code', defaultCommand: 'claude' },
-  { id: 'opencode', label: 'OpenCode', defaultCommand: 'opencode' },
-];
+export const AGENT_PROVIDERS: AgentProviderConfig[] = listAgentRuntimeDefs().map((runtime) => ({
+  id: runtime.id,
+  label: runtime.label,
+  defaultCommand: runtime.defaultCommand,
+}));
 
 export function getAgentProviderConfig(provider: AgentProvider): AgentProviderConfig {
-  return AGENT_PROVIDERS.find((candidate) => candidate.id === provider) ?? AGENT_PROVIDERS[0];
+  const runtime = getAgentRuntimeDef(provider);
+  return {
+    id: runtime.id,
+    label: runtime.label,
+    defaultCommand: runtime.defaultCommand,
+  };
 }
 
 export function isAgentProvider(value: unknown): value is AgentProvider {
-  return value === 'claude' || value === 'opencode';
+  return isAgentRuntimeId(value);
 }
 
 export function normalizeAgentProvider(value: unknown): AgentProvider {
-  return isAgentProvider(value) ? value : DEFAULT_AGENT_PROVIDER;
+  return normalizeAgentRuntimeId(value);
 }

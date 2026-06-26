@@ -29,6 +29,12 @@ export function pdfExportFileName(input: string): string {
   return exportFileName(input, 'pdf');
 }
 
+export function createPdfExportFileName(input: string): string {
+  const base = input.trim() || 'document';
+  if (/\.pdf$/i.test(base)) return base;
+  return base.replace(/\.(md|markdown|html|htm)$/iu, '') + '.pdf';
+}
+
 /**
  * 渲染 markdown 为 HTML（复用 Vditor 离线渲染，高质量）。
  * 然后包装为独立 HTML 文档，交给系统浏览器导出 PDF。

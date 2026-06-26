@@ -15,6 +15,7 @@ import {
   startAgentSession,
 } from '../services/agent/headlessService';
 import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
+import type { AgentDiagnostic } from '../services/agent/runtime/types';
 
 type UseConversationManagerOptions = {
   workspaceRoot?: string;
@@ -26,6 +27,35 @@ type UseConversationManagerOptions = {
   pluginDirs?: string[];
   onArtifactFile?: (artifact: { path: string; content?: string; toolName: string }) => void;
 };
+
+function formatAgentDiagnostic(diagnostic: AgentDiagnostic | null | undefined, fallback: string): string {
+  if (!diagnostic) return fallback;
+  return diagnostic.detail || diagnostic.title || fallback;
+}
+
+function claudeFailureDiagnostic(input: Parameters<typeof diagnoseClaudeCliFailure>[0]): AgentDiagnostic | null {
+  const diagnostic = diagnoseClaudeCliFailure(input);
+  if (!diagnostic) return null;
+  return {
+    code: diagnostic.code || 'unknown',
+    level: diagnostic.retryable ? 'warning' : 'error',
+    title: diagnostic.message || 'Claude Code 执行失败',
+    detail: diagnostic.detail || diagnostic.message || 'Claude Code 执行失败。',
+    fix: null,
+  };
+}
+
+function openCodeFailureDiagnostic(input: Parameters<typeof diagnoseOpenCodeCliFailure>[0]): AgentDiagnostic | null {
+  const diagnostic = diagnoseOpenCodeCliFailure(input);
+  if (!diagnostic) return null;
+  return {
+    code: diagnostic.code || 'unknown',
+    level: 'error',
+    title: diagnostic.message || 'OpenCode 执行失败',
+    detail: diagnostic.detail || diagnostic.message || 'OpenCode 执行失败。',
+    fix: null,
+  };
+}
 
 function createProviderStreamHandler(provider: AgentProvider, onEvent: (event: AgentEvent) => void) {
   return provider === 'opencode'
@@ -286,14 +316,14 @@ export function useConversationManager({
       if (payload.exitCode !== 0 && !wasCancelled) {
         const provider = conv.provider ?? DEFAULT_AGENT_PROVIDER;
         const diagnostic = provider === 'claude'
-          ? diagnoseClaudeCliFailure({ agentId: 'claude', exitCode: payload.exitCode, stderrTail: payload.stderrTail })
-          : diagnoseOpenCodeCliFailure({
+          ? claudeFailureDiagnostic({ agentId: 'claude', exitCode: payload.exitCode, stderrTail: payload.stderrTail })
+          : openCodeFailureDiagnostic({
             exitCode: payload.exitCode,
             stderrTail: payload.stderrTail,
             agentPath: openCodePathRef.current,
             model: openCodeModelRef.current,
           });
-        patch.lastError = diagnostic?.detail || payload.stderrTail || `${getAgentProviderConfig(provider).label} 执行失败。`;
+        patch.lastError = formatAgentDiagnostic(diagnostic, payload.stderrTail || `${getAgentProviderConfig(provider).label} 执行失败。`);
         updateConv(convId, patch);
         appendAssistantEvent(convId, { type: 'error', message: patch.lastError });
       } else {
@@ -399,13 +429,13 @@ export function useConversationManager({
     } catch (error) {
       const message = String(error);
       const diagnostic = provider === 'opencode'
-        ? diagnoseOpenCodeCliFailure({
+        ? openCodeFailureDiagnostic({
           error: message,
           agentPath: runtime.agentPath,
           model: runtime.model,
         })
         : null;
-      const displayMessage = diagnostic?.detail || message;
+      const displayMessage = formatAgentDiagnostic(diagnostic, message);
       updateConv(convId, { runState: 'error', lastError: displayMessage });
       appendAssistantEvent(convId, { type: 'error', message: displayMessage });
     }

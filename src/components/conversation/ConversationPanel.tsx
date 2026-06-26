@@ -111,14 +111,8 @@ export function ConversationPanel({
   const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
   const hasHistory = messages.length > 0;
-  // 优先用 provider 进程实际跑的模型(来自 init 事件),fallback 才是用户在 Typola 设置里填的
   const providerConfig = getAgentProviderConfig(activeProvider);
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
-  const modelLabel = currentModel
-    ? `${providerConfig.label} · ${currentModel}`
-    : configuredModel
-      ? `${providerConfig.label} · ${configuredModel}`
-      : `${providerConfig.label} · 默认模型`;
   const composerRef = useRef<ComposerHandle>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -268,9 +262,6 @@ export function ConversationPanel({
       <header className="conversation-header">
         <div>
           <strong>AI 工作台</strong>
-          <span className="conversation-model-badge" title={`当前使用的 ${providerConfig.label} 模型`}>
-            {modelLabel}
-          </span>
           <ConversationPill
             conversations={conversations}
             activeConvId={activeConvId}

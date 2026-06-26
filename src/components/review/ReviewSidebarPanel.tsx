@@ -32,7 +32,7 @@ type Props = {
   onRemove: (commentId: string) => void;
   /** 导出检视版(原"导出 review 版"重命名) */
   onExport: () => void;
-  /** 发 AI 修改 —— 把全文 + 意见拼成 prompt 真正发送给 AI(只在 AI 改稿视图调) */
+  /** 发 AI 修改 —— 把当前文件路径 + 意见拼成 prompt 真正发送给 AI(只在 AI 改稿视图调) */
   onSendToAI: () => void;
   /** 关闭右栏检视面板 */
   onClose: () => void;
@@ -272,7 +272,7 @@ function AIRevisionsView({
               className="review-sidebar-action review-sidebar-action-send"
               disabled={!canSend}
               onClick={onSendToAI}
-              title={canSend ? '把全文 + 所有意见拼成 prompt 真正发送给 AI' : '没有意见或未打开文档'}
+              title={canSend ? '把当前文件路径 + 所有意见发送给 AI' : '没有意见或未打开文档'}
             >
               <Send size={13} /> 发 AI 修改
             </button>
