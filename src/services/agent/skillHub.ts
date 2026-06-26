@@ -326,13 +326,14 @@ export function removeCustomSkillFromScene(hub: SkillHub, sceneId: string, skill
 }
 
 export function buildSkillInstallPrompt(skill: SkillTemplateRef): string {
-  const source = skill.installSource ?? skill.expectedPath ?? '未提供来源，仅提供安装名';
+  const source = skill.installSource ?? skill.expectedPath ?? skill.name;
   return [
     `请帮我安装 Claude skill：${skill.name}。`,
     `用途：${skill.summary}`,
     `来源：${source}`,
+    skill.expectedPath ? `建议安装路径：${skill.expectedPath}` : undefined,
     `安装后请确认该 skill 可以通过 /${skill.name} 调用。`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 export async function loadSkillHub(): Promise<LoadSkillHubResult> {

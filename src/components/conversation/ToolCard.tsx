@@ -1,19 +1,29 @@
-import type { AgentToolCall } from '../../services/agent/types';
+import type { AgentMessage, AgentToolCall } from '../../services/agent/types';
+import { ToolCardDispatcher } from './toolCards/dispatcher';
 
-const KNOWN_TOOLS = new Set(['Write', 'Edit', 'Read', 'Bash', 'Glob', 'Grep']);
+type Props = {
+  tool: AgentToolCall;
+  message: Extract<AgentMessage, { role: 'assistant' }>;
+};
 
-export function ToolCard({ tool }: { tool: AgentToolCall }) {
-  const known = KNOWN_TOOLS.has(tool.name);
+// 薄包装:把 Typola 的 AgentToolCall (result:string) 适配成 OpenDesign
+// 派发器期望的 { content, isError } 形状,并推算 running / succeeded 状态。
+// running = 父消息未结束 且 本工具无 result
+// succeeded = 父消息结束 且 本工具没失败
+export function ToolCard({ tool, message }: Props) {
+  const runStreaming = !message.done && !tool.result;
+  const runSucceeded = !!message.done && !tool.isError;
+  const result =
+    tool.result !== undefined
+      ? { content: tool.result, isError: !!tool.isError }
+      : undefined;
   return (
-    <details className={`conversation-tool-card ${tool.isError ? 'error' : ''}`}>
-      <summary>
-        <span>{known ? tool.name : 'Tool'}</span>
-        <strong>{tool.name}</strong>
-        {tool.result && <em>{tool.isError ? '失败' : '完成'}</em>}
-      </summary>
-      {tool.input !== undefined && <pre>{JSON.stringify(tool.input, null, 2)}</pre>}
-      {tool.inputDelta && <pre>{tool.inputDelta}</pre>}
-      {tool.result && <pre>{tool.result}</pre>}
-    </details>
+    <ToolCardDispatcher
+      name={tool.name}
+      input={tool.input}
+      result={result}
+      runStreaming={runStreaming}
+      runSucceeded={runSucceeded}
+    />
   );
 }

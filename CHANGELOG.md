@@ -24,7 +24,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - AI CLI 检测升级为轻量结构化诊断：设置页现在会展示实际识别到的 CLI 路径、版本、检测时间与多条可读诊断，Windows 下继续优先识别 npm 全局 `.cmd`，但不运行模型请求或污染正式 AI 会话。
-- 设置页 `AI CLI` 升级为简化版 `AI 执行`：Claude/OpenCode 以运行时卡片展示，可设为默认 Provider、配置 CLI 路径并重新检测；AI 工作台顶部同步展示当前 Provider / 模型 / 工作区状态。
+- 设置页 `AI CLI` 升级为简化版 `AI 执行`：Claude/OpenCode 以运行时卡片展示，可设为默认 Provider、配置 CLI 路径并重新检测；AI 工作台仅在 Composer 底部展示当前 Provider / 模型状态。
+- AI 工作台工具调用卡片切换为 OpenDesign 风格的紧凑状态卡，按 Todo / 文件 / 命令 / 搜索等工具类型分派展示，并保留原始 JSON 展开入口。
+- Skill 模板卡片统一已安装 / 未安装布局高度，GitHub 来源图标改为调用系统默认浏览器打开源码地址。
 - PDF / Word 导出改为后台自动保存：已保存文档默认导出到源文件同目录，未保存文档导出到系统下载目录；不再弹出保存对话框，完成或失败通过右上角 toast 提示。
 - PDF 导出缩短图片等待并采用 fail-open 渲染策略，远程图片加载慢时不再长时间阻塞整次导出。
 - AI 工作台的 Provider 切换器改为底部 pill 按钮组，并补齐亮暗主题共用的细边框 token，避免原生下拉控件和未定义 CSS 变量带来的视觉割裂。
