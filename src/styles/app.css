@@ -3868,7 +3868,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .conversation-empty,
 .conversation-message,
 .conversation-error-card,
-.conversation-tool-card,
 .conversation-thought-card,
 .conversation-done-bar {
   border: 1px solid var(--border-subtle);
@@ -3973,7 +3972,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .conversation-thought-card,
-.conversation-tool-card,
 .conversation-error-card,
 .conversation-done-bar {
   padding: 10px;
@@ -4004,8 +4002,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   50% { opacity: 1; }
 }
 
-.conversation-thought-card pre,
-.conversation-tool-card pre {
+.conversation-thought-card pre {
   margin: 8px 0 0;
   white-space: pre-wrap;
   overflow: auto;
@@ -4013,21 +4010,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   font-size: 12px;
 }
 
-.conversation-tool-card summary {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.conversation-tool-card summary span,
-.conversation-tool-card summary em {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.conversation-tool-card.error,
-.conversation-error-card {
+.conversation-done-bar {
   border-color: #e6a39a;
   background: #fff7f4;
 }
@@ -4035,6 +4018,357 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .conversation-done-bar {
   color: var(--text-muted);
   font-size: 12px;
+}
+
+/* ===== OpenDesign-style tool cards (fork from D:\AI\workspace\open-design\apps\web\src\components\ToolCard.tsx) ===== */
+
+.op-card {
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 12px;
+  margin: 2px 0;
+  overflow: hidden;
+}
+
+.op-card.op-bash { border-left-color: #d97706; }
+.op-card.op-file { border-left-color: #2563eb; }
+.op-card.op-search { border-left-color: #7c3aed; }
+.op-card.op-web { border-left-color: #0891b2; }
+.op-card.op-generic { border-left-color: #6b7280; }
+.op-card.op-todo { border-left-color: #059669; }
+
+.op-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  min-height: 28px;
+}
+
+.op-card-head.op-card-head-static {
+  cursor: default;
+}
+
+.op-card-head-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.op-card-head-toggle:hover .op-title {
+  color: var(--accent);
+}
+
+.op-title {
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.op-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.op-meta.op-desc {
+  font-style: italic;
+}
+
+.op-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.op-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.op-status-running {
+  color: #2563eb;
+  background: color-mix(in oklch, #2563eb 12%, transparent);
+}
+
+.op-status-spinner {
+  animation: op-spin 0.9s linear infinite;
+}
+
+@keyframes op-spin {
+  to { transform: rotate(360deg); }
+}
+
+.op-status-ok {
+  color: #059669;
+  background: color-mix(in oklch, #059669 12%, transparent);
+}
+
+.op-status-error {
+  color: #dc2626;
+  background: color-mix(in oklch, #dc2626 12%, transparent);
+}
+
+.op-expand-chev {
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, currentColor 0%, currentColor 40%, color-mix(in oklch, currentColor 50%, transparent) 50%, currentColor 60%, currentColor 100%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: op-shimmer 1.4s linear infinite;
+}
+
+@keyframes op-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.accordion-collapsible {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+
+.accordion-collapsible.open {
+  max-height: 800px;
+}
+
+.accordion-collapsible-inner {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.op-card-detail {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: color-mix(in oklch, var(--surface) 80%, transparent);
+}
+
+.op-card-file-detail {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.op-path {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary, color-mix(in oklch, var(--surface) 60%, transparent));
+  padding: 2px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+
+.op-open {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.op-open:hover {
+  background: var(--bg-tertiary, color-mix(in oklch, var(--surface) 70%, transparent));
+  color: var(--accent);
+}
+
+.op-command,
+.op-output {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg-tertiary, color-mix(in oklch, var(--surface) 50%, transparent));
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.op-output {
+  background: color-mix(in oklch, #dc2626 6%, var(--surface));
+  border-color: color-mix(in oklch, #dc2626 30%, var(--border-subtle));
+  color: #991b1b;
+}
+
+/* ===== TodoCard ===== */
+
+.op-todo-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  min-height: 28px;
+}
+
+.op-todo-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.op-todo-toggle:hover .op-title {
+  color: var(--accent);
+}
+
+.op-todo-current {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-style: italic;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-todo-chev {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.todo-item.todo-completed .todo-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.todo-item.todo-in_progress {
+  background: color-mix(in oklch, #2563eb 8%, transparent);
+  border-radius: 4px;
+}
+
+.todo-item.todo-stopped {
+  color: #991b1b;
+}
+
+.todo-check {
+  width: 14px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.todo-text {
+  flex: 1;
+  word-break: break-word;
+}
+
+/* ===== RawJsonDisclosure ===== */
+
+.op-raw-json {
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  background: color-mix(in oklch, var(--surface) 60%, transparent);
+}
+
+.op-raw-json summary {
+  cursor: pointer;
+  padding: 4px 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  user-select: none;
+  list-style: none;
+}
+
+.op-raw-json summary::-webkit-details-marker {
+  display: none;
+}
+
+.op-raw-json summary::before {
+  content: '▸ ';
+  display: inline-block;
+  width: 12px;
+  font-size: 9px;
+}
+
+.op-raw-json[open] summary::before {
+  content: '▾ ';
+}
+
+.op-raw-json summary:hover {
+  color: var(--accent);
+}
+
+.op-raw-json pre {
+  margin: 0;
+  padding: 6px 10px 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+  color: var(--text-secondary);
+  border-top: 1px dashed var(--border-subtle);
 }
 
 .conversation-composer {
