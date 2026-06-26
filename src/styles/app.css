@@ -4787,6 +4787,77 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   color: var(--danger);
 }
 
+.agent-detect-result {
+  margin: 0 0 12px;
+}
+
+.agent-diagnostic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.agent-diagnostic-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--bg-muted) 72%, transparent);
+}
+
+.agent-diagnostic-row.ok {
+  border-color: color-mix(in oklch, var(--success) 36%, var(--border));
+}
+
+.agent-diagnostic-row.warning {
+  border-color: color-mix(in oklch, var(--accent) 34%, var(--border));
+}
+
+.agent-diagnostic-row.error {
+  border-color: color-mix(in oklch, var(--danger) 34%, var(--border));
+}
+
+.agent-diagnostic-row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-diagnostic-row-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.agent-diagnostic-row-detail {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.agent-diagnostic-row-action {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.agent-diagnostic-row-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .settings-preset-list {
   display: flex;
   flex-direction: column;

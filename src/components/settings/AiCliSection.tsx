@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { AgentDiagnosticRow } from '../agent/AgentDiagnosticRow';
 import { useSettings } from '../../hooks/useSettings';
-import { diagnoseOpenCodeCliFailure } from '../../services/agent/opencodeDiagnostics';
-import { detectAgent, type AgentDetectResult } from '../../services/agentService';
+import { detectAgentRuntime } from '../../services/agent/runtime/detection';
+import type { AgentDetectResult } from '../../services/agentService';
 import { getAgentProviderConfig, type AgentProvider } from '../../services/agent/provider';
 import { updateSettings } from '../../services/settingsService';
 
@@ -14,7 +15,7 @@ export function AiCliSection() {
     setDetecting(provider);
     const config = getAgentProviderConfig(provider);
     try {
-      const next = await detectAgent(path, provider);
+      const next = await detectAgentRuntime(provider, path);
       setResults((current) => ({ ...current, [provider]: next }));
     } catch (error) {
       setResults((current) => ({
@@ -22,6 +23,13 @@ export function AiCliSection() {
         [provider]: {
           available: false,
           path: path || config.defaultCommand,
+          diagnostics: [{
+            code: 'unknown',
+            level: 'error',
+            title: `${config.label} 检测失败`,
+            detail: error instanceof Error ? error.message : String(error),
+            fix: { label: '重新检测', action: 'rescan' },
+          }],
           error: error instanceof Error ? error.message : String(error),
         },
       }));
@@ -32,18 +40,26 @@ export function AiCliSection() {
 
   const renderDetectResult = (provider: AgentProvider, result?: AgentDetectResult) => {
     if (!result) return null;
-    const diagnostic = !result.available && provider === 'opencode'
-      ? diagnoseOpenCodeCliFailure({
-        error: result.error,
-        agentPath: result.path,
-        model: settings.aiOpenCodeModel,
-      })
-      : null;
+    const config = getAgentProviderConfig(provider);
+    const diagnostics = result.diagnostics ?? [];
     return (
-      <div className={`settings-message ${result.available ? 'ok' : 'error'}`}>
-        {result.available
-          ? `可用：${result.path}${result.version ? `（${result.version}）` : ''}`
-          : `不可用：${diagnostic?.detail || result.error || result.path}`}
+      <div className={`agent-detect-result ${result.available ? 'ok' : 'error'}`}>
+        <div className={`settings-message ${result.available ? 'ok' : 'error'}`}>
+          {result.available
+            ? `可用：${result.executablePath || result.path}${result.version ? `（${result.version}）` : ''}`
+            : `不可用：${result.error || `${config.label} CLI 检测失败`}`}
+        </div>
+        {diagnostics.length > 0 && (
+          <div className="agent-diagnostic-list">
+            {diagnostics.map((diagnostic, index) => (
+              <AgentDiagnosticRow
+                key={`${diagnostic.code}-${index}`}
+                diagnostic={diagnostic}
+                onRescan={() => void handleDetect(provider, provider === 'opencode' ? settings.aiOpenCodePath : settings.aiClaudePath)}
+              />
+            ))}
+          </div>
+        )}
       </div>
     );
   };

@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- AI CLI 检测升级为轻量结构化诊断：设置页现在会展示实际识别到的 CLI 路径、版本、检测时间与多条可读诊断，Windows 下继续优先识别 npm 全局 `.cmd`，但不运行模型请求或污染正式 AI 会话。
 - PDF / Word 导出改为后台自动保存：已保存文档默认导出到源文件同目录，未保存文档导出到系统下载目录；不再弹出保存对话框，完成或失败通过右上角 toast 提示。
 - PDF 导出缩短图片等待并采用 fail-open 渲染策略，远程图片加载慢时不再长时间阻塞整次导出。
 - AI 工作台的 Provider 切换器改为底部 pill 按钮组，并补齐亮暗主题共用的细边框 token，避免原生下拉控件和未定义 CSS 变量带来的视觉割裂。
