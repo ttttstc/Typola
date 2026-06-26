@@ -1,12 +1,14 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ChevronDown,
   Code2,
+  FileDown,
   FilePlus,
   FileText,
   FolderOpen,
   ImagePlus,
   Newspaper,
   PanelLeft,
-  Printer,
   RefreshCw,
   Save,
   SaveAll,
@@ -31,15 +33,12 @@ type ToolbarProps = {
   dirty: boolean;
   fileName: string;
   editorMode: EditorMode;
-  /** 左栏文件树是否可见(workspace) */
   workspacePanelVisible: boolean;
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
-  /** 文档三态(阅读/心流/检视)当前态 */
   docMode: DocMode;
-  /** 当前文档是否有未保存的检视意见(用于切换器上的小红点) */
   reviewDirty?: boolean;
   onToggleEditorMode: () => void;
   onToggleWorkspacePanel: () => void;
@@ -52,10 +51,11 @@ type ToolbarProps = {
   onSave: () => void;
   onSaveAs: () => void;
   onRename?: () => void;
-  /** 工具栏「插入图片」按钮:打开系统文件对话框选本地图片插入。 */
   onInsertImage?: () => void;
   onExportPdf?: () => void;
+  onExportWord?: () => void;
   pdfExporting?: boolean;
+  wordExporting?: boolean;
   onOpenSettings: () => void;
   onPreloadSettings?: () => void;
   updateStatus?: UpdateToolbarStatus;
@@ -68,7 +68,8 @@ export function Toolbar({
   terminalVisible, editingDisabled, docMode, reviewDirty,
   onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview,
   onToggleTerminal, onSetDocMode,
-  onNew, onOpen, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, pdfExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  onNew, onOpen, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
+  pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -76,9 +77,28 @@ export function Toolbar({
   const iconSize = 18;
   const strokeWidth = 1.6;
 
+  // 导出下拉菜单
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exporting = pdfExporting || wordExporting;
+
+  const closeExportMenu = useCallback(() => {
+    setExportMenuOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        closeExportMenu();
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportMenuOpen, closeExportMenu]);
+
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!('__TAURI_INTERNALS__' in window)) return;
-
     void handleTitlebarMouseDown(event.nativeEvent, getCurrentWindow())
       .catch((error) => console.warn('Failed to start window drag:', error));
   };
@@ -126,15 +146,44 @@ export function Toolbar({
             </button>
           )}
           {onExportPdf && (
-            <button
-              data-no-window-drag="true"
-              onClick={onExportPdf}
-              disabled={editingDisabled || pdfExporting}
-              data-tooltip={pdfExporting ? '正在导出 PDF…' : '导出 PDF（Cmd/Ctrl+P，快速打开改为 Cmd/Ctrl+Shift+P）'}
-              aria-label="导出 PDF"
-            >
-              <Printer size={iconSize} strokeWidth={strokeWidth} />
-            </button>
+            <div className="toolbar-export-dropdown" ref={exportMenuRef}>
+              <button
+                data-no-window-drag="true"
+                onClick={() => setExportMenuOpen((prev) => !prev)}
+                disabled={editingDisabled || exporting}
+                data-tooltip={exporting ? '正在导出…' : '导出（Cmd/Ctrl+P 导出 PDF，Cmd/Ctrl+Shift+E 导出 Word）'}
+                aria-label="导出"
+                aria-expanded={exportMenuOpen}
+                aria-haspopup="true"
+              >
+                <FileDown size={iconSize} strokeWidth={strokeWidth} />
+                <ChevronDown size={10} strokeWidth={strokeWidth} className="export-chevron" />
+              </button>
+              {exportMenuOpen && (
+                <div className="export-menu" role="menu" aria-label="导出格式">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-no-window-drag="true"
+                    onClick={() => { closeExportMenu(); onExportPdf(); }}
+                    disabled={editingDisabled}
+                  >
+                    导出 PDF
+                  </button>
+                  {onExportWord && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-no-window-drag="true"
+                      onClick={() => { closeExportMenu(); onExportWord(); }}
+                      disabled={editingDisabled}
+                    >
+                      导出 Word
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

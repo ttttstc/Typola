@@ -23,8 +23,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- PDF / Word 导出改为后台自动保存：已保存文档默认导出到源文件同目录，未保存文档导出到系统下载目录；不再弹出保存对话框，完成或失败通过右上角 toast 提示。
+- PDF 导出缩短图片等待并采用 fail-open 渲染策略，远程图片加载慢时不再长时间阻塞整次导出。
 - AI 工作台的 Provider 切换器改为底部 pill 按钮组，并补齐亮暗主题共用的细边框 token，避免原生下拉控件和未定义 CSS 变量带来的视觉割裂。
-- AI 工作台会持久化当前 AI Provider 选择；空对话切换 Claude Code / OpenCode 时不再弹出“新建对话”确认。
+- AI 工作台会持久化当前 AI Provider 选择；空对话切换 Claude Code / OpenCode 时不再弹出”新建对话”确认。
 - 心流模式打开时会主动调整左侧 AI 工作台与右侧场景栏到更接近“三栏工作台”的比例，减少右栏过宽与编辑区被压缩的问题。
 - 左侧文件树窄条切换入口改为更克制的线性图标与细指示条样式，弱化突兀感。
 - 终端新建会话的工作目录优先使用用户当前选择的文件树 workspace；未选择 workspace 时再回退到当前文件目录 / 系统默认目录。

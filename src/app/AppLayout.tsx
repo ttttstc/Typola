@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { TocItem } from '../types/document';
 import {
@@ -160,10 +161,14 @@ export function AppLayout() {
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
-  const [pdfExportStatus, setPdfExportStatus] = useState<{
-    phase: 'preparing' | 'exporting';
-    savePath: string;
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [wordExporting, setWordExporting] = useState(false);
+  const [exportToast, setExportToast] = useState<{
+    type: 'running' | 'success' | 'error';
+    title: string;
+    detail?: string;
   } | null>(null);
+  const exportToastTimerRef = useRef<number | null>(null);
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
   const [transientMessage, setTransientMessage] = useState('');
@@ -392,6 +397,24 @@ export function AppLayout() {
     return () => window.clearTimeout(timeout);
   }, [transientMessage]);
 
+  const showExportToast = useCallback((toast: {
+    type: 'running' | 'success' | 'error';
+    title: string;
+    detail?: string;
+  }) => {
+    if (exportToastTimerRef.current !== null) {
+      window.clearTimeout(exportToastTimerRef.current);
+      exportToastTimerRef.current = null;
+    }
+    setExportToast(toast);
+    if (toast.type !== 'running') {
+      exportToastTimerRef.current = window.setTimeout(() => {
+        setExportToast(null);
+        exportToastTimerRef.current = null;
+      }, 3600);
+    }
+  }, []);
+
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.style.colorScheme = settings.theme;
@@ -514,26 +537,47 @@ export function AppLayout() {
   }, [aiRevisions, convManager, file.content, file.path, refreshRevisions, reviewStateApi, setLeftRailMode, truncate]);
 
   const handleExportWord = useCallback(async () => {
-    if (!file.path || file.fileType === 'docx') return;
-    try {
-      const { exportToWord } = await import('../services/wordExportService');
-      await exportToWord(file.content, file.name, getExportPresetConfig());
-    } catch (e) {
-      console.error('Export failed:', e);
-    }
-  }, [file]);
-
-  const handleExportPdf = useCallback(async () => {
-    if (pdfExportStatus) return;
+    if (wordExporting) return;
     if (file.fileType === 'docx') {
-      await messageDialog('暂不支持直接从 Word 预览导出 PDF，请先将内容保存为 Markdown 或 HTML 后再导出。', {
-        title: '导出 PDF',
+      showExportToast({
+        type: 'error',
+        title: 'Word 导出失败',
+        detail: '当前 Word 预览文件暂不支持再次导出。',
       });
       return;
     }
+    setWordExporting(true);
+    showExportToast({ type: 'running', title: '正在后台导出 Word', detail: file.name });
+    try {
+      const { exportToWord } = await import('../services/wordExportService');
+      const savePath = await exportToWord(file.content, file.name, file.path || undefined, getExportPresetConfig());
+      if (savePath) {
+        showExportToast({ type: 'success', title: 'Word 导出完成', detail: savePath });
+      }
+    } catch (e) {
+      console.error('Export failed:', e);
+      const { humanizeExportError } = await import('../services/exportErrors');
+      showExportToast({ type: 'error', title: 'Word 导出失败', detail: humanizeExportError(e, 'Word') });
+    } finally {
+      setWordExporting(false);
+    }
+  }, [file.content, file.fileType, file.name, file.path, showExportToast, wordExporting]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (pdfExporting) return;
+    if (file.fileType === 'docx') {
+      showExportToast({
+        type: 'error',
+        title: 'PDF 导出失败',
+        detail: '请先将 Word 内容保存为 Markdown 或 HTML 后再导出 PDF。',
+      });
+      return;
+    }
+    setPdfExporting(true);
+    showExportToast({ type: 'running', title: '正在后台导出 PDF', detail: file.name });
     try {
       const { exportToPdf } = await import('../services/pdfExport');
-      const result = await exportToPdf({
+      const savePath = await exportToPdf({
         content: file.content,
         fileName: file.name,
         filePath: file.path || undefined,
@@ -542,18 +586,18 @@ export function AppLayout() {
         resolvedPreviewHeadingFontFamily: resolvePreviewHeadingFontFamily(settings),
         previewFontSize: settings.previewFontSize,
         previewLineHeight: settings.previewLineHeight,
-        onStatusChange: setPdfExportStatus,
       });
-      if (result.status === 'saved') {
-        setTransientMessage(`PDF 已导出：${result.savePath}`);
+      if (savePath) {
+        showExportToast({ type: 'success', title: 'PDF 导出完成', detail: savePath });
       }
     } catch (error) {
       console.error('PDF export failed:', error);
-      await messageDialog(String(error), { title: '导出 PDF 失败' });
+      const { humanizeExportError } = await import('../services/exportErrors');
+      showExportToast({ type: 'error', title: 'PDF 导出失败', detail: humanizeExportError(error, 'PDF') });
     } finally {
-      setPdfExportStatus(null);
+      setPdfExporting(false);
     }
-  }, [file.content, file.fileType, file.name, file.path, pdfExportStatus, settings]);
+  }, [file.content, file.fileType, file.name, file.path, pdfExporting, settings, showExportToast]);
 
   const replaceCurrentContent = useCallback((value: string) => {
     handleContentChange(value);
@@ -1276,7 +1320,9 @@ export function AppLayout() {
           onRename: () => handleRequestRename(),
           onInsertImage: handleSelectLocalImage,
           onExportPdf: handleExportPdf,
-          pdfExporting: pdfExportStatus !== null,
+          pdfExporting,
+          onExportWord: handleExportWord,
+          wordExporting,
           onOpenSettings: () => {
             void preloadSettingsPage();
             setSettingsVisible(true);
@@ -1469,13 +1515,29 @@ export function AppLayout() {
         diffPreview={diffPreview}
         setDiffPreview={setDiffPreview}
       />
-      {pdfExportStatus && (
-        <div className="pdf-export-overlay" role="status" aria-live="polite">
-          <div className="pdf-export-overlay-card">
-            <strong>正在导出 PDF</strong>
-            <span>{pdfExportStatus.phase === 'preparing' ? '准备离屏渲染内容…' : '正在生成 PDF 文件…'}</span>
-            <code>{pdfExportStatus.savePath}</code>
+      {exportToast && (
+        <div className={`export-toast export-toast-${exportToast.type}`} role="status" aria-live="polite">
+          <div className="export-toast-body">
+            {exportToast.type === 'running' && <span className="export-toast-spinner" />}
+            <div className="export-toast-text">
+              <strong>{exportToast.title}</strong>
+              {exportToast.detail && <span>{exportToast.detail}</span>}
+            </div>
           </div>
+          <button
+            type="button"
+            className="export-toast-close"
+            onClick={() => {
+              if (exportToastTimerRef.current !== null) {
+                window.clearTimeout(exportToastTimerRef.current);
+                exportToastTimerRef.current = null;
+              }
+              setExportToast(null);
+            }}
+            aria-label="关闭导出通知"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
       {/* 选区原地结果对比卡(C 混合 · 4 个固定动作走 oneshot 后弹此卡) */}

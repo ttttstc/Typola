@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPdfExportFileName } from './pdfExport';
 
-vi.mock('@tauri-apps/plugin-dialog', () => ({ save: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
+vi.mock('@tauri-apps/api/path', () => ({ downloadDir: vi.fn().mockResolvedValue('C:\\Users\\tester\\Downloads') }));
+vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn().mockResolvedValue(false) }));
 
 describe('createPdfExportFileName', () => {
   it('replaces markdown and html extensions with pdf', () => {
