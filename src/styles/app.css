@@ -6164,6 +6164,53 @@ html[data-theme='dark'] .terminal-session {
   white-space: pre-wrap;
 }
 
+/* KaTeX 实时渲染:替换 .language-math 的 innerHTML 后留 cursor 提示用户可点击改源码。 */
+.wysiwyg-editor-pane .typola-katex-rendered {
+  cursor: text;
+  display: inline-block;
+}
+
+.wysiwyg-editor-pane .typola-katex-error {
+  display: inline-block;
+  padding: 2px 6px;
+  border-left: 3px solid #c0392b;
+  background: #fdecea;
+  color: #a93226;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Heading 折叠按钮:prepend 到 <h1>-<h6> 内的第一个子元素,跟文本基线对齐。 */
+.wysiwyg-editor-pane .typola-heading-fold-toggle {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  color: #888;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.wysiwyg-editor-pane .typola-heading-fold-toggle:hover {
+  color: #333;
+}
+
+.wysiwyg-editor-pane.dark-theme .typola-heading-fold-toggle {
+  color: #aaa;
+}
+
+.wysiwyg-editor-pane.dark-theme .typola-heading-fold-toggle:hover {
+  color: #eee;
+}
+
+.wysiwyg-editor-pane .typola-heading-folded {
+  display: none !important;
+}
+
 .selection-ai-section-title {
   padding: 4px 10px 2px;
   font-size: 10.5px;

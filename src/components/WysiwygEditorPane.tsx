@@ -1,9 +1,21 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import { resolveLocalImages } from '../services/localImageResolver';
 import { renderMermaidIn, serializeMermaidSvg } from '../services/mermaidRenderer';
+import { renderKatexIn } from '../services/katexRenderer';
+import {
+  applyHeadingFolds,
+  getFoldKeyFromTarget,
+  toggleFoldKey,
+  type FoldKey,
+} from '../services/headingFoldService';
+import {
+  buildTaskLineMap,
+  findClickedTaskIndex,
+  toggleTaskLine,
+} from '../services/taskListClickHandler';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
@@ -246,6 +258,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   // 跨文档:filePath 变化时清栈,避免在 B 文档按 Ctrl+Z 把 A 文档的 before 写进 B
   useEffect(() => {
     undoStackRef.current = [];
+    setFoldedHeadings(new Set());
   }, [filePath]);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -257,6 +270,16 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
   const suppressFloatingBarRef = useRef(false);
+  // Heading 折叠集合:键 = `<level>:<text>`,跨 source 行变化稳定。
+  // 关文档 / 切 filePath 时清空(useEffect 见下)。
+  const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
+  // foldedHeadings 在 Vditor 回调里(after/input/selectionchange)需要读到最新值,
+  // 但 useEffect 不重跑编辑器,故同步进 ref。
+  const foldedHeadingsRef = useRef<ReadonlySet<FoldKey>>(foldedHeadings);
+  useEffect(() => {
+    foldedHeadingsRef.current = foldedHeadings;
+  }, [foldedHeadings]);
+  const taskLineMap = useMemo(() => buildTaskLineMap(source), [source]);
 
   const getSavedOrCurrentSelection = useCallback((): Range | null => {
     const editor = editorRef.current;
@@ -341,6 +364,45 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   }, [contextMenu, triggerAIAction]);
 
   const handleMenuClose = useCallback(() => setContextMenu(null), []);
+
+  // Host click 统一派发:heading 折叠按钮 + task checkbox。
+  // KaTeX reveal 由 renderKatexIn 内部 addEventListener 处理,不上冒到这里。
+  const handleHostClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const ir = getIrElement(editor);
+    if (!ir) return;
+
+    // 1. Heading fold toggle
+    const foldKey = getFoldKeyFromTarget(event.target);
+    if (foldKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      setFoldedHeadings((prev) => toggleFoldKey(prev, foldKey));
+      return;
+    }
+
+    // 2. Task list checkbox
+    const taskIdx = findClickedTaskIndex({ target: event.target }, ir);
+    if (taskIdx === null) return;
+    if (taskIdx < 0 || taskIdx >= taskLineMap.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const entry = taskLineMap[taskIdx];
+    const next = toggleTaskLine(editor.getValue(), entry);
+    if (next === null) return;
+    const before = editor.getValue();
+    const savedRange = lastSelectionRangeRef.current?.cloneRange() ?? null;
+    applyingExternalValue.current = true;
+    editor.setValue(next, true);
+    lastEmittedValue.current = next;
+    pushUndoSnapshot(before, next, savedRange);
+    lastSelectionRangeRef.current = null;
+    onChange(next);
+    window.requestAnimationFrame(() => {
+      applyingExternalValue.current = false;
+    });
+  }, [taskLineMap, pushUndoSnapshot, onChange]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
@@ -450,6 +512,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
           theme: settings.theme === 'dark' ? 'dark' : 'default',
           editable: true,
         });
+        void renderKatexIn(host);
+        applyHeadingFolds(host, editorRef.current?.getValue() ?? '', foldedHeadingsRef.current);
       }, 350);
     };
 
@@ -563,6 +627,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
           if (host) {
             void resolveLocalImages(host, filePath);
             void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+            void renderKatexIn(host);
+            applyHeadingFolds(host, editor.getValue(), foldedHeadingsRef.current);
           }
         },
         input(value) {
@@ -583,6 +649,8 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
             if (host) {
               void resolveLocalImages(host, filePath);
               void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+              void renderKatexIn(host);
+              applyHeadingFolds(host, editor.getValue(), foldedHeadingsRef.current);
             }
           }, IR_MARKER_COLLAPSE_DELAY_MS);
 
@@ -651,6 +719,16 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       applyingExternalValue.current = false;
     });
   }, [source]);
+
+  // Heading 折叠 DOM 应用:foldedHeadings 切换 或 source 变化时重跑。
+  // applyHeadingFolds 内部先清旧标记,幂等。
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const ir = getIrElement(editor);
+    if (!ir) return;
+    applyHeadingFolds(ir, source, foldedHeadings);
+  }, [foldedHeadings, source]);
 
   // 在 IR DOM 中高亮有检视意见的段落。
   // 策略：遍历 reviewComments，用 findUniqueAnchor 在 source 中定位，
@@ -869,6 +947,7 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       <div
         ref={hostRef}
         className="wysiwyg-editor-host"
+        onClick={handleHostClick}
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
       />
