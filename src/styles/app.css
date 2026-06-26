@@ -4954,16 +4954,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   margin: 0 0 14px;
 }
 
-.agent-model-select {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-}
-
-.agent-model-custom-field {
-  margin-top: -4px;
-}
-
 .agent-runtime-meta-grid {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
@@ -4987,21 +4977,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   font-family: var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.agent-runtime-capabilities {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 14px;
-}
-
-.agent-runtime-capabilities span {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--control-bg);
-  color: var(--fg-muted);
-  font-size: 11px;
 }
 
 .settings-action-link {

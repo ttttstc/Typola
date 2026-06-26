@@ -42,21 +42,15 @@ export function AiCliSection() {
   const providerPath = (provider: AgentProvider) => provider === 'opencode'
     ? settings.aiOpenCodePath
     : settings.aiClaudePath;
-  const providerModel = (provider: AgentProvider) => provider === 'opencode'
-    ? settings.aiOpenCodeModel
-    : settings.aiClaudeModel;
   const updateProviderPath = (provider: AgentProvider, value: string) => {
     updateSettings(provider === 'opencode' ? { aiOpenCodePath: value } : { aiClaudePath: value });
-  };
-  const updateProviderModel = (provider: AgentProvider, value: string) => {
-    updateSettings(provider === 'opencode' ? { aiOpenCodeModel: value } : { aiClaudeModel: value });
   };
 
   return (
     <div className="settings-section settings-section-agent-runtime">
       <h3 className="settings-section-title">AI 执行</h3>
       <p className="settings-section-intro">
-        选择 Typola AI 工作台默认使用的本地 CLI，并查看它能访问的工作区、Plugin 目录与检测状态。这里只做 CLI 识别，不运行模型测试。
+        选择 Typola AI 工作台默认使用的本地 CLI，并检测 Claude / OpenCode 是否能被桌面应用识别。这里只做 CLI 识别，不运行模型测试。
       </p>
       <div className="agent-runtime-card-list">
         {runtimes.map((runtime) => (
@@ -65,14 +59,10 @@ export function AiCliSection() {
             runtime={runtime}
             active={settings.aiActiveProvider === runtime.id}
             pathValue={providerPath(runtime.id)}
-            modelValue={providerModel(runtime.id)}
             detecting={detecting === runtime.id}
             result={results[runtime.id]}
-            workspaceRoot={settings.aiWorkspaceRoot}
-            pluginDirs={settings.aiPluginDirs}
             onSetActive={(provider) => updateSettings({ aiActiveProvider: provider })}
             onPathChange={(value) => updateProviderPath(runtime.id, value)}
-            onModelChange={(value) => updateProviderModel(runtime.id, value)}
             onDetect={() => void handleDetect(runtime.id, providerPath(runtime.id))}
           />
         ))}
