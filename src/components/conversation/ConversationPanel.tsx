@@ -119,6 +119,11 @@ export function ConversationPanel({
     : configuredModel
       ? `${providerConfig.label} · ${configuredModel}`
       : `${providerConfig.label} · 默认模型`;
+  const runtimeStatusItems = [
+    providerConfig.label,
+    currentModel || configuredModel || '默认模型',
+    cwd ? `工作区 ${cwd}` : '未设置 AI 工作区',
+  ];
   const composerRef = useRef<ComposerHandle>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -284,6 +289,11 @@ export function ConversationPanel({
           <X size={15} />
         </button>
       </header>
+      <div className="conversation-runtime-status" title={runtimeStatusItems.join(' · ')}>
+        {runtimeStatusItems.map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
       <div className="conversation-messages">
         {messages.length === 0 && (
           <div className="conversation-empty">

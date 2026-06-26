@@ -3688,6 +3688,30 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   min-height: 28px;
 }
 
+.conversation-runtime-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 16px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.conversation-runtime-status span {
+  min-width: 0;
+  max-width: 180px;
+  padding: 2px 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--control-bg);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .conversation-pill-container {
   position: relative;
 }
@@ -4702,6 +4726,10 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   max-width: 520px;
 }
 
+.settings-section-agent-runtime {
+  max-width: 760px;
+}
+
 .settings-section-export {
   max-width: none;
 }
@@ -4723,6 +4751,13 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 14px;
+}
+
+.settings-section-intro {
+  margin: -4px 0 18px;
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .settings-subnav {
@@ -4856,6 +4891,130 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .agent-diagnostic-row-action:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.agent-runtime-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.agent-runtime-card {
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: color-mix(in oklch, var(--surface) 84%, var(--bg));
+  box-shadow: 0 12px 32px var(--shadow-soft);
+}
+
+.agent-runtime-card.active {
+  border-color: color-mix(in oklch, var(--accent) 42%, var(--border-soft));
+}
+
+.agent-runtime-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.agent-runtime-card-header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-runtime-card-header strong {
+  font-size: 15px;
+  color: var(--fg);
+}
+
+.agent-runtime-status {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  background: var(--control-bg);
+}
+
+.agent-runtime-status.ok {
+  color: var(--success);
+  border-color: color-mix(in oklch, var(--success) 34%, var(--border));
+}
+
+.agent-runtime-status.error {
+  color: var(--danger);
+  border-color: color-mix(in oklch, var(--danger) 34%, var(--border));
+}
+
+.agent-runtime-desc {
+  margin: 0 0 14px;
+}
+
+.agent-model-select {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.agent-model-custom-field {
+  margin-top: -4px;
+}
+
+.agent-runtime-meta-grid {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 7px 12px;
+  margin: 2px 0 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--bg) 74%, transparent);
+  font-size: 12px;
+}
+
+.agent-runtime-meta-grid span {
+  color: var(--fg-muted);
+}
+
+.agent-runtime-meta-grid code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-runtime-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.agent-runtime-capabilities span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--control-bg);
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.settings-action-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.settings-action-link:hover {
+  text-decoration: underline;
 }
 
 .settings-preset-list {
