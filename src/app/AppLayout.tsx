@@ -551,7 +551,9 @@ export function AppLayout() {
     try {
       const { exportToWord } = await import('../services/wordExportService');
       const savePath = await exportToWord(file.content, file.name, file.path || undefined, getExportPresetConfig());
-      showExportToast({ type: 'success', title: 'Word 导出完成', detail: savePath });
+      if (savePath) {
+        showExportToast({ type: 'success', title: 'Word 导出完成', detail: savePath });
+      }
     } catch (e) {
       console.error('Export failed:', e);
       const { humanizeExportError } = await import('../services/exportErrors');
