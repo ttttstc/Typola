@@ -10,6 +10,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
@@ -18,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use tauri::Emitter as _;
 use tauri::Manager;
+use wait_timeout::ChildExt;
 
 mod export;
 
@@ -69,6 +71,10 @@ struct TerminalSession {
 struct AgentDetectRequest {
     provider: Option<AgentProvider>,
     agent_path: Option<String>,
+    runtime_id: Option<AgentProvider>,
+    custom_path: Option<String>,
+    default_command: Option<String>,
+    version_args: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -238,10 +244,36 @@ struct UploadImageResult {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct AgentDetectResult {
+    runtime_id: AgentProvider,
     available: bool,
     path: String,
+    executable_path: Option<String>,
     version: Option<String>,
+    auth_status: String,
+    diagnostics: Vec<AgentDiagnostic>,
+    detected_at: String,
     error: Option<String>,
+    exit_code: Option<i32>,
+    stdout_preview: Option<String>,
+    stderr_preview: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentDiagnostic {
+    code: String,
+    level: String,
+    title: String,
+    detail: String,
+    fix: Option<AgentDiagnosticFix>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AgentDiagnosticFix {
+    label: String,
+    action: String,
+    payload: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -496,22 +528,7 @@ fn upload_image_via_command(request: UploadImageRequest) -> Result<UploadImageRe
 
 #[tauri::command]
 fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
-    let provider = request.provider.unwrap_or_default();
-    let agent_path = normalize_agent_path(provider, request.agent_path.as_deref());
-    match run_agent_version(provider, &agent_path) {
-        Ok(version) => AgentDetectResult {
-            available: true,
-            path: agent_path,
-            version: Some(version),
-            error: None,
-        },
-        Err(error) => AgentDetectResult {
-            available: false,
-            path: agent_path,
-            version: None,
-            error: Some(error),
-        },
-    }
+    detect_agent_runtime(request)
 }
 
 #[tauri::command]
@@ -1099,6 +1116,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
@@ -1921,28 +1939,366 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
     command
 }
 
-fn run_agent_version(provider: AgentProvider, agent_path: &str) -> Result<String, String> {
-    let output = create_agent_command(agent_path, &provider.detect_args())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|error| format!("failed to run {} CLI: {error}", provider.display_name()))?;
+struct AgentVersionProbe {
+    version: Option<String>,
+    exit_code: Option<i32>,
+    stdout_preview: String,
+    stderr_preview: String,
+}
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
-            format!("{} CLI exited with an error", provider.display_name())
-        } else {
-            stderr
-        });
+fn detect_agent_runtime(request: AgentDetectRequest) -> AgentDetectResult {
+    let provider = request.runtime_id.or(request.provider).unwrap_or_default();
+    let requested_path = request.custom_path.as_deref().or(request.agent_path.as_deref());
+    let default_command = request
+        .default_command
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| normalize_agent_path(provider, Some(value)))
+        .unwrap_or_else(|| provider.default_command());
+    let agent_path = requested_path
+        .map(|value| normalize_agent_path(provider, Some(value)))
+        .unwrap_or(default_command);
+    let version_args = request
+        .version_args
+        .filter(|args| !args.is_empty())
+        .unwrap_or_else(|| provider.detect_args());
+    let detected_at = detected_at_millis();
+
+    if let Some(diagnostic) = validate_agent_path_before_spawn(provider, requested_path, &agent_path) {
+        return AgentDetectResult {
+            runtime_id: provider,
+            available: false,
+            path: agent_path,
+            executable_path: None,
+            version: None,
+            auth_status: "unknown".into(),
+            error: Some(diagnostic.detail.clone()),
+            diagnostics: vec![diagnostic],
+            detected_at,
+            exit_code: None,
+            stdout_preview: None,
+            stderr_preview: None,
+        };
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok(if stdout.is_empty() {
-        "unknown".into()
+    match run_agent_version(provider, &agent_path, &version_args) {
+        Ok(probe) => {
+            let mut diagnostics = vec![agent_diagnostic(
+                "ok",
+                "ok",
+                format!("{} CLI 可用", provider.display_name()),
+                format!("已识别到 {}：{}", provider.display_name(), agent_path),
+                None,
+            )];
+            diagnostics.push(agent_diagnostic(
+                "auth_unknown",
+                "warning",
+                "尚未验证登录状态",
+                "本次只做 CLI 识别，不运行模型请求；如果后续对话失败，请先在终端确认 CLI 已登录。",
+                None,
+            ));
+            AgentDetectResult {
+                runtime_id: provider,
+                available: true,
+                path: agent_path.clone(),
+                executable_path: Some(agent_path),
+                version: probe.version,
+                auth_status: "unknown".into(),
+                error: None,
+                diagnostics,
+                detected_at,
+                exit_code: probe.exit_code,
+                stdout_preview: optional_preview(probe.stdout_preview),
+                stderr_preview: optional_preview(probe.stderr_preview),
+            }
+        }
+        Err((diagnostic, probe)) => AgentDetectResult {
+            runtime_id: provider,
+            available: false,
+            path: agent_path,
+            executable_path: None,
+            version: None,
+            auth_status: "unknown".into(),
+            error: Some(diagnostic.detail.clone()),
+            diagnostics: vec![diagnostic],
+            detected_at,
+            exit_code: probe.as_ref().and_then(|value| value.exit_code),
+            stdout_preview: probe.as_ref().and_then(|value| optional_preview(value.stdout_preview.clone())),
+            stderr_preview: probe.and_then(|value| optional_preview(value.stderr_preview)),
+        },
+    }
+}
+
+fn run_agent_version(
+    provider: AgentProvider,
+    agent_path: &str,
+    version_args: &[String],
+) -> Result<AgentVersionProbe, (AgentDiagnostic, Option<AgentVersionProbe>)> {
+    let mut child = create_agent_command(agent_path, version_args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| {
+            let diagnostic = classify_spawn_error(provider, agent_path, &error.to_string());
+            (diagnostic, None)
+        })?;
+
+    let stdout_reader = child.stdout.take().map(spawn_preview_reader);
+    let stderr_reader = child.stderr.take().map(spawn_preview_reader);
+    let status = match child.wait_timeout(Duration::from_secs(5)) {
+        Ok(Some(status)) => status,
+        Ok(None) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let stdout = join_preview_reader(stdout_reader);
+            let stderr = join_preview_reader(stderr_reader);
+            let probe = AgentVersionProbe {
+                version: optional_preview(stdout.lines().next().unwrap_or_default().trim().to_string()),
+                exit_code: None,
+                stdout_preview: preview_text(&stdout),
+                stderr_preview: preview_text(&stderr),
+            };
+            let diagnostic = agent_diagnostic(
+                "timeout",
+                "error",
+                format!("{} CLI 检测超时", provider.display_name()),
+                format!(
+                    "Typola 启动了 {agent_path}，但版本探测在 5 秒内没有结束。请先在终端运行 `{}` 确认是否会卡住。",
+                    display_command(agent_path, version_args),
+                ),
+                Some(agent_fix("重新检测", "rescan", None)),
+            );
+            return Err((diagnostic, Some(probe)));
+        }
+        Err(error) => {
+            let diagnostic = classify_spawn_error(provider, agent_path, &error.to_string());
+            return Err((diagnostic, None));
+        }
+    };
+
+    let stdout = join_preview_reader(stdout_reader);
+    let stderr = join_preview_reader(stderr_reader);
+    let probe = AgentVersionProbe {
+        version: optional_preview(stdout.lines().next().unwrap_or_default().trim().to_string()),
+        exit_code: status.code(),
+        stdout_preview: preview_text(&stdout),
+        stderr_preview: preview_text(&stderr),
+    };
+
+    if !status.success() {
+        let detail = if probe.stderr_preview.trim().is_empty() {
+            format!("{} CLI 能启动，但 `--version` 返回非 0。", provider.display_name())
+        } else {
+            probe.stderr_preview.clone()
+        };
+        let diagnostic = agent_diagnostic(
+            "version_failed",
+            "error",
+            format!("{} CLI 版本探测失败", provider.display_name()),
+            format!(
+                "Typola 已找到 {agent_path}，但执行 `{}` 失败。输出：{}",
+                display_command(agent_path, version_args),
+                detail,
+            ),
+            Some(agent_fix("重新检测", "rescan", None)),
+        );
+        return Err((diagnostic, Some(probe)));
+    }
+
+    Ok(probe)
+}
+
+fn spawn_preview_reader(reader: impl Read + Send + 'static) -> thread::JoinHandle<String> {
+    thread::spawn(move || read_preview(reader))
+}
+
+fn join_preview_reader(handle: Option<thread::JoinHandle<String>>) -> String {
+    handle.and_then(|reader| reader.join().ok()).unwrap_or_default()
+}
+
+fn validate_agent_path_before_spawn(
+    provider: AgentProvider,
+    requested_path: Option<&str>,
+    resolved_path: &str,
+) -> Option<AgentDiagnostic> {
+    let requested = requested_path?.trim();
+    if requested.is_empty() || is_bare_command(requested) {
+        return None;
+    }
+    let path = Path::new(resolved_path);
+    if !path.exists() {
+        return Some(agent_diagnostic(
+            "not_found",
+            "error",
+            format!("{} CLI 路径不存在", provider.display_name()),
+            format!("Typola 找不到你填写的 CLI 路径：{resolved_path}。请检查路径，或清空后让 Typola 从 PATH 自动识别。"),
+            Some(agent_fix("选择路径", "choose_file", Some(resolved_path.to_string()))),
+        ));
+    }
+    if !path.is_file() {
+        return Some(agent_diagnostic(
+            "not_executable",
+            "error",
+            format!("{} CLI 路径不是可执行文件", provider.display_name()),
+            format!("你填写的路径不是文件：{resolved_path}。请填写 CLI 的 .cmd/.exe 或可执行文件路径。"),
+            Some(agent_fix("选择路径", "choose_file", Some(resolved_path.to_string()))),
+        ));
+    }
+    if !is_agent_executable_file(path) {
+        return Some(agent_diagnostic(
+            "not_executable",
+            "error",
+            format!("{} CLI 路径不可执行", provider.display_name()),
+            format!("Typola 找到了文件，但它看起来不是可执行 CLI：{resolved_path}。Windows 下建议填写 .cmd 或 .exe。"),
+            Some(agent_fix("选择路径", "choose_file", Some(resolved_path.to_string()))),
+        ));
+    }
+    None
+}
+
+fn classify_spawn_error(provider: AgentProvider, agent_path: &str, raw_error: &str) -> AgentDiagnostic {
+    let lower = raw_error.to_ascii_lowercase();
+    let missing = lower.contains("not found")
+        || lower.contains("no such file")
+        || lower.contains("cannot find")
+        || lower.contains("os error 2")
+        || raw_error.contains("系统找不到指定的文件");
+    if missing {
+        let (code, title, detail) = if cfg!(target_os = "windows") && is_bare_command(agent_path) {
+            (
+                "windows_path_issue",
+                format!("{} CLI 未在 Windows GUI PATH 中找到", provider.display_name()),
+                format!("Typola 没能启动 `{agent_path}`。Windows 桌面应用的 PATH 可能和终端不同，请填写 npm 全局目录中的完整 .cmd 路径，或重新打开应用。原始错误：{raw_error}"),
+            )
+        } else {
+            (
+                "not_found",
+                format!("{} CLI 未找到", provider.display_name()),
+                format!("Typola 没能启动 `{agent_path}`。请先安装 CLI，或在设置里填写完整路径。原始错误：{raw_error}"),
+            )
+        };
+        return agent_diagnostic(code, "error", title, detail, Some(agent_fix("重新检测", "rescan", None)));
+    }
+
+    let denied = lower.contains("permission denied")
+        || lower.contains("access is denied")
+        || raw_error.contains("拒绝访问");
+    if denied {
+        return agent_diagnostic(
+            "not_executable",
+            "error",
+            format!("{} CLI 无法执行", provider.display_name()),
+            format!("Typola 找到了 `{agent_path}`，但系统拒绝执行。请检查文件权限，或改填 .cmd/.exe 路径。原始错误：{raw_error}"),
+            Some(agent_fix("选择路径", "choose_file", Some(agent_path.to_string()))),
+        );
+    }
+
+    agent_diagnostic(
+        "unknown",
+        "error",
+        format!("{} CLI 检测失败", provider.display_name()),
+        format!("Typola 检测 `{agent_path}` 时遇到未知错误：{raw_error}"),
+        Some(agent_fix("重新检测", "rescan", None)),
+    )
+}
+
+fn agent_diagnostic(
+    code: impl Into<String>,
+    level: impl Into<String>,
+    title: impl Into<String>,
+    detail: impl Into<String>,
+    fix: Option<AgentDiagnosticFix>,
+) -> AgentDiagnostic {
+    AgentDiagnostic {
+        code: code.into(),
+        level: level.into(),
+        title: title.into(),
+        detail: detail.into(),
+        fix,
+    }
+}
+
+fn agent_fix(
+    label: impl Into<String>,
+    action: impl Into<String>,
+    payload: Option<String>,
+) -> AgentDiagnosticFix {
+    AgentDiagnosticFix {
+        label: label.into(),
+        action: action.into(),
+        payload,
+    }
+}
+
+fn is_bare_command(value: &str) -> bool {
+    let path = Path::new(value);
+    path.parent()
+        .map_or(true, |parent| parent.as_os_str().is_empty())
+        && path.extension().is_none()
+        && !value.contains('\\')
+        && !value.contains('/')
+}
+
+fn read_preview(mut reader: impl Read) -> String {
+    const MAX_PREVIEW_BYTES: usize = 64 * 1024;
+    let mut bytes = Vec::with_capacity(MAX_PREVIEW_BYTES);
+    let _ = reader.by_ref().take(MAX_PREVIEW_BYTES as u64).read_to_end(&mut bytes);
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn preview_text(value: &str) -> String {
+    const MAX_PREVIEW_CHARS: usize = 800;
+    let cleaned = value.replace('\0', "");
+    let trimmed = cleaned.trim();
+    if trimmed.chars().count() <= MAX_PREVIEW_CHARS {
+        return trimmed.to_string();
+    }
+    let start = trimmed
+        .char_indices()
+        .rev()
+        .nth(MAX_PREVIEW_CHARS - 1)
+        .map(|(index, _)| index)
+        .unwrap_or(0);
+    trimmed[start..].to_string()
+}
+
+fn optional_preview(value: String) -> Option<String> {
+    let trimmed = value.trim().to_string();
+    if trimmed.is_empty() {
+        None
     } else {
-        stdout
-    })
+        Some(trimmed)
+    }
+}
+
+fn display_command(agent_path: &str, args: &[String]) -> String {
+    std::iter::once(agent_path.to_string())
+        .chain(args.iter().cloned())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn detected_at_millis() -> String {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_millis().to_string())
+        .unwrap_or_else(|_| "0".into())
+}
+
+#[cfg(target_os = "windows")]
+fn is_agent_executable_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| matches!(extension.to_ascii_lowercase().as_str(), "cmd" | "exe" | "bat"))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn is_agent_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
 }
 
 fn resolve_terminal_cwd(requested: Option<&str>) -> PathBuf {
@@ -2323,6 +2679,71 @@ mod tests {
             normalize_agent_path(AgentProvider::Claude, Some(" custom-claude ")),
             "custom-claude"
         );
+    }
+
+    #[test]
+    fn agent_detect_reports_invalid_custom_path_without_spawn() {
+        let missing = temp_path("missing-claude.cmd");
+        let result = agent_detect(AgentDetectRequest {
+            provider: Some(AgentProvider::Claude),
+            agent_path: Some(missing.to_string_lossy().to_string()),
+            runtime_id: None,
+            custom_path: None,
+            default_command: None,
+            version_args: None,
+        });
+
+        assert!(!result.available);
+        assert_eq!(result.runtime_id, AgentProvider::Claude);
+        assert_eq!(result.diagnostics[0].code, "not_found");
+        assert!(result.error.unwrap_or_default().contains("找不到"));
+    }
+
+    #[test]
+    fn custom_bare_agent_command_skips_pre_spawn_path_validation() {
+        let diagnostic = validate_agent_path_before_spawn(
+            AgentProvider::Claude,
+            Some("custom-claude"),
+            "custom-claude",
+        );
+
+        assert!(diagnostic.is_none());
+    }
+
+    #[test]
+    fn classify_spawn_error_handles_permission_denied() {
+        let diagnostic = classify_spawn_error(AgentProvider::Claude, "claude.cmd", "拒绝访问。");
+
+        assert_eq!(diagnostic.code, "not_executable");
+        assert_eq!(diagnostic.fix.as_ref().map(|fix| fix.action.as_str()), Some("choose_file"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn classify_spawn_error_handles_windows_path_lookup_miss() {
+        let diagnostic = classify_spawn_error(
+            AgentProvider::Opencode,
+            "opencode",
+            "系统找不到指定的文件。 (os error 2)",
+        );
+
+        assert_eq!(diagnostic.code, "windows_path_issue");
+    }
+
+    #[test]
+    fn classify_spawn_error_falls_back_to_unknown() {
+        let diagnostic = classify_spawn_error(AgentProvider::Claude, "claude", "something odd happened");
+
+        assert_eq!(diagnostic.code, "unknown");
+    }
+
+    #[test]
+    fn preview_text_truncates_on_char_boundary() {
+        let input = format!("{}{}", "a".repeat(900), "😀");
+        let preview = preview_text(&input);
+
+        assert!(preview.chars().count() <= 800);
+        assert!(preview.ends_with('😀'));
     }
 
     #[cfg(not(target_os = "windows"))]

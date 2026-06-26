@@ -493,7 +493,7 @@ export function AppLayout() {
       .map((r: { version?: number }) => r.version ?? 0);
     const nextVersion = (existingVersions.length ? Math.max(...existingVersions) : 0) + 1;
     const targetFileName = `${stem}.ai改${nextVersion}.md`;
-    // 拼 prompt:每条意见带「prefixHint + originalText」锚点,要求严格按锚点修改,
+    // 拼 prompt:只传当前文件路径 + 每条意见的锚点,不把全文塞进 prompt。
     // 找不到/多处重复 → 跳过;不要扩大修改范围。
     const commentsBlock = state.comments.map((c, idx) => {
       const original = c.anchor.originalText || '(空)';
@@ -503,9 +503,12 @@ export function AppLayout() {
       return `${idx + 1}. 锚点 = ${hint}原文「${truncate(original, 160)}」\n   意见:${c.text}`;
     }).join('\n\n');
     const prompt = [
-      `请按以下检视意见,修改我的文档《${fileName}》并产出一份完整的、可替换原文的新版本。正文以当前主屏文章为准(见下方)。`,
+      `请按以下检视意见,修改指定文稿并产出一份完整的、可替换原文的新版本。`,
       '',
       '**严格修改规则(务必遵守):**',
+      `- 指定文稿路径:${file.path}`,
+      '- 改稿范围仅限上述指定文稿;不要读取、搜索、引用或修改任何其他文件',
+      '- 不要扫描工作区,不要根据相邻文件、目录、README 或历史版本补充上下文',
       '- 每条意见都附了精确锚点 = 「前缀 prefixHint」+「原文 originalText」共同唯一定位',
       `- 每条意见**只修改该锚点对应的那一小段原文**,其他位置一律不动`,
       `- 如果 prefixHint + originalText 在文档中找不到唯一位置(已被改动 / 重复多次),**跳过该条意见,不修改任何内容**`,
@@ -516,10 +519,6 @@ export function AppLayout() {
       `- 把修改后的完整 markdown 通过 Write 工具落到当前工作目录,文件名必须是:`,
       `  ${targetFileName}`,
       '',
-      '## 待修改的全文(当前主屏文章)',
-      '',
-      file.content,
-      '',
       '## 检视意见清单(每条带唯一锚点 prefixHint + originalText)',
       '',
       commentsBlock,
@@ -528,13 +527,13 @@ export function AppLayout() {
     const newConvId = convManager.createConversation('检视修改');
     setLeftRailMode('aiWorkbench');
     try {
-      await convManager.send(prompt, { conversationId: newConvId });
+      await convManager.send(prompt, { conversationId: newConvId, referencePaths: [file.path] });
       markClean();
       setTransientMessage(`已交给 AI 修改,改后版本将作为「${targetFileName}」回到右栏列表`);
     } catch (error) {
       await messageDialog(String(error), { title: '发起 AI 修改失败' });
     }
-  }, [aiRevisions, convManager, file.content, file.path, refreshRevisions, reviewStateApi, setLeftRailMode, truncate]);
+  }, [aiRevisions, convManager, file.path, refreshRevisions, reviewStateApi, setLeftRailMode, truncate]);
 
   const handleExportWord = useCallback(async () => {
     if (wordExporting) return;

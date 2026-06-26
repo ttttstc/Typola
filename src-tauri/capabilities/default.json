@@ -26,6 +26,7 @@
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-exists",
+    "opener:default",
     {
       "identifier": "fs:scope",
       "allow": [

@@ -98,9 +98,13 @@ describe('skill hub helpers', () => {
       'guizang-ppt-skill',
       'huashu-slides',
       'baoyu-slide-deck',
+      'ppt-master',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')?.skills.map((skill) => skill.name)).toEqual([
       'frontend-slides',
+      'guizang-ppt-skill',
+      'baoyu-markdown-to-html',
+      'html-ppt-skill',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'wechat')?.skills.map((skill) => skill.name)).toEqual([
       'ni-writer',
@@ -120,6 +124,7 @@ describe('skill hub helpers', () => {
       'guizang-ppt-skill',
       'huashu-slides',
       'baoyu-slide-deck',
+      'ppt-master',
     ]);
     expect(getSystemSkillScenesForProvider('opencode').flatMap((scene) => scene.skills)).toEqual([]);
   });
