@@ -271,8 +271,8 @@ function parseLegacyV1(root: Record<string, unknown>): SkillHub {
   return { version: 2, sceneAdditions, hiddenSystemSkills: {} };
 }
 
-export function parseSkillHubJson(raw: string): LoadSkillHubResult {
-  if (!raw.trim()) return { hub: { ...EMPTY_SKILL_HUB } };
+export function parseSkillHubJson(raw: unknown): LoadSkillHubResult {
+  if (typeof raw !== 'string' || !raw.trim()) return { hub: { ...EMPTY_SKILL_HUB } };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -353,25 +353,25 @@ export async function saveSkillHub(hub: SkillHub): Promise<void> {
 // 一次性迁移:如果 skill-hub.json 为空,尝试从旧的 flow-scenarios.json 抽出 skillHint 作为用户增补。
 // 系统模板始终由代码维护,迁移不会污染或覆盖模板。
 export async function migrateFlowScenariosIfStale(): Promise<boolean> {
-  let existingRaw = '';
+  let existingRaw: unknown = '';
   try {
     existingRaw = await invoke<string>('read_skill_hub');
   } catch {
     // ignore - treat as empty
   }
-  if (existingRaw.trim()) {
+  if (typeof existingRaw === 'string' && existingRaw.trim()) {
     const parsed = parseSkillHubJson(existingRaw);
     const hasAdditions = Object.values(parsed.hub.sceneAdditions).some((skills) => skills.length > 0);
     if (!parsed.error && hasAdditions) return false;
   }
 
-  let legacyRaw = '';
+  let legacyRaw: unknown = '';
   try {
     legacyRaw = await invoke<string>('read_flow_scenarios');
   } catch {
     return false;
   }
-  if (!legacyRaw.trim()) return false;
+  if (typeof legacyRaw !== 'string' || !legacyRaw.trim()) return false;
 
   let legacyParsed: unknown;
   try {

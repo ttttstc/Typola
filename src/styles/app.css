@@ -2943,8 +2943,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  min-width: 74px;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 128px;
   padding: 8px 8px 8px 0;
 }
 
@@ -3707,30 +3708,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   color: var(--text-primary);
   border-radius: 8px;
   min-height: 28px;
-}
-
-.conversation-runtime-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 16px 8px;
-  border-bottom: 1px solid var(--border-subtle);
-  overflow: hidden;
-}
-
-.conversation-runtime-status span {
-  min-width: 0;
-  max-width: 180px;
-  padding: 2px 7px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--control-bg);
-  color: var(--text-muted);
-  font-size: 11px;
 }
 
 .conversation-pill-container {

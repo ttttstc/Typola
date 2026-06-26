@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { AgentProvider } from './agent/provider';
 import { getAgentRuntimeDef } from './agent/runtime/registry';
-import type { AgentDiagnostic } from './agent/runtime/diagnostics';
+import type { AgentDiagnostic } from './agent/runtime/types';
 
 export type AgentDetectResult = {
   runtimeId?: AgentProvider;

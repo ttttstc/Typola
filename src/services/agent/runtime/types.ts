@@ -8,54 +8,6 @@
 
 export type AgentRuntimeId = 'claude' | 'opencode';
 
-export type AgentCapability =
-  | 'stream'
-  | 'sessionResume'
-  | 'fileWrite'
-  | 'mcp'
-  | 'extraAllowedDirs'
-  | 'promptViaStdin'
-  | 'modelSelection'
-  | 'partialMessages'
-  | 'pluginDirs'
-  | 'promptContextFiles'
-  | 'commandName';
-
-export type AgentModelOption = {
-  id: string;
-  label: string;
-};
-
-export type AgentCommandInput = {
-  runtimeId: AgentRuntimeId;
-  prompt: string;
-  cwd?: string;
-  model?: string;
-  resumed?: boolean;
-  sessionId?: string;
-  pluginDirs?: string[];
-  extraAllowedDirs?: string[];
-  promptContextPaths?: string[];
-  commandName?: string;
-};
-
-export type AgentCommandSpec = {
-  runtimeId: AgentRuntimeId;
-  command: string;
-  args: string[];
-  cwd?: string;
-  promptViaStdin: boolean;
-  promptInputFormat?: 'text' | 'stream-json';
-  outputFormat?: 'text' | 'json' | 'stream-json';
-};
-
-export type AgentPromptBudgetWarning = {
-  code: 'AGENT_PROMPT_TOO_LARGE';
-  message: string;
-  bytes: number;
-  limit: number;
-};
-
 export type AgentRuntimeDef = {
   id: AgentRuntimeId;
   label: string;
@@ -65,9 +17,32 @@ export type AgentRuntimeDef = {
   versionArgs: string[];
   docsUrl?: string;
   installUrl?: string;
-  capabilities: Partial<Record<AgentCapability, boolean>>;
-  defaultModels: AgentModelOption[];
   experimental?: boolean;
-  maxPromptArgBytes?: number;
-  buildCommandSpec: (input: AgentCommandInput) => AgentCommandSpec;
+};
+
+export type AgentDiagnosticLevel = 'ok' | 'warning' | 'error';
+
+export type AgentDiagnosticCode =
+  | 'ok'
+  | 'not_found'
+  | 'not_executable'
+  | 'version_failed'
+  | 'windows_path_issue'
+  | 'timeout'
+  | 'auth_unknown'
+  | 'unknown'
+  | string;
+
+export type AgentDiagnosticFix = {
+  label: string;
+  action: 'choose_file' | 'copy_command' | 'open_settings' | 'open_doc' | 'rescan' | 'none';
+  payload?: string;
+};
+
+export type AgentDiagnostic = {
+  code: AgentDiagnosticCode;
+  level: AgentDiagnosticLevel;
+  title: string;
+  detail: string;
+  fix?: AgentDiagnosticFix | null;
 };

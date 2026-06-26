@@ -384,9 +384,6 @@ export function SkillHubPanel({
                             </span>
                           )}
                         </span>
-                        <span className={`skill-hub-badge ${skill.installed ? 'installed' : 'missing'}`}>
-                          {skill.installed ? '已安装' : '未安装'}
-                        </span>
                       </span>
                       <strong>{skill.label}</strong>
                       {skill.summary && <span className="skill-hub-item-desc">{skill.summary}</span>}
@@ -409,6 +406,9 @@ export function SkillHubPanel({
                           <Trash2 size={12} />
                         </button>
                       )}
+                      <span className={`skill-hub-badge ${skill.installed ? 'installed' : 'missing'}`}>
+                        {skill.installed ? '已安装' : '未安装'}
+                      </span>
                     </div>
                   </div>
                 </li>

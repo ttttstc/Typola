@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use tauri::Emitter as _;
 use tauri::Manager;
+use wait_timeout::ChildExt;
 
 mod export;
 
@@ -2043,45 +2044,41 @@ fn run_agent_version(
             (diagnostic, None)
         })?;
 
-    let deadline = SystemTime::now() + Duration::from_secs(5);
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => {
-                if SystemTime::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    let diagnostic = agent_diagnostic(
-                        "timeout",
-                        "error",
-                        format!("{} CLI 检测超时", provider.display_name()),
-                        format!(
-                            "Typola 启动了 {agent_path}，但版本探测在 5 秒内没有结束。请先在终端运行 `{}` 确认是否会卡住。",
-                            display_command(agent_path, version_args),
-                        ),
-                        Some(agent_fix("重新检测", "rescan", None)),
-                    );
-                    return Err((diagnostic, None));
-                }
-                thread::sleep(Duration::from_millis(50));
-            }
-            Err(error) => {
-                let diagnostic = classify_spawn_error(provider, agent_path, &error.to_string());
-                return Err((diagnostic, None));
-            }
+    let stdout_reader = child.stdout.take().map(spawn_preview_reader);
+    let stderr_reader = child.stderr.take().map(spawn_preview_reader);
+    let status = match child.wait_timeout(Duration::from_secs(5)) {
+        Ok(Some(status)) => status,
+        Ok(None) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let stdout = join_preview_reader(stdout_reader);
+            let stderr = join_preview_reader(stderr_reader);
+            let probe = AgentVersionProbe {
+                version: optional_preview(stdout.lines().next().unwrap_or_default().trim().to_string()),
+                exit_code: None,
+                stdout_preview: preview_text(&stdout),
+                stderr_preview: preview_text(&stderr),
+            };
+            let diagnostic = agent_diagnostic(
+                "timeout",
+                "error",
+                format!("{} CLI 检测超时", provider.display_name()),
+                format!(
+                    "Typola 启动了 {agent_path}，但版本探测在 5 秒内没有结束。请先在终端运行 `{}` 确认是否会卡住。",
+                    display_command(agent_path, version_args),
+                ),
+                Some(agent_fix("重新检测", "rescan", None)),
+            );
+            return Err((diagnostic, Some(probe)));
+        }
+        Err(error) => {
+            let diagnostic = classify_spawn_error(provider, agent_path, &error.to_string());
+            return Err((diagnostic, None));
         }
     };
 
-    let stdout = child
-        .stdout
-        .take()
-        .map(read_preview)
-        .unwrap_or_default();
-    let stderr = child
-        .stderr
-        .take()
-        .map(read_preview)
-        .unwrap_or_default();
+    let stdout = join_preview_reader(stdout_reader);
+    let stderr = join_preview_reader(stderr_reader);
     let probe = AgentVersionProbe {
         version: optional_preview(stdout.lines().next().unwrap_or_default().trim().to_string()),
         exit_code: status.code(),
@@ -2110,6 +2107,14 @@ fn run_agent_version(
     }
 
     Ok(probe)
+}
+
+fn spawn_preview_reader(reader: impl Read + Send + 'static) -> thread::JoinHandle<String> {
+    thread::spawn(move || read_preview(reader))
+}
+
+fn join_preview_reader(handle: Option<thread::JoinHandle<String>>) -> String {
+    handle.and_then(|reader| reader.join().ok()).unwrap_or_default()
 }
 
 fn validate_agent_path_before_spawn(
@@ -2236,13 +2241,26 @@ fn is_bare_command(value: &str) -> bool {
 }
 
 fn read_preview(mut reader: impl Read) -> String {
-    let mut buffer = String::new();
-    let _ = reader.read_to_string(&mut buffer);
-    buffer
+    const MAX_PREVIEW_BYTES: usize = 64 * 1024;
+    let mut bytes = Vec::with_capacity(MAX_PREVIEW_BYTES);
+    let _ = reader.by_ref().take(MAX_PREVIEW_BYTES as u64).read_to_end(&mut bytes);
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 fn preview_text(value: &str) -> String {
-    value.replace('\0', "").trim().chars().rev().take(800).collect::<String>().chars().rev().collect()
+    const MAX_PREVIEW_CHARS: usize = 800;
+    let cleaned = value.replace('\0', "");
+    let trimmed = cleaned.trim();
+    if trimmed.chars().count() <= MAX_PREVIEW_CHARS {
+        return trimmed.to_string();
+    }
+    let start = trimmed
+        .char_indices()
+        .rev()
+        .nth(MAX_PREVIEW_CHARS - 1)
+        .map(|(index, _)| index)
+        .unwrap_or(0);
+    trimmed[start..].to_string()
 }
 
 fn optional_preview(value: String) -> Option<String> {
@@ -2690,6 +2708,42 @@ mod tests {
         );
 
         assert!(diagnostic.is_none());
+    }
+
+    #[test]
+    fn classify_spawn_error_handles_permission_denied() {
+        let diagnostic = classify_spawn_error(AgentProvider::Claude, "claude.cmd", "拒绝访问。");
+
+        assert_eq!(diagnostic.code, "not_executable");
+        assert_eq!(diagnostic.fix.as_ref().map(|fix| fix.action.as_str()), Some("choose_file"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn classify_spawn_error_handles_windows_path_lookup_miss() {
+        let diagnostic = classify_spawn_error(
+            AgentProvider::Opencode,
+            "opencode",
+            "系统找不到指定的文件。 (os error 2)",
+        );
+
+        assert_eq!(diagnostic.code, "windows_path_issue");
+    }
+
+    #[test]
+    fn classify_spawn_error_falls_back_to_unknown() {
+        let diagnostic = classify_spawn_error(AgentProvider::Claude, "claude", "something odd happened");
+
+        assert_eq!(diagnostic.code, "unknown");
+    }
+
+    #[test]
+    fn preview_text_truncates_on_char_boundary() {
+        let input = format!("{}{}", "a".repeat(900), "😀");
+        let preview = preview_text(&input);
+
+        assert!(preview.chars().count() <= 800);
+        assert!(preview.ends_with('😀'));
     }
 
     #[cfg(not(target_os = "windows"))]
