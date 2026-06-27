@@ -767,8 +767,7 @@ fn update_manifest_overwrite(
     if !manifest.is_object() {
         manifest = serde_json::json!({});
     }
-    manifest["primaryFile"] =
-        serde_json::Value::String(artifact_path.to_string_lossy().to_string());
+    manifest["primaryFile"] = serde_json::Value::String(artifact_path.to_string_lossy().to_string());
     manifest["updatedAt"] = serde_json::Value::String(now.clone());
     if let Some(backup_path) = backup_path {
         manifest["overwrite"] = serde_json::json!({
@@ -776,19 +775,13 @@ fn update_manifest_overwrite(
             "backupPath": backup_path.to_string_lossy().to_string(),
             "appliedAt": now,
         });
-        if !manifest
-            .get("actions")
-            .is_some_and(|value| value.is_object())
-        {
+        if !manifest.get("actions").is_some_and(|value| value.is_object()) {
             manifest["actions"] = serde_json::json!({});
         }
         manifest["actions"]["undoOverwrite"] = serde_json::Value::Bool(true);
     } else if let Some(object) = manifest.as_object_mut() {
         object.remove("overwrite");
-        if let Some(actions) = object
-            .get_mut("actions")
-            .and_then(|value| value.as_object_mut())
-        {
+        if let Some(actions) = object.get_mut("actions").and_then(|value| value.as_object_mut()) {
             actions.remove("undoOverwrite");
         }
     }
@@ -816,10 +809,7 @@ fn overwrite_artifact_to_document(request: OverwriteArtifactRequest) -> Result<S
     let backup_dir = artifact_parent.join("backups");
     std::fs::create_dir_all(&backup_dir)
         .map_err(|error| format!("failed to create backup directory: {error}"))?;
-    let target_name = target_path
-        .file_name()
-        .and_then(OsStr::to_str)
-        .unwrap_or("document");
+    let target_name = target_path.file_name().and_then(OsStr::to_str).unwrap_or("document");
     let backup_path = unique_file_path(&backup_dir, &format!("{target_name}.bak"));
     std::fs::copy(&target_path, &backup_path)
         .map_err(|error| format!("failed to backup target document: {error}"))?;
