@@ -137,6 +137,21 @@ struct ArchiveArtifactRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ScanArtifactsRequest {
+    output_root: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScannedArtifactFile {
+    path: String,
+    manifest_path: String,
+    manifest_json: Option<String>,
+    modified_at: Option<u128>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct OverwriteArtifactRequest {
     artifact_path: String,
     target_path: String,
@@ -571,6 +586,18 @@ fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<Stri
     Ok(target.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+fn scan_artifacts(request: ScanArtifactsRequest) -> Result<Vec<ScannedArtifactFile>, String> {
+    let output_root = PathBuf::from(request.output_root);
+    if !output_root.exists() {
+        return Ok(Vec::new());
+    }
+    let output_root = canonical_output_dir(&output_root)?;
+    let mut files = Vec::new();
+    scan_artifact_files(&output_root, 0, &mut files)?;
+    Ok(files)
+}
+
 fn canonical_output_dir_for_artifact(
     artifact_path: &Path,
     workspace_root: Option<&str>,
@@ -597,6 +624,82 @@ fn canonical_output_dir_for_artifact(
         }
     }
     Err("refused: path is outside .typola-output directory".into())
+}
+
+fn canonical_output_dir(output_root: &Path) -> Result<PathBuf, String> {
+    let canonical = output_root
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve .typola-output directory: {error}"))?;
+    if canonical
+        .file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(|name| name == ".typola-output")
+    {
+        return Ok(canonical);
+    }
+    Err("refused: artifact scan root must be a .typola-output directory".into())
+}
+
+fn is_artifact_candidate(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(OsStr::to_str) else {
+        return false;
+    };
+    if name.eq_ignore_ascii_case("artifact.json") {
+        return false;
+    }
+    let Some(extension) = path.extension().and_then(OsStr::to_str).map(|value| value.to_ascii_lowercase()) else {
+        return false;
+    };
+    matches!(
+        extension.as_str(),
+        "md" | "markdown" | "html" | "htm" | "txt" | "json" | "csv" | "tsv" | "png" | "jpg"
+            | "jpeg" | "gif" | "webp" | "svg"
+    )
+}
+
+fn system_time_millis(value: SystemTime) -> Option<u128> {
+    value
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_millis())
+}
+
+fn scan_artifact_files(root: &Path, depth: usize, output: &mut Vec<ScannedArtifactFile>) -> Result<(), String> {
+    if depth > 5 {
+        return Ok(());
+    }
+    let entries = std::fs::read_dir(root)
+        .map_err(|error| format!("failed to read artifact directory: {error}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("failed to read artifact entry: {error}"))?;
+        let path = entry.path();
+        if path.is_dir() {
+            if path.file_name().and_then(OsStr::to_str) == Some("backups") {
+                continue;
+            }
+            scan_artifact_files(&path, depth + 1, output)?;
+            continue;
+        }
+        if !path.is_file() || !is_artifact_candidate(&path) {
+            continue;
+        }
+        let parent = path
+            .parent()
+            .ok_or_else(|| "invalid artifact parent".to_string())?;
+        let manifest_path = parent.join("artifact.json");
+        let manifest_json = std::fs::read_to_string(&manifest_path).ok();
+        let modified_at = std::fs::metadata(&path)
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(system_time_millis);
+        output.push(ScannedArtifactFile {
+            path: path.to_string_lossy().to_string(),
+            manifest_path: manifest_path.to_string_lossy().to_string(),
+            manifest_json,
+            modified_at,
+        });
+    }
+    Ok(())
 }
 
 fn path_matches_optional_expected(path: &Path, expected_path: Option<&str>) -> bool {
@@ -1322,6 +1425,7 @@ pub fn run() {
             write_opened_document,
             rename_opened_document,
             archive_artifact_to_workspace,
+            scan_artifacts,
             overwrite_artifact_to_document,
             undo_artifact_overwrite,
             delete_artifact_file,
@@ -3461,6 +3565,41 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(!artifact.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn scan_artifacts_reads_files_under_output_dir() {
+        let workspace = temp_path("ws-scan-artifacts");
+        let output_dir = workspace.join(".typola-output").join("conv");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let artifact = output_dir.join("draft.md");
+        let manifest = output_dir.join("artifact.json");
+        std::fs::write(&artifact, b"content").unwrap();
+        std::fs::write(&manifest, r#"{"id":"a","title":"Draft","kind":"markdown","status":"done","primaryFile":"draft.md","createdAt":"2026-06-27T00:00:00.000Z","source":{"type":"unknown"}}"#).unwrap();
+
+        let result = scan_artifacts(ScanArtifactsRequest {
+            output_root: workspace.join(".typola-output").to_string_lossy().to_string(),
+        }).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(PathBuf::from(&result[0].path).ends_with(Path::new(".typola-output").join("conv").join("draft.md")));
+        assert!(PathBuf::from(&result[0].manifest_path).ends_with(Path::new(".typola-output").join("conv").join("artifact.json")));
+        assert!(result[0].manifest_json.as_deref().unwrap_or("").contains("\"Draft\""));
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn scan_artifacts_rejects_non_output_root() {
+        let workspace = temp_path("ws-scan-reject");
+        std::fs::create_dir_all(&workspace).unwrap();
+
+        let result = scan_artifacts(ScanArtifactsRequest {
+            output_root: workspace.to_string_lossy().to_string(),
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains(".typola-output"));
         let _ = std::fs::remove_dir_all(&workspace);
     }
 

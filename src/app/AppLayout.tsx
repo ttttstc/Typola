@@ -283,19 +283,6 @@ export function AppLayout() {
       cancelled = true;
     };
   }, [isTauriRuntime]);
-  // 从当前打开的文件路径自动推导工作区根目录
-  const derivedWorkspaceRoot = useMemo(() => {
-    if (!file.path || file.path === '未命名') return undefined;
-    const normalized = file.path.replace(/\\/g, '/');
-    const parent = normalized.split('/').slice(0, -1).join('/');
-    return parent || undefined;
-  }, [file.path]);
-  // 仅当 file 变化导致 worksspaceRoot 落空时自动补充
-  useEffect(() => {
-    if (derivedWorkspaceRoot && !workspaceRoot) {
-      setWorkspaceRoot(derivedWorkspaceRoot);
-    }
-  }, [derivedWorkspaceRoot, workspaceRoot]);
   const effectiveAiWorkspaceRoot = useMemo(() => resolveWorkbenchWorkspaceRoot({
     configuredWorkspaceRoot: settings.aiWorkspaceRoot,
     defaultWorkspaceRoot: workspaceRoot || defaultAiWorkspaceRoot,

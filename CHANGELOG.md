@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- 新增 v0.5 AI 产物中心：AI 生成物会标准化为本地 artifact manifest，右栏可按当前会话、当前文档或全部 `.typola-output` 产物浏览，并支持打开、对比、归档、删除、覆盖原文与撤销覆盖。
+- 新增 v0.5 AI 产物中心：AI 生成物会标准化为本地 artifact manifest，右栏可按当前会话或全部 `.typola-output` 产物浏览，并支持打开、对比、归档、删除、覆盖原文与撤销覆盖。
 - 新增 AI Workbench OpenCode Provider 规划文档：沉淀 AI Provider 术语、ADR、PRD 与 GitHub issue 拆分，用于跟踪在同一左侧 AI 工作台中接入 OpenCode CLI。
 - AI 工作台新增 OpenCode Provider 主链路：Composer 底部可切换 Claude Code / OpenCode，设置页可配置 OpenCode CLI 路径与模型，OpenCode 使用 `opencode run` 接入同一 headless 会话与产物回流流程。
 - 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
@@ -71,7 +71,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 修复 PR #102 检视指出的 AI 产物中心安全与稳定性问题：覆盖/撤销原文会在 Rust 侧校验目标文档白名单，产物时间戳排序兼容 ISO 与历史毫秒格式，补齐 `.typola-output` 文件系统权限、CSS token 兼容别名和 artifact scanner / 覆盖白名单回归测试。
-- 调整 AI 产物中心：产物统一生成并扫描当前 AI 工作目录下的 `.typola-output/`，未指定工作目录时使用用户默认目录下的 `.typola-output/`；产物中心移除“当前文档”视图和“全部状态”筛选，保留当前会话 / 全部产物与类型筛选。
+- 调整 AI 产物中心：产物统一生成到当前 AI 工作目录下的 `.typola-output/<当前会话>/`，扫描当前 AI 工作目录下的 `.typola-output/`；未指定工作目录时使用用户默认目录下的 `.typola-output/`。产物中心移除“当前文档”视图和“全部状态”筛选，保留当前会话 / 全部产物与类型筛选。
 - 修复 PR #100 检视指出的 AI Runtime 空抽象问题：移除未接入实际 spawn 的 commandSpec / promptBudget 层，Claude / OpenCode runtime 定义收敛为 CLI 检测配置表。
 - 修复 AI CLI 检测稳定性：版本探测改用进程级超时等待、限量读取 stdout/stderr 并按字符边界安全截断；诊断操作按钮不再只支持重新检测。
 - 修复 Windows 下通过 npm `.cmd` wrapper 启动 OpenCode 时，用户 prompt 中的 shell 特殊字符可能被 `cmd.exe` 重新解析的问题；现在会优先解析 wrapper 指向的真实可执行文件，并在取消后等待旧 run 退出、丢弃 late stdout，再切换到新 Provider 对话。
@@ -80,7 +80,7 @@ All notable changes to this project will be documented in this file.
 
 - 修复 SkillHub 系统内置 skill 安装入口不区分 AI Provider 的问题：内置模板现在按当前 CLI provider 过滤，OpenCode 场景不会再展示 Claude-only 的安装项。
 
-- 修复未显式选择 AI 工作区时 OpenCode Provider 会继承 Typola 启动目录、导致工作目录显示为 Typola 源码目录的问题；现在会依次回退到文件树目录和当前文档目录。
+- 修复未显式选择 AI 工作区时 OpenCode Provider 会继承 Typola 启动目录、导致工作目录显示为 Typola 源码目录的问题；现在会回退到用户默认目录，并在默认目录下使用 `.typola-output/<当前会话>/` 保存 AI 产物。
 - 修复 OpenCode Provider 下当前文档/附件仅作为 prompt 路径文本传递、导致模型可能无法读取当前编辑区文章的问题；现在会把可见上下文 chip 对应的参考文件在每轮发送时同步传给 `opencode run --file`，把 `opencode run --dir` 指向有效工作区而不是会话产物目录，并避免在 OpenCode prompt argv 中追加首轮多行参考文本。
 - 修复 OpenCode Provider 交互时不显示工具调用卡片的问题；现在会把 OpenCode `tool_use` JSON 事件映射到与 Claude Code 一致的工具卡与结果显示，并在存在 reasoning/thinking 文本时显示思考过程。
 - 修复 AI 工作台在同一会话中切换编辑区文章后仍沿用旧“已注入当前文档”状态、导致后续回复无法识别新打开文章的问题。

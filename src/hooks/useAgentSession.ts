@@ -153,6 +153,11 @@ function summarizeTitle(text: string): string {
   return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || '自由对话';
 }
 
+function withArtifactWriteGuard(prompt: string, cwd?: string): string {
+  if (!cwd) return prompt;
+  return `${prompt}\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
+}
+
 let nextConvCounter = 1;
 
 export function useConversationManager({
@@ -399,7 +404,7 @@ export function useConversationManager({
     const request = {
       provider,
       conversationId: convId,
-      prompt: trimmed,
+      prompt: withArtifactWriteGuard(trimmed, cwd),
       cwd,
       agentPath: runtime.agentPath,
       model: runtime.model,
