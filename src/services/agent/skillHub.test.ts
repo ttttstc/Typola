@@ -105,6 +105,7 @@ describe('skill hub helpers', () => {
       'guizang-ppt-skill',
       'baoyu-markdown-to-html',
       'html-ppt-skill',
+      'md2html',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'wechat')?.skills.map((skill) => skill.name)).toEqual([
       'ni-writer',

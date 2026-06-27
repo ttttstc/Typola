@@ -269,11 +269,37 @@ export function AppLayout() {
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
     [debouncedStatsSource, file.fileType],
   );
+  const [defaultAiWorkspaceRoot, setDefaultAiWorkspaceRoot] = useState('');
+  useEffect(() => {
+    if (!isTauriRuntime) return;
+    let cancelled = false;
+    void import('@tauri-apps/api/path')
+      .then(({ homeDir }) => homeDir())
+      .then((path) => {
+        if (!cancelled) setDefaultAiWorkspaceRoot(path);
+      })
+      .catch((error) => console.warn('Failed to resolve default AI workspace:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauriRuntime]);
+  // 从当前打开的文件路径自动推导工作区根目录
+  const derivedWorkspaceRoot = useMemo(() => {
+    if (!file.path || file.path === '未命名') return undefined;
+    const normalized = file.path.replace(/\\/g, '/');
+    const parent = normalized.split('/').slice(0, -1).join('/');
+    return parent || undefined;
+  }, [file.path]);
+  // 仅当 file 变化导致 worksspaceRoot 落空时自动补充
+  useEffect(() => {
+    if (derivedWorkspaceRoot && !workspaceRoot) {
+      setWorkspaceRoot(derivedWorkspaceRoot);
+    }
+  }, [derivedWorkspaceRoot, workspaceRoot]);
   const effectiveAiWorkspaceRoot = useMemo(() => resolveWorkbenchWorkspaceRoot({
     configuredWorkspaceRoot: settings.aiWorkspaceRoot,
-    fileTreeRoot: workspaceRoot,
-    currentFilePath: file.path,
-  }), [file.path, settings.aiWorkspaceRoot, workspaceRoot]);
+    defaultWorkspaceRoot: workspaceRoot || defaultAiWorkspaceRoot,
+  }), [defaultAiWorkspaceRoot, settings.aiWorkspaceRoot, workspaceRoot]);
   const outputBaseDir = useMemo(() => (
     effectiveAiWorkspaceRoot
       ? joinLocalPath(effectiveAiWorkspaceRoot, '.typola-output')
@@ -377,7 +403,7 @@ export function AppLayout() {
     bumpWorkspaceTreeVersion,
   } = useWorkspaceWatch({
     isTauriRuntime,
-    watchRoot: effectiveAiWorkspaceRoot,
+    watchRoot: outputBaseDir,
     outputRoot: outputBaseDir,
     lastSelfWriteRef,
   });
@@ -1406,7 +1432,6 @@ export function AppLayout() {
     <ArtifactCenterPanel
       records={artifactRecords}
       activeConversationId={convManager.activeConvId}
-      currentFilePath={file.path || undefined}
       onOpen={(path) => { void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error)); }}
       onCompare={(path) => { void handleReviewRevision(path); }}
       onArchive={(path) => { void handleArchiveArtifact(path); setArtifactLibraryRefreshKey((key) => key + 1); }}

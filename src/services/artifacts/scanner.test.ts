@@ -43,7 +43,7 @@ describe('artifact scanner helpers', () => {
     ]);
   });
 
-  it('filters by active session and current document independently', () => {
+  it('filters by active session while all mode keeps every artifact', () => {
     const docA = 'C:/docs/a.md';
     const docB = 'C:/docs/b.md';
     const records = [
@@ -52,7 +52,6 @@ describe('artifact scanner helpers', () => {
     ];
 
     expect(filterArtifacts(records, 'session', { conversationId: 'conv-a' })).toHaveLength(1);
-    expect(filterArtifacts(records, 'document', { documentPath: docB })).toHaveLength(1);
     expect(filterArtifacts(records, 'all', {})).toHaveLength(2);
   });
 });

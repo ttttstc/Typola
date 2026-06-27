@@ -53,6 +53,7 @@ describe('Tauri capabilities', () => {
         '$DOCUMENT/**',
         '$DOWNLOAD/**',
         '$DESKTOP/**',
+        '$HOME/.typola-output/**',
         '$HOME/**/.typola-output/**',
       ]),
     }));

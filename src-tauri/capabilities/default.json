@@ -39,6 +39,7 @@
         "$DOCUMENT/**/.typola-output/**",
         "$DOWNLOAD/**",
         "$DOWNLOAD/**/.typola-output/**",
+        "$HOME/.typola-output/**",
         "$HOME/**/.typola-output/**",
         "$PICTURE/**",
         "$VIDEO/**"

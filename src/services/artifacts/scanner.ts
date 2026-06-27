@@ -7,14 +7,6 @@ type FsEntry = {
   isFile: boolean;
 };
 
-function normalize(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/u, '').toLowerCase();
-}
-
-function pathEquals(a?: string, b?: string): boolean {
-  return Boolean(a && b && normalize(a) === normalize(b));
-}
-
 function isArtifactCandidate(path: string): boolean {
   const name = artifactBasename(path).toLowerCase();
   if (name === 'artifact.json') return false;
@@ -123,7 +115,6 @@ export function filterArtifacts(
   return records.filter((record) => {
     const manifest = record.manifest;
     if (mode === 'session' && options.conversationId && manifest.source.conversationId !== options.conversationId) return false;
-    if (mode === 'document' && options.documentPath && !pathEquals(manifest.source.documentPath, options.documentPath)) return false;
     if (options.kind && options.kind !== 'all' && manifest.kind !== options.kind) return false;
     if (options.status && options.status !== 'all' && manifest.status !== options.status) return false;
     if (query) {

@@ -80,7 +80,7 @@ export type ArtifactRecord = {
   legacy: boolean;
 };
 
-export type ArtifactViewMode = 'session' | 'document' | 'all';
+export type ArtifactViewMode = 'session' | 'all';
 
 export type ArtifactCreateInput = {
   primaryFile: string;

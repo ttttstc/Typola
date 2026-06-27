@@ -46,6 +46,8 @@ export function useWorkspaceWatch({
 
     void import('../services/workspaceWatchService')
       .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
+        const { mkdir } = await import('@tauri-apps/plugin-fs');
+        await mkdir(outputRoot, { recursive: true });
         await watchWorkspace(watchRoot);
         return onWorkspaceChanged((payload) => {
           const now = Date.now();

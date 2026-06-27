@@ -7,7 +7,6 @@ import { filterArtifacts, isOverwritableArtifact } from '../../services/artifact
 type ArtifactCenterPanelProps = {
   records: ArtifactRecord[];
   activeConversationId?: string;
-  currentFilePath?: string;
   onOpen: (path: string) => void;
   onCompare: (path: string) => void;
   onArchive: (path: string) => void;
@@ -54,7 +53,6 @@ function formatTime(value: string): string {
 export function ArtifactCenterPanel({
   records,
   activeConversationId,
-  currentFilePath,
   onOpen,
   onCompare,
   onArchive,
@@ -67,21 +65,18 @@ export function ArtifactCenterPanel({
   const [mode, setMode] = useState<ArtifactViewMode>('session');
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
-  const [status, setStatus] = useState('all');
   const filtered = useMemo(() => filterArtifacts(records, mode, {
     conversationId: activeConversationId,
-    documentPath: currentFilePath,
     query,
     kind,
-    status,
-  }), [activeConversationId, currentFilePath, kind, mode, query, records, status]);
+  }), [activeConversationId, kind, mode, query, records]);
 
   return (
     <aside className="artifact-center-panel" aria-label="AI 产物中心">
       <header className="artifact-center-header">
         <div>
           <strong>AI 产物</strong>
-          <span>管理当前会话、当前文档或全部产物</span>
+          <span>管理当前会话或全部产物</span>
         </div>
         <div className="artifact-center-header-actions">
           <button type="button" onClick={onRefresh} title="重新扫描产物">
@@ -95,7 +90,6 @@ export function ArtifactCenterPanel({
       <div className="artifact-center-tabs" role="tablist" aria-label="产物范围">
         {[
           ['session', '当前会话'],
-          ['document', '当前文档'],
           ['all', '全部产物'],
         ].map(([id, label]) => (
           <button
@@ -122,19 +116,12 @@ export function ArtifactCenterPanel({
           <option value="wechat-html">公众号</option>
           <option value="ppt-html">PPT</option>
         </select>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="产物状态">
-          <option value="all">全部状态</option>
-          <option value="done">完成</option>
-          <option value="partial">部分完成</option>
-          <option value="failed">失败</option>
-          <option value="archived">已归档</option>
-        </select>
       </div>
       {filtered.length === 0 ? (
         <div className="artifact-center-empty">
           <FileText size={22} />
           <strong>暂无产物</strong>
-          <span>{mode === 'session' ? '当前会话还没有生成产物。' : mode === 'document' ? '当前文档暂无关联产物。' : '产物文件夹中暂无可展示文件。'}</span>
+          <span>{mode === 'session' ? '当前会话还没有生成产物。' : '产物文件夹中暂无可展示文件。'}</span>
         </div>
       ) : (
         <ol className="artifact-center-list">

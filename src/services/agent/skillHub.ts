@@ -144,6 +144,14 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         installSource: 'https://github.com/lewislulu/html-ppt-skill',
         system: true,
       },
+      {
+        name: 'md2html',
+        label: 'md2html 文档网页',
+        summary: '把长文档(计划、设计、RFC、复盘)转成带侧边目录、Mermaid 流程图、时间线卡片、对比表格的自包含 HTML 网页,零安装,跨 AI 代理。',
+        expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\md2html',
+        installSource: 'https://github.com/haidang1810/md2html',
+        system: true,
+      },
     ],
   },
   {
