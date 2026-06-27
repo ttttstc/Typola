@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addSkillToScene,
+  buildSkillPrefill,
   buildSkillInstallPrompt,
   EMPTY_SKILL_HUB,
   getSceneAdditionsForProvider,
@@ -148,5 +149,18 @@ describe('skill hub helpers', () => {
     const skill = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')!.skills[0];
     expect(buildSkillInstallPrompt(skill)).toContain('请帮我安装 Claude skill：frontend-slides');
     expect(buildSkillInstallPrompt(skill)).toContain(skill.expectedPath);
+  });
+
+  it('builds OpenCode command install prompt without Claude copy', () => {
+    const skill = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')!.skills[0];
+    const prompt = buildSkillInstallPrompt(skill, 'opencode');
+    expect(prompt).toContain('请帮我创建或安装 OpenCode command：frontend-slides');
+    expect(prompt).toContain('opencode run --command frontend-slides');
+    expect(prompt).not.toContain('Claude');
+  });
+
+  it('builds provider-specific skill prefill text', () => {
+    expect(buildSkillPrefill('claude', 'frontend-slides')).toBe('/frontend-slides ');
+    expect(buildSkillPrefill('opencode', '/frontend-slides')).toBe('请使用 frontend-slides：');
   });
 });

@@ -198,6 +198,16 @@ export function getSceneAdditionsForProvider(hub: SkillHub, sceneId: string, pro
   ).includes(provider));
 }
 
+export function skillCapabilityLabel(provider: AgentProvider): string {
+  return provider === 'opencode' ? 'OpenCode command' : 'Claude skill';
+}
+
+export function buildSkillPrefill(provider: AgentProvider, skillName: string): string {
+  const name = skillName.trim().replace(/^\/+/u, '');
+  if (!name) return '';
+  return provider === 'opencode' ? `请使用 ${name}：` : `/${name} `;
+}
+
 function normalizeSkill(raw: unknown): SkillRef | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
@@ -325,8 +335,17 @@ export function removeCustomSkillFromScene(hub: SkillHub, sceneId: string, skill
   };
 }
 
-export function buildSkillInstallPrompt(skill: SkillTemplateRef): string {
+export function buildSkillInstallPrompt(skill: SkillTemplateRef, provider: AgentProvider = 'claude'): string {
   const source = skill.installSource ?? skill.expectedPath ?? skill.name;
+  if (provider === 'opencode') {
+    return [
+      `请帮我创建或安装 OpenCode command：${skill.name}。`,
+      `用途：${skill.summary}`,
+      `来源：${source}`,
+      `请优先安装到当前工作区 .opencode/commands/${skill.name}.md；如果不适合项目级安装，则安装到全局 ~/.config/opencode/commands/${skill.name}.md，或写入 opencode.jsonc 的 command.${skill.name} 配置。`,
+      `安装后请确认该 command 可以通过 opencode run --command ${skill.name} 调用。`,
+    ].join('\n');
+  }
   return [
     `请帮我安装 Claude skill：${skill.name}。`,
     `用途：${skill.summary}`,
@@ -365,7 +384,7 @@ export async function migrateFlowScenariosIfStale(): Promise<boolean> {
     if (!parsed.error && hasAdditions) return false;
   }
 
-  let legacyRaw: unknown = '';
+  let legacyRaw: unknown;
   try {
     legacyRaw = await invoke<string>('read_flow_scenarios');
   } catch {

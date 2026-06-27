@@ -4,9 +4,8 @@ import { EMPTY_SKILL_HUB, loadSkillHub, migrateFlowScenariosIfStale, saveSkillHu
 type UseSkillHubStateResult = {
   skillHub: SkillHub;
   skillHubError?: string;
-  skillHubReloadKey: number;
   handleSaveSkillHub: (hub: SkillHub) => Promise<void>;
-  handleReloadSkillHub: () => void;
+  handleReloadSkillHub: () => Promise<void>;
 };
 
 /**
@@ -15,7 +14,12 @@ type UseSkillHubStateResult = {
 export function useSkillHubState(): UseSkillHubStateResult {
   const [skillHub, setSkillHub] = useState<SkillHub>(EMPTY_SKILL_HUB);
   const [skillHubError, setSkillHubError] = useState<string | undefined>(undefined);
-  const [skillHubReloadKey, setSkillHubReloadKey] = useState(0);
+
+  const reloadSkillHub = useCallback(async () => {
+    const result = await loadSkillHub();
+    setSkillHub(result.hub);
+    setSkillHubError(result.error);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,11 +38,11 @@ export function useSkillHubState(): UseSkillHubStateResult {
     return () => {
       cancelled = true;
     };
-  }, [skillHubReloadKey]);
+  }, []);
 
   const handleReloadSkillHub = useCallback(() => {
-    setSkillHubReloadKey((key) => key + 1);
-  }, []);
+    return reloadSkillHub();
+  }, [reloadSkillHub]);
 
   const handleSaveSkillHub = useCallback(async (hub: SkillHub) => {
     await saveSkillHub(hub);
@@ -49,7 +53,6 @@ export function useSkillHubState(): UseSkillHubStateResult {
   return {
     skillHub,
     skillHubError,
-    skillHubReloadKey,
     handleSaveSkillHub,
     handleReloadSkillHub,
   };
