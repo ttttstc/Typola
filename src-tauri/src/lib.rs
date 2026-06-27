@@ -137,6 +137,13 @@ struct ArchiveArtifactRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct OverwriteArtifactRequest {
+    artifact_path: String,
+    target_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AgentSessionCancelRequest {
     run_id: String,
 }
@@ -555,6 +562,147 @@ fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<Stri
     Ok(target.to_string_lossy().to_string())
 }
 
+fn canonical_output_dir_for_artifact(artifact_path: &Path, workspace_root: Option<&str>) -> Result<PathBuf, String> {
+    let canonical = artifact_path
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve path: {error}"))?;
+    let inferred_output_dir = canonical
+        .ancestors()
+        .find(|path| path.file_name().and_then(OsStr::to_str) == Some(".typola-output"))
+        .map(PathBuf::from);
+    let mut candidate_output_dirs = Vec::new();
+    if let Some(workspace_root) = workspace_root.filter(|root| !root.is_empty()) {
+        candidate_output_dirs.push(PathBuf::from(workspace_root).join(".typola-output"));
+    }
+    if let Some(output_dir) = inferred_output_dir {
+        candidate_output_dirs.push(output_dir);
+    }
+    for output_dir in candidate_output_dirs {
+        if let Ok(canonical_output) = output_dir.canonicalize() {
+            if canonical.starts_with(&canonical_output) {
+                return Ok(canonical_output);
+            }
+        }
+    }
+    Err("refused: path is outside .typola-output directory".into())
+}
+
+fn artifact_manifest_path(artifact_path: &Path) -> Result<PathBuf, String> {
+    let parent = artifact_path
+        .parent()
+        .ok_or_else(|| "invalid artifact parent".to_string())?;
+    Ok(parent.join("artifact.json"))
+}
+
+fn read_manifest_json(path: &Path) -> serde_json::Value {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+fn write_manifest_json(path: &Path, manifest: &serde_json::Value) -> Result<String, String> {
+    let content = serde_json::to_string_pretty(manifest)
+        .map_err(|error| format!("failed to serialize artifact manifest: {error}"))?;
+    std::fs::write(path, format!("{content}\n"))
+        .map_err(|error| format!("failed to write artifact manifest: {error}"))?;
+    Ok(content)
+}
+
+fn update_manifest_overwrite(
+    manifest_path: &Path,
+    artifact_path: &Path,
+    target_path: &Path,
+    backup_path: Option<&Path>,
+) -> Result<String, String> {
+    let mut manifest = read_manifest_json(manifest_path);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().to_string())
+        .unwrap_or_else(|_| "0".into());
+    if !manifest.is_object() {
+        manifest = serde_json::json!({});
+    }
+    manifest["primaryFile"] = serde_json::Value::String(artifact_path.to_string_lossy().to_string());
+    manifest["updatedAt"] = serde_json::Value::String(now.clone());
+    if let Some(backup_path) = backup_path {
+        manifest["overwrite"] = serde_json::json!({
+            "targetPath": target_path.to_string_lossy().to_string(),
+            "backupPath": backup_path.to_string_lossy().to_string(),
+            "appliedAt": now,
+        });
+        if !manifest.get("actions").is_some_and(|value| value.is_object()) {
+            manifest["actions"] = serde_json::json!({});
+        }
+        manifest["actions"]["undoOverwrite"] = serde_json::Value::Bool(true);
+    } else if let Some(object) = manifest.as_object_mut() {
+        object.remove("overwrite");
+        if let Some(actions) = object.get_mut("actions").and_then(|value| value.as_object_mut()) {
+            actions.remove("undoOverwrite");
+        }
+    }
+    write_manifest_json(manifest_path, &manifest)
+}
+
+#[tauri::command]
+fn overwrite_artifact_to_document(request: OverwriteArtifactRequest) -> Result<String, String> {
+    let artifact_path = PathBuf::from(&request.artifact_path);
+    let target_path = PathBuf::from(&request.target_path);
+    if !artifact_path.is_file() {
+        return Err("artifact file not found".into());
+    }
+    if !target_path.is_file() {
+        return Err("target document not found".into());
+    }
+    if !is_openable_document_path(&artifact_path) || !is_openable_document_path(&target_path) {
+        return Err("unsupported artifact or target type".into());
+    }
+    canonical_output_dir_for_artifact(&artifact_path, None)?;
+    let artifact_parent = artifact_path
+        .parent()
+        .ok_or_else(|| "invalid artifact parent".to_string())?;
+    let backup_dir = artifact_parent.join("backups");
+    std::fs::create_dir_all(&backup_dir)
+        .map_err(|error| format!("failed to create backup directory: {error}"))?;
+    let target_name = target_path.file_name().and_then(OsStr::to_str).unwrap_or("document");
+    let backup_path = unique_file_path(&backup_dir, &format!("{target_name}.bak"));
+    std::fs::copy(&target_path, &backup_path)
+        .map_err(|error| format!("failed to backup target document: {error}"))?;
+    std::fs::copy(&artifact_path, &target_path)
+        .map_err(|error| format!("failed to overwrite target document: {error}"))?;
+    update_manifest_overwrite(
+        &artifact_manifest_path(&artifact_path)?,
+        &artifact_path,
+        &target_path,
+        Some(&backup_path),
+    )
+}
+
+#[tauri::command]
+fn undo_artifact_overwrite(request: OverwriteArtifactRequest) -> Result<String, String> {
+    let artifact_path = PathBuf::from(&request.artifact_path);
+    let target_path = PathBuf::from(&request.target_path);
+    if !artifact_path.is_file() {
+        return Err("artifact file not found".into());
+    }
+    canonical_output_dir_for_artifact(&artifact_path, None)?;
+    let manifest_path = artifact_manifest_path(&artifact_path)?;
+    let manifest = read_manifest_json(&manifest_path);
+    let backup_path = manifest
+        .get("overwrite")
+        .and_then(|value| value.get("backupPath"))
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| "artifact has no overwrite backup".to_string())?;
+    let backup_path = PathBuf::from(backup_path);
+    if !backup_path.is_file() {
+        return Err("overwrite backup not found".into());
+    }
+    canonical_output_dir_for_artifact(&backup_path, None)?;
+    std::fs::copy(&backup_path, &target_path)
+        .map_err(|error| format!("failed to restore backup: {error}"))?;
+    update_manifest_overwrite(&manifest_path, &artifact_path, &target_path, None)
+}
+
 #[derive(Debug, Deserialize)]
 struct DeleteArtifactRequest {
     path: String,
@@ -567,32 +715,7 @@ fn delete_artifact_file(request: DeleteArtifactRequest) -> Result<(), String> {
     if !artifact_path.is_file() {
         return Err("artifact file not found".into());
     }
-    let canonical = artifact_path
-        .canonicalize()
-        .map_err(|error| format!("failed to resolve path: {error}"))?;
-    // 安全约束：优先用调用方传入的工作区定位 .typola-output；没有工作区或工作区已切换时，
-    // 从文件路径自身向上寻找 .typola-output，避免误删工作区外文件。
-    let inferred_output_dir = canonical
-        .ancestors()
-        .find(|path| path.file_name().and_then(OsStr::to_str) == Some(".typola-output"))
-        .map(PathBuf::from);
-    let mut candidate_output_dirs = Vec::new();
-    if let Some(workspace_root) = request.workspace_root.as_deref().filter(|root| !root.is_empty()) {
-        candidate_output_dirs.push(PathBuf::from(workspace_root).join(".typola-output"));
-    }
-    if let Some(output_dir) = inferred_output_dir {
-        candidate_output_dirs.push(output_dir);
-    }
-
-    let is_inside_output = candidate_output_dirs.iter().any(|output_dir| {
-        output_dir
-            .canonicalize()
-            .map(|canonical_output| canonical.starts_with(canonical_output))
-            .unwrap_or(false)
-    });
-    if !is_inside_output {
-        return Err("refused: path is outside .typola-output directory".into());
-    }
+    canonical_output_dir_for_artifact(&artifact_path, request.workspace_root.as_deref())?;
     std::fs::remove_file(&artifact_path)
         .map_err(|error| format!("failed to delete artifact: {error}"))
 }
@@ -1127,6 +1250,8 @@ pub fn run() {
             write_opened_document,
             rename_opened_document,
             archive_artifact_to_workspace,
+            overwrite_artifact_to_document,
+            undo_artifact_overwrite,
             delete_artifact_file,
             write_attachment_file,
             process_inserted_image,
@@ -3138,6 +3263,38 @@ mod tests {
         assert!(!artifact.exists());
         let _ = std::fs::remove_dir_all(&workspace);
         let _ = std::fs::remove_dir_all(&other_workspace);
+    }
+
+    #[test]
+    fn overwrite_artifact_to_document_creates_backup_and_undo_restores() {
+        let workspace = temp_path("ws-overwrite-artifact");
+        let output_dir = workspace.join(".typola-output").join("conv");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let artifact = output_dir.join("draft.md");
+        let target = workspace.join("doc.md");
+        let manifest = output_dir.join("artifact.json");
+        std::fs::write(&artifact, b"new content").unwrap();
+        std::fs::write(&target, b"old content").unwrap();
+        std::fs::write(&manifest, r#"{"id":"a","primaryFile":"draft.md","actions":{}}"#).unwrap();
+
+        overwrite_artifact_to_document(OverwriteArtifactRequest {
+            artifact_path: artifact.to_string_lossy().to_string(),
+            target_path: target.to_string_lossy().to_string(),
+        }).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new content");
+        let manifest_text = std::fs::read_to_string(&manifest).unwrap();
+        assert!(manifest_text.contains("backupPath"));
+
+        undo_artifact_overwrite(OverwriteArtifactRequest {
+            artifact_path: artifact.to_string_lossy().to_string(),
+            target_path: target.to_string_lossy().to_string(),
+        }).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "old content");
+        let manifest_text = std::fs::read_to_string(&manifest).unwrap();
+        assert!(!manifest_text.contains("backupPath"));
+        let _ = std::fs::remove_dir_all(&workspace);
     }
 
 

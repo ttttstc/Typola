@@ -25,6 +25,7 @@ import { StatusBar } from '../components/StatusBar';
 import { AppLayoutChrome } from '../components/AppLayoutChrome';
 import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
 import { SkillHubPanel } from '../components/SkillHubPanel';
+import { ArtifactCenterPanel } from '../components/artifacts/ArtifactCenterPanel';
 import { SelectionResultCard } from '../components/selection/SelectionResultCard';
 import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor';
 import { ReviewSidebarPanel } from '../components/review/ReviewSidebarPanel';
@@ -32,11 +33,14 @@ import { runSkillOneshot } from '../services/agent/oneshotService';
 import { useReviewState } from '../hooks/useReviewState';
 import { useRevisionList } from '../hooks/useRevisionList';
 import { buildReviewMarkdown, type ReviewComment } from '../services/review/reviewState';
+import { ensureArtifactManifest } from '../services/artifacts/manifest';
+import type { ArtifactRecord } from '../services/artifacts/types';
 import { saveFileDialog } from '../services/dialogService';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import type { SelectionAnchor } from '../services/agent/types';
 import { resolveWorkbenchWorkspaceRoot } from '../services/agent/workbenchWorkspace';
 import { useConversationManager } from '../hooks/useAgentSession';
+import { useArtifactLibrary } from '../hooks/useArtifactLibrary';
 import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
 import { useFileTabs } from '../hooks/useFileTabs';
@@ -468,12 +472,25 @@ export function AppLayout() {
       const target = await saveFileDialog(defaultPath);
       if (!target) return;
       await writeTextFile(target, reviewMd);
+      await ensureArtifactManifest({
+        primaryFile: target,
+        outputRoot: outputBaseDir,
+        workspaceRoot: effectiveAiWorkspaceRoot,
+        sourceType: 'review_export',
+        documentPath: file.path,
+        documentName: file.name,
+        conversationId: convManager.activeConvId,
+        agentId: 'typola',
+        agentLabel: 'Typola',
+        title: `检视版 · ${file.name}`,
+      }).catch((manifestError) => console.warn('Failed to write review artifact manifest:', manifestError));
+      setArtifactLibraryRefreshKey((key) => key + 1);
       markClean();
       setTransientMessage(`已导出检视版:${target.split(/[\\/]/).pop()}`);
     } catch (error) {
       await messageDialog(String(error), { title: '导出失败' });
     }
-  }, [file.content, file.path, reviewStateApi]);
+  }, [convManager.activeConvId, effectiveAiWorkspaceRoot, file.content, file.name, file.path, outputBaseDir, reviewStateApi]);
 
   // 任务 #15 发 AI 改:把全文 + 所有意见拼成 prompt,新会话发送,走产物回流。
   // 文件命名约定:{stem}.ai改{N}.md(N 递增),所以每次发送前先扫一遍现有 N,取 max+1。
@@ -1146,6 +1163,106 @@ export function AppLayout() {
     onOpenPath: handleOpenPath,
     onTransientMessage: setTransientMessage,
   });
+  const [artifactLibraryRefreshKey, setArtifactLibraryRefreshKey] = useState(0);
+  const { records: artifactRecords, refresh: refreshArtifactLibrary } = useArtifactLibrary({
+    outputRoot: outputBaseDir,
+    refreshKey: `${artifactLibraryRefreshKey}:${agentChangedPaths.size}:${convManager.activeConvId}:${file.path}`,
+  });
+
+  useEffect(() => {
+    if (!outputBaseDir || agentChangedPaths.size === 0) return;
+    const active = convManager.activeConv;
+    const paths = [...agentChangedPaths.keys()];
+    void Promise.all(paths.map((path) => {
+      const name = path.split(/[\\/]/).pop() ?? '';
+      const sourceType = /\.ai改\d+\.md$/u.test(name) ? 'review_ai_edit' : 'flow_generation';
+      return ensureArtifactManifest({
+        primaryFile: path,
+        outputRoot: outputBaseDir,
+        workspaceRoot: effectiveAiWorkspaceRoot,
+        sourceType,
+        documentPath: file.path || undefined,
+        documentName: file.path ? file.name : undefined,
+        conversationId: convManager.activeConvId,
+        agentId: active?.provider,
+        agentLabel: active?.provider === 'opencode' ? 'OpenCode' : 'Claude Code',
+        model: active?.currentModel,
+      }).catch((error) => console.warn('Failed to ensure artifact manifest:', error));
+    }))
+      .then(() => setArtifactLibraryRefreshKey((key) => key + 1));
+  }, [agentChangedPaths, convManager.activeConv, convManager.activeConvId, effectiveAiWorkspaceRoot, file.name, file.path, outputBaseDir]);
+
+  const handleDeleteArtifact = useCallback(async (path: string) => {
+    const confirmed = await confirmDialog(`确定删除「${path.split(/[\\/]/).pop()}」？删除后不可恢复。`, {
+      title: '删除产物',
+      okLabel: '删除',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_artifact_file', { request: { path, workspaceRoot: effectiveAiWorkspaceRoot ?? '' } });
+      forgetArtifact(path);
+      setArtifactLibraryRefreshKey((key) => key + 1);
+      setTransientMessage(`已删除:${path.split(/[\\/]/).pop()}`);
+    } catch (error) {
+      await messageDialog(String(error), { title: '删除失败' });
+    }
+  }, [effectiveAiWorkspaceRoot, forgetArtifact]);
+
+  const handleOverwriteArtifact = useCallback(async (record: ArtifactRecord) => {
+    const targetPath = record.manifest.source.documentPath || file.path;
+    if (!targetPath) {
+      await messageDialog('未找到可覆盖的原文档。请先打开目标文档后再试。', { title: '覆盖原文' });
+      return;
+    }
+    if (file.dirty && targetPath.replace(/\\/g, '/') === file.path.replace(/\\/g, '/')) {
+      await messageDialog('当前文档有未保存改动。请先保存后再覆盖，避免覆盖掉你的手写修改。', { title: '覆盖原文' });
+      return;
+    }
+    const confirmed = await confirmDialog(`将用「${record.manifest.title}」覆盖原文档，并自动保存一份可撤销备份。\n\n目标:${targetPath}`, {
+      title: '覆盖原文',
+      okLabel: '覆盖',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke<string>('overwrite_artifact_to_document', {
+        request: { artifactPath: record.manifest.primaryFile, targetPath },
+      });
+      setArtifactLibraryRefreshKey((key) => key + 1);
+      await handleOpenPath(targetPath);
+      setTransientMessage('已覆盖原文，可在产物卡片中撤销');
+    } catch (error) {
+      await messageDialog(String(error), { title: '覆盖失败' });
+    }
+  }, [file.dirty, file.path, handleOpenPath]);
+
+  const handleUndoArtifactOverwrite = useCallback(async (record: ArtifactRecord) => {
+    const targetPath = record.manifest.overwrite?.targetPath || record.manifest.source.documentPath || file.path;
+    if (!targetPath) {
+      await messageDialog('未找到要恢复的原文档。', { title: '撤销覆盖' });
+      return;
+    }
+    const confirmed = await confirmDialog(`确定撤销覆盖并恢复备份？\n\n目标:${targetPath}`, {
+      title: '撤销覆盖',
+      okLabel: '撤销覆盖',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke<string>('undo_artifact_overwrite', {
+        request: { artifactPath: record.manifest.primaryFile, targetPath },
+      });
+      setArtifactLibraryRefreshKey((key) => key + 1);
+      await handleOpenPath(targetPath);
+      setTransientMessage('已撤销覆盖并恢复原文');
+    } catch (error) {
+      await messageDialog(String(error), { title: '撤销失败' });
+    }
+  }, [file.path, handleOpenPath]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1275,6 +1392,20 @@ export function AppLayout() {
       onRefreshRevisions={refreshRevisions}
       onClose={() => setRightPanelMode('none')}
     />
+  ) : rightPanelMode === 'artifacts' && !isDocx ? (
+    <ArtifactCenterPanel
+      records={artifactRecords}
+      activeConversationId={convManager.activeConvId}
+      currentFilePath={file.path || undefined}
+      onOpen={(path) => { void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error)); }}
+      onCompare={(path) => { void handleReviewRevision(path); }}
+      onArchive={(path) => { void handleArchiveArtifact(path); setArtifactLibraryRefreshKey((key) => key + 1); }}
+      onDelete={(path) => { void handleDeleteArtifact(path); }}
+      onOverwrite={(record) => { void handleOverwriteArtifact(record); }}
+      onUndoOverwrite={(record) => { void handleUndoArtifactOverwrite(record); }}
+      onRefresh={refreshArtifactLibrary}
+      onClose={() => setRightPanelMode('none')}
+    />
   ) : null;
 
   const docxPane = (
@@ -1302,6 +1433,7 @@ export function AppLayout() {
           workspacePanelVisible: leftRailMode === 'workspace',
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
+          artifactsVisible: rightPanelMode === 'artifacts',
           reviewDirty: reviewStateApi.state.dirty,
           terminalVisible,
           editingDisabled: isDocx,
@@ -1310,6 +1442,7 @@ export function AppLayout() {
           onToggleWorkspacePanel: handleToggleWorkspacePanel,
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
+          onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
           onToggleTerminal: handleToggleTerminal,
           onSetDocMode: (next) => void setDocMode(next),
           onNew: handleNewFile,
@@ -1473,22 +1606,7 @@ export function AppLayout() {
                 void handleArchiveArtifact(path);
               }}
               onDeleteFile={(path) => {
-                void (async () => {
-                  const confirmed = await confirmDialog(`确定删除「${path.split(/[\\/]/).pop()}」？删除后不可恢复。`, {
-                    title: '删除产物',
-                    okLabel: '删除',
-                    cancelLabel: '取消',
-                  });
-                  if (!confirmed) return;
-                  try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    await invoke('delete_artifact_file', { request: { path, workspaceRoot: effectiveAiWorkspaceRoot ?? '' } });
-                    forgetArtifact(path);
-                    setTransientMessage(`已删除：${path.split(/[\\/]/).pop()}`);
-                  } catch (error) {
-                    await messageDialog(String(error), { title: '删除失败' });
-                  }
-                })();
+                void handleDeleteArtifact(path);
               }}
               onClose={handleClearArtifacts}
             />
