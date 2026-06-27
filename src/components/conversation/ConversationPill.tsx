@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, MessageSquare, Plus, X } from 'lucide-react';
+import { ChevronDown, MessageSquare, Pencil, Plus, X } from 'lucide-react';
 import type { ConversationData } from '../../services/agent/conversationStore';
 
 type ConversationPillProps = {
@@ -83,6 +83,19 @@ export function ConversationPill({ conversations, activeConvId, onSelect, onCrea
                 </span>
               )}
               {conv.runState === 'running' && <span className="conversation-pill-item-running" />}
+              <button
+                type="button"
+                className="conversation-pill-item-rename"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setEditingId(conv.id);
+                  setDraft(conv.title);
+                }}
+                aria-label={`重命名 ${conv.title}`}
+                title="重命名"
+              >
+                <Pencil size={11} />
+              </button>
               {conversations.size > 1 && (
                 <button
                   type="button"

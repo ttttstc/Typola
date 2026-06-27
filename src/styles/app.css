@@ -3284,6 +3284,218 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   background: color-mix(in oklch, var(--danger) 8%, var(--surface));
 }
 
+/* ===== Artifact Center Right Rail ===== */
+.artifact-center-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+}
+
+.artifact-center-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.artifact-center-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.artifact-center-header strong {
+  font-size: 14px;
+}
+
+.artifact-center-header span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.artifact-center-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.artifact-center-header-actions button,
+.artifact-center-card-actions button {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.artifact-center-header-actions button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.artifact-center-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.artifact-center-tabs button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 9px;
+  min-height: 30px;
+  cursor: pointer;
+}
+
+.artifact-center-tabs button.active {
+  border-color: var(--accent-muted);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.artifact-center-filters {
+  display: grid;
+  grid-template-columns: 1fr 112px 112px;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.artifact-center-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0 8px;
+  min-width: 0;
+}
+
+.artifact-center-search input,
+.artifact-center-filters select {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  min-height: 30px;
+  min-width: 0;
+  outline: none;
+}
+
+.artifact-center-filters select {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0 6px;
+}
+
+.artifact-center-empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px;
+}
+
+.artifact-center-list {
+  list-style: none;
+  margin: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+
+.artifact-center-card {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 10px 24px rgba(38, 27, 14, 0.04);
+}
+
+.artifact-center-card.legacy {
+  border-style: dashed;
+}
+
+.artifact-center-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.artifact-center-kind {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.artifact-center-card-title button {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-center-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.artifact-center-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.artifact-center-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.artifact-center-card-actions button:hover,
+.artifact-center-header-actions button:hover {
+  background: var(--control-hover);
+  color: var(--text-primary);
+}
+
+.artifact-center-card-actions button.danger:hover {
+  background: color-mix(in oklch, var(--danger) 8%, var(--surface));
+  color: var(--danger);
+}
+
 /* ===== File tree agent-changed highlight ===== */
 
 .file-tree-item.agent-changed {
@@ -3735,7 +3947,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .conversation-pill-title {
-  max-width: 120px;
+  max-width: 190px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3765,8 +3977,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   top: calc(100% + 4px);
   left: 0;
   z-index: 100;
-  min-width: 180px;
-  max-width: 260px;
+  min-width: 260px;
+  max-width: 360px;
   background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
@@ -3833,6 +4045,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   50% { opacity: 1; }
 }
 
+.conversation-pill-item-rename,
 .conversation-pill-item-close {
   border: none;
   background: transparent;
@@ -3849,8 +4062,14 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   transition: opacity 100ms, background 100ms;
 }
 
+.conversation-pill-item:hover .conversation-pill-item-rename,
 .conversation-pill-item:hover .conversation-pill-item-close {
   opacity: 1;
+}
+
+.conversation-pill-item-rename:hover {
+  background: var(--control-hover);
+  color: var(--text-primary);
 }
 
 .conversation-pill-item-close:hover {
