@@ -107,6 +107,34 @@ describe('useConversationManager', () => {
     });
   });
 
+  it('passes the OpenCode skill conversation as commandName', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    let convId = '';
+    act(() => {
+      convId = api?.createConversation('frontend-slides', 'frontend-slides', 'opencode') ?? '';
+    });
+
+    await act(async () => {
+      await api?.send('生成一页演示稿', { conversationId: convId });
+    });
+
+    expect(headlessMock.startAgentSession).toHaveBeenCalledTimes(1);
+    expect(headlessMock.startAgentSession.mock.calls[0][0]).toMatchObject({
+      provider: 'opencode',
+      prompt: '生成一页演示稿',
+      commandName: 'frontend-slides',
+    });
+  });
+
   it('drops late stdout from a cancelled run', async () => {
     act(() => {
       root.render(

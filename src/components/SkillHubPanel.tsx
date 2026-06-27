@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ArrowLeft, BarChart3, CalendarDays, Check, ClipboardList, Globe, PenLine,
@@ -12,6 +12,7 @@ import {
   getSceneAdditionsForProvider,
   getSystemSkillScenesForProvider,
   removeCustomSkillFromScene,
+  skillCapabilityLabel,
   type SkillHub,
   type SkillRef,
   type SkillSceneTemplate,
@@ -26,7 +27,7 @@ type SkillHubPanelProps = {
   onPickSkill: (skillName: string) => void;
   onInstallSkill: (prompt: string) => void;
   onSaveHub: (hub: SkillHub) => Promise<void>;
-  onReload: () => void;
+  onReload: () => Promise<void>;
 };
 
 type SkillCard = {
@@ -94,6 +95,7 @@ function AddSkillDialog({
   hub,
   localSkills,
   activeProvider,
+  capabilityLabel,
   saving,
   onClose,
   onSaveHub,
@@ -102,6 +104,7 @@ function AddSkillDialog({
   hub: SkillHub;
   localSkills: Skill[];
   activeProvider: AgentProvider;
+  capabilityLabel: string;
   saving: boolean;
   onClose: () => void;
   onSaveHub: (hub: SkillHub) => Promise<void>;
@@ -141,7 +144,7 @@ function AddSkillDialog({
         <header className="skill-hub-modal-header">
           <div>
             <strong>添加到 {scene.label}</strong>
-            <span>从本机已安装 skill 中选择</span>
+            <span>从本机已安装 {capabilityLabel} 中选择</span>
           </div>
           <button type="button" onClick={onClose}>关闭</button>
         </header>
@@ -155,7 +158,7 @@ function AddSkillDialog({
         </label>
         <div className="skill-hub-local-list">
           {filtered.length === 0 ? (
-            <p className="skill-hub-category-empty">没有匹配的本机 skill。</p>
+            <p className="skill-hub-category-empty">没有匹配的本机 {capabilityLabel}。</p>
           ) : filtered.map((skill) => {
             const added = existing.has(normalizeKey(skill.name));
             return (
@@ -181,7 +184,7 @@ function AddSkillDialog({
           <input
             value={manualName}
             onChange={(event) => setManualName(event.target.value)}
-            placeholder="手动输入 skill 名称"
+            placeholder={`手动输入 ${capabilityLabel} 名称`}
           />
           <button type="button" disabled={!manualName.trim() || saving} onClick={() => void addManual()}>
             添加
@@ -209,9 +212,12 @@ export function SkillHubPanel({
   const [selectedSceneId, setSelectedSceneId] = useState<SkillSceneTemplate['id'] | null>(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const systemScenes = useMemo(() => getSystemSkillScenesForProvider(activeProvider), [activeProvider]);
+  const capabilityLabel = skillCapabilityLabel(activeProvider);
+  const installActionLabel = activeProvider === 'opencode' ? '让 OpenCode 配置' : '让 Claude 安装';
 
-  const scanLocal = async () => {
+  const scanLocal = useCallback(async () => {
     setScanning(true);
     try {
       setLocalSkills(await listLocalSkills(activeProvider, activeWorkspaceRoot));
@@ -221,11 +227,23 @@ export function SkillHubPanel({
     } finally {
       setScanning(false);
     }
-  };
+  }, [activeProvider, activeWorkspaceRoot]);
 
   useEffect(() => {
-    void scanLocal();
-  }, [activeProvider, activeWorkspaceRoot]);
+    const timer = window.setTimeout(() => {
+      void scanLocal();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [scanLocal]);
+
+  const reloadAll = async () => {
+    setReloading(true);
+    try {
+      await Promise.all([onReload(), scanLocal()]);
+    } finally {
+      setReloading(false);
+    }
+  };
 
   const selectedScene = systemScenes.find((scene) => scene.id === selectedSceneId) ?? null;
   const cards = useMemo<SkillCard[]>(() => {
@@ -283,12 +301,10 @@ export function SkillHubPanel({
         <button
           type="button"
           className="skill-hub-reload"
-          onClick={() => {
-            onReload();
-            void scanLocal();
-          }}
-          title="重新加载 skill-hub.json 和本机 skill"
-          aria-label="重新加载 skill-hub.json 和本机 skill"
+          disabled={reloading || scanning}
+          onClick={() => void reloadAll()}
+          title={`重新加载 skill-hub.json 和本机 ${capabilityLabel}`}
+          aria-label={`重新加载 skill-hub.json 和本机 ${capabilityLabel}`}
         >
           <RefreshCw size={11} />
         </button>
@@ -300,7 +316,7 @@ export function SkillHubPanel({
       )}
       {scanError && (
         <div className="skill-hub-error" role="alert">
-          本地 skill 扫描失败：{scanError}
+          本地 {capabilityLabel} 扫描失败：{scanError}
         </div>
       )}
       {!selectedScene ? (
@@ -324,7 +340,7 @@ export function SkillHubPanel({
                   <strong className="skill-hub-scene-title">{scene.label}</strong>
                   <em className="skill-hub-scene-desc">{scene.description}</em>
                   <span className="skill-hub-scene-count">
-                    {total > 0 ? `${total} 个 skill` : '待添加 skill'}
+                    {total > 0 ? `${total} 个 ${capabilityLabel}` : `待添加 ${capabilityLabel}`}
                   </span>
                 </span>
               </button>
@@ -338,13 +354,13 @@ export function SkillHubPanel({
               <ArrowLeft size={13} /> 返回
             </button>
             <button type="button" onClick={() => setAddDialogOpen(true)}>
-              <Plus size={13} /> 添加 skill
+              <Plus size={13} /> 添加 {capabilityLabel}
             </button>
           </div>
           {cards.length === 0 ? (
             <div className="skill-hub-empty">
-              <p>该场景还没有预置 skill。</p>
-              <p className="skill-hub-hint">点击右上角添加本机已有 skill。</p>
+              <p>该场景还没有预置 {capabilityLabel}。</p>
+              <p className="skill-hub-hint">点击右上角添加本机已有 {capabilityLabel}。</p>
             </div>
           ) : (
             <ul className="skill-hub-items">
@@ -358,7 +374,7 @@ export function SkillHubPanel({
                       className="skill-hub-item-main"
                       onClick={() => {
                         if (skill.installed) onPickSkill(skill.name);
-                        else if (skill.template) onInstallSkill(buildSkillInstallPrompt(skill.template));
+                        else if (skill.template) onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider));
                       }}
                       title={skill.path ? `${skill.name} — ${skill.path}` : skill.name}
                     >
@@ -391,8 +407,8 @@ export function SkillHubPanel({
                     <div className="skill-hub-item-actions">
                       {skill.system ? (
                         !skill.installed && (
-                          <button type="button" onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template))}>
-                            让 Claude 安装
+                          <button type="button" onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}>
+                            {installActionLabel}
                           </button>
                         )
                       ) : (
@@ -420,7 +436,7 @@ export function SkillHubPanel({
       )}
       <div className="skill-hub-footer">
         <span>{selectedScene ? `${installedCount}/${cards.length} 可用` : `${systemScenes.length} 个场景`}</span>
-        {scanning && <span className="skill-hub-footer-meta">扫描中…</span>}
+        {(scanning || reloading) && <span className="skill-hub-footer-meta">扫描中…</span>}
       </div>
       {selectedScene && addDialogOpen && (
         <AddSkillDialog
@@ -428,6 +444,7 @@ export function SkillHubPanel({
           hub={hub}
           localSkills={localSkills}
           activeProvider={activeProvider}
+          capabilityLabel={capabilityLabel}
           saving={saving}
           onClose={() => setAddDialogOpen(false)}
           onSaveHub={saveHub}
