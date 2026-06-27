@@ -7,13 +7,12 @@ type FsEntry = {
   isFile: boolean;
 };
 
-function normalize(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/u, '').toLowerCase();
-}
-
-function pathEquals(a?: string, b?: string): boolean {
-  return Boolean(a && b && normalize(a) === normalize(b));
-}
+type ScannedArtifactFile = {
+  path: string;
+  manifestPath: string;
+  manifestJson?: string | null;
+  modifiedAt?: number | null;
+};
 
 function isArtifactCandidate(path: string): boolean {
   const name = artifactBasename(path).toLowerCase();
@@ -57,6 +56,33 @@ async function readManifest(path: string): Promise<ArtifactManifest | null> {
   }
 }
 
+function parseManifestJson(content?: string | null): ArtifactManifest | null {
+  if (!content) return null;
+  try {
+    const parsed = JSON.parse(content) as ArtifactManifest;
+    return parsed && typeof parsed.primaryFile === 'string' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAbsolutePath(path: string): boolean {
+  return /^[a-z]:[\\/]/iu.test(path) || path.startsWith('/') || path.startsWith('\\\\');
+}
+
+function withScannedPrimaryFile(manifest: ArtifactManifest, filePath: string): ArtifactManifest {
+  if (isAbsolutePath(manifest.primaryFile)) return manifest;
+  return {
+    ...manifest,
+    primaryFile: filePath,
+    files: manifest.files?.map((file) => (
+      file.role === 'primary' && !isAbsolutePath(file.path)
+        ? { ...file, path: filePath }
+        : file
+    )),
+  };
+}
+
 async function scanFiles(root: string, depth = 0): Promise<string[]> {
   if (depth > 5) return [];
   const entries = await readDirSafe(root);
@@ -73,19 +99,72 @@ async function scanFiles(root: string, depth = 0): Promise<string[]> {
   return files;
 }
 
+export function parseArtifactTime(value?: string): number {
+  if (!value) return 0;
+  const parsed = /^\d+$/u.test(value) ? Number(value) : Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function compareRecords(a: ArtifactRecord, b: ArtifactRecord): number {
-  return Date.parse(b.manifest.updatedAt ?? b.manifest.createdAt) - Date.parse(a.manifest.updatedAt ?? a.manifest.createdAt);
+  return parseArtifactTime(b.manifest.updatedAt ?? b.manifest.createdAt) - parseArtifactTime(a.manifest.updatedAt ?? a.manifest.createdAt);
 }
 
 export async function scanArtifacts(outputRoot?: string): Promise<ArtifactRecord[]> {
   if (!outputRoot) return [];
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const files = await invoke<ScannedArtifactFile[]>('scan_artifacts', {
+      request: { outputRoot },
+    });
+    return recordsFromScannedFiles(files, outputRoot);
+  } catch (error) {
+    console.warn('Rust artifact scan failed, falling back to plugin-fs:', error);
+  }
   const files = await scanFiles(outputRoot);
+  return recordsFromPaths(files, outputRoot);
+}
+
+function createLegacyRecord(file: string, outputRoot: string, updatedAt?: string): ArtifactRecord {
+  const manifest = createArtifactManifest({
+    primaryFile: file,
+    outputRoot,
+    status: 'done',
+    sourceType: 'unknown',
+    title: artifactBasename(file),
+  });
+  manifest.kind = inferArtifactKind(file);
+  manifest.createdAt = updatedAt ?? manifest.createdAt;
+  manifest.updatedAt = updatedAt ?? manifest.updatedAt;
+  return { manifest, legacy: true };
+}
+
+function recordsFromScannedFiles(files: ScannedArtifactFile[], outputRoot: string): ArtifactRecord[] {
+  const records: ArtifactRecord[] = [];
+  const seenManifestPaths = new Set<string>();
+  for (const file of files) {
+    const manifestPath = file.manifestPath || joinArtifactPath(artifactDir(file.path), 'artifact.json');
+    if (seenManifestPaths.has(manifestPath)) continue;
+    const parsedManifest = parseManifestJson(file.manifestJson);
+    const manifest = parsedManifest ? withScannedPrimaryFile(parsedManifest, file.path) : null;
+    if (manifest?.status === 'deleted') continue;
+    if (manifest) {
+      seenManifestPaths.add(manifestPath);
+      records.push({ manifest, manifestPath, legacy: false });
+      continue;
+    }
+    const updatedAt = typeof file.modifiedAt === 'number' ? new Date(file.modifiedAt).toISOString() : undefined;
+    records.push(createLegacyRecord(file.path, outputRoot, updatedAt));
+  }
+  return records.sort(compareRecords);
+}
+
+async function recordsFromPaths(files: string[], outputRoot: string): Promise<ArtifactRecord[]> {
   const records: ArtifactRecord[] = [];
   const seenManifestPaths = new Set<string>();
   for (const file of files) {
     const manifestPath = joinArtifactPath(artifactDir(file), 'artifact.json');
     if (seenManifestPaths.has(manifestPath)) continue;
-    let manifest = await readManifest(manifestPath);
+    const manifest = await readManifest(manifestPath);
     if (manifest?.status === 'deleted') continue;
     if (manifest) {
       seenManifestPaths.add(manifestPath);
@@ -93,17 +172,7 @@ export async function scanArtifacts(outputRoot?: string): Promise<ArtifactRecord
       continue;
     }
     const updatedAt = await statMtime(file);
-    manifest = createArtifactManifest({
-      primaryFile: file,
-      outputRoot,
-      status: 'done',
-      sourceType: 'unknown',
-      title: artifactBasename(file),
-    });
-    manifest.kind = inferArtifactKind(file);
-    manifest.createdAt = updatedAt ?? manifest.createdAt;
-    manifest.updatedAt = updatedAt ?? manifest.updatedAt;
-    records.push({ manifest, legacy: true });
+    records.push(createLegacyRecord(file, outputRoot, updatedAt));
   }
   return records.sort(compareRecords);
 }
@@ -117,7 +186,6 @@ export function filterArtifacts(
   return records.filter((record) => {
     const manifest = record.manifest;
     if (mode === 'session' && options.conversationId && manifest.source.conversationId !== options.conversationId) return false;
-    if (mode === 'document' && options.documentPath && !pathEquals(manifest.source.documentPath, options.documentPath)) return false;
     if (options.kind && options.kind !== 'all' && manifest.kind !== options.kind) return false;
     if (options.status && options.status !== 'all' && manifest.status !== options.status) return false;
     if (query) {

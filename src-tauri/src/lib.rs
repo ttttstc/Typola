@@ -1,3 +1,6 @@
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     env,
@@ -12,9 +15,6 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
-use serde::{Deserialize, Serialize};
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 use tauri::Emitter;
 use tauri::Emitter as _;
@@ -137,9 +137,26 @@ struct ArchiveArtifactRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ScanArtifactsRequest {
+    output_root: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScannedArtifactFile {
+    path: String,
+    manifest_path: String,
+    manifest_json: Option<String>,
+    modified_at: Option<u128>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct OverwriteArtifactRequest {
     artifact_path: String,
     target_path: String,
+    workspace_root: Option<String>,
+    expected_document_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -237,7 +254,6 @@ struct UploadImageRequest {
     document_path: String,
     document_name: String,
 }
-
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -425,7 +441,8 @@ fn rename_opened_document(request: RenameDocumentRequest) -> Result<RenameDocume
     if target.exists() && target != path {
         return Err("target file already exists".into());
     }
-    std::fs::rename(&path, &target).map_err(|error| format!("failed to rename document: {error}"))?;
+    std::fs::rename(&path, &target)
+        .map_err(|error| format!("failed to rename document: {error}"))?;
     let name = target
         .file_name()
         .and_then(OsStr::to_str)
@@ -462,7 +479,9 @@ fn write_attachment_file(request: AttachmentWriteRequest) -> Result<String, Stri
 }
 
 #[tauri::command]
-fn process_inserted_image(request: ProcessInsertedImageRequest) -> Result<ProcessInsertedImageResult, String> {
+fn process_inserted_image(
+    request: ProcessInsertedImageRequest,
+) -> Result<ProcessInsertedImageResult, String> {
     let document_path = PathBuf::from(&request.document_path);
     if !is_writable_document_path(&document_path) {
         return Err("unsupported document type".into());
@@ -478,7 +497,12 @@ fn process_inserted_image(request: ProcessInsertedImageRequest) -> Result<Proces
     let requested_name = request
         .file_name
         .as_deref()
-        .or_else(|| request.source_path.as_deref().and_then(|path| Path::new(path).file_name()?.to_str()))
+        .or_else(|| {
+            request
+                .source_path
+                .as_deref()
+                .and_then(|path| Path::new(path).file_name()?.to_str())
+        })
         .unwrap_or("inserted-image.png");
     let safe_name = sanitize_attachment_file_name(requested_name);
     let output_path = unique_attachment_path(&output_dir, &safe_name);
@@ -562,7 +586,22 @@ fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<Stri
     Ok(target.to_string_lossy().to_string())
 }
 
-fn canonical_output_dir_for_artifact(artifact_path: &Path, workspace_root: Option<&str>) -> Result<PathBuf, String> {
+#[tauri::command]
+fn scan_artifacts(request: ScanArtifactsRequest) -> Result<Vec<ScannedArtifactFile>, String> {
+    let output_root = PathBuf::from(request.output_root);
+    if !output_root.exists() {
+        return Ok(Vec::new());
+    }
+    let output_root = canonical_output_dir(&output_root)?;
+    let mut files = Vec::new();
+    scan_artifact_files(&output_root, 0, &mut files)?;
+    Ok(files)
+}
+
+fn canonical_output_dir_for_artifact(
+    artifact_path: &Path,
+    workspace_root: Option<&str>,
+) -> Result<PathBuf, String> {
     let canonical = artifact_path
         .canonicalize()
         .map_err(|error| format!("failed to resolve path: {error}"))?;
@@ -585,6 +624,111 @@ fn canonical_output_dir_for_artifact(artifact_path: &Path, workspace_root: Optio
         }
     }
     Err("refused: path is outside .typola-output directory".into())
+}
+
+fn canonical_output_dir(output_root: &Path) -> Result<PathBuf, String> {
+    let canonical = output_root
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve .typola-output directory: {error}"))?;
+    if canonical
+        .file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(|name| name == ".typola-output")
+    {
+        return Ok(canonical);
+    }
+    Err("refused: artifact scan root must be a .typola-output directory".into())
+}
+
+fn is_artifact_candidate(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(OsStr::to_str) else {
+        return false;
+    };
+    if name.eq_ignore_ascii_case("artifact.json") {
+        return false;
+    }
+    let Some(extension) = path.extension().and_then(OsStr::to_str).map(|value| value.to_ascii_lowercase()) else {
+        return false;
+    };
+    matches!(
+        extension.as_str(),
+        "md" | "markdown" | "html" | "htm" | "txt" | "json" | "csv" | "tsv" | "png" | "jpg"
+            | "jpeg" | "gif" | "webp" | "svg"
+    )
+}
+
+fn system_time_millis(value: SystemTime) -> Option<u128> {
+    value
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_millis())
+}
+
+fn scan_artifact_files(root: &Path, depth: usize, output: &mut Vec<ScannedArtifactFile>) -> Result<(), String> {
+    if depth > 5 {
+        return Ok(());
+    }
+    let entries = std::fs::read_dir(root)
+        .map_err(|error| format!("failed to read artifact directory: {error}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("failed to read artifact entry: {error}"))?;
+        let path = entry.path();
+        if path.is_dir() {
+            if path.file_name().and_then(OsStr::to_str) == Some("backups") {
+                continue;
+            }
+            scan_artifact_files(&path, depth + 1, output)?;
+            continue;
+        }
+        if !path.is_file() || !is_artifact_candidate(&path) {
+            continue;
+        }
+        let parent = path
+            .parent()
+            .ok_or_else(|| "invalid artifact parent".to_string())?;
+        let manifest_path = parent.join("artifact.json");
+        let manifest_json = std::fs::read_to_string(&manifest_path).ok();
+        let modified_at = std::fs::metadata(&path)
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(system_time_millis);
+        output.push(ScannedArtifactFile {
+            path: path.to_string_lossy().to_string(),
+            manifest_path: manifest_path.to_string_lossy().to_string(),
+            manifest_json,
+            modified_at,
+        });
+    }
+    Ok(())
+}
+
+fn path_matches_optional_expected(path: &Path, expected_path: Option<&str>) -> bool {
+    expected_path
+        .filter(|value| !value.is_empty())
+        .and_then(|value| PathBuf::from(value).canonicalize().ok())
+        .is_some_and(|expected| path == expected)
+}
+
+fn path_is_inside_optional_workspace(path: &Path, workspace_root: Option<&str>) -> bool {
+    workspace_root
+        .filter(|value| !value.is_empty())
+        .and_then(|value| PathBuf::from(value).canonicalize().ok())
+        .is_some_and(|workspace| path.starts_with(workspace))
+}
+
+fn validate_overwrite_target(
+    request: &OverwriteArtifactRequest,
+    target_path: &Path,
+) -> Result<PathBuf, String> {
+    let canonical_target = target_path
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve target document: {error}"))?;
+    if path_matches_optional_expected(&canonical_target, request.expected_document_path.as_deref())
+        || path_is_inside_optional_workspace(&canonical_target, request.workspace_root.as_deref())
+    {
+        return Ok(canonical_target);
+    }
+    Err("refused: target document is outside the allowed document/workspace scope".into())
 }
 
 fn artifact_manifest_path(artifact_path: &Path) -> Result<PathBuf, String> {
@@ -658,6 +802,7 @@ fn overwrite_artifact_to_document(request: OverwriteArtifactRequest) -> Result<S
         return Err("unsupported artifact or target type".into());
     }
     canonical_output_dir_for_artifact(&artifact_path, None)?;
+    let target_path = validate_overwrite_target(&request, &target_path)?;
     let artifact_parent = artifact_path
         .parent()
         .ok_or_else(|| "invalid artifact parent".to_string())?;
@@ -685,6 +830,12 @@ fn undo_artifact_overwrite(request: OverwriteArtifactRequest) -> Result<String, 
     if !artifact_path.is_file() {
         return Err("artifact file not found".into());
     }
+    if !target_path.is_file() {
+        return Err("target document not found".into());
+    }
+    if !is_openable_document_path(&artifact_path) || !is_openable_document_path(&target_path) {
+        return Err("unsupported artifact or target type".into());
+    }
     canonical_output_dir_for_artifact(&artifact_path, None)?;
     let manifest_path = artifact_manifest_path(&artifact_path)?;
     let manifest = read_manifest_json(&manifest_path);
@@ -698,6 +849,18 @@ fn undo_artifact_overwrite(request: OverwriteArtifactRequest) -> Result<String, 
         return Err("overwrite backup not found".into());
     }
     canonical_output_dir_for_artifact(&backup_path, None)?;
+    let target_path = validate_overwrite_target(&request, &target_path)?;
+    let manifest_target = manifest
+        .get("overwrite")
+        .and_then(|value| value.get("targetPath"))
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| "artifact has no overwrite target".to_string())?;
+    let manifest_target = PathBuf::from(manifest_target)
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve overwrite target: {error}"))?;
+    if manifest_target != target_path {
+        return Err("refused: undo target does not match the recorded overwrite target".into());
+    }
     std::fs::copy(&backup_path, &target_path)
         .map_err(|error| format!("failed to restore backup: {error}"))?;
     update_manifest_overwrite(&manifest_path, &artifact_path, &target_path, None)
@@ -950,7 +1113,9 @@ fn watch_workspace(
     let root_for_filter = root.clone();
     let mut watcher: RecommendedWatcher = RecommendedWatcher::new(
         move |result: notify::Result<Event>| {
-            let Ok(event) = result else { return; };
+            let Ok(event) = result else {
+                return;
+            };
             if !is_document_change_event(&event.kind) {
                 return;
             }
@@ -971,7 +1136,10 @@ fn watch_workspace(
             touched.dedup();
             let _ = emit_app.emit(
                 "workspace-changed",
-                WorkspaceChangedPayload { kind, paths: touched },
+                WorkspaceChangedPayload {
+                    kind,
+                    paths: touched,
+                },
             );
         },
         Config::default(),
@@ -982,10 +1150,7 @@ fn watch_workspace(
         .watch(&root, RecursiveMode::Recursive)
         .map_err(|error| format!("failed to watch workspace: {error}"))?;
 
-    let entry = WorkspaceWatcherEntry {
-        root,
-        watcher,
-    };
+    let entry = WorkspaceWatcherEntry { root, watcher };
     watchers.insert(key, entry);
     Ok(())
 }
@@ -1250,6 +1415,7 @@ pub fn run() {
             write_opened_document,
             rename_opened_document,
             archive_artifact_to_workspace,
+            scan_artifacts,
             overwrite_artifact_to_document,
             undo_artifact_overwrite,
             delete_artifact_file,
@@ -1479,7 +1645,9 @@ fn parse_upload_urls(stdout: &str, count: usize) -> Result<Vec<String>, String> 
 }
 
 fn is_upload_url(value: &str) -> bool {
-    value.starts_with("http://") || value.starts_with("https://") || value.starts_with("data:image/")
+    value.starts_with("http://")
+        || value.starts_with("https://")
+        || value.starts_with("data:image/")
 }
 
 fn unique_attachment_path(dir: &Path, file_name: &str) -> PathBuf {
@@ -1607,16 +1775,25 @@ fn start_agent_headless_run(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if let Some(cwd) = request.cwd.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(cwd) = request
+        .cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         let cwd_path = PathBuf::from(cwd);
-        std::fs::create_dir_all(&cwd_path)
-            .map_err(|error| format!("failed to create {} cwd: {error}", provider.display_name()))?;
+        std::fs::create_dir_all(&cwd_path).map_err(|error| {
+            format!("failed to create {} cwd: {error}", provider.display_name())
+        })?;
         command.current_dir(cwd_path);
     }
 
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("failed to start {} headless run: {error}", provider.display_name()))?;
+    let mut child = command.spawn().map_err(|error| {
+        format!(
+            "failed to start {} headless run: {error}",
+            provider.display_name()
+        )
+    })?;
     let mut stdin = child
         .stdin
         .take()
@@ -1634,7 +1811,12 @@ fn start_agent_headless_run(
         stdin
             .write_all(request.prompt.as_bytes())
             .and_then(|_| stdin.flush())
-            .map_err(|error| format!("failed to write {} prompt: {error}", provider.display_name()))?;
+            .map_err(|error| {
+                format!(
+                    "failed to write {} prompt: {error}",
+                    provider.display_name()
+                )
+            })?;
     }
     drop(stdin);
 
@@ -1738,7 +1920,11 @@ fn build_claude_headless_args(
         args.push("--model".to_string());
         args.push(model.to_string());
     }
-    for dir in plugin_dirs.iter().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+    for dir in plugin_dirs
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
         args.push("--plugin-dir".to_string());
         args.push(dir.to_string());
     }
@@ -1779,7 +1965,10 @@ fn build_opencode_headless_args(
         args.push("--model".to_string());
         args.push(model.to_string());
     }
-    if let Some(command_name) = command_name.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(command_name) = command_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         args.push("--command".to_string());
         args.push(command_name.trim_start_matches('/').to_string());
     }
@@ -1809,7 +1998,13 @@ fn build_agent_headless_command(
 ) -> AgentCommandSpec {
     match provider {
         AgentProvider::Claude => AgentCommandSpec {
-            args: build_claude_headless_args(session_uuid, resumed, model, plugin_dirs, extra_allowed_dirs),
+            args: build_claude_headless_args(
+                session_uuid,
+                resumed,
+                model,
+                plugin_dirs,
+                extra_allowed_dirs,
+            ),
             prompt_stdin: true,
         },
         AgentProvider::Opencode => AgentCommandSpec {
@@ -1851,7 +2046,10 @@ fn spawn_agent_stdout_forwarder(
     });
 }
 
-fn spawn_agent_stderr_collector(stderr: impl Read + Send + 'static, stderr_tail: Arc<Mutex<String>>) {
+fn spawn_agent_stderr_collector(
+    stderr: impl Read + Send + 'static,
+    stderr_tail: Arc<Mutex<String>>,
+) {
     thread::spawn(move || {
         let mut reader = BufReader::new(stderr);
         let mut buffer = String::new();
@@ -1983,11 +2181,7 @@ fn create_agent_command(command_path: &str, args: &[String]) -> Command {
         }
         let mut command = Command::new("cmd");
         let command_line = build_windows_cmd_invocation(command_path, args);
-        command
-            .arg("/d")
-            .arg("/s")
-            .arg("/c")
-            .raw_arg(command_line);
+        command.arg("/d").arg("/s").arg("/c").raw_arg(command_line);
         command.creation_flags(CREATE_NO_WINDOW);
         return command;
     }
@@ -2073,7 +2267,10 @@ struct AgentVersionProbe {
 
 fn detect_agent_runtime(request: AgentDetectRequest) -> AgentDetectResult {
     let provider = request.runtime_id.or(request.provider).unwrap_or_default();
-    let requested_path = request.custom_path.as_deref().or(request.agent_path.as_deref());
+    let requested_path = request
+        .custom_path
+        .as_deref()
+        .or(request.agent_path.as_deref());
     let default_command = request
         .default_command
         .as_deref()
@@ -2090,7 +2287,9 @@ fn detect_agent_runtime(request: AgentDetectRequest) -> AgentDetectResult {
         .unwrap_or_else(|| provider.detect_args());
     let detected_at = detected_at_millis();
 
-    if let Some(diagnostic) = validate_agent_path_before_spawn(provider, requested_path, &agent_path) {
+    if let Some(diagnostic) =
+        validate_agent_path_before_spawn(provider, requested_path, &agent_path)
+    {
         return AgentDetectResult {
             runtime_id: provider,
             available: false,
@@ -2149,7 +2348,9 @@ fn detect_agent_runtime(request: AgentDetectRequest) -> AgentDetectResult {
             diagnostics: vec![diagnostic],
             detected_at,
             exit_code: probe.as_ref().and_then(|value| value.exit_code),
-            stdout_preview: probe.as_ref().and_then(|value| optional_preview(value.stdout_preview.clone())),
+            stdout_preview: probe
+                .as_ref()
+                .and_then(|value| optional_preview(value.stdout_preview.clone())),
             stderr_preview: probe.and_then(|value| optional_preview(value.stderr_preview)),
         },
     }
@@ -2179,7 +2380,9 @@ fn run_agent_version(
             let stdout = join_preview_reader(stdout_reader);
             let stderr = join_preview_reader(stderr_reader);
             let probe = AgentVersionProbe {
-                version: optional_preview(stdout.lines().next().unwrap_or_default().trim().to_string()),
+                version: optional_preview(
+                    stdout.lines().next().unwrap_or_default().trim().to_string(),
+                ),
                 exit_code: None,
                 stdout_preview: preview_text(&stdout),
                 stderr_preview: preview_text(&stderr),
@@ -2213,7 +2416,10 @@ fn run_agent_version(
 
     if !status.success() {
         let detail = if probe.stderr_preview.trim().is_empty() {
-            format!("{} CLI 能启动，但 `--version` 返回非 0。", provider.display_name())
+            format!(
+                "{} CLI 能启动，但 `--version` 返回非 0。",
+                provider.display_name()
+            )
         } else {
             probe.stderr_preview.clone()
         };
@@ -2239,7 +2445,9 @@ fn spawn_preview_reader(reader: impl Read + Send + 'static) -> thread::JoinHandl
 }
 
 fn join_preview_reader(handle: Option<thread::JoinHandle<String>>) -> String {
-    handle.and_then(|reader| reader.join().ok()).unwrap_or_default()
+    handle
+        .and_then(|reader| reader.join().ok())
+        .unwrap_or_default()
 }
 
 fn validate_agent_path_before_spawn(
@@ -2266,8 +2474,14 @@ fn validate_agent_path_before_spawn(
             "not_executable",
             "error",
             format!("{} CLI 路径不是可执行文件", provider.display_name()),
-            format!("你填写的路径不是文件：{resolved_path}。请填写 CLI 的 .cmd/.exe 或可执行文件路径。"),
-            Some(agent_fix("选择路径", "choose_file", Some(resolved_path.to_string()))),
+            format!(
+                "你填写的路径不是文件：{resolved_path}。请填写 CLI 的 .cmd/.exe 或可执行文件路径。"
+            ),
+            Some(agent_fix(
+                "选择路径",
+                "choose_file",
+                Some(resolved_path.to_string()),
+            )),
         ));
     }
     if !is_agent_executable_file(path) {
@@ -2282,7 +2496,11 @@ fn validate_agent_path_before_spawn(
     None
 }
 
-fn classify_spawn_error(provider: AgentProvider, agent_path: &str, raw_error: &str) -> AgentDiagnostic {
+fn classify_spawn_error(
+    provider: AgentProvider,
+    agent_path: &str,
+    raw_error: &str,
+) -> AgentDiagnostic {
     let lower = raw_error.to_ascii_lowercase();
     let missing = lower.contains("not found")
         || lower.contains("no such file")
@@ -2303,7 +2521,13 @@ fn classify_spawn_error(provider: AgentProvider, agent_path: &str, raw_error: &s
                 format!("Typola 没能启动 `{agent_path}`。请先安装 CLI，或在设置里填写完整路径。原始错误：{raw_error}"),
             )
         };
-        return agent_diagnostic(code, "error", title, detail, Some(agent_fix("重新检测", "rescan", None)));
+        return agent_diagnostic(
+            code,
+            "error",
+            title,
+            detail,
+            Some(agent_fix("重新检测", "rescan", None)),
+        );
     }
 
     let denied = lower.contains("permission denied")
@@ -2368,7 +2592,10 @@ fn is_bare_command(value: &str) -> bool {
 fn read_preview(mut reader: impl Read) -> String {
     const MAX_PREVIEW_BYTES: usize = 64 * 1024;
     let mut bytes = Vec::with_capacity(MAX_PREVIEW_BYTES);
-    let _ = reader.by_ref().take(MAX_PREVIEW_BYTES as u64).read_to_end(&mut bytes);
+    let _ = reader
+        .by_ref()
+        .take(MAX_PREVIEW_BYTES as u64)
+        .read_to_end(&mut bytes);
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
@@ -2415,7 +2642,12 @@ fn detected_at_millis() -> String {
 fn is_agent_executable_file(path: &Path) -> bool {
     path.extension()
         .and_then(OsStr::to_str)
-        .is_some_and(|extension| matches!(extension.to_ascii_lowercase().as_str(), "cmd" | "exe" | "bat"))
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "cmd" | "exe" | "bat"
+            )
+        })
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -2501,7 +2733,8 @@ fn skill_hub_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .app_config_dir()
         .map_err(|error| format!("failed to resolve app config dir: {error}"))?
         .join("typola");
-    std::fs::create_dir_all(&dir).map_err(|error| format!("failed to create config dir: {error}"))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("failed to create config dir: {error}"))?;
     Ok(dir.join("skill-hub.json"))
 }
 
@@ -2572,7 +2805,11 @@ fn list_claude_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
         if !path.is_dir() {
             continue;
         }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()).map(|s| s.to_string()) else {
+        let Some(name) = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+        else {
             continue;
         };
         let skill_md = path.join("SKILL.md");
@@ -2590,7 +2827,10 @@ fn list_claude_skills(app: tauri::AppHandle) -> Result<Vec<SkillInfo>, String> {
     Ok(skills)
 }
 
-fn list_opencode_commands(app: tauri::AppHandle, workspace_root: Option<&str>) -> Result<Vec<SkillInfo>, String> {
+fn list_opencode_commands(
+    app: tauri::AppHandle,
+    workspace_root: Option<&str>,
+) -> Result<Vec<SkillInfo>, String> {
     let home = app
         .path()
         .home_dir()
@@ -2600,7 +2840,10 @@ fn list_opencode_commands(app: tauri::AppHandle, workspace_root: Option<&str>) -
     collect_opencode_command_dirs(&mut commands, &global_config);
     collect_opencode_config_commands(&mut commands, &global_config.join("opencode.jsonc"));
 
-    if let Some(root) = workspace_root.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(root) = workspace_root
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         let project_config = PathBuf::from(root).join(".opencode");
         collect_opencode_command_dirs(&mut commands, &project_config);
         collect_opencode_config_commands(&mut commands, &project_config.join("opencode.jsonc"));
@@ -2614,19 +2857,25 @@ fn list_opencode_commands(app: tauri::AppHandle, workspace_root: Option<&str>) -
 fn collect_opencode_command_dirs(commands: &mut Vec<SkillInfo>, base: &Path) {
     for dir_name in ["commands", "command"] {
         let dir = base.join(dir_name);
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries {
             let Ok(entry) = entry else { continue };
             let path = entry.path();
             if !path.is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("md") {
                 continue;
             }
-            let Some(name) = path.file_stem().and_then(|stem| stem.to_str()).map(|value| value.to_string()) else {
+            let Some(name) = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(|value| value.to_string())
+            else {
                 continue;
             };
-            let description = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|content| parse_skill_md_description(&content).or_else(|| parse_markdown_heading(&content)));
+            let description = std::fs::read_to_string(&path).ok().and_then(|content| {
+                parse_skill_md_description(&content).or_else(|| parse_markdown_heading(&content))
+            });
             commands.push(SkillInfo {
                 name,
                 description,
@@ -2647,10 +2896,16 @@ fn parse_markdown_heading(content: &str) -> Option<String> {
 }
 
 fn collect_opencode_config_commands(commands: &mut Vec<SkillInfo>, config_path: &Path) {
-    let Ok(raw) = std::fs::read_to_string(config_path) else { return };
+    let Ok(raw) = std::fs::read_to_string(config_path) else {
+        return;
+    };
     let stripped = strip_jsonc_comments(&raw);
-    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stripped) else { return };
-    let Some(command_map) = parsed.get("command").and_then(|value| value.as_object()) else { return };
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&stripped) else {
+        return;
+    };
+    let Some(command_map) = parsed.get("command").and_then(|value| value.as_object()) else {
+        return;
+    };
     for (name, value) in command_map {
         let description = value
             .as_object()
@@ -2840,7 +3095,10 @@ mod tests {
         let diagnostic = classify_spawn_error(AgentProvider::Claude, "claude.cmd", "拒绝访问。");
 
         assert_eq!(diagnostic.code, "not_executable");
-        assert_eq!(diagnostic.fix.as_ref().map(|fix| fix.action.as_str()), Some("choose_file"));
+        assert_eq!(
+            diagnostic.fix.as_ref().map(|fix| fix.action.as_str()),
+            Some("choose_file")
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -2857,7 +3115,8 @@ mod tests {
 
     #[test]
     fn classify_spawn_error_falls_back_to_unknown() {
-        let diagnostic = classify_spawn_error(AgentProvider::Claude, "claude", "something odd happened");
+        let diagnostic =
+            classify_spawn_error(AgentProvider::Claude, "claude", "something odd happened");
 
         assert_eq!(diagnostic.code, "unknown");
     }
@@ -2875,7 +3134,10 @@ mod tests {
     #[test]
     fn claude_path_defaults_to_path_lookup_on_non_windows() {
         assert_eq!(normalize_agent_path(AgentProvider::Claude, None), "claude");
-        assert_eq!(normalize_agent_path(AgentProvider::Opencode, None), "opencode");
+        assert_eq!(
+            normalize_agent_path(AgentProvider::Opencode, None),
+            "opencode"
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -2891,7 +3153,10 @@ mod tests {
                 || path.ends_with("\\claude.exe"),
             "unexpected default Claude path: {path}"
         );
-        assert!(!path.ends_with(".ps1"), "Claude should not resolve to PowerShell wrapper: {path}");
+        assert!(
+            !path.ends_with(".ps1"),
+            "Claude should not resolve to PowerShell wrapper: {path}"
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -2907,7 +3172,10 @@ mod tests {
                 || path.ends_with("\\opencode.exe"),
             "unexpected default OpenCode path: {path}"
         );
-        assert!(!path.ends_with(".ps1"), "OpenCode should not resolve to PowerShell wrapper: {path}");
+        assert!(
+            !path.ends_with(".ps1"),
+            "OpenCode should not resolve to PowerShell wrapper: {path}"
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -2959,7 +3227,10 @@ mod tests {
 
     #[test]
     fn claude_headless_args_use_text_stdin_and_stream_json_output() {
-        let plugin_dirs = vec!["D:\\plugins\\one".to_string(), "D:\\plugins\\two".to_string()];
+        let plugin_dirs = vec![
+            "D:\\plugins\\one".to_string(),
+            "D:\\plugins\\two".to_string(),
+        ];
         let extra_allowed_dirs = vec!["D:\\workspace".to_string()];
         let args = build_claude_headless_args(
             "session-123",
@@ -2969,13 +3240,25 @@ mod tests {
             &extra_allowed_dirs,
         );
 
-        assert!(args.windows(2).any(|pair| pair == ["--input-format", "text"]));
-        assert!(args.windows(2).any(|pair| pair == ["--output-format", "stream-json"]));
-        assert!(args.windows(2).any(|pair| pair == ["--session-id", "session-123"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--input-format", "text"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--output-format", "stream-json"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--session-id", "session-123"]));
         assert!(args.windows(2).any(|pair| pair == ["--model", "sonnet"]));
-        assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\one"]));
-        assert!(args.windows(2).any(|pair| pair == ["--plugin-dir", "D:\\plugins\\two"]));
-        assert!(args.windows(2).any(|pair| pair == ["--add-dir", "D:\\workspace"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--plugin-dir", "D:\\plugins\\one"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--plugin-dir", "D:\\plugins\\two"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--add-dir", "D:\\workspace"]));
         assert!(!args.contains(&"--resume".to_string()));
     }
 
@@ -2983,7 +3266,9 @@ mod tests {
     fn claude_headless_resume_args_reuse_session_uuid() {
         let args = build_claude_headless_args("session-123", true, None, &[], &[]);
 
-        assert!(args.windows(2).any(|pair| pair == ["--resume", "session-123"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--resume", "session-123"]));
         assert!(!args.contains(&"--session-id".to_string()));
     }
 
@@ -3004,15 +3289,20 @@ mod tests {
         assert!(!args.contains(&"--session".to_string()));
         assert!(!args.contains(&"session-123".to_string()));
         assert!(!args.contains(&"--continue".to_string()));
-        assert!(args.windows(2).any(|pair| pair == ["--model", "anthropic/claude-sonnet-4"]));
-        assert!(args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--model", "anthropic/claude-sonnet-4"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
         assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
         assert_eq!(args.last().map(String::as_str), Some("summarize"));
     }
 
     #[test]
     fn opencode_headless_resume_uses_the_same_session_argument() {
-        let args = build_opencode_headless_args("session-123", true, None, None, &[], None, "continue");
+        let args =
+            build_opencode_headless_args("session-123", true, None, None, &[], None, "continue");
 
         assert!(args.contains(&"--continue".to_string()));
         assert!(!args.contains(&"--session".to_string()));
@@ -3035,10 +3325,20 @@ mod tests {
             "summarize",
         );
 
-        assert!(args.windows(2).any(|pair| pair == ["--file", "D:\\workspace\\current.md"]));
-        assert!(args.windows(2).any(|pair| pair == ["--file", "D:\\workspace\\brief.md"]));
-        let prompt_index = args.iter().position(|arg| arg == "summarize").expect("missing prompt");
-        let first_file_index = args.iter().position(|arg| arg == "--file").expect("missing --file");
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--file", "D:\\workspace\\current.md"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--file", "D:\\workspace\\brief.md"]));
+        let prompt_index = args
+            .iter()
+            .position(|arg| arg == "summarize")
+            .expect("missing prompt");
+        let first_file_index = args
+            .iter()
+            .position(|arg| arg == "--file")
+            .expect("missing --file");
         assert!(prompt_index < first_file_index);
     }
 
@@ -3054,7 +3354,9 @@ mod tests {
             "use current doc",
         );
 
-        assert!(args.windows(2).any(|pair| pair == ["--command", "write-report"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--command", "write-report"]));
         assert_eq!(args.last().map(String::as_str), Some("use current doc"));
     }
 
@@ -3106,8 +3408,14 @@ mod tests {
             "hello",
         );
 
-        assert!(opencode.args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace"]));
-        assert!(!opencode.args.windows(2).any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
+        assert!(opencode
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--dir", "D:\\workspace"]));
+        assert!(!opencode
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--dir", "D:\\workspace\\.typola-output\\conv-1"]));
     }
 
     #[test]
@@ -3130,8 +3438,14 @@ mod tests {
 
     #[test]
     fn skill_md_frontmatter_description_missing() {
-        assert_eq!(parse_skill_md_description("# no frontmatter\n").is_none(), true);
-        assert_eq!(parse_skill_md_description("---\nname: x\n---\n").is_none(), true);
+        assert_eq!(
+            parse_skill_md_description("# no frontmatter\n").is_none(),
+            true
+        );
+        assert_eq!(
+            parse_skill_md_description("---\nname: x\n---\n").is_none(),
+            true
+        );
     }
 
     #[test]
@@ -3245,6 +3559,41 @@ mod tests {
     }
 
     #[test]
+    fn scan_artifacts_reads_files_under_output_dir() {
+        let workspace = temp_path("ws-scan-artifacts");
+        let output_dir = workspace.join(".typola-output").join("conv");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let artifact = output_dir.join("draft.md");
+        let manifest = output_dir.join("artifact.json");
+        std::fs::write(&artifact, b"content").unwrap();
+        std::fs::write(&manifest, r#"{"id":"a","title":"Draft","kind":"markdown","status":"done","primaryFile":"draft.md","createdAt":"2026-06-27T00:00:00.000Z","source":{"type":"unknown"}}"#).unwrap();
+
+        let result = scan_artifacts(ScanArtifactsRequest {
+            output_root: workspace.join(".typola-output").to_string_lossy().to_string(),
+        }).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(PathBuf::from(&result[0].path).ends_with(Path::new(".typola-output").join("conv").join("draft.md")));
+        assert!(PathBuf::from(&result[0].manifest_path).ends_with(Path::new(".typola-output").join("conv").join("artifact.json")));
+        assert!(result[0].manifest_json.as_deref().unwrap_or("").contains("\"Draft\""));
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn scan_artifacts_rejects_non_output_root() {
+        let workspace = temp_path("ws-scan-reject");
+        std::fs::create_dir_all(&workspace).unwrap();
+
+        let result = scan_artifacts(ScanArtifactsRequest {
+            output_root: workspace.to_string_lossy().to_string(),
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains(".typola-output"));
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
     fn delete_artifact_file_falls_back_when_workspace_changed() {
         let workspace = temp_path("ws-delete-old");
         let other_workspace = temp_path("ws-delete-new");
@@ -3275,12 +3624,19 @@ mod tests {
         let manifest = output_dir.join("artifact.json");
         std::fs::write(&artifact, b"new content").unwrap();
         std::fs::write(&target, b"old content").unwrap();
-        std::fs::write(&manifest, r#"{"id":"a","primaryFile":"draft.md","actions":{}}"#).unwrap();
+        std::fs::write(
+            &manifest,
+            r#"{"id":"a","primaryFile":"draft.md","actions":{}}"#,
+        )
+        .unwrap();
 
         overwrite_artifact_to_document(OverwriteArtifactRequest {
             artifact_path: artifact.to_string_lossy().to_string(),
             target_path: target.to_string_lossy().to_string(),
-        }).unwrap();
+            workspace_root: Some(workspace.to_string_lossy().to_string()),
+            expected_document_path: Some(target.to_string_lossy().to_string()),
+        })
+        .unwrap();
 
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "new content");
         let manifest_text = std::fs::read_to_string(&manifest).unwrap();
@@ -3289,7 +3645,10 @@ mod tests {
         undo_artifact_overwrite(OverwriteArtifactRequest {
             artifact_path: artifact.to_string_lossy().to_string(),
             target_path: target.to_string_lossy().to_string(),
-        }).unwrap();
+            workspace_root: Some(workspace.to_string_lossy().to_string()),
+            expected_document_path: Some(target.to_string_lossy().to_string()),
+        })
+        .unwrap();
 
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "old content");
         let manifest_text = std::fs::read_to_string(&manifest).unwrap();
@@ -3297,5 +3656,73 @@ mod tests {
         let _ = std::fs::remove_dir_all(&workspace);
     }
 
+    #[test]
+    fn overwrite_artifact_to_document_rejects_target_outside_allowed_scope() {
+        let workspace = temp_path("ws-overwrite-reject");
+        let outside = temp_path("ws-overwrite-outside");
+        let output_dir = workspace.join(".typola-output").join("conv");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let artifact = output_dir.join("draft.md");
+        let target = outside.join("doc.md");
+        std::fs::write(&artifact, b"new content").unwrap();
+        std::fs::write(&target, b"old content").unwrap();
 
+        let result = overwrite_artifact_to_document(OverwriteArtifactRequest {
+            artifact_path: artifact.to_string_lossy().to_string(),
+            target_path: target.to_string_lossy().to_string(),
+            workspace_root: Some(workspace.to_string_lossy().to_string()),
+            expected_document_path: None,
+        });
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("allowed document/workspace scope"));
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "old content");
+        let _ = std::fs::remove_dir_all(&workspace);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn undo_artifact_overwrite_rejects_mismatched_target() {
+        let workspace = temp_path("ws-undo-reject");
+        let output_dir = workspace.join(".typola-output").join("conv");
+        std::fs::create_dir_all(&output_dir).unwrap();
+        let artifact = output_dir.join("draft.md");
+        let target = workspace.join("doc.md");
+        let other_target = workspace.join("other.md");
+        let manifest = output_dir.join("artifact.json");
+        std::fs::write(&artifact, b"new content").unwrap();
+        std::fs::write(&target, b"old content").unwrap();
+        std::fs::write(&other_target, b"other content").unwrap();
+        std::fs::write(
+            &manifest,
+            r#"{"id":"a","primaryFile":"draft.md","actions":{}}"#,
+        )
+        .unwrap();
+
+        overwrite_artifact_to_document(OverwriteArtifactRequest {
+            artifact_path: artifact.to_string_lossy().to_string(),
+            target_path: target.to_string_lossy().to_string(),
+            workspace_root: Some(workspace.to_string_lossy().to_string()),
+            expected_document_path: Some(target.to_string_lossy().to_string()),
+        })
+        .unwrap();
+
+        let result = undo_artifact_overwrite(OverwriteArtifactRequest {
+            artifact_path: artifact.to_string_lossy().to_string(),
+            target_path: other_target.to_string_lossy().to_string(),
+            workspace_root: Some(workspace.to_string_lossy().to_string()),
+            expected_document_path: Some(other_target.to_string_lossy().to_string()),
+        });
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("recorded overwrite target"));
+        assert_eq!(
+            std::fs::read_to_string(&other_target).unwrap(),
+            "other content"
+        );
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
 }

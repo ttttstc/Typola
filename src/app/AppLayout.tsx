@@ -269,11 +269,24 @@ export function AppLayout() {
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
     [debouncedStatsSource, file.fileType],
   );
+  const [defaultAiWorkspaceRoot, setDefaultAiWorkspaceRoot] = useState('');
+  useEffect(() => {
+    if (!isTauriRuntime) return;
+    let cancelled = false;
+    void import('@tauri-apps/api/path')
+      .then(({ homeDir }) => homeDir())
+      .then((path) => {
+        if (!cancelled) setDefaultAiWorkspaceRoot(path);
+      })
+      .catch((error) => console.warn('Failed to resolve default AI workspace:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauriRuntime]);
   const effectiveAiWorkspaceRoot = useMemo(() => resolveWorkbenchWorkspaceRoot({
     configuredWorkspaceRoot: settings.aiWorkspaceRoot,
-    fileTreeRoot: workspaceRoot,
-    currentFilePath: file.path,
-  }), [file.path, settings.aiWorkspaceRoot, workspaceRoot]);
+    defaultWorkspaceRoot: workspaceRoot || defaultAiWorkspaceRoot,
+  }), [defaultAiWorkspaceRoot, settings.aiWorkspaceRoot, workspaceRoot]);
   const outputBaseDir = useMemo(() => (
     effectiveAiWorkspaceRoot
       ? joinLocalPath(effectiveAiWorkspaceRoot, '.typola-output')
@@ -377,7 +390,7 @@ export function AppLayout() {
     bumpWorkspaceTreeVersion,
   } = useWorkspaceWatch({
     isTauriRuntime,
-    watchRoot: effectiveAiWorkspaceRoot,
+    watchRoot: outputBaseDir,
     outputRoot: outputBaseDir,
     lastSelfWriteRef,
   });
@@ -1229,7 +1242,12 @@ export function AppLayout() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke<string>('overwrite_artifact_to_document', {
-        request: { artifactPath: record.manifest.primaryFile, targetPath },
+        request: {
+          artifactPath: record.manifest.primaryFile,
+          targetPath,
+          workspaceRoot: effectiveAiWorkspaceRoot,
+          expectedDocumentPath: record.manifest.source.documentPath || file.path || undefined,
+        },
       });
       setArtifactLibraryRefreshKey((key) => key + 1);
       await handleOpenPath(targetPath);
@@ -1237,7 +1255,7 @@ export function AppLayout() {
     } catch (error) {
       await messageDialog(String(error), { title: '覆盖失败' });
     }
-  }, [file.dirty, file.path, handleOpenPath]);
+  }, [effectiveAiWorkspaceRoot, file.dirty, file.path, handleOpenPath]);
 
   const handleUndoArtifactOverwrite = useCallback(async (record: ArtifactRecord) => {
     const targetPath = record.manifest.overwrite?.targetPath || record.manifest.source.documentPath || file.path;
@@ -1254,7 +1272,12 @@ export function AppLayout() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke<string>('undo_artifact_overwrite', {
-        request: { artifactPath: record.manifest.primaryFile, targetPath },
+        request: {
+          artifactPath: record.manifest.primaryFile,
+          targetPath,
+          workspaceRoot: effectiveAiWorkspaceRoot,
+          expectedDocumentPath: record.manifest.source.documentPath || file.path || undefined,
+        },
       });
       setArtifactLibraryRefreshKey((key) => key + 1);
       await handleOpenPath(targetPath);
@@ -1262,7 +1285,7 @@ export function AppLayout() {
     } catch (error) {
       await messageDialog(String(error), { title: '撤销失败' });
     }
-  }, [file.path, handleOpenPath]);
+  }, [effectiveAiWorkspaceRoot, file.path, handleOpenPath]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1396,7 +1419,6 @@ export function AppLayout() {
     <ArtifactCenterPanel
       records={artifactRecords}
       activeConversationId={convManager.activeConvId}
-      currentFilePath={file.path || undefined}
       onOpen={(path) => { void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error)); }}
       onCompare={(path) => { void handleReviewRevision(path); }}
       onArchive={(path) => { void handleArchiveArtifact(path); setArtifactLibraryRefreshKey((key) => key + 1); }}

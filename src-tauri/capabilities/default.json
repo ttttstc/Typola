@@ -25,14 +25,22 @@
     "fs:allow-write-text-file",
     "fs:allow-read-file",
     "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-mkdir",
+    "fs:allow-stat",
     "fs:allow-exists",
     "opener:default",
     {
       "identifier": "fs:scope",
       "allow": [
         "$DESKTOP/**",
+        "$DESKTOP/**/.typola-output/**",
         "$DOCUMENT/**",
+        "$DOCUMENT/**/.typola-output/**",
         "$DOWNLOAD/**",
+        "$DOWNLOAD/**/.typola-output/**",
+        "$HOME/.typola-output/**",
+        "$HOME/**/.typola-output/**",
         "$PICTURE/**",
         "$VIDEO/**"
       ]

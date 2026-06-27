@@ -101,10 +101,11 @@ describe('useConversationManager', () => {
     expect(headlessMock.resumeAgentSession).not.toHaveBeenCalled();
     expect(headlessMock.startAgentSession.mock.calls[0][0]).toMatchObject({
       provider: 'opencode',
-      prompt: '读取当前文档',
+      prompt: expect.stringContaining('读取当前文档'),
       cwd: expect.stringContaining(String.raw`D:\md files\.typola-output\conv-`),
       promptContextPaths: [String.raw`D:\md files\杭州景区.md`],
     });
+    expect(headlessMock.startAgentSession.mock.calls[0][0].prompt).toContain('必须只写入当前进程工作目录');
   });
 
   it('drops late stdout from a cancelled run', async () => {
