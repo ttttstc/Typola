@@ -70,6 +70,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 PR #102 检视指出的 AI 产物中心安全与稳定性问题：覆盖/撤销原文会在 Rust 侧校验目标文档白名单，产物时间戳排序兼容 ISO 与历史毫秒格式，补齐 `.typola-output` 文件系统权限、CSS token 兼容别名和 artifact scanner / 覆盖白名单回归测试。
 - 修复 PR #100 检视指出的 AI Runtime 空抽象问题：移除未接入实际 spawn 的 commandSpec / promptBudget 层，Claude / OpenCode runtime 定义收敛为 CLI 检测配置表。
 - 修复 AI CLI 检测稳定性：版本探测改用进程级超时等待、限量读取 stdout/stderr 并按字符边界安全截断；诊断操作按钮不再只支持重新检测。
 - 修复 Windows 下通过 npm `.cmd` wrapper 启动 OpenCode 时，用户 prompt 中的 shell 特殊字符可能被 `cmd.exe` 重新解析的问题；现在会优先解析 wrapper 指向的真实可执行文件，并在取消后等待旧 run 退出、丢弃 late stdout，再切换到新 Provider 对话。

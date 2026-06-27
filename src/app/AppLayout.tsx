@@ -1229,7 +1229,12 @@ export function AppLayout() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke<string>('overwrite_artifact_to_document', {
-        request: { artifactPath: record.manifest.primaryFile, targetPath },
+        request: {
+          artifactPath: record.manifest.primaryFile,
+          targetPath,
+          workspaceRoot: effectiveAiWorkspaceRoot,
+          expectedDocumentPath: record.manifest.source.documentPath || file.path || undefined,
+        },
       });
       setArtifactLibraryRefreshKey((key) => key + 1);
       await handleOpenPath(targetPath);
@@ -1237,7 +1242,7 @@ export function AppLayout() {
     } catch (error) {
       await messageDialog(String(error), { title: '覆盖失败' });
     }
-  }, [file.dirty, file.path, handleOpenPath]);
+  }, [effectiveAiWorkspaceRoot, file.dirty, file.path, handleOpenPath]);
 
   const handleUndoArtifactOverwrite = useCallback(async (record: ArtifactRecord) => {
     const targetPath = record.manifest.overwrite?.targetPath || record.manifest.source.documentPath || file.path;
@@ -1254,7 +1259,12 @@ export function AppLayout() {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke<string>('undo_artifact_overwrite', {
-        request: { artifactPath: record.manifest.primaryFile, targetPath },
+        request: {
+          artifactPath: record.manifest.primaryFile,
+          targetPath,
+          workspaceRoot: effectiveAiWorkspaceRoot,
+          expectedDocumentPath: record.manifest.source.documentPath || file.path || undefined,
+        },
       });
       setArtifactLibraryRefreshKey((key) => key + 1);
       await handleOpenPath(targetPath);
@@ -1262,7 +1272,7 @@ export function AppLayout() {
     } catch (error) {
       await messageDialog(String(error), { title: '撤销失败' });
     }
-  }, [file.path, handleOpenPath]);
+  }, [effectiveAiWorkspaceRoot, file.path, handleOpenPath]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;

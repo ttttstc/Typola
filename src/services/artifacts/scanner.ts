@@ -73,8 +73,14 @@ async function scanFiles(root: string, depth = 0): Promise<string[]> {
   return files;
 }
 
+export function parseArtifactTime(value?: string): number {
+  if (!value) return 0;
+  const parsed = /^\d+$/u.test(value) ? Number(value) : Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function compareRecords(a: ArtifactRecord, b: ArtifactRecord): number {
-  return Date.parse(b.manifest.updatedAt ?? b.manifest.createdAt) - Date.parse(a.manifest.updatedAt ?? a.manifest.createdAt);
+  return parseArtifactTime(b.manifest.updatedAt ?? b.manifest.createdAt) - parseArtifactTime(a.manifest.updatedAt ?? a.manifest.createdAt);
 }
 
 export async function scanArtifacts(outputRoot?: string): Promise<ArtifactRecord[]> {
