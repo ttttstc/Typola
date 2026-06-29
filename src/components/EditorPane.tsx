@@ -4,14 +4,20 @@ import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
 import type { EditorCoreHandle } from '../types/editorCore';
-import { SelectionAIMenu } from './selection/SelectionAIMenu';
+import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
+import { applyCm6Format } from '../services/editor/cm6FormatService';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import type { SelectionAnchor } from '../services/agent/types';
 import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions';
+import { headingIndexAt } from './editor/cm6/previewSyncExtension';
+import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
+import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
 
 export type SourceHeadingScrollRequest = {
   index: number;
+  /** 段内滚动比例(0..1),可选;不传则只滚到 heading 顶部 */
+  withinRatio?: number;
   requestId: number;
 };
 
@@ -27,19 +33,6 @@ type EditorPaneProps = {
   onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
 };
 
-function findHeadingPosition(source: string, targetIndex: number): number | null {
-  const headingRegex = /^(#{1,6})\s+(.+)$/gm;
-  let match: RegExpExecArray | null;
-  let index = 0;
-
-  while ((match = headingRegex.exec(source)) !== null) {
-    if (index === targetIndex) return match.index;
-    index += 1;
-  }
-
-  return null;
-}
-
 export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function EditorPane(
   props,
   ref,
@@ -47,7 +40,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
   const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction } = props;
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
-  const [aiMenu, setAiMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
@@ -80,9 +73,9 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
 
   const handleAIPick = useCallback((action: SelectionActionId) => {
     // 菜单 origin 用菜单当前位置;菜单 state 在 onClose 才被清,这里仍可读。
-    const origin = aiMenu ? { x: aiMenu.x, y: aiMenu.y } : undefined;
+    const origin = ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : undefined;
     triggerAIAction(action, origin);
-  }, [aiMenu, triggerAIAction]);
+  }, [ctxMenu, triggerAIAction]);
 
   // 选区浮条状态:跟着 CodeMirror 选区变化重算 rect + hasSelection。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
@@ -134,16 +127,20 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
   }, [editorView]);
 
   const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!onAIAction) return;
     const editor = editorView;
     if (!editor) return;
     const target = event.target as Node | null;
     if (!target || !editor.contentDOM.contains(target)) return;
     event.preventDefault();
     const sel = editor.state.selection.main;
-    const hasSelection = !sel.empty;
-    setAiMenu({ x: event.clientX, y: event.clientY, hasSelection });
-  }, [editorView, onAIAction]);
+    setCtxMenu({ x: event.clientX, y: event.clientY, hasSelection: !sel.empty });
+  }, [editorView]);
+
+  const handleFormatPick = useCallback((action: FormatAction) => {
+    const editor = editorViewRef.current;
+    if (!editor) return;
+    applyCm6Format(editor, action);
+  }, []);
 
   const extensions = useMemo(() => {
     return createMarkdownExtensions({
@@ -162,7 +159,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
         if (sel.empty) return false;
         // 用选区首字符的视口位置作为菜单位置;coords 不可用时退化到视口左上
         const coords = view.coordsAtPos(sel.from) ?? { left: 80, top: 80 };
-        setAiMenu({ x: coords.left, y: coords.top, hasSelection: true });
+        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true });
         return true;
       },
     });
@@ -172,15 +169,35 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
     if (!editorView || !headingScrollRequest) return;
     if (handledHeadingScrollRequestRef.current === headingScrollRequest.requestId) return;
 
-    const position = findHeadingPosition(source, headingScrollRequest.index);
-    if (position === null) return;
-
+    const from = headingIndexAt(editorView.state, headingScrollRequest.index);
+    if (from === null) return;
     handledHeadingScrollRequestRef.current = headingScrollRequest.requestId;
-    editorView.dispatch({
-      effects: EditorView.scrollIntoView(position, { y: 'start', yMargin: 24 }),
-      selection: { anchor: position },
-    });
-  }, [editorView, headingScrollRequest, source]);
+
+    if (headingScrollRequest.withinRatio !== undefined) {
+      // 段内插值滚动:用 view.lineBlockAt 像素位置 + withinRatio 精确定位
+      const nextFrom = headingIndexAt(editorView.state, headingScrollRequest.index + 1);
+      const headingBlock = editorView.lineBlockAt(from);
+      const nextBlock = nextFrom !== null ? editorView.lineBlockAt(nextFrom) : null;
+      const sectionStart = headingBlock.top;
+      const sectionEnd = nextBlock ? nextBlock.top : editorView.scrollDOM.scrollHeight;
+      const ratio = Math.max(0, Math.min(1, headingScrollRequest.withinRatio));
+      const target = sectionStart + (sectionEnd - sectionStart) * ratio;
+      suppressFloatingBarRef.current = true;
+      editorView.dispatch({
+        effects: EditorView.scrollIntoView(from, { y: 'start' }),
+        selection: { anchor: from },
+      });
+      editorView.scrollDOM.scrollTop = Math.max(0, target);
+      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
+    } else {
+      suppressFloatingBarRef.current = true;
+      editorView.dispatch({
+        effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 24 }),
+        selection: { anchor: from },
+      });
+      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
+    }
+  }, [editorView, headingScrollRequest]);
 
   useEffect(() => {
     if (!editorView || !onScrollRatio) return;
@@ -277,8 +294,32 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
       if (!opts?.preserveFocus) editorView.focus();
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     },
-    revealText() {
-      editorView?.focus();
+    revealText(text: string, backwards = false) {
+      if (!editorView || !text) return;
+      const docString = editorView.state.doc.toString();
+      const fromPos = editorView.state.selection.main.to;
+      const idx = backwards
+        ? docString.lastIndexOf(text, Math.max(0, fromPos - 1))
+        : docString.indexOf(text, fromPos);
+      if (idx === -1) return;
+      const to = idx + text.length;
+      suppressFloatingBarRef.current = true;
+      editorView.dispatch({
+        selection: { anchor: idx, head: to },
+        effects: EditorView.scrollIntoView(idx, { y: 'center', yMargin: 80 }),
+      });
+      editorView.focus();
+      window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
+    },
+    setZoom(size: number) {
+      if (!editorView) return;
+      applyBaseSize(editorView, size);
+    },
+    setFoldedHeadings(keys: ReadonlySet<string>) {
+      if (!editorView) return;
+      // setFoldedHeadings 的 keys 类型来自 EditorCoreHandle 契约(string),
+      // headingFoldExtension 内部仍按 FoldKey(`${level}:${text}`) 处理。
+      setFoldedHeadings(editorView, keys as ReadonlySet<never>);
     },
     undoLastAIReplacement() {
       // CodeMirror 的 history 插件已自动追踪所有 dispatch（含 replaceRange），
@@ -312,25 +353,22 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
           history: true,
         }}
       />
-      {onAIAction && (
-        <>
-          <SelectionAIMenu
-            open={aiMenu !== null}
-            x={aiMenu?.x ?? 0}
-            y={aiMenu?.y ?? 0}
-            hasSelection={aiMenu?.hasSelection ?? false}
-            onPick={handleAIPick}
-            onClose={() => setAiMenu(null)}
-          />
-          {settings.selectionFloatingBarEnabled && (
-            <SelectionFloatingBar
-              rect={floatingRect}
-              hasSelection={floatingHasSelection}
-              onPick={(action, origin) => triggerAIAction(action, origin)}
-            />
-          )}
-        </>
+      {onAIAction && settings.selectionFloatingBarEnabled && (
+        <SelectionFloatingBar
+          rect={floatingRect}
+          hasSelection={floatingHasSelection}
+          onPick={(action, origin) => triggerAIAction(action, origin)}
+        />
       )}
+      <EditorContextMenu
+        open={ctxMenu !== null}
+        x={ctxMenu?.x ?? 0}
+        y={ctxMenu?.y ?? 0}
+        hasSelection={ctxMenu?.hasSelection ?? false}
+        onPick={handleFormatPick}
+        onClose={() => setCtxMenu(null)}
+        onPickAI={onAIAction ? handleAIPick : undefined}
+      />
     </div>
   );
 });

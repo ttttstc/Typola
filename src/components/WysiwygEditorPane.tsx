@@ -911,6 +911,10 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       if (!text || typeof find !== 'function') return;
       find(text, false, backwards, true, false, false, false);
     },
+    setZoom(_size: number) {
+      // Vditor 时代的字号通过 settings.editorFontSize + Vditor 自己的字号渲染
+      // 控制,无需运行时 dispatch;这里保留契约签名,不做事。
+    },
     undoLastAIReplacement() {
       const editor = editorRef.current;
       if (!editor) return false;

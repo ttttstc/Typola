@@ -1,4 +1,4 @@
-import { forwardRef, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { ClipboardCopy, FileOutput, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
@@ -23,6 +23,7 @@ type WechatPreviewPaneProps = {
   fileName?: string;
   onClose: () => void;
   filePath?: string;
+  onPreviewHeadingScroll?: (change: { index: number; withinRatio: number }) => void;
 };
 
 type ActionStatus = {
@@ -32,7 +33,7 @@ type ActionStatus = {
 };
 
 export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPaneProps>(function WechatPreviewPane(
-  { source, fileName = 'document.md', onClose, filePath },
+  { source, fileName = 'document.md', onClose, filePath, onPreviewHeadingScroll },
   ref,
 ) {
   const settings = useSettings();
@@ -48,6 +49,18 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
       const max = scroller.scrollHeight - scroller.clientHeight;
       if (max <= 0) return;
       scroller.scrollTop = Math.max(0, Math.min(max, ratio * max));
+    },
+    scrollToHeading(headingIndex: number, withinRatio: number) {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const headings = scroller.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
+      const target = headings[headingIndex];
+      if (!target) return;
+      const offset = target.offsetTop;
+      const nextSection = headings[headingIndex + 1];
+      const sectionHeight = nextSection ? nextSection.offsetTop - offset : Math.max(0, scroller.scrollHeight - offset);
+      const within = Math.max(0, Math.min(1, withinRatio));
+      scroller.scrollTop = Math.max(0, offset + sectionHeight * within - 8);
     },
   }), []);
   const renderIdRef = useRef(0);
@@ -65,6 +78,57 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
     [settings],
   );
   const sourceIsEmpty = deferredSource.trim() === '';
+  const handlePreviewScroll = useCallback(() => {
+    if (!onPreviewHeadingScroll) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const headings = scroller.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
+    if (headings.length === 0) {
+      onPreviewHeadingScroll({ index: -1, withinRatio: 0 });
+      return;
+    }
+    const scrollTop = scroller.scrollTop;
+    let lo = 0;
+    let hi = headings.length - 1;
+    let idx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (headings[mid].offsetTop <= scrollTop) {
+        idx = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (idx < 0) {
+      onPreviewHeadingScroll({ index: -1, withinRatio: 0 });
+      return;
+    }
+    const start = headings[idx].offsetTop;
+    const end = idx + 1 < headings.length ? headings[idx + 1].offsetTop : scroller.scrollHeight;
+    const sectionHeight = Math.max(1, end - start);
+    const within = (scrollTop - start) / sectionHeight;
+    onPreviewHeadingScroll({ index: idx, withinRatio: Math.max(0, Math.min(1, within)) });
+  }, [onPreviewHeadingScroll]);
+
+  useEffect(() => {
+    if (!onPreviewHeadingScroll) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    let rafId: number | null = null;
+    const handle = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        handlePreviewScroll();
+      });
+    };
+    scroller.addEventListener('scroll', handle, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', handle);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
+  }, [onPreviewHeadingScroll, handlePreviewScroll]);
 
   useEffect(() => {
     const el = renderRef.current;

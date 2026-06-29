@@ -30,6 +30,10 @@ export type EditorCoreHandle = {
     },
   ) => void;
   revealText: (text: string, backwards?: boolean) => void;
+  /** 重置编辑器字号(用于缩放指示器点击回 100%)。 */
+  setZoom: (size: number) => void;
   undoLastAIReplacement: () => boolean;
   commitAIReplacement: (content: string) => void;
+  /** CM6 heading 折叠:外部(React state)把折叠集合同步进编辑器。 */
+  setFoldedHeadings?: (keys: ReadonlySet<string>) => void;
 };

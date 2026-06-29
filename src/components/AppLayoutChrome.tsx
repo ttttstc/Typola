@@ -107,15 +107,6 @@ export function AppLayoutChrome({
         className={mainContentClassName}
         style={{ '--right-panel-width': `${rightPanelWidth}px` } as CSSProperties}
       >
-        <button
-          type="button"
-          className={`workspace-toggle-rail ${leftRailMode === 'workspace' ? 'active' : ''}`}
-          onClick={onToggleWorkspacePanel}
-          aria-label={leftRailMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
-          title={leftRailMode === 'workspace' ? '收起目录栏' : '展开目录栏'}
-        >
-          <FolderOpen size={15} />
-        </button>
         {leftRailMode !== 'none' && (
           <>
             <aside className="left-rail-shell" style={{ width: workspacePanelWidth }}>
