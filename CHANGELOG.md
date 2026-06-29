@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- 新增 CM6 编辑器内核 Phase 1 骨架：增加实验性 `Cm6MarkdownEditorPane`、统一 Markdown extension 构建入口和编辑器核心接口草案；默认仍使用 Vditor，可通过本地 `typola.editorEngine=cm6` feature flag 进行开发验证。
 - 新增 v0.5 AI 产物中心：AI 生成物会标准化为本地 artifact manifest，右栏可按当前会话或全部 `.typola-output` 产物浏览，并支持打开、对比、归档、删除、覆盖原文与撤销覆盖。
 - 新增 AI Workbench OpenCode Provider 规划文档：沉淀 AI Provider 术语、ADR、PRD 与 GitHub issue 拆分，用于跟踪在同一左侧 AI 工作台中接入 OpenCode CLI。
 - AI 工作台新增 OpenCode Provider 主链路：Composer 底部可切换 Claude Code / OpenCode，设置页可配置 OpenCode CLI 路径与模型，OpenCode 使用 `opencode run` 接入同一 headless 会话与产物回流流程。

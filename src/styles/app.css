@@ -577,6 +577,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .writing-layout .editor-pane,
+.writing-layout .cm6-markdown-editor-pane,
 .writing-layout .wysiwyg-editor-pane {
   flex: 1;
   display: flex;
@@ -595,6 +596,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .editor-workbench > .editor-pane,
+.editor-workbench > .cm6-markdown-editor-pane,
 .editor-workbench > .wysiwyg-editor-pane,
 .editor-workbench > .html-presentation-pane {
   flex: 1;
@@ -1392,6 +1394,16 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   height: 100%;
   min-height: 0;
   min-width: 0;
+}
+
+.cm6-markdown-editor-pane {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.cm6-markdown-editor-pane > .editor-pane {
+  flex: 1;
 }
 
 .editor-pane > div {

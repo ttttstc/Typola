@@ -100,6 +100,10 @@ const WysiwygEditorPane = lazy(() =>
   import('../components/WysiwygEditorPane').then((module) => ({ default: module.WysiwygEditorPane })),
 );
 
+const Cm6MarkdownEditorPane = lazy(() =>
+  import('../components/editor/cm6/Cm6MarkdownEditorPane').then((module) => ({ default: module.Cm6MarkdownEditorPane })),
+);
+
 const DocxPreviewPane = lazy(() =>
   import('../components/DocxPreviewPane').then((module) => ({ default: module.DocxPreviewPane })),
 );
@@ -135,6 +139,11 @@ type UpdateInstallState =
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
+function readExperimentalEditorEngine(): 'vditor' | 'cm6' {
+  if (typeof window === 'undefined') return 'vditor';
+  return window.localStorage.getItem('typola.editorEngine') === 'cm6' ? 'cm6' : 'vditor';
+}
+
 export function AppLayout() {
   const settings = useSettings();
   const isTauriRuntime = '__TAURI_INTERNALS__' in window;
@@ -158,6 +167,7 @@ export function AppLayout() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
+  const [experimentalEditorEngine] = useState(readExperimentalEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
@@ -1336,6 +1346,18 @@ export function AppLayout() {
         source={file.content}
         filePath={file.path}
         onBack={() => setHtmlPresentationVisible(false)}
+      />
+    </Suspense>
+  ) : experimentalEditorEngine === 'cm6' ? (
+    <Suspense fallback={<div className="cm6-markdown-editor-pane lazy-pane"><span>CM6 编辑器加载中</span></div>}>
+      <Cm6MarkdownEditorPane
+        ref={editorCommandRef}
+        source={file.content}
+        onChange={handleContentChange}
+        headingScrollRequest={sourceHeadingScrollRequest}
+        filePath={file.path}
+        onScrollRatio={handleEditorScrollRatio}
+        onAIAction={handleEditorAIAction}
       />
     </Suspense>
   ) : (
