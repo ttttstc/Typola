@@ -2,13 +2,11 @@ import { forwardRef, useDeferredValue, useEffect, useImperativeHandle, useMemo, 
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { ClipboardCopy, FileOutput, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
-import { detectMarkdownRenderFeatures } from '../services/markdownFeatureDetector';
 import { translate } from '../services/i18n';
 import {
   listEnabledHtmlExportPresets,
   setHtmlExportPreset,
 } from '../services/settingsService';
-import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import {
   copyWechatPreviewToClipboard,
   createHtmlExportArticleStyles,
@@ -18,8 +16,7 @@ import {
 } from '../services/wechatPreviewService';
 import { getHtmlExportPresetDefinition } from '../services/htmlExportPresets';
 import type { HtmlExportPresetId } from '../services/htmlExportPresets';
-import { resolveLocalImages } from '../services/localImageResolver';
-import { renderMermaidIn } from '../services/mermaidRenderer';
+import { markdownToExportHtml } from '../services/markdownExportRenderer';
 
 type WechatPreviewPaneProps = {
   source: string;
@@ -59,10 +56,6 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
   const [status, setStatus] = useState<'empty' | 'loading' | 'ready' | 'error'>(
     source.trim() ? 'loading' : 'empty',
   );
-  const renderFeatures = useMemo(
-    () => detectMarkdownRenderFeatures(deferredSource),
-    [deferredSource],
-  );
   const htmlExportPreset = useMemo(
     () => getHtmlExportPresetDefinition(settings.htmlExportPresetId, settings.customHtmlExportPresets),
     [settings.customHtmlExportPresets, settings.htmlExportPresetId],
@@ -94,43 +87,18 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
       };
     }
 
-    void Promise.all([
-      import('vditor/dist/index.css'),
-      import('vditor'),
-    ]).then(async ([, { default: Vditor }]) => {
+    void markdownToExportHtml(deferredSource, {
+      target: el,
+      filePath,
+      theme: 'light',
+      mermaidTheme: settings.theme === 'dark' ? 'dark' : 'default',
+    }).then((renderedHtml) => {
       if (cancelled || renderIdRef.current !== renderId) return;
-      await Vditor.preview(el, deferredSource, {
-        mode: 'light',
-        anchor: 0,
-        cdn: '/vditor',
-        i18n: VDITOR_PREVIEW_I18N,
-        icon: undefined,
-        theme: {
-          current: 'light',
-          path: '',
-        },
-        hljs: {
-          style: 'github',
-          enable: renderFeatures.hasHighlightableCode,
-          lineNumber: false,
-        },
-        markdown: {
-          sanitize: true,
-        },
-        after() {
-          if (cancelled || renderIdRef.current !== renderId) return;
-          void (async () => {
-            await renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
-            await resolveLocalImages(el, filePath);
-            if (cancelled || renderIdRef.current !== renderId) return;
-            setPreviewResult(createHtmlExportResult(deferredSource, el.innerHTML, {
-              preset: htmlExportPreset,
-              title: fileName,
-            }));
-            setStatus('ready');
-          })();
-        },
-      });
+      setPreviewResult(createHtmlExportResult(deferredSource, renderedHtml, {
+        preset: htmlExportPreset,
+        title: fileName,
+      }));
+      setStatus('ready');
     }).catch((error) => {
       if (cancelled || renderIdRef.current !== renderId) return;
       console.warn('Failed to render HTML export preview:', error);
@@ -142,7 +110,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, fileName, filePath, htmlExportPreset, renderFeatures.hasHighlightableCode, sourceIsEmpty]);
+  }, [deferredSource, fileName, filePath, htmlExportPreset, settings.theme, sourceIsEmpty]);
 
   const effectiveStatus = sourceIsEmpty ? 'empty' : status;
   const effectiveActionStatus = sourceIsEmpty ? null : actionStatus;
