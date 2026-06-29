@@ -1,14 +1,14 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { markdown } from '@codemirror/lang-markdown';
-import { EditorState } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
+import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import { SelectionAIMenu } from './selection/SelectionAIMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import type { SelectionAnchor } from '../services/agent/types';
+import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -18,6 +18,7 @@ export type SourceHeadingScrollRequest = {
 type EditorPaneProps = {
   source: string;
   onChange: (value: string) => void;
+  extraExtensions?: Extension[];
   headingScrollRequest?: SourceHeadingScrollRequest;
   onScrollRatio?: (ratio: number) => void;
   filePath?: string;
@@ -43,7 +44,7 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
   props,
   ref,
 ) {
-  const { source, onChange, headingScrollRequest, onScrollRatio, filePath, onAIAction } = props;
+  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction } = props;
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const [aiMenu, setAiMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
@@ -145,21 +146,14 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
   }, [editorView, onAIAction]);
 
   const extensions = useMemo(() => {
-    const exts: Parameters<typeof CodeMirror>[0]['extensions'] = [markdown()];
-
-    if (settings.editorTabSize !== 4) {
-      exts.push(EditorState.tabSize.of(settings.editorTabSize));
-    }
-
-    if (settings.editorWordWrap) {
-      exts.push(EditorView.lineWrapping);
-    }
-
-    // Cmd/Ctrl+K → 弹起 5+1 AI 菜单(对齐右键的动线),菜单触发后再走 onAIAction 注入
-    exts.push(keymap.of([{
-      key: 'Mod-k',
-      preventDefault: true,
-      run: () => {
+    return createMarkdownExtensions({
+      fontFamily: editorFontFamily,
+      fontSize: settings.editorFontSize,
+      tabSize: settings.editorTabSize,
+      wordWrap: settings.editorWordWrap,
+      extraExtensions,
+      // Cmd/Ctrl+K → 弹起 5+1 AI 菜单(对齐右键的动线),菜单触发后再走 onAIAction 注入
+      onModK: () => {
         const cb = onAIActionRef.current;
         if (!cb || !filePathRef.current) return false;
         const view = editorViewRef.current;
@@ -171,25 +165,8 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
         setAiMenu({ x: coords.left, y: coords.top, hasSelection: true });
         return true;
       },
-    }]));
-
-    exts.push(
-      EditorView.theme({
-        '&': {
-          fontFamily: editorFontFamily,
-        },
-        '.cm-content': {
-          fontSize: `${settings.editorFontSize}px`,
-          fontFamily: editorFontFamily,
-        },
-        '.cm-gutters': {
-          fontFamily: editorFontFamily,
-        },
-      })
-    );
-
-    return exts;
-  }, [editorFontFamily, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
+    });
+  }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
 
   useEffect(() => {
     if (!editorView || !headingScrollRequest) return;
