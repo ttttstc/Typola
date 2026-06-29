@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
-import type { EditorCommandHandle } from '../types/editorCommands';
+import type { EditorCoreHandle } from '../types/editorCore';
 import { SelectionAIMenu } from './selection/SelectionAIMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import type { SelectionActionId } from '../services/agent/selectionActions';
@@ -40,7 +40,7 @@ function findHeadingPosition(source: string, targetIndex: number): number | null
   return null;
 }
 
-export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(function EditorPane(
+export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function EditorPane(
   props,
   ref,
 ) {
@@ -205,6 +205,16 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
     focus() {
       editorView?.focus();
     },
+    getMarkdown() {
+      return editorView?.state.doc.toString() ?? source;
+    },
+    setMarkdown(markdown: string) {
+      if (!editorView) return;
+      const docLen = editorView.state.doc.length;
+      editorView.dispatch({
+        changes: { from: 0, to: docLen, insert: markdown },
+      });
+    },
     insertText(text: string) {
       if (!editorView) return;
       const selection = editorView.state.selection.main;
@@ -256,7 +266,7 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       return editor.state.doc.sliceString(from, to) === originalText ? 'valid' : 'stale';
     },
     // Source 模式:from/to 直接是 CodeMirror 文档偏移,不需要 opts.text / query /
-    // searchOptions。保留 opts 签名仅是为了实现 EditorCommandHandle 契约。
+    // searchOptions。保留 opts 签名仅是为了实现 EditorCoreHandle 契约。
     revealRange(from: number, to: number, opts) {
       if (!editorView) return;
       suppressFloatingBarRef.current = true;
