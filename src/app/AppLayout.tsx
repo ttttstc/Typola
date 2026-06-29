@@ -49,7 +49,7 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
-import { useRightPanel } from '../hooks/useRightPanel';
+import { useRightPanel, type RightPanelMode } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
@@ -82,8 +82,8 @@ import {
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_RESIZER_GAP,
-  toUpdateErrorMessage,
   WORKSPACE_PANEL_DEFAULT_WIDTH,
+  toUpdateErrorMessage,
 } from './appLayoutUtils';
 import {
   preloadSettingsPage,
@@ -155,8 +155,29 @@ export function AppLayout() {
   const editorCommandRef = useRef<EditorCoreHandle | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
+  // 双向同步震荡抑制:任一方向触发后,锁定反向一段时间(防止 editor↔preview 循环)。
+  const syncLockUntilRef = useRef(0);
+  const SYNC_LOCK_MS = 220;
   const handleEditorScrollRatio = useCallback((ratio: number) => {
+    if (Date.now() < syncLockUntilRef.current) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
     previewScrollRef.current?.scrollToRatio(ratio);
+  }, []);
+  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
+    if (Date.now() < syncLockUntilRef.current) return;
+    if (change.index < 0) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
+    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
+  }, []);
+  const handlePreviewHeadingScroll = useCallback((change: { index: number; withinRatio: number }) => {
+    if (Date.now() < syncLockUntilRef.current) return;
+    if (change.index < 0) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
+    setSourceHeadingScrollRequest({
+      index: change.index,
+      withinRatio: change.withinRatio,
+      requestId: Date.now(),
+    });
   }, []);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -193,8 +214,13 @@ export function AppLayout() {
     const root = mainContentRef.current;
     if (!root) return null;
 
+    // 同时兼容 Vditor IR/WYSIWYG 与 CM6 源码模式。
+    // CM6 下 heading 是 .cm-content 里的语义 h1..h6(atomic-editor 用真实标签,
+    // 而非自定义 span),不命中 Vditor selector 会导致 TOC 跳转永远 index 越界。
     const headings = root.querySelectorAll<HTMLElement>(
-      '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, .vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6',
+      '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, '
+      + '.vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6, '
+      + '.cm-content h1, .cm-content h2, .cm-content h3, .cm-content h4, .cm-content h5, .cm-content h6',
     );
     return headings[index] ?? null;
   }, []);
@@ -208,16 +234,24 @@ export function AppLayout() {
     handleTocAlwaysPinnedChange,
   } = useTocState({
     editorMode,
+    editorEngine,
     alwaysPinned: settings.tocAlwaysPinned,
     mainContentRef,
     resolveTocHeading,
     setSourceHeadingScrollRequest,
   });
+  // 模式 ref 解决「getDefaultRightPanelWidth 在 rightPanelMode 声明前定义」的问题。
+  const rightPanelModeRef = useRef<RightPanelMode>('none');
   const getDefaultRightPanelWidth = useCallback(() => {
-    // 三栏比例:右栏目标 360 紧凑,容器太小时 clamp 到 min。原算法 /3 在大屏太宽(1920 → 640)。
+    // 模式分支:word/wechat 跟编辑器 1:1(可用空间均分);其他模式跟左栏一致 360。
     const containerWidth = mainContentRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-    const target = Math.round((containerWidth - RIGHT_PANEL_RESIZER_GAP) / 5);
-    return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, target));
+    const mode = rightPanelModeRef.current;
+    if (mode === 'word' || mode === 'wechat') {
+      const available = containerWidth - WORKSPACE_PANEL_DEFAULT_WIDTH - RIGHT_PANEL_RESIZER_GAP;
+      const target = Math.round(available / 2);
+      return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, target));
+    }
+    return 360;
   }, []);
   const {
     rightPanelMode,
@@ -232,6 +266,13 @@ export function AppLayout() {
     maxWidth: RIGHT_PANEL_MAX_WIDTH,
     getDefaultRightPanelWidth,
   });
+  // 模式变化时同步 ref 并按新模式重算默认宽度
+  useEffect(() => {
+    rightPanelModeRef.current = rightPanelMode;
+    if (rightPanelMode !== 'none') {
+      setRightPanelWidth(getDefaultRightPanelWidth());
+    }
+  }, [rightPanelMode, getDefaultRightPanelWidth, setRightPanelWidth]);
   const {
     file,
     openTabs,
@@ -1358,6 +1399,7 @@ export function AppLayout() {
         filePath={file.path}
         onScrollRatio={handleEditorScrollRatio}
         onAIAction={handleEditorAIAction}
+        onPreviewHeadingChange={handleEditorHeadingChange}
       />
     </Suspense>
   ) : (
@@ -1384,6 +1426,7 @@ export function AppLayout() {
         onExportWord={handleExportWord}
         onClose={() => setRightPanelMode('none')}
         filePath={file.path}
+        onPreviewHeadingScroll={handlePreviewHeadingScroll}
       />
     </Suspense>
   ) : rightPanelMode === 'wechat' && !isDocx ? (
@@ -1394,6 +1437,7 @@ export function AppLayout() {
         fileName={file.name}
         onClose={() => setRightPanelMode('none')}
         filePath={file.path}
+        onPreviewHeadingScroll={handlePreviewHeadingScroll}
       />
     </Suspense>
   ) : rightPanelMode === 'flow' && !isDocx ? (
@@ -1417,7 +1461,12 @@ export function AppLayout() {
       dirty={reviewStateApi.state.dirty}
       currentFilePath={file.path}
       onJump={(comment: ReviewComment) => {
-        editorCommandRef.current?.revealText(comment.anchor.originalText);
+        // 用 anchor 保存的 from/to 直接定位 — 比 revealText(originalText) 更稳:
+        // 1) 不依赖文档未修改;2) 即使原文出现多次也跳到创建时的精确位置。
+        // preserveFocus 让检视面板保留焦点,用户可以连续点多个意见。
+        editorCommandRef.current?.revealRange(comment.anchor.from, comment.anchor.to, {
+          preserveFocus: true,
+        });
       }}
       onEdit={(comment: ReviewComment) => {
         setReviewEditor({
