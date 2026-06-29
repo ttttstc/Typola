@@ -1,5 +1,6 @@
+import type { AnchorStatus } from '../services/agent/types';
+
 export type EditorEngine = 'vditor' | 'cm6';
-export type AnchorStatus = 'valid' | 'stale' | 'wrong-file';
 export type EditorSelection = { text: string; from: number; to: number };
 
 /**

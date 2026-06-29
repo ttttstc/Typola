@@ -214,7 +214,6 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
       editorView.dispatch({
         changes: { from: 0, to: docLen, insert: markdown },
       });
-      onChange(markdown);
     },
     insertText(text: string) {
       if (!editorView) return;
