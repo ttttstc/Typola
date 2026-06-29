@@ -4,7 +4,7 @@ import 'katex/dist/katex.min.css';
 import { EditorPane, type SourceHeadingScrollRequest } from '../../EditorPane';
 import type { SelectionActionId } from '../../../services/agent/selectionActions';
 import type { SelectionAnchor } from '../../../services/agent/types';
-import type { EditorCommandHandle } from '../../../types/editorCommands';
+import type { EditorCoreHandle } from '../../../types/editorCore';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';
 
 type Cm6MarkdownEditorPaneProps = {
@@ -23,7 +23,7 @@ type Cm6MarkdownEditorPaneProps = {
  * 搜索 reveal、撤销等命令契约不变。Phase 2 再在这里替换为 Typora-like live preview
  * extension 组合。
  */
-export const Cm6MarkdownEditorPane = forwardRef<EditorCommandHandle, Cm6MarkdownEditorPaneProps>(
+export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEditorPaneProps>(
   function Cm6MarkdownEditorPane(props, ref) {
     const livePreviewExtensions = useMemo(() => createLivePreviewExtensions(), []);
     return (

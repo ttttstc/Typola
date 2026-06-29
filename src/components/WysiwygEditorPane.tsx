@@ -16,7 +16,7 @@ import {
   findClickedTaskIndex,
   toggleTaskLine,
 } from '../services/taskListClickHandler';
-import type { EditorCommandHandle } from '../types/editorCommands';
+import type { EditorCoreHandle } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
 import type { SelectionActionId } from '../services/agent/selectionActions';
@@ -213,7 +213,7 @@ type WindowWithFind = Window & {
 // 选区浮条抑制时长 —— 见 revealRange 内注释。
 const FLOATING_BAR_SETTLE_MS = 250;
 
-export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
+export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
   { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
   ref,
 ) {
@@ -779,6 +779,20 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
   useImperativeHandle(ref, () => ({
     focus() {
       editorRef.current?.focus();
+    },
+    getMarkdown() {
+      return editorRef.current?.getValue() ?? latestSource.current;
+    },
+    setMarkdown(markdown: string) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      applyingExternalValue.current = true;
+      editor.setValue(markdown, true);
+      lastEmittedValue.current = markdown;
+      onChange(markdown);
+      window.requestAnimationFrame(() => {
+        applyingExternalValue.current = false;
+      });
     },
     insertText(text: string) {
       const editor = editorRef.current;

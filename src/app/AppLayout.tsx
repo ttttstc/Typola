@@ -54,7 +54,7 @@ import { useSkillHubState } from '../hooks/useSkillHubState';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
-import type { EditorCommandHandle } from '../types/editorCommands';
+import type { EditorCoreHandle } from '../types/editorCore';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
@@ -152,7 +152,7 @@ export function AppLayout() {
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
-  const editorCommandRef = useRef<EditorCommandHandle | null>(null);
+  const editorCommandRef = useRef<EditorCoreHandle | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   const handleEditorScrollRatio = useCallback((ratio: number) => {
