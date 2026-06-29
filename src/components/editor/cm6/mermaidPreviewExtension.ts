@@ -11,9 +11,10 @@ import {
   EditorView,
   WidgetType,
 } from '@codemirror/view';
+import DOMPurify from 'dompurify';
 
-let renderCounter = 0;
 let mermaidApiPromise: Promise<typeof import('mermaid').default> | null = null;
+let fallbackRenderCounter = 0;
 
 function loadMermaid() {
   mermaidApiPromise ??= import('mermaid').then((module) => {
@@ -29,10 +30,13 @@ function loadMermaid() {
 
 class MermaidWidget extends WidgetType {
   private readonly source: string;
+  private readonly renderId: string;
 
   constructor(source: string) {
     super();
     this.source = source;
+    fallbackRenderCounter += 1;
+    this.renderId = `typola-cm6-mermaid-${globalThis.crypto?.randomUUID?.() ?? fallbackRenderCounter}`;
   }
 
   eq(other: MermaidWidget): boolean {
@@ -44,11 +48,12 @@ class MermaidWidget extends WidgetType {
     container.className = 'typola-cm6-mermaid';
     container.textContent = 'Mermaid 渲染中...';
 
-    const id = `typola-cm6-mermaid-${renderCounter += 1}`;
     loadMermaid()
-      .then((mermaid) => mermaid.render(id, this.source))
+      .then((mermaid) => mermaid.render(this.renderId, this.source))
       .then(({ svg }) => {
-        container.innerHTML = svg;
+        container.innerHTML = DOMPurify.sanitize(svg, {
+          USE_PROFILES: { svg: true, svgFilters: true },
+        });
       })
       .catch((error: unknown) => {
         container.classList.add('typola-cm6-mermaid-error');

@@ -7,7 +7,9 @@ import { createLivePreviewExtensions } from './createLivePreviewExtensions';
 vi.mock('mermaid', () => ({
   default: {
     initialize: vi.fn(),
-    render: vi.fn(async () => ({ svg: '<svg data-testid="mermaid-svg"></svg>' })),
+    render: vi.fn(async () => ({
+      svg: '<svg data-testid="mermaid-svg"><script>alert(1)</script><g><text>ok</text></g></svg>',
+    })),
   },
 }));
 
@@ -37,6 +39,15 @@ function destroyView(view: EditorView): void {
   const parent = view.dom.parentElement;
   view.destroy();
   parent?.remove();
+}
+
+async function waitForElement(selector: string): Promise<Element> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const element = document.querySelector(selector);
+    if (element) return element;
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
+  throw new Error(`Timed out waiting for ${selector}`);
 }
 
 describe('createMarkdownExtensions live preview', () => {
@@ -98,7 +109,7 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelectorAll('.typola-cm6-math-block').length).toBe(2);
   });
 
-  it('renders mermaid fenced blocks as widgets', () => {
+  it('renders and sanitizes mermaid fenced blocks as widgets', async () => {
     view = createView([
       '```mermaid',
       'graph TD',
@@ -110,5 +121,7 @@ describe('createMarkdownExtensions live preview', () => {
     moveCursorToEnd(view);
 
     expect(view.contentDOM.querySelector('.typola-cm6-mermaid')).not.toBeNull();
+    await waitForElement('[data-testid="mermaid-svg"]');
+    expect(view.contentDOM.querySelector('.typola-cm6-mermaid script')).toBeNull();
   });
 });
