@@ -139,9 +139,9 @@ type UpdateInstallState =
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
-function readExperimentalEditorEngine(): 'vditor' | 'cm6' {
-  if (typeof window === 'undefined') return 'vditor';
-  return window.localStorage.getItem('typola.editorEngine') === 'cm6' ? 'cm6' : 'vditor';
+function readEditorEngine(): 'vditor' | 'cm6' {
+  if (typeof window === 'undefined') return 'cm6';
+  return window.localStorage.getItem('typola.editorEngine') === 'vditor' ? 'vditor' : 'cm6';
 }
 
 export function AppLayout() {
@@ -167,7 +167,7 @@ export function AppLayout() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
-  const [experimentalEditorEngine] = useState(readExperimentalEditorEngine);
+  const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
@@ -1348,7 +1348,7 @@ export function AppLayout() {
         onBack={() => setHtmlPresentationVisible(false)}
       />
     </Suspense>
-  ) : experimentalEditorEngine === 'cm6' ? (
+  ) : editorEngine === 'cm6' ? (
     <Suspense fallback={<div className="cm6-markdown-editor-pane lazy-pane"><span>CM6 编辑器加载中</span></div>}>
       <Cm6MarkdownEditorPane
         ref={editorCommandRef}

@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- 新增 CM6 编辑器内核 Phase 1/2/3 骨架：增加实验性 `Cm6MarkdownEditorPane`、统一 Markdown extension 构建入口，并将运行时编辑命令收敛到 `EditorCoreHandle`；默认仍使用 Vditor，可通过本地 `typola.editorEngine=cm6` feature flag 验证基础 live preview，包括任务列表、表格、图片、KaTeX 数学公式和 Mermaid 图表。
+- 新增 CM6 编辑器内核 Phase 1/2/3 骨架：增加 `Cm6MarkdownEditorPane`、统一 Markdown extension 构建入口，并将运行时编辑命令收敛到 `EditorCoreHandle`；支持基础 live preview，包括任务列表、表格、图片、KaTeX 数学公式和 Mermaid 图表。
 - 新增 v0.5 AI 产物中心：AI 生成物会标准化为本地 artifact manifest，右栏可按当前会话或全部 `.typola-output` 产物浏览，并支持打开、对比、归档、删除、覆盖原文与撤销覆盖。
 - 新增 AI Workbench OpenCode Provider 规划文档：沉淀 AI Provider 术语、ADR、PRD 与 GitHub issue 拆分，用于跟踪在同一左侧 AI 工作台中接入 OpenCode CLI。
 - AI 工作台新增 OpenCode Provider 主链路：Composer 底部可切换 Claude Code / OpenCode，设置页可配置 OpenCode CLI 路径与模型，OpenCode 使用 `opencode run` 接入同一 headless 会话与产物回流流程。
@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Markdown 默认编辑器切换为 CM6 live preview 内核；Vditor WYSIWYG 暂作为过渡回退保留，可通过本地 `typola.editorEngine=vditor` 切回。
 - AI CLI 检测升级为轻量结构化诊断：设置页现在会展示实际识别到的 CLI 路径、版本、检测时间与多条可读诊断，Windows 下继续优先识别 npm 全局 `.cmd`，但不运行模型请求或污染正式 AI 会话。
 - 设置页 `AI CLI` 升级为简化版 `AI 执行`：Claude/OpenCode 以运行时卡片展示，可设为默认 Provider、配置 CLI 路径并重新检测；AI 工作台仅在 Composer 底部展示当前 Provider / 模型状态。
 - AI 工作台工具调用卡片切换为 OpenDesign 风格的紧凑状态卡，按 Todo / 文件 / 命令 / 搜索等工具类型分派展示，并保留原始 JSON 展开入口。
