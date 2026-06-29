@@ -1406,6 +1406,47 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex: 1;
 }
 
+.cm6-markdown-editor-pane .cm-atomic-image,
+.cm6-markdown-editor-pane .typola-cm6-math-block,
+.cm6-markdown-editor-pane .typola-cm6-mermaid {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid color-mix(in oklch, var(--border) 72%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--surface) 84%, var(--bg));
+}
+
+.cm6-markdown-editor-pane .cm-atomic-image img {
+  display: block;
+  max-width: min(100%, 760px);
+  height: auto;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-math-inline {
+  padding: 0 2px;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-math-block {
+  overflow-x: auto;
+  text-align: center;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-math-error,
+.cm6-markdown-editor-pane .typola-cm6-mermaid-error {
+  color: var(--danger);
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
 .editor-pane > div {
   flex: 1 1 auto;
   min-height: 0;

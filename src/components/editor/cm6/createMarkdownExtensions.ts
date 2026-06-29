@@ -1,4 +1,4 @@
-import { markdown } from '@codemirror/lang-markdown';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 
@@ -7,11 +7,12 @@ type CreateMarkdownExtensionsOptions = {
   fontSize: number;
   tabSize: number;
   wordWrap: boolean;
+  extraExtensions?: Extension[];
   onModK?: () => boolean;
 };
 
 export function createMarkdownExtensions(options: CreateMarkdownExtensionsOptions): Extension[] {
-  const extensions: Extension[] = [markdown()];
+  const extensions: Extension[] = [markdown({ base: markdownLanguage })];
 
   if (options.tabSize !== 4) {
     extensions.push(EditorState.tabSize.of(options.tabSize));
@@ -19,6 +20,10 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
 
   if (options.wordWrap) {
     extensions.push(EditorView.lineWrapping);
+  }
+
+  if (options.extraExtensions?.length) {
+    extensions.push(...options.extraExtensions);
   }
 
   if (options.onModK) {
@@ -46,4 +51,3 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
 
   return extensions;
 }
-

@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
+import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
 import type { EditorCommandHandle } from '../types/editorCommands';
 import { SelectionAIMenu } from './selection/SelectionAIMenu';
@@ -17,6 +18,7 @@ export type SourceHeadingScrollRequest = {
 type EditorPaneProps = {
   source: string;
   onChange: (value: string) => void;
+  extraExtensions?: Extension[];
   headingScrollRequest?: SourceHeadingScrollRequest;
   onScrollRatio?: (ratio: number) => void;
   filePath?: string;
@@ -42,7 +44,7 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
   props,
   ref,
 ) {
-  const { source, onChange, headingScrollRequest, onScrollRatio, filePath, onAIAction } = props;
+  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction } = props;
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const [aiMenu, setAiMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
@@ -149,6 +151,7 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
       fontSize: settings.editorFontSize,
       tabSize: settings.editorTabSize,
       wordWrap: settings.editorWordWrap,
+      extraExtensions,
       // Cmd/Ctrl+K → 弹起 5+1 AI 菜单(对齐右键的动线),菜单触发后再走 onAIAction 注入
       onModK: () => {
         const cb = onAIActionRef.current;
@@ -163,7 +166,7 @@ export const EditorPane = forwardRef<EditorCommandHandle, EditorPaneProps>(funct
         return true;
       },
     });
-  }, [editorFontFamily, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
+  }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
 
   useEffect(() => {
     if (!editorView || !headingScrollRequest) return;

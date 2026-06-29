@@ -1,8 +1,11 @@
-import { forwardRef } from 'react';
+import { forwardRef, useMemo } from 'react';
+import '@atomic-editor/editor/styles.css';
+import 'katex/dist/katex.min.css';
 import { EditorPane, type SourceHeadingScrollRequest } from '../../EditorPane';
 import type { SelectionActionId } from '../../../services/agent/selectionActions';
 import type { SelectionAnchor } from '../../../services/agent/types';
 import type { EditorCommandHandle } from '../../../types/editorCommands';
+import { createLivePreviewExtensions } from './createLivePreviewExtensions';
 
 type Cm6MarkdownEditorPaneProps = {
   source: string;
@@ -22,11 +25,11 @@ type Cm6MarkdownEditorPaneProps = {
  */
 export const Cm6MarkdownEditorPane = forwardRef<EditorCommandHandle, Cm6MarkdownEditorPaneProps>(
   function Cm6MarkdownEditorPane(props, ref) {
+    const livePreviewExtensions = useMemo(() => createLivePreviewExtensions(), []);
     return (
       <div className="cm6-markdown-editor-pane">
-        <EditorPane ref={ref} {...props} />
+        <EditorPane ref={ref} {...props} extraExtensions={livePreviewExtensions} />
       </div>
     );
   },
 );
-
