@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 - 新增 Mermaid 图表渲染：阅读、心流、检视、HTML 预览和 Word 预览会把 ` ```mermaid ` 代码块渲染为 SVG 图，语法错误保留源码并显示错误条，WYSIWYG 中右键图表可复制 SVG。
 - 新增 PDF 导出：工具栏「导出 PDF」与 `Cmd/Ctrl+P` 会按阅读模式渲染当前文档，生成 A4 / 2cm 页边距的 PDF 文件。
+- 新增 CM6 编辑器内核 Phase 4 导出桥接：HTML 预览、Word 纸张预览与 PDF 导出统一通过 `markdownToExportHtml` 从 Markdown source 渲染导出 HTML，减少对编辑器 DOM 的依赖；PDF 导出改为后台写入默认导出路径并通过 toast 汇报结果。
 
 ### Changed
 
