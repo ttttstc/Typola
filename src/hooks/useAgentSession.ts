@@ -25,7 +25,14 @@ type UseConversationManagerOptions = {
   openCodePath?: string;
   openCodeModel?: string;
   pluginDirs?: string[];
-  onArtifactFile?: (artifact: { path: string; content?: string; toolName: string }) => void;
+  onArtifactFile?: (artifact: {
+    path: string;
+    content?: string;
+    toolName: string;
+    conversationId: string;
+    provider: AgentProvider;
+    model?: string;
+  }) => void;
 };
 
 function formatAgentDiagnostic(diagnostic: AgentDiagnostic | null | undefined, fallback: string): string {
@@ -233,7 +240,15 @@ export function useConversationManager({
 
   const appendAssistantEvent = useCallback((convId: string, event: AgentEvent) => {
     if (event.type === 'artifact_file') {
-      artifactFileRef.current?.({ path: event.path, content: event.content, toolName: event.toolName });
+      const conv = conversationsRef.current.get(convId);
+      artifactFileRef.current?.({
+        path: event.path,
+        content: event.content,
+        toolName: event.toolName,
+        conversationId: convId,
+        provider: conv?.provider ?? DEFAULT_AGENT_PROVIDER,
+        model: conv?.currentModel,
+      });
       return;
     }
     // status 事件携带 claude 进程实际跑的模型 → 落到 ConversationData,Composer 显示

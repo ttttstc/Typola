@@ -55,6 +55,7 @@ import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
+import { ensureArtifactManifest, manifestPathForArtifact } from '../services/artifacts/manifest';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
 import {
@@ -306,6 +307,24 @@ export function AppLayout() {
     flowRightPanelWidth: FLOW_RIGHT_PANEL_WIDTH,
   });
 
+  const handleAgentArtifactFile = useCallback((artifact: {
+    path: string;
+    content?: string;
+    toolName: string;
+    conversationId: string;
+    provider: string;
+    model?: string;
+  }) => {
+    void ensureArtifactManifest({
+      artifactPath: artifact.path,
+      documentPath: fileRef.current.path || undefined,
+      provider: artifact.provider,
+      model: artifact.model,
+      toolName: artifact.toolName,
+      rawOutput: artifact.content,
+    }).catch((error) => console.warn('Failed to write artifact manifest:', error));
+  }, [fileRef]);
+
   const convManager = useConversationManager({
     workspaceRoot: effectiveAiWorkspaceRoot,
     agentProvider: settings.aiActiveProvider,
@@ -314,6 +333,7 @@ export function AppLayout() {
     openCodePath: settings.aiOpenCodePath,
     openCodeModel: settings.aiOpenCodeModel,
     pluginDirs: settings.aiPluginDirs,
+    onArtifactFile: handleAgentArtifactFile,
   });
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
   const reviewStateApi = useReviewState(file.path);
@@ -1138,9 +1158,12 @@ export function AppLayout() {
     });
   }, [isTauriRuntime, settings.autoUpdateCheck, startBackgroundUpdateDownload]);
 
-  const { artifactItems, handleArchiveArtifact } = useArtifactState({
+  const { artifactItems, handleArchiveArtifact, refreshArtifacts } = useArtifactState({
     agentChangedPaths,
+    outputRoot: outputBaseDir,
     workspaceRoot: effectiveAiWorkspaceRoot,
+    activeConversationId: convManager.activeConvId,
+    currentDocumentPath: file.path || undefined,
     onForgetArtifact: forgetArtifact,
     onWorkspaceRefresh: bumpWorkspaceTreeVersion,
     onOpenPath: handleOpenPath,
@@ -1469,6 +1492,23 @@ export function AppLayout() {
                 void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
               }}
               onMergeIntoDocument={(path) => { void handleReviewRevision(path); }}
+              onInsertFile={(path) => {
+                void (async () => {
+                  try {
+                    const { readTextWithEncoding } = await import('../services/fileService');
+                    const content = await readTextWithEncoding(path, settings.defaultEncoding);
+                    insertMarkdown(content);
+                    setTransientMessage(`已插入：${path.split(/[\\/]/).pop()}`);
+                  } catch (error) {
+                    await messageDialog(String(error), { title: '插入产物失败' });
+                  }
+                })();
+              }}
+              onCopyPath={(path) => {
+                void navigator.clipboard.writeText(path)
+                  .then(() => setTransientMessage('已复制产物路径'))
+                  .catch((error) => messageDialog(String(error), { title: '复制路径失败' }));
+              }}
               onArchiveFile={(path) => {
                 void handleArchiveArtifact(path);
               }}
@@ -1483,7 +1523,11 @@ export function AppLayout() {
                   try {
                     const { invoke } = await import('@tauri-apps/api/core');
                     await invoke('delete_artifact_file', { request: { path, workspaceRoot: effectiveAiWorkspaceRoot ?? '' } });
+                    await invoke('delete_artifact_file', {
+                      request: { path: manifestPathForArtifact(path), workspaceRoot: effectiveAiWorkspaceRoot ?? '' },
+                    }).catch(() => undefined);
                     forgetArtifact(path);
+                    await refreshArtifacts();
                     setTransientMessage(`已删除：${path.split(/[\\/]/).pop()}`);
                   } catch (error) {
                     await messageDialog(String(error), { title: '删除失败' });

@@ -1,13 +1,19 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { messageDialog } from '../services/dialogService';
 import { pathBasename } from '../app/appLayoutUtils';
+import { ensureArtifactManifest, inferArtifactKind } from '../services/artifacts/manifest';
+import { scanArtifacts } from '../services/artifacts/scanner';
+import type { ArtifactRecord } from '../services/artifacts/types';
 
 type ArtifactItem = import('../components/ArtifactPreview').ArtifactItem;
 
 type UseArtifactStateOptions = {
   agentChangedPaths: Map<string, number>;
+  outputRoot?: string;
   workspaceRoot?: string;
+  activeConversationId?: string;
+  currentDocumentPath?: string;
   onForgetArtifact: (path: string) => void;
   onWorkspaceRefresh: () => void;
   onOpenPath: (path: string) => Promise<void>;
@@ -19,25 +25,71 @@ type UseArtifactStateOptions = {
  */
 export function useArtifactState({
   agentChangedPaths,
+  outputRoot,
   workspaceRoot,
+  activeConversationId,
+  currentDocumentPath,
   onForgetArtifact,
   onWorkspaceRefresh,
   onOpenPath,
   onTransientMessage,
 }: UseArtifactStateOptions) {
+  const [scannedArtifacts, setScannedArtifacts] = useState<ArtifactRecord[]>([]);
+
+  const refreshArtifacts = useCallback(async () => {
+    if (!outputRoot) {
+      setScannedArtifacts([]);
+      return;
+    }
+    setScannedArtifacts(await scanArtifacts(outputRoot));
+  }, [outputRoot]);
+
+  useEffect(() => {
+    void refreshArtifacts();
+  }, [refreshArtifacts, agentChangedPaths]);
+
+  useEffect(() => {
+    if (agentChangedPaths.size === 0) return;
+    agentChangedPaths.forEach((_ts, path) => {
+      if (/\.artifact\.json$/iu.test(path)) return;
+      void ensureArtifactManifest({
+        artifactPath: path,
+        documentPath: currentDocumentPath,
+      }).then(() => refreshArtifacts()).catch((error) => {
+        console.warn('Failed to ensure artifact manifest:', error);
+      });
+    });
+  }, [agentChangedPaths, currentDocumentPath, refreshArtifacts]);
+
   const artifactItems = useMemo<ArtifactItem[]>(() => {
-    const items: ArtifactItem[] = [];
+    const merged = new Map<string, ArtifactItem>();
+    for (const record of scannedArtifacts) {
+      if (activeConversationId && record.manifest?.source.conversationId && record.manifest.source.conversationId !== activeConversationId) {
+        continue;
+      }
+      merged.set(record.path, {
+        path: record.path,
+        name: record.name,
+        ts: record.ts,
+        kind: record.kind,
+        status: record.status,
+        legacy: record.legacy,
+      });
+    }
     agentChangedPaths.forEach((ts, path) => {
       const name = path.replace(/\\/g, '/').split('/').pop() ?? path;
-      const lower = name.toLowerCase();
-      let kind: ArtifactItem['kind'] = 'other';
-      if (lower.endsWith('.md') || lower.endsWith('.markdown')) kind = 'markdown';
-      else if (lower.endsWith('.html') || lower.endsWith('.htm')) kind = 'html';
-      else if (lower.endsWith('.txt') || lower.endsWith('.json') || lower.endsWith('.css') || lower.endsWith('.js')) kind = 'text';
-      items.push({ path, name, ts, kind });
+      if (/\.artifact\.json$/iu.test(name)) return;
+      merged.set(path, {
+        path,
+        name,
+        ts,
+        kind: inferArtifactKind(path),
+        status: merged.get(path)?.status ?? 'ready',
+        legacy: merged.get(path)?.legacy ?? false,
+      });
     });
-    return items.sort((a, b) => b.ts - a.ts);
-  }, [agentChangedPaths]);
+    return [...merged.values()].sort((a, b) => b.ts - a.ts);
+  }, [activeConversationId, agentChangedPaths, scannedArtifacts]);
 
   const handleArchiveArtifact = useCallback(async (artifactPath: string) => {
     if (!workspaceRoot) {
@@ -49,13 +101,14 @@ export function useArtifactState({
         request: { artifactPath, workspaceRoot },
       });
       onForgetArtifact(artifactPath);
+      await refreshArtifacts();
       onWorkspaceRefresh();
       await onOpenPath(archivedPath);
       onTransientMessage(`已保存到工作区：${pathBasename(archivedPath)}`);
     } catch (error) {
       await messageDialog(String(error), { title: '保存产物失败' });
     }
-  }, [onForgetArtifact, onOpenPath, onTransientMessage, onWorkspaceRefresh, workspaceRoot]);
+  }, [onForgetArtifact, onOpenPath, onTransientMessage, onWorkspaceRefresh, refreshArtifacts, workspaceRoot]);
 
-  return { artifactItems, handleArchiveArtifact };
+  return { artifactItems, handleArchiveArtifact, refreshArtifacts };
 }

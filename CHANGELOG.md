@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 - 新增 Mermaid 图表渲染：阅读、心流、检视、HTML 预览和 Word 预览会把 ` ```mermaid ` 代码块渲染为 SVG 图，语法错误保留源码并显示错误条，WYSIWYG 中右键图表可复制 SVG。
 - 新增 PDF 导出：工具栏「导出 PDF」与 `Cmd/Ctrl+P` 会按阅读模式渲染当前文档，生成 A4 / 2cm 页边距的 PDF 文件。
+- AI 产物新增 manifest / legacy 扫描底座：`.typola-output` 中的新产物会补写 sidecar 元数据，历史文件仍可恢复显示，产物浮窗支持插入当前光标与复制路径。
 
 ### Changed
 
@@ -33,6 +34,7 @@ All notable changes to this project will be documented in this file.
 - AI 工作台的 Provider 切换器改为底部 pill 按钮组，并补齐亮暗主题共用的细边框 token，避免原生下拉控件和未定义 CSS 变量带来的视觉割裂。
 - AI 工作台会持久化当前 AI Provider 选择；空对话切换 Claude Code / OpenCode 时不再弹出”新建对话”确认。
 - 心流模式打开时会主动调整左侧 AI 工作台与右侧场景栏到更接近“三栏工作台”的比例，减少右栏过宽与编辑区被压缩的问题。
+- 源码编辑器 CodeMirror 代码 token 改为跟 Typola 浅色编辑底色一致，避免代码块出现黑底低对比度导致看不清。
 - 左侧文件树窄条切换入口改为更克制的线性图标与细指示条样式，弱化突兀感。
 - 终端新建会话的工作目录优先使用用户当前选择的文件树 workspace；未选择 workspace 时再回退到当前文件目录 / 系统默认目录。
 - Markdown WYSIWYG 代码块改回由 Vditor 原生管理光标，不再额外做按键后光标偏移修正；补充代码块 / 行内代码显示样式，降低代码块内容被空框“吞掉”的概率。

@@ -1422,6 +1422,40 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   background: color-mix(in oklch, var(--accent) 24%, transparent);
 }
 
+.editor-pane .cm-editor .cm-line,
+.editor-pane .cm-editor .cm-content,
+.editor-pane .cm-editor .cm-matchingBracket,
+.editor-pane .cm-editor .cm-nonmatchingBracket {
+  color: var(--fg);
+}
+
+.editor-pane .cm-editor .tok-meta,
+.editor-pane .cm-editor .tok-processingInstruction,
+.editor-pane .cm-editor .tok-string2 {
+  color: color-mix(in oklch, var(--muted) 82%, var(--fg));
+}
+
+.editor-pane .cm-editor .tok-keyword,
+.editor-pane .cm-editor .tok-atom,
+.editor-pane .cm-editor .tok-bool {
+  color: color-mix(in oklch, var(--accent) 82%, var(--fg));
+}
+
+.editor-pane .cm-editor .tok-string {
+  color: color-mix(in oklch, #3f7f43 78%, var(--fg));
+}
+
+.editor-pane .cm-editor .tok-comment {
+  color: color-mix(in oklch, var(--muted) 72%, var(--fg));
+  font-style: italic;
+}
+
+.editor-pane .cm-editor .tok-variableName,
+.editor-pane .cm-editor .tok-propertyName,
+.editor-pane .cm-editor .tok-definition {
+  color: color-mix(in oklch, #7a4d18 74%, var(--fg));
+}
+
 .readonly-pane {
   align-items: center;
   justify-content: center;
@@ -3182,7 +3216,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .artifact-chip-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) repeat(5, auto);
   gap: 6px;
 }
 
@@ -3217,8 +3251,30 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   white-space: nowrap;
 }
 
+.artifact-status {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--muted) 12%, transparent);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.artifact-status-failed {
+  background: color-mix(in oklch, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.artifact-status-partial {
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
 .artifact-clear,
-.artifact-archive {
+.artifact-archive,
+.artifact-copy,
+.artifact-insert {
   padding: 4px 6px;
   background: transparent;
   border: 1px solid var(--border-soft);
@@ -3248,7 +3304,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .artifact-archive,
 .artifact-delete,
-.artifact-merge {
+.artifact-merge,
+.artifact-copy,
+.artifact-insert {
   opacity: 0;
   pointer-events: none;
   transform: translateX(2px);
@@ -3258,9 +3316,13 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .artifact-chip-row:hover .artifact-archive,
 .artifact-chip-row:hover .artifact-delete,
 .artifact-chip-row:hover .artifact-merge,
+.artifact-chip-row:hover .artifact-copy,
+.artifact-chip-row:hover .artifact-insert,
 .artifact-chip-row:focus-within .artifact-archive,
 .artifact-chip-row:focus-within .artifact-delete,
-.artifact-chip-row:focus-within .artifact-merge {
+.artifact-chip-row:focus-within .artifact-merge,
+.artifact-chip-row:focus-within .artifact-copy,
+.artifact-chip-row:focus-within .artifact-insert {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
@@ -3272,7 +3334,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .artifact-archive:hover,
-.artifact-merge:hover {
+.artifact-merge:hover,
+.artifact-copy:hover,
+.artifact-insert:hover {
   color: var(--accent);
   border-color: color-mix(in oklch, var(--accent) 40%, var(--border-soft));
   background: color-mix(in oklch, var(--accent) 8%, var(--surface));

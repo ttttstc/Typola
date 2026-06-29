@@ -32,6 +32,8 @@ describe('ArtifactPreview (M2 产物 chips)', () => {
     artifacts: ArtifactItem[];
     onOpenFile?: (path: string) => void;
     onArchiveFile?: (path: string) => void;
+    onInsertFile?: (path: string) => void;
+    onCopyPath?: (path: string) => void;
     onClose?: () => void;
   }) {
     act(() => {
@@ -40,6 +42,8 @@ describe('ArtifactPreview (M2 产物 chips)', () => {
           artifacts={props.artifacts}
           onOpenFile={props.onOpenFile ?? vi.fn()}
           onArchiveFile={props.onArchiveFile}
+          onInsertFile={props.onInsertFile}
+          onCopyPath={props.onCopyPath}
           onClose={props.onClose}
         />,
       );
@@ -78,6 +82,20 @@ describe('ArtifactPreview (M2 产物 chips)', () => {
     });
 
     expect(onArchiveFile).toHaveBeenCalledWith(HTML_PATH);
+  });
+
+  it('Markdown 产物可插入当前编辑器并复制路径', () => {
+    const onInsertFile = vi.fn();
+    const onCopyPath = vi.fn();
+    render({ artifacts: [makeArtifact(MD_PATH, 'markdown')], onInsertFile, onCopyPath });
+
+    act(() => {
+      host.querySelector<HTMLButtonElement>('.artifact-insert')?.click();
+      host.querySelector<HTMLButtonElement>('.artifact-copy')?.click();
+    });
+
+    expect(onInsertFile).toHaveBeenCalledWith(MD_PATH);
+    expect(onCopyPath).toHaveBeenCalledWith(MD_PATH);
   });
 
   it('关闭按钮交给上层清空本次产物', () => {
