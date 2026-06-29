@@ -230,13 +230,25 @@ function normalizeSupportedProviders(raw: unknown): AgentProvider[] | undefined 
 }
 
 function uniqueSkills(skills: SkillRef[]): SkillRef[] {
-  const seen = new Set<string>();
-  return skills.filter((skill) => {
+  const merged = new Map<string, SkillRef>();
+  for (const skill of skills) {
     const key = skill.name.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, skill);
+      continue;
+    }
+    const providers = new Set<AgentProvider>([
+      ...(existing.supportedProviders ?? []),
+      ...(skill.supportedProviders ?? []),
+    ]);
+    merged.set(key, {
+      ...existing,
+      description: existing.description ?? skill.description,
+      supportedProviders: providers.size > 0 ? [...providers] : undefined,
+    });
+  }
+  return [...merged.values()];
 }
 
 function normalizeSceneAdditions(raw: unknown): Record<string, SkillRef[]> {
@@ -336,16 +348,17 @@ export function removeCustomSkillFromScene(hub: SkillHub, sceneId: string, skill
 }
 
 export function buildSkillInstallPrompt(skill: SkillTemplateRef, provider: AgentProvider = 'claude'): string {
-  const source = skill.installSource ?? skill.expectedPath ?? skill.name;
   if (provider === 'opencode') {
+    const source = skill.installSource ?? '未提供来源，请根据用途创建 command 内容';
     return [
       `请帮我创建或安装 OpenCode command：${skill.name}。`,
       `用途：${skill.summary}`,
       `来源：${source}`,
-      `请优先安装到当前工作区 .opencode/commands/${skill.name}.md；如果不适合项目级安装，则安装到全局 ~/.config/opencode/commands/${skill.name}.md，或写入 opencode.jsonc 的 command.${skill.name} 配置。`,
+      `请优先安装到当前工作区 .opencode/commands/${skill.name}.md；如果不适合项目级安装，则安装到全局 ~/.config/opencode/commands/${skill.name}.md（Windows: %USERPROFILE%\\.config\\opencode\\commands\\${skill.name}.md），或写入 opencode.jsonc 的 command.${skill.name} 配置。`,
       `安装后请确认该 command 可以通过 opencode run --command ${skill.name} 调用。`,
     ].join('\n');
   }
+  const source = skill.installSource ?? skill.expectedPath ?? skill.name;
   return [
     `请帮我安装 Claude skill：${skill.name}。`,
     `用途：${skill.summary}`,

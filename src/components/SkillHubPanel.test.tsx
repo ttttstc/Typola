@@ -81,14 +81,60 @@ describe('SkillHubPanel', () => {
     await act(async () => undefined);
     act(() => findButtonByText(host, 'HTML 制作').click());
 
-    expect(host.textContent).toContain('/frontend-slides');
+    expect(host.textContent).toContain('frontend-slides');
+    expect(host.textContent).not.toContain('/frontend-slides');
     expect(host.textContent).toContain('已安装');
     expect(host.textContent).not.toContain('让 Claude 安装');
 
-    act(() => findButtonByText(host, '/frontend-slides').click());
+    act(() => findButtonByText(host, 'frontend-slides').click());
 
     expect(onPickSkill).toHaveBeenCalledWith('frontend-slides');
     expect(skillScannerMock.listLocalSkills).toHaveBeenCalledWith('opencode', String.raw`D:\notes`);
+  });
+
+  it('allows adding an OpenCode command with the same name as a Claude custom skill', async () => {
+    const onSaveHub = vi.fn().mockResolvedValue(undefined);
+    const mixedHub: SkillHub = {
+      version: 2,
+      sceneAdditions: {
+        html: [{ name: 'frontend-slides', description: 'Claude version', supportedProviders: ['claude'] }],
+      },
+      hiddenSystemSkills: {},
+    };
+
+    await act(async () => {
+      root.render(
+        <SkillHubPanel
+          activeProvider="opencode"
+          activeWorkspaceRoot={String.raw`D:\notes`}
+          hub={mixedHub}
+          onPickSkill={vi.fn()}
+          onInstallSkill={vi.fn()}
+          onSaveHub={onSaveHub}
+          onReload={vi.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+
+    await act(async () => undefined);
+    act(() => findButtonByText(host, 'HTML 制作').click());
+    act(() => findButtonByText(host, '添加 OpenCode command').click());
+
+    const localButton = findButtonByText(host, 'frontend-slides');
+    expect(localButton.disabled).toBe(false);
+
+    await act(async () => {
+      localButton.click();
+    });
+
+    expect(onSaveHub).toHaveBeenCalledWith(expect.objectContaining({
+      sceneAdditions: expect.objectContaining({
+        html: [expect.objectContaining({
+          name: 'frontend-slides',
+          supportedProviders: ['claude', 'opencode'],
+        })],
+      }),
+    }));
   });
 
   it('reloads skill-hub and scans OpenCode commands for the active workspace', async () => {

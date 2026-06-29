@@ -19,7 +19,7 @@ import {
   type SkillTemplateRef,
 } from '../services/agent/skillHub';
 
-type SkillHubPanelProps = {
+export type SkillHubPanelProps = {
   activeProvider: AgentProvider;
   activeWorkspaceRoot?: string;
   hub: SkillHub;
@@ -113,9 +113,10 @@ function AddSkillDialog({
   const [manualName, setManualName] = useState('');
   const [error, setError] = useState('');
 
+  const currentProviderAdditions = getSceneAdditionsForProvider(hub, scene.id, activeProvider);
   const existing = new Set([
     ...scene.skills.map((skill) => normalizeKey(skill.name)),
-    ...(hub.sceneAdditions[scene.id] ?? []).map((skill) => normalizeKey(skill.name)),
+    ...currentProviderAdditions.map((skill) => normalizeKey(skill.name)),
   ]);
   const filtered = localSkills.filter((skill) => {
     const text = `${skill.name} ${skill.description ?? ''} ${skill.path}`.toLowerCase();
@@ -171,7 +172,7 @@ function AddSkillDialog({
                 title={skill.path}
               >
                 <span>
-                  <strong>/{skill.name}</strong>
+                  <strong>{activeProvider === 'opencode' ? skill.name : `/${skill.name}`}</strong>
                   {skill.description && <em>{skill.description}</em>}
                   <small>{skill.path}</small>
                 </span>
@@ -230,11 +231,25 @@ export function SkillHubPanel({
   }, [activeProvider, activeWorkspaceRoot]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void scanLocal();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [scanLocal]);
+    let cancelled = false;
+    void (async () => {
+      setScanning(true);
+      try {
+        const skills = await listLocalSkills(activeProvider, activeWorkspaceRoot);
+        if (cancelled) return;
+        setLocalSkills(skills);
+        setScanError('');
+      } catch (error) {
+        if (cancelled) return;
+        setScanError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (!cancelled) setScanning(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProvider, activeWorkspaceRoot]);
 
   const reloadAll = async () => {
     setReloading(true);
@@ -366,6 +381,7 @@ export function SkillHubPanel({
             <ul className="skill-hub-items">
               {cards.map((skill) => {
                 const sourceUrl = skill.template?.installSource;
+                const displayName = activeProvider === 'opencode' ? skill.name : `/${skill.name}`;
                 return (
                 <li key={`${skill.system ? 'system' : 'custom'}-${skill.name}`}>
                   <div className={`skill-hub-item ${skill.installed ? '' : 'is-disabled'}`}>
@@ -380,7 +396,7 @@ export function SkillHubPanel({
                     >
                       <span className="skill-hub-item-topline">
                         <span className="skill-hub-item-name">
-                          /{skill.name}
+                          {displayName}
                           {sourceUrl && (
                             <button
                               type="button"
@@ -416,8 +432,8 @@ export function SkillHubPanel({
                           type="button"
                           disabled={saving}
                           onClick={() => void removeCustomSkill(selectedScene.id, skill.name)}
-                          title="移除自定义 skill"
-                          aria-label="移除自定义 skill"
+                          title={`移除自定义 ${capabilityLabel}`}
+                          aria-label={`移除自定义 ${capabilityLabel}`}
                         >
                           <Trash2 size={12} />
                         </button>

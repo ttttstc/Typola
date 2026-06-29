@@ -814,9 +814,10 @@ export function AppLayout() {
   }, []);
 
   const handlePickSkill = useCallback((skillName: string) => {
-    convManager.createConversation(skillName, skillName);
+    const provider = convManager.activeProvider;
+    convManager.createConversation(skillName, skillName, provider);
     setLeftRailMode('aiWorkbench');
-    setSkillPrefill({ tick: Date.now(), text: buildSkillPrefill(convManager.activeProvider, skillName) });
+    setSkillPrefill({ tick: Date.now(), text: buildSkillPrefill(provider, skillName) });
   }, [convManager]);
 
   const handleInstallSkill = useCallback((prompt: string) => {
