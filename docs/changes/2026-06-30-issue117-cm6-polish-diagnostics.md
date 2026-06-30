@@ -1,9 +1,60 @@
 # Issue #117 CM6 Polish Diagnostics
 
 > 日期:2026-06-30
-> 状态:诊断完成,实施中
+> 状态:**6 个 PR 全部合入**(`codex/issue-117-cm6-polish`)
 > 跟踪:https://github.com/ttttstc/Typola/issues/117
 > 基础 commit:5ed9096(`codex/issue-117-cm6-polish-plan`)
+> 实施提交:`1d3768a`(诊断文档)→`d0d7e15`(IME/表格)→`4c1f76d`(图片)→`2e3fdbd`(长文档)→`f469c13`(折叠/搜索)→`1c062d1`(e2e 覆盖)
+
+## 实施结果摘要(2026-06-30 收尾)
+
+### PR1 阶段 0 — 诊断矩阵
+- `docs/changes/2026-06-30-issue117-cm6-polish-diagnostics.md` 记录场景矩阵(commit `1d3768a`)
+
+### PR2 阶段 1 — 中文 IME + 表格稳定性(commit `d0d7e15`)
+- atomic-editor `tables()` + `imageBlocks()` 接入后,空单元格 placeholder 走 CSS:`.cm-atomic-table-cell-source:empty::before`
+- 单测:`cm6-ime-table.test.ts`(11 用例)— compositionstart/end 不会触发多次 dispatch;`|` 转义;5×5 tab navigation
+
+### PR3 阶段 1 — 图片粘贴 + 加载失败回退(commit `4c1f76d`)
+- `EditorCoreHandle` 新增 `insertTextAt` / `posAtCoords`
+- AppLayout 接管 drop/paste 路径:`insertImageFromSource(insertAt)` + `resolveInsertPosition(clientX, clientY)`
+- Tauri `onDragDropEvent` 缺 viewport 坐标 → 用 `mousemove` 跟踪 last client position
+- `imageFallbackExtension`:`img.error` 事件 → wrap `cm-atomic-image--failed` + dataset 记录 alt/src
+- 单测:`cm6-image-fallback.test.ts`(7 用例)
+
+### PR4 阶段 2 — 长文档性能(commit `2e3fdbd`)
+- `Cm6MarkdownEditorPane.livePreviewExtensions` useMemo 移除 `foldedHeadings` deps → 折叠切换不再重建整组扩展
+- `headingFoldExtension.setFoldedHeadings(view, same)` 短路 → 不触发 onChange 回环
+- 单测:`cm6-perf.test.ts`(7 用例)— 5 万字 fixture init/输入/选区;setFoldedHeadings 幂等
+
+### PR5 阶段 2 — 标题折叠 + 搜索展开(commit `f469c13`)
+- `foldKey(level, text, sectionIndex)` — 同名 heading 多次出现用 sectionIndex 区分
+- `collectHeadingSections` 返回的 sections 已按 headingLine 排序;sectionIndex 单调递增(独立 counter)
+- `headingFoldExtension.FoldToggleWidget` 透传 sectionIndex/text 给 DOM
+- AppLayout 接管 `foldedHeadings` state:Cm6MarkdownEditorPane 接受 `foldedHeadings` + `onFoldChange` props
+- `handleSearchNavigate` 命中折叠区时先移除覆盖 heading 的 foldKey,再 revealRange
+- 新增 `appLayoutUtils.lineIndexAtOffset`
+- 单测:`cm6-fold-search.test.ts`(16 用例)
+
+### PR6 阶段 3 — E2E + 单测覆盖(commit `1c062d1`)
+- `e2e/cm6-ime.spec.ts`(3 用例)— 中文输入不丢、切 WYSIWYG 不丢、Ctrl+End 末尾继续输入
+- `e2e/cm6-fold-search.spec.ts`(2 用例)— 同名 H2 独立折叠、搜索自动展开
+- `e2e/cm6-image.spec.ts`(2 用例)— 图片语法 + 后续输入 + Ctrl+End 定位
+
+## 验证结果
+
+| 命令 | 结果 |
+|---|---|
+| `npx tsc -b config/tsconfig.json` | pass(无输出) |
+| `npx vitest run --config config/vite.config.ts` | **615/615 通过** |
+| `cargo check --manifest-path src-tauri/Cargo.toml` | pass(无差异) |
+
+## 剩余风险 / 未覆盖项
+
+- **Tauri WebView2 真实 IME 行为**:本机未启动 `npm run tauri dev`,搜狗输入法 / 候选框同步完全未覆盖。Reviewer 在真实环境用微软拼音验证 200 字段落流畅度。
+- **Tauri drop pos + ImageInsert.upload**:Playwright 浏览器层触发不到 `onDragDropEvent`,复制上传图床路径由 AppLayout 兜底,需要 Tauri 集成测试。
+- **5 万字真实滚动 fps**:jsdom 无 layout,只有 init/输入/选区 dispatch 预算。真实浏览器手测在 diagnostics 矩阵的「长文档滚动 fps」行补。
+- **per-PR `npm run tauri:build:local`**:本会话每个 PR 提交后没有逐个跑完整 Tauri 打包(`cargo check` 跑过,JS/Rust 都编译干净);最终全量打包留 reviewer 在 PR 合入前跑。
 
 ## 环境
 
