@@ -3,25 +3,25 @@ import { AgentRuntimeCard } from '../agent/AgentRuntimeCard';
 import { useSettings } from '../../hooks/useSettings';
 import { detectAgentRuntime } from '../../services/agent/runtime/detection';
 import type { AgentDetectResult } from '../../services/agentService';
-import type { AgentProvider } from '../../services/agent/provider';
 import { listAgentRuntimeDefs } from '../../services/agent/runtime/registry';
+import type { AgentRuntimeId } from '../../services/agent/runtime/types';
 import { updateSettings } from '../../services/settingsService';
 
 export function AiCliSection() {
   const settings = useSettings();
-  const [detecting, setDetecting] = useState<AgentProvider | null>(null);
-  const [results, setResults] = useState<Partial<Record<AgentProvider, AgentDetectResult>>>({});
+  const [detecting, setDetecting] = useState<AgentRuntimeId | null>(null);
+  const [results, setResults] = useState<Partial<Record<AgentRuntimeId, AgentDetectResult>>>({});
   const runtimes = listAgentRuntimeDefs();
 
-  const handleDetect = async (provider: AgentProvider, path: string) => {
-    setDetecting(provider);
+  const handleDetect = async (runtimeId: AgentRuntimeId, path: string) => {
+    setDetecting(runtimeId);
     try {
-      const next = await detectAgentRuntime(provider, path);
-      setResults((current) => ({ ...current, [provider]: next }));
+      const next = await detectAgentRuntime(runtimeId, path);
+      setResults((current) => ({ ...current, [runtimeId]: next }));
     } catch (error) {
       setResults((current) => ({
         ...current,
-        [provider]: {
+        [runtimeId]: {
           available: false,
           path,
           diagnostics: [{
@@ -39,18 +39,22 @@ export function AiCliSection() {
     }
   };
 
-  const providerPath = (provider: AgentProvider) => provider === 'opencode'
-    ? settings.aiOpenCodePath
-    : settings.aiClaudePath;
-  const updateProviderPath = (provider: AgentProvider, value: string) => {
-    updateSettings(provider === 'opencode' ? { aiOpenCodePath: value } : { aiClaudePath: value });
+  const runtimePath = (runtimeId: AgentRuntimeId) => {
+    if (runtimeId === 'opencode') return settings.aiOpenCodePath;
+    if (runtimeId === 'codex') return settings.aiCodexPath;
+    return settings.aiClaudePath;
+  };
+  const updateRuntimePath = (runtimeId: AgentRuntimeId, value: string) => {
+    if (runtimeId === 'opencode') updateSettings({ aiOpenCodePath: value });
+    else if (runtimeId === 'codex') updateSettings({ aiCodexPath: value });
+    else updateSettings({ aiClaudePath: value });
   };
 
   return (
     <div className="settings-section settings-section-agent-runtime">
       <h3 className="settings-section-title">AI 执行</h3>
       <p className="settings-section-intro">
-        选择 Typola AI 工作台默认使用的本地 CLI，并检测 Claude / OpenCode 是否能被桌面应用识别。这里只做 CLI 识别，不运行模型测试。
+        选择 Typola AI 工作台默认使用的本地 CLI，并检测 Claude / OpenCode / Codex 是否能被桌面应用识别。这里不运行模型测试，Codex 当前仅检测不发送。
       </p>
       <div className="agent-runtime-card-list">
         {runtimes.map((runtime) => (
@@ -58,12 +62,12 @@ export function AiCliSection() {
             key={runtime.id}
             runtime={runtime}
             active={settings.aiActiveProvider === runtime.id}
-            pathValue={providerPath(runtime.id)}
+            pathValue={runtimePath(runtime.id)}
             detecting={detecting === runtime.id}
             result={results[runtime.id]}
             onSetActive={(provider) => updateSettings({ aiActiveProvider: provider })}
-            onPathChange={(value) => updateProviderPath(runtime.id, value)}
-            onDetect={() => void handleDetect(runtime.id, providerPath(runtime.id))}
+            onPathChange={(value) => updateRuntimePath(runtime.id, value)}
+            onDetect={() => void handleDetect(runtime.id, runtimePath(runtime.id))}
           />
         ))}
       </div>

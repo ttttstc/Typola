@@ -133,6 +133,7 @@ describe('settingsService', () => {
       aiClaudeModel: ' sonnet ',
       aiOpenCodePath: ' opencode.cmd ',
       aiOpenCodeModel: ' anthropic/claude-sonnet-4 ',
+      aiCodexPath: ' codex.cmd ',
     });
 
     expect(settings).toMatchObject({
@@ -140,6 +141,7 @@ describe('settingsService', () => {
       aiClaudeModel: 'sonnet',
       aiOpenCodePath: 'opencode.cmd',
       aiOpenCodeModel: 'anthropic/claude-sonnet-4',
+      aiCodexPath: 'codex.cmd',
     });
     expect(getSettings().aiOpenCodePath).toBe('opencode.cmd');
     expect(getSettings().aiOpenCodeModel).toBe('anthropic/claude-sonnet-4');
@@ -152,6 +154,9 @@ describe('settingsService', () => {
     expect(getSettings().aiActiveProvider).toBe('opencode');
 
     localStorage.setItem('typola-settings', JSON.stringify({ aiActiveProvider: 'unknown' }));
+    expect(getSettings().aiActiveProvider).toBe('claude');
+
+    localStorage.setItem('typola-settings', JSON.stringify({ aiActiveProvider: 'codex' }));
     expect(getSettings().aiActiveProvider).toBe('claude');
   });
 

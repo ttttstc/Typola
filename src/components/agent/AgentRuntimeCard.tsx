@@ -30,6 +30,7 @@ export function AgentRuntimeCard({
       ? '已识别'
       : '不可用';
   const statusTone = !result ? 'idle' : result.available ? 'ok' : 'error';
+  const canSetActive = !runtime.detectionOnly;
 
   return (
     <section className={`agent-runtime-card ${active ? 'active' : ''}`} aria-label={`${runtime.label} 设置`}>
@@ -41,10 +42,12 @@ export function AgentRuntimeCard({
         <button
           type="button"
           className="settings-action-button"
-          disabled={active}
-          onClick={() => onSetActive(runtime.id)}
+          disabled={active || !canSetActive}
+          onClick={() => {
+            if (canSetActive) onSetActive(runtime.id as AgentProvider);
+          }}
         >
-          {active ? '当前默认' : '设为默认'}
+          {runtime.detectionOnly ? '仅检测' : active ? '当前默认' : '设为默认'}
         </button>
       </header>
       {runtime.description && <p className="settings-desc agent-runtime-desc">{runtime.description}</p>}

@@ -6,9 +6,10 @@ describe('agent runtime detection config', () => {
   it('lists Typola-supported CLI runtimes', () => {
     const runtimes = listAgentRuntimeDefs();
 
-    expect(runtimes.map((runtime) => runtime.id)).toEqual(['claude', 'opencode']);
-    expect(runtimes.map((runtime) => runtime.defaultCommand)).toEqual(['claude', 'opencode']);
+    expect(runtimes.map((runtime) => runtime.id)).toEqual(['claude', 'opencode', 'codex']);
+    expect(runtimes.map((runtime) => runtime.defaultCommand)).toEqual(['claude', 'opencode', 'codex']);
     expect(runtimes.every((runtime) => runtime.versionArgs.length > 0)).toBe(true);
+    expect(getAgentRuntimeDef('codex').detectionOnly).toBe(true);
   });
 
   it('normalizes unknown runtime ids to Claude', () => {

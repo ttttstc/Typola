@@ -82,6 +82,7 @@ struct AgentDetectRequest {
 enum AgentProvider {
     Claude,
     Opencode,
+    Codex,
 }
 
 impl Default for AgentProvider {
@@ -95,6 +96,7 @@ impl AgentProvider {
         match self {
             Self::Claude => default_agent_command("claude"),
             Self::Opencode => default_agent_command("opencode"),
+            Self::Codex => default_agent_command("codex"),
         }
     }
 
@@ -102,6 +104,7 @@ impl AgentProvider {
         match self {
             Self::Claude => vec!["--version".to_string()],
             Self::Opencode => vec!["--version".to_string()],
+            Self::Codex => vec!["--version".to_string()],
         }
     }
 
@@ -109,6 +112,7 @@ impl AgentProvider {
         match self {
             Self::Claude => "Claude",
             Self::Opencode => "OpenCode",
+            Self::Codex => "Codex",
         }
     }
 }
@@ -1738,6 +1742,9 @@ fn start_agent_headless_run(
     }
 
     let provider = request.provider.unwrap_or_default();
+    if provider == AgentProvider::Codex {
+        return Err("Codex CLI 当前仅用于检测，暂不支持 AI 工作台发送。".into());
+    }
     let agent_path = normalize_agent_path(provider, request.agent_path.as_deref());
     let run_id = uuid::Uuid::new_v4().to_string();
     let (session_uuid, resumed) = {
@@ -2018,6 +2025,10 @@ fn build_agent_headless_command(
                 prompt,
             ),
             prompt_stdin: false,
+        },
+        AgentProvider::Codex => AgentCommandSpec {
+            args: Vec::new(),
+            prompt_stdin: true,
         },
     }
 }
@@ -2784,6 +2795,7 @@ fn list_local_skills(
     match provider.unwrap_or_default() {
         AgentProvider::Claude => list_claude_skills(app),
         AgentProvider::Opencode => list_opencode_commands(app, workspace_root.as_deref()),
+        AgentProvider::Codex => Ok(Vec::new()),
     }
 }
 

@@ -1,9 +1,9 @@
 import { detectAgent, type AgentDetectResult } from '../../agentService';
-import type { AgentProvider } from '../provider';
 import type { AgentDiagnostic, AgentDiagnosticFix } from './types';
+import type { AgentRuntimeId } from './types';
 
-export async function detectAgentRuntime(provider: AgentProvider, customPath?: string): Promise<AgentDetectResult> {
-  const result = await detectAgent(customPath, provider);
+export async function detectAgentRuntime(runtimeId: AgentRuntimeId, customPath?: string): Promise<AgentDetectResult> {
+  const result = await detectAgent(customPath, runtimeId);
   return {
     ...result,
     diagnostics: normalizeAgentDiagnostics(result.diagnostics),
