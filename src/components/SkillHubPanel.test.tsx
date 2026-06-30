@@ -29,6 +29,16 @@ function findButtonByText(host: HTMLElement, text: string): HTMLButtonElement {
   return button;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('SkillHubPanel', () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -200,5 +210,71 @@ describe('SkillHubPanel', () => {
 
     expect(onReload).toHaveBeenCalledTimes(1);
     expect(skillScannerMock.listLocalSkills).toHaveBeenLastCalledWith('opencode', String.raw`D:\notes`);
+  });
+
+  it('ignores stale scan results after provider changes', async () => {
+    const opencodeScan = deferred<Awaited<ReturnType<typeof skillScannerMock.listLocalSkills>>>();
+    const claudeScan = deferred<Awaited<ReturnType<typeof skillScannerMock.listLocalSkills>>>();
+    skillScannerMock.listLocalSkills.mockImplementation((provider) => (
+      provider === 'opencode' ? opencodeScan.promise : claudeScan.promise
+    ));
+    const mixedHub: SkillHub = {
+      version: 2,
+      sceneAdditions: {
+        html: [{ name: 'write-report', description: 'Claude report', supportedProviders: ['claude'] }],
+      },
+      hiddenSystemSkills: {},
+    };
+
+    await act(async () => {
+      root.render(
+        <SkillHubPanel
+          activeProvider="opencode"
+          activeWorkspaceRoot={String.raw`D:\notes`}
+          hub={mixedHub}
+          onPickSkill={vi.fn()}
+          onInstallSkill={vi.fn()}
+          onSaveHub={vi.fn()}
+          onReload={vi.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+
+    await act(async () => {
+      root.render(
+        <SkillHubPanel
+          activeProvider="claude"
+          activeWorkspaceRoot={String.raw`D:\notes`}
+          hub={mixedHub}
+          onPickSkill={vi.fn()}
+          onInstallSkill={vi.fn()}
+          onSaveHub={vi.fn()}
+          onReload={vi.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+
+    await act(async () => {
+      claudeScan.resolve([]);
+      await claudeScan.promise;
+    });
+    await act(async () => {
+      opencodeScan.resolve([
+        {
+          name: 'write-report',
+          description: 'OpenCode report',
+          source: 'opencode',
+          path: String.raw`D:\notes\.opencode\commands\write-report.md`,
+        },
+      ]);
+      await opencodeScan.promise;
+    });
+    act(() => findButtonByText(host, 'HTML 制作').click());
+
+    const staleInstalledCard = Array.from(host.querySelectorAll('li')).find((entry) => (
+      entry.textContent?.includes('write-report')
+    ));
+    expect(staleInstalledCard?.textContent).toContain('未安装');
+    expect(staleInstalledCard?.textContent).not.toContain('已安装');
   });
 });

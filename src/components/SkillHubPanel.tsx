@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ArrowLeft, BarChart3, CalendarDays, Check, ClipboardList, Globe, PenLine,
@@ -214,47 +214,43 @@ export function SkillHubPanel({
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const scanGenerationRef = useRef(0);
   const systemScenes = useMemo(() => getSystemSkillScenesForProvider(activeProvider), [activeProvider]);
   const capabilityLabel = skillCapabilityLabel(activeProvider);
   const installActionLabel = activeProvider === 'opencode' ? '让 OpenCode 配置' : '让 Claude 安装';
 
   const scanLocal = useCallback(async () => {
+    const generation = scanGenerationRef.current + 1;
+    scanGenerationRef.current = generation;
     setScanning(true);
     try {
-      setLocalSkills(await listLocalSkills(activeProvider, activeWorkspaceRoot));
+      const skills = await listLocalSkills(activeProvider, activeWorkspaceRoot);
+      if (scanGenerationRef.current !== generation) return;
+      setLocalSkills(skills);
       setScanError('');
     } catch (error) {
+      if (scanGenerationRef.current !== generation) return;
       setScanError(error instanceof Error ? error.message : String(error));
     } finally {
-      setScanning(false);
+      if (scanGenerationRef.current === generation) setScanning(false);
     }
   }, [activeProvider, activeWorkspaceRoot]);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      setScanning(true);
-      try {
-        const skills = await listLocalSkills(activeProvider, activeWorkspaceRoot);
-        if (cancelled) return;
-        setLocalSkills(skills);
-        setScanError('');
-      } catch (error) {
-        if (cancelled) return;
-        setScanError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (!cancelled) setScanning(false);
-      }
-    })();
+    void scanLocal();
     return () => {
-      cancelled = true;
+      scanGenerationRef.current += 1;
     };
-  }, [activeProvider, activeWorkspaceRoot]);
+  }, [scanLocal]);
 
   const reloadAll = async () => {
     setReloading(true);
     try {
-      await Promise.all([onReload(), scanLocal()]);
+      const [reloadResult] = await Promise.allSettled([onReload(), scanLocal()]);
+      if (reloadResult.status === 'rejected') {
+        const reason = reloadResult.reason;
+        setScanError(`重新加载 skill-hub.json 失败：${reason instanceof Error ? reason.message : String(reason)}`);
+      }
     } finally {
       setReloading(false);
     }
