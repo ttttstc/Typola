@@ -3,10 +3,10 @@
  * License: Apache-2.0
  * Original path: apps/daemon/src/runtimes/types.ts
  * Modifications: reduced to Typola's Tauri runtime registry and existing
- * Claude/OpenCode document-workbench execution model.
+ * Claude/OpenCode document-workbench execution model; Codex is detection-only.
  */
 
-export type AgentRuntimeId = 'claude' | 'opencode';
+export type AgentRuntimeId = 'claude' | 'opencode' | 'codex';
 
 export type AgentRuntimeDef = {
   id: AgentRuntimeId;
@@ -18,6 +18,7 @@ export type AgentRuntimeDef = {
   docsUrl?: string;
   installUrl?: string;
   experimental?: boolean;
+  detectionOnly?: boolean;
 };
 
 export type AgentDiagnosticLevel = 'ok' | 'warning' | 'error';

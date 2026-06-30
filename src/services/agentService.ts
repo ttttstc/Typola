@@ -1,10 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { AgentProvider } from './agent/provider';
 import { getAgentRuntimeDef } from './agent/runtime/registry';
+import type { AgentRuntimeId } from './agent/runtime/types';
 import type { AgentDiagnostic } from './agent/runtime/types';
 
 export type AgentDetectResult = {
-  runtimeId?: AgentProvider;
+  runtimeId?: AgentRuntimeId;
   available: boolean;
   path: string;
   executablePath?: string;
@@ -18,8 +18,8 @@ export type AgentDetectResult = {
   stderrPreview?: string;
 };
 
-export function detectAgent(agentPath?: string, provider?: AgentProvider): Promise<AgentDetectResult> {
-  const runtime = getAgentRuntimeDef(provider ?? 'claude');
+export function detectAgent(agentPath?: string, runtimeId?: AgentRuntimeId): Promise<AgentDetectResult> {
+  const runtime = getAgentRuntimeDef(runtimeId ?? 'claude');
   return invoke<AgentDetectResult>('agent_detect', {
     request: {
       runtimeId: runtime.id,
