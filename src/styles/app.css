@@ -1496,6 +1496,16 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-radius: 8px;
 }
 
+/* 表格空单元格占位:cell source 无内容时给一个不抢眼的提示文字,
+ * 由 CM6 contentEditable 直接走 ::before content,不改 markdown source。 */
+.cm6-markdown-editor-pane .cm-atomic-table-cell-source:empty::before {
+  content: '空单元格';
+  color: var(--muted);
+  opacity: 0.55;
+  pointer-events: none;
+  font-style: italic;
+}
+
 .cm6-markdown-editor-pane .typola-cm6-math-inline {
   padding: 0 2px;
 }
