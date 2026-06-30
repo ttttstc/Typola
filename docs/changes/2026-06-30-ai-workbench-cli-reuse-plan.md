@@ -245,12 +245,14 @@ PR6 (mocks):
   - mocks/ 整目录 + traces/ + golden tests
 ```
 
-## 8. 待对齐事项
+## 8. 对齐决策(2026-06-30)
 
-需要确认才能开干:
+用户已确认范围:
 
-1. **是否做 5 个 agent def**(codex/gemini/cursor-agent/qwen/grok)还是先保留 2 个(claude/opencode)只补 capability detection?
-2. **toolCards 优先级** —— 先做 shell (Read/Write/Edit/Bash) 还是先做完整 9 个?
-3. **slash command 入口是否需要全量键盘面板(Cmd+K 弹层)** —— 还是只做 `/` 前缀拦截就够?
-4. **mocks 系统是否本 PR 一起做** —— 还是延后,先靠真实 CLI 测?
-5. **artifact_file → 产物中心推送**:是否要做(用户已经通过 `ArtifactToast` + `useArtifactState` 有基础)?
+1. **Agent def**: 补 5 个新 def(codex / gemini / cursor-agent / qwen / grok),从 open-design `apps/daemon/src/runtimes/defs/` 对应文件搬运
+2. **Tool cards**: 完整 9 个一次到位(Read/Write/Edit/Bash/Grep/Glob/WebFetch/TodoWrite/Default)
+3. **Slash 入口**: 只 `/` 前缀拦截,不引入 Cmd+K 弹层
+4. **Mock CLI**: 本 PR 做基础(mocks/ 目录 + 2-3 条 trace + golden tests)
+5. **artifact_file → 产物中心**: 默认做(随 tool cards PR4 一起)
+
+PR 顺序不变(§7)。
