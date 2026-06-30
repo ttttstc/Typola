@@ -25,6 +25,7 @@ import { StatusBar } from '../components/StatusBar';
 import { AppLayoutChrome } from '../components/AppLayoutChrome';
 import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
 import { SkillHubPanel } from '../components/SkillHubPanel';
+import { ArtifactCenterPanel } from '../components/artifacts/ArtifactCenterPanel';
 import { SelectionResultCard } from '../components/selection/SelectionResultCard';
 import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor';
 import { ReviewSidebarPanel } from '../components/review/ReviewSidebarPanel';
@@ -32,11 +33,14 @@ import { runSkillOneshot } from '../services/agent/oneshotService';
 import { useReviewState } from '../hooks/useReviewState';
 import { useRevisionList } from '../hooks/useRevisionList';
 import { buildReviewMarkdown, type ReviewComment } from '../services/review/reviewState';
+import { ensureArtifactManifest } from '../services/artifacts/manifest';
+import type { ArtifactRecord } from '../services/artifacts/types';
 import { saveFileDialog } from '../services/dialogService';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import type { SelectionAnchor } from '../services/agent/types';
 import { resolveWorkbenchWorkspaceRoot } from '../services/agent/workbenchWorkspace';
 import { useConversationManager } from '../hooks/useAgentSession';
+import { useArtifactLibrary } from '../hooks/useArtifactLibrary';
 import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
 import { useFileTabs } from '../hooks/useFileTabs';
@@ -45,13 +49,13 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
-import { useRightPanel } from '../hooks/useRightPanel';
+import { useRightPanel, type RightPanelMode } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
 import { buildSkillPrefill } from '../services/agent/skillHub';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
-import type { EditorCommandHandle } from '../types/editorCommands';
+import type { EditorCoreHandle } from '../types/editorCore';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
@@ -66,6 +70,7 @@ import {
   resolveCopyDestination,
   resolveImageInsertAction,
 } from '../services/imageInsert';
+import { collectHeadingSections, foldKey, type FoldKey } from '../services/headingFoldService';
 import {
   extractToc,
   escapeRegExp,
@@ -76,11 +81,12 @@ import {
   joinLocalPath,
   LEFT_PANEL_MAX_WIDTH,
   LEFT_PANEL_MIN_WIDTH,
+  lineIndexAtOffset,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_RESIZER_GAP,
-  toUpdateErrorMessage,
   WORKSPACE_PANEL_DEFAULT_WIDTH,
+  toUpdateErrorMessage,
 } from './appLayoutUtils';
 import {
   preloadSettingsPage,
@@ -95,6 +101,10 @@ const EditorPane = lazy(() =>
 
 const WysiwygEditorPane = lazy(() =>
   import('../components/WysiwygEditorPane').then((module) => ({ default: module.WysiwygEditorPane })),
+);
+
+const Cm6MarkdownEditorPane = lazy(() =>
+  import('../components/editor/cm6/Cm6MarkdownEditorPane').then((module) => ({ default: module.Cm6MarkdownEditorPane })),
 );
 
 const DocxPreviewPane = lazy(() =>
@@ -132,6 +142,11 @@ type UpdateInstallState =
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
+function readEditorEngine(): 'vditor' | 'cm6' {
+  if (typeof window === 'undefined') return 'cm6';
+  return window.localStorage.getItem('typola.editorEngine') === 'vditor' ? 'vditor' : 'cm6';
+}
+
 export function AppLayout() {
   const settings = useSettings();
   const isTauriRuntime = '__TAURI_INTERNALS__' in window;
@@ -140,11 +155,32 @@ export function AppLayout() {
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
-  const editorCommandRef = useRef<EditorCommandHandle | null>(null);
+  const editorCommandRef = useRef<EditorCoreHandle | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
+  // 双向同步震荡抑制:任一方向触发后,锁定反向一段时间(防止 editor↔preview 循环)。
+  const syncLockUntilRef = useRef(0);
+  const SYNC_LOCK_MS = 220;
   const handleEditorScrollRatio = useCallback((ratio: number) => {
+    if (Date.now() < syncLockUntilRef.current) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
     previewScrollRef.current?.scrollToRatio(ratio);
+  }, []);
+  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
+    if (Date.now() < syncLockUntilRef.current) return;
+    if (change.index < 0) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
+    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
+  }, []);
+  const handlePreviewHeadingScroll = useCallback((change: { index: number; withinRatio: number }) => {
+    if (Date.now() < syncLockUntilRef.current) return;
+    if (change.index < 0) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
+    setSourceHeadingScrollRequest({
+      index: change.index,
+      withinRatio: change.withinRatio,
+      requestId: Date.now(),
+    });
   }, []);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -155,7 +191,14 @@ export function AppLayout() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
+  const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
+  // 折叠集合:由 AppLayout 拥有,用于"搜索命中自动展开"等命令式扩展。
+  // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
+  const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
+  const handleEditorFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
+    setFoldedHeadings((prev) => sameFoldSet(prev, next) ? prev : new Set(next));
+  }, []);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
@@ -180,8 +223,13 @@ export function AppLayout() {
     const root = mainContentRef.current;
     if (!root) return null;
 
+    // 同时兼容 Vditor IR/WYSIWYG 与 CM6 源码模式。
+    // CM6 下 heading 是 .cm-content 里的语义 h1..h6(atomic-editor 用真实标签,
+    // 而非自定义 span),不命中 Vditor selector 会导致 TOC 跳转永远 index 越界。
     const headings = root.querySelectorAll<HTMLElement>(
-      '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, .vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6',
+      '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, '
+      + '.vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6, '
+      + '.cm-content h1, .cm-content h2, .cm-content h3, .cm-content h4, .cm-content h5, .cm-content h6',
     );
     return headings[index] ?? null;
   }, []);
@@ -195,16 +243,24 @@ export function AppLayout() {
     handleTocAlwaysPinnedChange,
   } = useTocState({
     editorMode,
+    editorEngine,
     alwaysPinned: settings.tocAlwaysPinned,
     mainContentRef,
     resolveTocHeading,
     setSourceHeadingScrollRequest,
   });
+  // 模式 ref 解决「getDefaultRightPanelWidth 在 rightPanelMode 声明前定义」的问题。
+  const rightPanelModeRef = useRef<RightPanelMode>('none');
   const getDefaultRightPanelWidth = useCallback(() => {
-    // 三栏比例:右栏目标 360 紧凑,容器太小时 clamp 到 min。原算法 /3 在大屏太宽(1920 → 640)。
+    // 模式分支:word/wechat 跟编辑器 1:1(可用空间均分);其他模式跟左栏一致 360。
     const containerWidth = mainContentRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-    const target = Math.round((containerWidth - RIGHT_PANEL_RESIZER_GAP) / 5);
-    return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, target));
+    const mode = rightPanelModeRef.current;
+    if (mode === 'word' || mode === 'wechat') {
+      const available = containerWidth - WORKSPACE_PANEL_DEFAULT_WIDTH - RIGHT_PANEL_RESIZER_GAP;
+      const target = Math.round(available / 2);
+      return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, target));
+    }
+    return 360;
   }, []);
   const {
     rightPanelMode,
@@ -219,6 +275,13 @@ export function AppLayout() {
     maxWidth: RIGHT_PANEL_MAX_WIDTH,
     getDefaultRightPanelWidth,
   });
+  // 模式变化时同步 ref 并按新模式重算默认宽度
+  useEffect(() => {
+    rightPanelModeRef.current = rightPanelMode;
+    if (rightPanelMode !== 'none') {
+      setRightPanelWidth(getDefaultRightPanelWidth());
+    }
+  }, [rightPanelMode, getDefaultRightPanelWidth, setRightPanelWidth]);
   const {
     file,
     openTabs,
@@ -261,16 +324,32 @@ export function AppLayout() {
     setEditorMode,
     extractToc,
   });
+  useEffect(() => {
+    setFoldedHeadings(new Set());
+  }, [activeTabId]);
   const debouncedStatsSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 260);
   const documentStats = useMemo(
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
     [debouncedStatsSource, file.fileType],
   );
+  const [defaultAiWorkspaceRoot, setDefaultAiWorkspaceRoot] = useState('');
+  useEffect(() => {
+    if (!isTauriRuntime) return;
+    let cancelled = false;
+    void import('@tauri-apps/api/path')
+      .then(({ homeDir }) => homeDir())
+      .then((path) => {
+        if (!cancelled) setDefaultAiWorkspaceRoot(path);
+      })
+      .catch((error) => console.warn('Failed to resolve default AI workspace:', error));
+    return () => {
+      cancelled = true;
+    };
+  }, [isTauriRuntime]);
   const effectiveAiWorkspaceRoot = useMemo(() => resolveWorkbenchWorkspaceRoot({
     configuredWorkspaceRoot: settings.aiWorkspaceRoot,
-    fileTreeRoot: workspaceRoot,
-    currentFilePath: file.path,
-  }), [file.path, settings.aiWorkspaceRoot, workspaceRoot]);
+    defaultWorkspaceRoot: workspaceRoot || defaultAiWorkspaceRoot,
+  }), [defaultAiWorkspaceRoot, settings.aiWorkspaceRoot, workspaceRoot]);
   const outputBaseDir = useMemo(() => (
     effectiveAiWorkspaceRoot
       ? joinLocalPath(effectiveAiWorkspaceRoot, '.typola-output')
@@ -307,15 +386,6 @@ export function AppLayout() {
     flowRightPanelWidth: FLOW_RIGHT_PANEL_WIDTH,
   });
 
-  const convManager = useConversationManager({
-    workspaceRoot: effectiveAiWorkspaceRoot,
-    agentProvider: settings.aiActiveProvider,
-    claudePath: settings.aiClaudePath,
-    claudeModel: settings.aiClaudeModel,
-    openCodePath: settings.aiOpenCodePath,
-    openCodeModel: settings.aiOpenCodeModel,
-    pluginDirs: settings.aiPluginDirs,
-  });
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
   const reviewStateApi = useReviewState(file.path);
   const [reviewEditor, setReviewEditor] = useState<{
@@ -343,6 +413,36 @@ export function AppLayout() {
     });
   }, [effectiveAiWorkspaceRoot, settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs]);
 
+  const { skillHub, skillHubError, handleSaveSkillHub, handleReloadSkillHub } = useSkillHubState();
+  // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
+  const [skillPrefill, setSkillPrefill] = useState<{ tick: number; text: string } | null>(null);
+  const {
+    agentChangedPaths,
+    workspaceTreeVersion,
+    rememberArtifact,
+    clearArtifacts: handleClearArtifacts,
+    forgetArtifact,
+    bumpWorkspaceTreeVersion,
+  } = useWorkspaceWatch({
+    isTauriRuntime,
+    watchRoot: outputBaseDir,
+    outputRoot: outputBaseDir,
+    lastSelfWriteRef,
+  });
+
+  const convManager = useConversationManager({
+    workspaceRoot: effectiveAiWorkspaceRoot,
+    agentProvider: settings.aiActiveProvider,
+    claudePath: settings.aiClaudePath,
+    claudeModel: settings.aiClaudeModel,
+    openCodePath: settings.aiOpenCodePath,
+    openCodeModel: settings.aiOpenCodeModel,
+    pluginDirs: settings.aiPluginDirs,
+    onArtifactFile: (artifact) => {
+      rememberArtifact(artifact.path);
+    },
+  });
+
   const {
     hasEditorSelection,
     handleInsertToEditor,
@@ -362,21 +462,6 @@ export function AppLayout() {
     convManager,
     runOneshot: runEditorOneshot,
     onReviewRequested: handleReviewRequested,
-  });
-  const { skillHub, skillHubError, handleSaveSkillHub, handleReloadSkillHub } = useSkillHubState();
-  // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
-  const [skillPrefill, setSkillPrefill] = useState<{ tick: number; text: string } | null>(null);
-  const {
-    agentChangedPaths,
-    workspaceTreeVersion,
-    clearArtifacts: handleClearArtifacts,
-    forgetArtifact,
-    bumpWorkspaceTreeVersion,
-  } = useWorkspaceWatch({
-    isTauriRuntime,
-    watchRoot: effectiveAiWorkspaceRoot,
-    outputRoot: outputBaseDir,
-    lastSelfWriteRef,
   });
 
   // AI 改稿列表:跟当前文档相关的 {stem}.ai改{N}.md。Claude 写文件时 agentChangedPaths 变化 → 自动重扫。
@@ -469,12 +554,25 @@ export function AppLayout() {
       const target = await saveFileDialog(defaultPath);
       if (!target) return;
       await writeTextFile(target, reviewMd);
+      await ensureArtifactManifest({
+        primaryFile: target,
+        outputRoot: outputBaseDir,
+        workspaceRoot: effectiveAiWorkspaceRoot,
+        sourceType: 'review_export',
+        documentPath: file.path,
+        documentName: file.name,
+        conversationId: convManager.activeConvId,
+        agentId: 'typola',
+        agentLabel: 'Typola',
+        title: `检视版 · ${file.name}`,
+      }).catch((manifestError) => console.warn('Failed to write review artifact manifest:', manifestError));
+      setArtifactLibraryRefreshKey((key) => key + 1);
       markClean();
       setTransientMessage(`已导出检视版:${target.split(/[\\/]/).pop()}`);
     } catch (error) {
       await messageDialog(String(error), { title: '导出失败' });
     }
-  }, [file.content, file.path, reviewStateApi]);
+  }, [convManager.activeConvId, effectiveAiWorkspaceRoot, file.content, file.name, file.path, outputBaseDir, reviewStateApi]);
 
   // 任务 #15 发 AI 改:把全文 + 所有意见拼成 prompt,新会话发送,走产物回流。
   // 文件命名约定:{stem}.ai改{N}.md(N 递增),所以每次发送前先扫一遍现有 N,取 max+1。
@@ -660,6 +758,28 @@ export function AppLayout() {
     // 后续按键打进文档(包括 Esc 再 Ctrl+F 后的 type 会破坏文档内容)。
     // searchOptions:透传到 WYSIWYG 模式的 findTextNodeRange + getSearchMatchOccurrenceIndex,
     // 让 IR 里的 case/regex/wholeWord 匹配跟 FindReplacePanel 的 findSearchMatches 完全一致。
+    //
+    // PR5:折叠区域内命中时先自动展开 — 否则命中位置不可视,scrollIntoView 也无意义。
+    // 用 collectHeadingSections 找覆盖 match 位置的最深 heading section,
+    // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
+    if (editorEngine === 'cm6' && editorMode === 'source') {
+      const sections = collectHeadingSections(file.content);
+      const matchStartLine = lineIndexAtOffset(file.content, match.index);
+      const coveringKeys: FoldKey[] = [];
+      for (const section of sections) {
+        if (section.headingLine <= matchStartLine && matchStartLine <= section.endLine) {
+          // 展开命中行所在的完整父链,否则只展开最深层时父 heading 仍可能折住内容。
+          coveringKeys.push(foldKey(section.level, section.text, section.sectionIndex));
+        }
+      }
+      if (coveringKeys.some((key) => foldedHeadings.has(key))) {
+        setFoldedHeadings((prev) => {
+          const next = new Set(prev);
+          for (const key of coveringKeys) next.delete(key);
+          return sameFoldSet(prev, next) ? prev : next;
+        });
+      }
+    }
     const text = editorMode === 'source' ? match.text : (query || match.text);
     editorCommandRef.current?.revealRange(match.index, match.index + match.length, {
       text,
@@ -667,23 +787,44 @@ export function AppLayout() {
       query,
       searchOptions,
     });
-  }, [editorMode]);
+  }, [editorEngine, editorMode, file.content, foldedHeadings]);
 
-  const insertMarkdown = useCallback((markdown: string) => {
+  // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
+  const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {
     if (fileRef.current.fileType === 'docx') return;
-    editorCommandRef.current?.insertText(markdown);
+    if (pos == null) {
+      editorCommandRef.current?.insertText(markdown);
+      return;
+    }
+    editorCommandRef.current?.insertTextAt(markdown, pos);
+  }, []);
+  const recentImageInsertRef = useRef<{ key: string; at: number } | null>(null);
+
+  // 把视口坐标映射到编辑器 doc 位置。drop / paste 场景使用。
+  const resolveInsertPosition = useCallback((clientX?: number, clientY?: number): number | null => {
+    if (clientX == null || clientY == null) return null;
+    return editorCommandRef.current?.posAtCoords(clientX, clientY) ?? null;
   }, []);
 
   // 三入口统一(粘贴 / 拖拽 / 选本地文件)→ 按 settings.imageInsertAction 走 keep/copy/upload
   // 三态。upload 失败回退本地复制,保证图片不丢。
+  // insertAt:外部 drop/paste 解析出的 doc 位置;null = 当前 selection 末尾。
   const insertImageFromSource = useCallback(async (source: {
     localPath?: string;
     bytes?: Uint8Array;
     fileName?: string;
     mime?: string;
-  }) => {
+  }, insertAt: number | null = null) => {
     const currentFile = fileRef.current;
     if (currentFile.fileType === 'docx') return;
+    const dedupeKey = source.localPath
+      ? `path:${source.localPath}`
+      : `blob:${source.fileName ?? ''}:${source.mime ?? ''}:${source.bytes?.byteLength ?? 0}`;
+    const now = Date.now();
+    if (recentImageInsertRef.current?.key === dedupeKey && now - recentImageInsertRef.current.at < 800) {
+      return;
+    }
+    recentImageInsertRef.current = { key: dedupeKey, at: now };
     if (!currentFile.path) {
       setTransientMessage('请先保存文档，再插入图片。');
       return;
@@ -716,7 +857,7 @@ export function AppLayout() {
     try {
       if (action === 'keep' && source.localPath) {
         const src = formatImageSrc(source.localPath, currentFile.path, settings);
-        insertMarkdown(createImageMarkdown('图片', src));
+        insertMarkdownAt(createImageMarkdown('图片', src), insertAt);
         return;
       }
 
@@ -735,26 +876,26 @@ export function AppLayout() {
           const [url] = uploadResult.urls.length > 0
             ? uploadResult.urls
             : parseUploadUrls(uploadResult.rawStdout, 1);
-          insertMarkdown(createImageMarkdown('图片', url));
+          insertMarkdownAt(createImageMarkdown('图片', url), insertAt);
           setTransientMessage('图片已上传。');
           return;
         } catch (error) {
           console.warn('Image upload failed, falling back to copy:', error);
           setTransientMessage('图片上传失败，已回退为本地复制。');
           const copied = source.localPath ? await copyImage() : uploadPath;
-          insertMarkdown(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)));
+          insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)), insertAt);
           return;
         }
       }
 
       const copiedPath = await copyImage();
-      insertMarkdown(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)));
+      insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)), insertAt);
       setTransientMessage(`图片已保存到 ${copyDestination}。`);
     } catch (error) {
       console.warn('Failed to insert image:', error);
       setTransientMessage('图片插入失败。');
     }
-  }, [insertMarkdown, settings]);
+  }, [insertMarkdownAt, settings]);
 
   // 工具栏/菜单「插入本地图片」入口:打开系统文件对话框 → 走 insertImageFromSource。
   const handleSelectLocalImage = useCallback(async () => {
@@ -838,18 +979,18 @@ export function AppLayout() {
 
   const handlePasteImage = useCallback(async (event: ClipboardEvent) => {
     if (fileRef.current.fileType === 'docx') return;
+    const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    event.preventDefault();
+    event.stopPropagation();
     if (!fileRef.current.path) {
-      const hasImage = Array.from(event.clipboardData?.items ?? []).some((item) => item.type.startsWith('image/'));
-      if (hasImage) setTransientMessage('请先保存文档，再粘贴图片。');
+      setTransientMessage('请先保存文档，再粘贴图片。');
       return;
     }
 
-    const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
-    if (!imageItem) return;
     const blob = imageItem.getAsFile();
     if (!blob) return;
 
-    event.preventDefault();
     try {
       const extension = imageExtensionFromMime(blob.type);
       const fileName = `pasted-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
@@ -857,12 +998,12 @@ export function AppLayout() {
         bytes: new Uint8Array(await blob.arrayBuffer()),
         fileName,
         mime: blob.type,
-      });
+      }, resolveInsertPosition());
     } catch (error) {
       console.warn('Failed to paste image:', error);
       setTransientMessage('图片粘贴失败。');
     }
-  }, [insertImageFromSource]);
+  }, [insertImageFromSource, resolveInsertPosition]);
 
   const startBackgroundUpdateDownload = useCallback((source: UpdateSource, update: AvailableUpdate) => {
     if (updateDownloadVersionRef.current === update.version) return;
@@ -982,11 +1123,16 @@ export function AppLayout() {
       e.stopPropagation();
       const items = e.dataTransfer?.files;
       if (!items || items.length === 0) return;
+      if (isTauriRuntime) {
+        return;
+      }
       const f = items[0];
       const path = (f as unknown as { path?: string }).path;
+      // drop 落点 → CM6 pos;落点在编辑器外时回退到当前 selection(insertAt=null)。
+      const insertAt = resolveInsertPosition(e.clientX, e.clientY);
       // 优先识别图片:本地路径 or mime type
       if (path && isImagePath(path)) {
-        await insertImageFromSource({ localPath: path });
+        await insertImageFromSource({ localPath: path }, insertAt);
         return;
       }
       if (f.type.startsWith('image/')) {
@@ -994,7 +1140,7 @@ export function AppLayout() {
           bytes: new Uint8Array(await f.arrayBuffer()),
           fileName: f.name,
           mime: f.type,
-        });
+        }, insertAt);
         return;
       }
       if (path && isOpenableDocumentPath(path)) await handleOpenPath(path);
@@ -1006,7 +1152,17 @@ export function AppLayout() {
       window.removeEventListener('dragover', prevent);
       window.removeEventListener('drop', handler);
     };
-  }, [handleOpenPath, insertImageFromSource]);
+  }, [handleOpenPath, insertImageFromSource, isTauriRuntime, resolveInsertPosition]);
+
+  // 跟踪最后鼠标位置,Tauri drop 不传坐标时 fallback 用。
+  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const track = (e: MouseEvent) => {
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', track);
+    return () => window.removeEventListener('mousemove', track);
+  }, []);
 
   useEffect(() => {
     window.addEventListener('paste', handlePasteImage);
@@ -1022,9 +1178,12 @@ export function AppLayout() {
     void getCurrentWindow()
       .onDragDropEvent((event) => {
         if (event.payload.type !== 'drop') return;
+        const payload = event.payload as typeof event.payload & { position?: { x: number; y: number } };
+        const mouse = payload.position ?? lastMousePosRef.current;
+        const insertAt = mouse ? resolveInsertPosition(mouse.x, mouse.y) : null;
         const imagePath = event.payload.paths.find(isImagePath);
         if (imagePath) {
-          void insertImageFromSource({ localPath: imagePath });
+          void insertImageFromSource({ localPath: imagePath }, insertAt);
           return;
         }
         const path = firstOpenableDocumentPath(event.payload.paths);
@@ -1043,7 +1202,7 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
     };
-  }, [handleOpenPath, isTauriRuntime]);
+  }, [handleOpenPath, insertImageFromSource, isTauriRuntime, resolveInsertPosition]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1146,6 +1305,116 @@ export function AppLayout() {
     onOpenPath: handleOpenPath,
     onTransientMessage: setTransientMessage,
   });
+  const [artifactLibraryRefreshKey, setArtifactLibraryRefreshKey] = useState(0);
+  const { records: artifactRecords, refresh: refreshArtifactLibrary } = useArtifactLibrary({
+    outputRoot: outputBaseDir,
+    refreshKey: `${artifactLibraryRefreshKey}:${agentChangedPaths.size}:${convManager.activeConvId}:${file.path}`,
+  });
+
+  useEffect(() => {
+    if (!outputBaseDir || agentChangedPaths.size === 0) return;
+    const active = convManager.activeConv;
+    const paths = [...agentChangedPaths.keys()];
+    void Promise.all(paths.map((path) => {
+      const name = path.split(/[\\/]/).pop() ?? '';
+      const sourceType = /\.ai改\d+\.md$/u.test(name) ? 'review_ai_edit' : 'flow_generation';
+      return ensureArtifactManifest({
+        primaryFile: path,
+        outputRoot: outputBaseDir,
+        workspaceRoot: effectiveAiWorkspaceRoot,
+        sourceType,
+        documentPath: file.path || undefined,
+        documentName: file.path ? file.name : undefined,
+        conversationId: convManager.activeConvId,
+        agentId: active?.provider,
+        agentLabel: active?.provider === 'opencode' ? 'OpenCode' : 'Claude Code',
+        model: active?.currentModel,
+      }).catch((error) => console.warn('Failed to ensure artifact manifest:', error));
+    }))
+      .then(() => setArtifactLibraryRefreshKey((key) => key + 1));
+  }, [agentChangedPaths, convManager.activeConv, convManager.activeConvId, effectiveAiWorkspaceRoot, file.name, file.path, outputBaseDir]);
+
+  const handleDeleteArtifact = useCallback(async (path: string) => {
+    const confirmed = await confirmDialog(`确定删除「${path.split(/[\\/]/).pop()}」？删除后不可恢复。`, {
+      title: '删除产物',
+      okLabel: '删除',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('delete_artifact_file', { request: { path, workspaceRoot: effectiveAiWorkspaceRoot ?? '' } });
+      forgetArtifact(path);
+      setArtifactLibraryRefreshKey((key) => key + 1);
+      setTransientMessage(`已删除:${path.split(/[\\/]/).pop()}`);
+    } catch (error) {
+      await messageDialog(String(error), { title: '删除失败' });
+    }
+  }, [effectiveAiWorkspaceRoot, forgetArtifact]);
+
+  const handleOverwriteArtifact = useCallback(async (record: ArtifactRecord) => {
+    const targetPath = record.manifest.source.documentPath || file.path;
+    if (!targetPath) {
+      await messageDialog('未找到可覆盖的原文档。请先打开目标文档后再试。', { title: '覆盖原文' });
+      return;
+    }
+    if (file.dirty && targetPath.replace(/\\/g, '/') === file.path.replace(/\\/g, '/')) {
+      await messageDialog('当前文档有未保存改动。请先保存后再覆盖，避免覆盖掉你的手写修改。', { title: '覆盖原文' });
+      return;
+    }
+    const confirmed = await confirmDialog(`将用「${record.manifest.title}」覆盖原文档，并自动保存一份可撤销备份。\n\n目标:${targetPath}`, {
+      title: '覆盖原文',
+      okLabel: '覆盖',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke<string>('overwrite_artifact_to_document', {
+        request: {
+          artifactPath: record.manifest.primaryFile,
+          targetPath,
+          workspaceRoot: effectiveAiWorkspaceRoot,
+          expectedDocumentPath: record.manifest.source.documentPath || file.path || undefined,
+        },
+      });
+      setArtifactLibraryRefreshKey((key) => key + 1);
+      await handleOpenPath(targetPath);
+      setTransientMessage('已覆盖原文，可在产物卡片中撤销');
+    } catch (error) {
+      await messageDialog(String(error), { title: '覆盖失败' });
+    }
+  }, [effectiveAiWorkspaceRoot, file.dirty, file.path, handleOpenPath]);
+
+  const handleUndoArtifactOverwrite = useCallback(async (record: ArtifactRecord) => {
+    const targetPath = record.manifest.overwrite?.targetPath || record.manifest.source.documentPath || file.path;
+    if (!targetPath) {
+      await messageDialog('未找到要恢复的原文档。', { title: '撤销覆盖' });
+      return;
+    }
+    const confirmed = await confirmDialog(`确定撤销覆盖并恢复备份？\n\n目标:${targetPath}`, {
+      title: '撤销覆盖',
+      okLabel: '撤销覆盖',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke<string>('undo_artifact_overwrite', {
+        request: {
+          artifactPath: record.manifest.primaryFile,
+          targetPath,
+          workspaceRoot: effectiveAiWorkspaceRoot,
+          expectedDocumentPath: record.manifest.source.documentPath || file.path || undefined,
+        },
+      });
+      setArtifactLibraryRefreshKey((key) => key + 1);
+      await handleOpenPath(targetPath);
+      setTransientMessage('已撤销覆盖并恢复原文');
+    } catch (error) {
+      await messageDialog(String(error), { title: '撤销失败' });
+    }
+  }, [effectiveAiWorkspaceRoot, file.path, handleOpenPath]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1198,6 +1467,21 @@ export function AppLayout() {
         onBack={() => setHtmlPresentationVisible(false)}
       />
     </Suspense>
+  ) : editorEngine === 'cm6' ? (
+    <Suspense fallback={<div className="cm6-markdown-editor-pane lazy-pane"><span>CM6 编辑器加载中</span></div>}>
+      <Cm6MarkdownEditorPane
+        ref={editorCommandRef}
+        source={file.content}
+        onChange={handleContentChange}
+        headingScrollRequest={sourceHeadingScrollRequest}
+        filePath={file.path}
+        onScrollRatio={handleEditorScrollRatio}
+        onAIAction={handleEditorAIAction}
+        onPreviewHeadingChange={handleEditorHeadingChange}
+        foldedHeadings={foldedHeadings}
+        onFoldChange={handleEditorFoldChange}
+      />
+    </Suspense>
   ) : (
     <Suspense fallback={<div className="wysiwyg-editor-pane lazy-pane"><span>所见即所得编辑器加载中</span></div>}>
       <WysiwygEditorPane
@@ -1222,6 +1506,7 @@ export function AppLayout() {
         onExportWord={handleExportWord}
         onClose={() => setRightPanelMode('none')}
         filePath={file.path}
+        onPreviewHeadingScroll={handlePreviewHeadingScroll}
       />
     </Suspense>
   ) : rightPanelMode === 'wechat' && !isDocx ? (
@@ -1232,6 +1517,7 @@ export function AppLayout() {
         fileName={file.name}
         onClose={() => setRightPanelMode('none')}
         filePath={file.path}
+        onPreviewHeadingScroll={handlePreviewHeadingScroll}
       />
     </Suspense>
   ) : rightPanelMode === 'flow' && !isDocx ? (
@@ -1255,7 +1541,12 @@ export function AppLayout() {
       dirty={reviewStateApi.state.dirty}
       currentFilePath={file.path}
       onJump={(comment: ReviewComment) => {
-        editorCommandRef.current?.revealText(comment.anchor.originalText);
+        // 用 anchor 保存的 from/to 直接定位 — 比 revealText(originalText) 更稳:
+        // 1) 不依赖文档未修改;2) 即使原文出现多次也跳到创建时的精确位置。
+        // preserveFocus 让检视面板保留焦点,用户可以连续点多个意见。
+        editorCommandRef.current?.revealRange(comment.anchor.from, comment.anchor.to, {
+          preserveFocus: true,
+        });
       }}
       onEdit={(comment: ReviewComment) => {
         setReviewEditor({
@@ -1273,6 +1564,19 @@ export function AppLayout() {
       onOpenRevision={(path) => { void handleOpenPath(path).catch((e) => console.warn('Failed to open AI revision:', e)); }}
       onReviewRevision={(path) => { void handleReviewRevision(path); }}
       onRefreshRevisions={refreshRevisions}
+      onClose={() => setRightPanelMode('none')}
+    />
+  ) : rightPanelMode === 'artifacts' && !isDocx ? (
+    <ArtifactCenterPanel
+      records={artifactRecords}
+      activeConversationId={convManager.activeConvId}
+      onOpen={(path) => { void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error)); }}
+      onCompare={(path) => { void handleReviewRevision(path); }}
+      onArchive={(path) => { void handleArchiveArtifact(path); setArtifactLibraryRefreshKey((key) => key + 1); }}
+      onDelete={(path) => { void handleDeleteArtifact(path); }}
+      onOverwrite={(record) => { void handleOverwriteArtifact(record); }}
+      onUndoOverwrite={(record) => { void handleUndoArtifactOverwrite(record); }}
+      onRefresh={refreshArtifactLibrary}
       onClose={() => setRightPanelMode('none')}
     />
   ) : null;
@@ -1302,6 +1606,7 @@ export function AppLayout() {
           workspacePanelVisible: leftRailMode === 'workspace',
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
+          artifactsVisible: rightPanelMode === 'artifacts',
           reviewDirty: reviewStateApi.state.dirty,
           terminalVisible,
           editingDisabled: isDocx,
@@ -1310,6 +1615,7 @@ export function AppLayout() {
           onToggleWorkspacePanel: handleToggleWorkspacePanel,
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
+          onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
           onToggleTerminal: handleToggleTerminal,
           onSetDocMode: (next) => void setDocMode(next),
           onNew: handleNewFile,
@@ -1473,22 +1779,7 @@ export function AppLayout() {
                 void handleArchiveArtifact(path);
               }}
               onDeleteFile={(path) => {
-                void (async () => {
-                  const confirmed = await confirmDialog(`确定删除「${path.split(/[\\/]/).pop()}」？删除后不可恢复。`, {
-                    title: '删除产物',
-                    okLabel: '删除',
-                    cancelLabel: '取消',
-                  });
-                  if (!confirmed) return;
-                  try {
-                    const { invoke } = await import('@tauri-apps/api/core');
-                    await invoke('delete_artifact_file', { request: { path, workspaceRoot: effectiveAiWorkspaceRoot ?? '' } });
-                    forgetArtifact(path);
-                    setTransientMessage(`已删除：${path.split(/[\\/]/).pop()}`);
-                  } catch (error) {
-                    await messageDialog(String(error), { title: '删除失败' });
-                  }
-                })();
+                void handleDeleteArtifact(path);
               }}
               onClose={handleClearArtifacts}
             />
@@ -1579,4 +1870,11 @@ export function AppLayout() {
       />
     </>
   );
+}
+
+function sameFoldSet(a: ReadonlySet<FoldKey>, b: ReadonlySet<FoldKey>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const key of a) if (!b.has(key)) return false;
+  return true;
 }

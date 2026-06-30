@@ -29,13 +29,15 @@ type HarnessApi = ReturnType<typeof useConversationManager>;
 function Harness({
   workspaceRoot,
   agentProvider,
+  onArtifactFile,
   expose,
 }: {
   workspaceRoot: string;
   agentProvider: AgentProvider;
+  onArtifactFile?: Parameters<typeof useConversationManager>[0]['onArtifactFile'];
   expose: (api: HarnessApi) => void;
 }) {
-  const api = useConversationManager({ workspaceRoot, agentProvider });
+  const api = useConversationManager({ workspaceRoot, agentProvider, onArtifactFile });
   useEffect(() => expose(api), [api, expose]);
   return null;
 }
@@ -101,10 +103,11 @@ describe('useConversationManager', () => {
     expect(headlessMock.resumeAgentSession).not.toHaveBeenCalled();
     expect(headlessMock.startAgentSession.mock.calls[0][0]).toMatchObject({
       provider: 'opencode',
-      prompt: '读取当前文档',
+      prompt: expect.stringContaining('读取当前文档'),
       cwd: expect.stringContaining(String.raw`D:\md files\.typola-output\conv-`),
       promptContextPaths: [String.raw`D:\md files\杭州景区.md`],
     });
+    expect(headlessMock.startAgentSession.mock.calls[0][0].prompt).toContain('必须只写入当前进程工作目录');
   });
 
   it('passes the OpenCode skill conversation as commandName', async () => {
@@ -128,11 +131,13 @@ describe('useConversationManager', () => {
     });
 
     expect(headlessMock.startAgentSession).toHaveBeenCalledTimes(1);
-    expect(headlessMock.startAgentSession.mock.calls[0][0]).toMatchObject({
+    const request = headlessMock.startAgentSession.mock.calls[0][0];
+    expect(request).toMatchObject({
       provider: 'opencode',
-      prompt: '生成一页演示稿',
       commandName: 'frontend-slides',
     });
+    expect(request.prompt).toContain('生成一页演示稿');
+    expect(request.prompt).toContain('[Typola 产物写入规则]');
   });
 
   it('drops late stdout from a cancelled run', async () => {
@@ -177,5 +182,51 @@ describe('useConversationManager', () => {
       message.role === 'assistant' && message.content.includes('late output')
     ))).toBe(false);
     expect(api?.runState).toBe('idle');
+  });
+
+  it('routes relative artifact_file events into the conversation output directory', async () => {
+    const onArtifactFile = vi.fn();
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          onArtifactFile={onArtifactFile}
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('write artifact');
+    });
+    const request = headlessMock.startAgentSession.mock.calls[0][0];
+
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: request.conversationId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({
+          type: 'tool_use',
+          part: {
+            type: 'tool',
+            callID: 'toolu_write',
+            tool: 'write',
+            state: {
+              status: 'completed',
+              input: { filePath: 'draft.md', content: '# Draft\n' },
+              output: 'created',
+            },
+          },
+        }),
+      });
+    });
+
+    expect(onArtifactFile).toHaveBeenCalledWith({
+      path: `D:\\md files\\.typola-output\\${request.conversationId}\\draft.md`,
+      content: '# Draft\n',
+      toolName: 'Write',
+    });
   });
 });

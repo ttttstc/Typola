@@ -1,12 +1,11 @@
 import {
   getAgentRuntimeDef,
-  isAgentRuntimeId,
+  isExecutableAgentRuntimeId,
   listAgentRuntimeDefs,
-  normalizeAgentRuntimeId,
 } from './runtime/registry';
-import type { AgentRuntimeId } from './runtime/types';
+import type { AgentRuntimeDef, AgentRuntimeId } from './runtime/types';
 
-export type AgentProvider = AgentRuntimeId;
+export type AgentProvider = Exclude<AgentRuntimeId, 'codex'>;
 
 export const DEFAULT_AGENT_PROVIDER: AgentProvider = 'claude';
 
@@ -16,25 +15,31 @@ export type AgentProviderConfig = {
   defaultCommand: string;
 };
 
-export const AGENT_PROVIDERS: AgentProviderConfig[] = listAgentRuntimeDefs().map((runtime) => ({
-  id: runtime.id,
-  label: runtime.label,
-  defaultCommand: runtime.defaultCommand,
-}));
+function isSendableRuntime(runtime: AgentRuntimeDef): runtime is AgentRuntimeDef & { id: AgentProvider } {
+  return !runtime.detectionOnly && isExecutableAgentRuntimeId(runtime.id);
+}
+
+export const AGENT_PROVIDERS: AgentProviderConfig[] = listAgentRuntimeDefs()
+  .filter(isSendableRuntime)
+  .map((runtime) => ({
+    id: runtime.id,
+    label: runtime.label,
+    defaultCommand: runtime.defaultCommand,
+  }));
 
 export function getAgentProviderConfig(provider: AgentProvider): AgentProviderConfig {
   const runtime = getAgentRuntimeDef(provider);
   return {
-    id: runtime.id,
+    id: provider,
     label: runtime.label,
     defaultCommand: runtime.defaultCommand,
   };
 }
 
 export function isAgentProvider(value: unknown): value is AgentProvider {
-  return isAgentRuntimeId(value);
+  return isExecutableAgentRuntimeId(value);
 }
 
 export function normalizeAgentProvider(value: unknown): AgentProvider {
-  return normalizeAgentRuntimeId(value);
+  return isAgentProvider(value) ? value : 'claude';
 }

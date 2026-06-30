@@ -5,24 +5,21 @@ describe('resolveWorkbenchWorkspaceRoot', () => {
   it('prefers the explicitly configured AI workspace', () => {
     expect(resolveWorkbenchWorkspaceRoot({
       configuredWorkspaceRoot: 'D:\\ai-workspace',
-      fileTreeRoot: 'D:\\file-tree',
-      currentFilePath: 'D:\\docs\\current.md',
+      defaultWorkspaceRoot: 'D:\\default-workspace',
     })).toBe('D:\\ai-workspace');
   });
 
-  it('falls back to the file tree root when no AI workspace is configured', () => {
+  it('falls back to the default workspace when no AI workspace is configured', () => {
     expect(resolveWorkbenchWorkspaceRoot({
       configuredWorkspaceRoot: '',
-      fileTreeRoot: 'D:\\file-tree',
-      currentFilePath: 'D:\\docs\\current.md',
-    })).toBe('D:\\file-tree');
+      defaultWorkspaceRoot: 'D:\\default-workspace',
+    })).toBe('D:\\default-workspace');
   });
 
-  it('falls back to the current document directory when no workspace root is available', () => {
+  it('returns undefined when neither configured nor default workspace is available', () => {
     expect(resolveWorkbenchWorkspaceRoot({
       configuredWorkspaceRoot: '',
-      fileTreeRoot: '',
-      currentFilePath: 'D:\\docs\\current.md',
-    })).toBe('D:\\docs');
+      defaultWorkspaceRoot: '',
+    })).toBeUndefined();
   });
 });

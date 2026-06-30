@@ -8,3 +8,15 @@ The adapted files are located under src/services/agent/ and are based on:
 
 Open Design is licensed under the Apache License, Version 2.0.
 Copyright belongs to the Open Design authors.
+
+Typola includes @atomic-editor/editor (https://www.npmjs.com/package/@atomic-editor/editor)
+for the experimental CodeMirror 6 live-preview editor path.
+
+@atomic-editor/editor is licensed under the MIT License.
+Copyright belongs to the @atomic-editor/editor contributors.
+
+Typola includes KaTeX (https://katex.org/) for math rendering in Markdown previews
+and the experimental CodeMirror 6 live-preview editor path.
+
+KaTeX is licensed under the MIT License.
+Copyright (c) 2013-2020 Khan Academy and other contributors.

@@ -43,10 +43,19 @@ describe('Tauri capabilities', () => {
     expect(permissions).toEqual(expect.arrayContaining([
       'fs:allow-read-file',
       'fs:allow-write-file',
+      'fs:allow-read-dir',
+      'fs:allow-mkdir',
+      'fs:allow-stat',
     ]));
     expect(permissions).toContainEqual(expect.objectContaining({
       identifier: 'fs:scope',
-      allow: expect.arrayContaining(['$DOCUMENT/**', '$DOWNLOAD/**', '$DESKTOP/**']),
+      allow: expect.arrayContaining([
+        '$DOCUMENT/**',
+        '$DOWNLOAD/**',
+        '$DESKTOP/**',
+        '$HOME/.typola-output/**',
+        '$HOME/**/.typola-output/**',
+      ]),
     }));
   });
 

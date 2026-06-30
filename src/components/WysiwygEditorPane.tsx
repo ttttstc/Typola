@@ -16,7 +16,7 @@ import {
   findClickedTaskIndex,
   toggleTaskLine,
 } from '../services/taskListClickHandler';
-import type { EditorCommandHandle } from '../types/editorCommands';
+import type { EditorCoreHandle } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
 import type { SelectionActionId } from '../services/agent/selectionActions';
@@ -213,7 +213,7 @@ type WindowWithFind = Window & {
 // 选区浮条抑制时长 —— 见 revealRange 内注释。
 const FLOATING_BAR_SETTLE_MS = 250;
 
-export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
+export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
   { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
   ref,
 ) {
@@ -780,6 +780,20 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
     focus() {
       editorRef.current?.focus();
     },
+    getMarkdown() {
+      return editorRef.current?.getValue() ?? latestSource.current;
+    },
+    setMarkdown(markdown: string) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      applyingExternalValue.current = true;
+      editor.setValue(markdown, true);
+      lastEmittedValue.current = markdown;
+      onChange(markdown);
+      window.requestAnimationFrame(() => {
+        applyingExternalValue.current = false;
+      });
+    },
     insertText(text: string) {
       const editor = editorRef.current;
       if (!editor) return;
@@ -788,6 +802,21 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       const value = editor.getValue();
       lastEmittedValue.current = value;
       onChange(value);
+    },
+    insertTextAt(text: string, _pos: number) {
+      // WYSIWYG 没有显式 doc 位置概念;退化为当前光标插入,
+      // 让图片插入契约在 Vditor fallback 路径上仍能调用。
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      editor.insertValue(text, true);
+      const value = editor.getValue();
+      lastEmittedValue.current = value;
+      onChange(value);
+    },
+    posAtCoords(_x: number, _y: number) {
+      // WYSIWYG 不暴露 pos;返回 null 让 drop handler 回退到当前 selection 末尾。
+      return null;
     },
     getSelection() {
       const range = getSavedOrCurrentSelection();
@@ -896,6 +925,10 @@ export const WysiwygEditorPane = forwardRef<EditorCommandHandle, WysiwygEditorPa
       const find = (window as WindowWithFind).find;
       if (!text || typeof find !== 'function') return;
       find(text, false, backwards, true, false, false, false);
+    },
+    setZoom(_size: number) {
+      // Vditor 时代的字号通过 settings.editorFontSize + Vditor 自己的字号渲染
+      // 控制,无需运行时 dispatch;这里保留契约签名,不做事。
     },
     undoLastAIReplacement() {
       const editor = editorRef.current;

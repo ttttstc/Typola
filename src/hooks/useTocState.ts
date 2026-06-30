@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { TocItem } from '../types/document';
 import { updateSettings } from '../services/settingsService';
+import type { EditorEngine } from '../types/editorCore';
 import type { EditorMode } from '../components/Toolbar';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 
 type UseTocStateOptions = {
   editorMode: EditorMode;
+  editorEngine: EditorEngine;
   alwaysPinned: boolean;
   mainContentRef: MutableRefObject<HTMLDivElement | null>;
   resolveTocHeading: (item: TocItem, index: number) => HTMLElement | null;
@@ -28,6 +30,7 @@ type UseTocStateResult = {
  */
 export function useTocState({
   editorMode,
+  editorEngine,
   alwaysPinned,
   mainContentRef,
   resolveTocHeading,
@@ -40,7 +43,12 @@ export function useTocState({
   const tocPinned = tocSessionPinned || alwaysPinned;
 
   const handleTocNavigate = useCallback((item: TocItem, index: number) => {
-    if (editorMode === 'source') {
+    // CM6 引擎(包括 WYSIWYG 模式下渲染 Cm6MarkdownEditorPane)没有 .cm-content h1..h6
+    // 这种真实 DOM 元素,只能走位置驱动的 setSourceHeadingScrollRequest(由 EditorPane
+    // 内部用 lezer 语法树算 from 再 scrollIntoView)。
+    // Vditor 引擎才有渲染出来的 heading DOM,可以走 scrollIntoView。
+    const usePositionNav = editorEngine === 'cm6' || editorMode === 'source';
+    if (usePositionNav) {
       setSourceHeadingScrollRequest((current) => ({
         index,
         requestId: (current?.requestId ?? 0) + 1,
@@ -52,7 +60,7 @@ export function useTocState({
     const target = resolveTocHeading(item, index);
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveTocIndex(index);
-  }, [editorMode, resolveTocHeading, setSourceHeadingScrollRequest]);
+  }, [editorEngine, editorMode, resolveTocHeading, setSourceHeadingScrollRequest]);
 
   const handleTocPinnedChange = useCallback((nextPinned: boolean) => {
     setTocSessionPinned(nextPinned);

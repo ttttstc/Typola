@@ -7,12 +7,14 @@
  */
 
 import { claudeRuntimeDef } from './defs/claude';
+import { codexRuntimeDef } from './defs/codex';
 import { opencodeRuntimeDef } from './defs/opencode';
 import type { AgentRuntimeDef, AgentRuntimeId } from './types';
 
 const RUNTIME_DEFS: AgentRuntimeDef[] = [
   claudeRuntimeDef,
   opencodeRuntimeDef,
+  codexRuntimeDef,
 ];
 
 const runtimeIds = new Set<AgentRuntimeId>();
@@ -32,6 +34,10 @@ export function getAgentRuntimeDef(id: AgentRuntimeId): AgentRuntimeDef {
 }
 
 export function isAgentRuntimeId(value: unknown): value is AgentRuntimeId {
+  return value === 'claude' || value === 'opencode' || value === 'codex';
+}
+
+export function isExecutableAgentRuntimeId(value: unknown): value is Exclude<AgentRuntimeId, 'codex'> {
   return value === 'claude' || value === 'opencode';
 }
 

@@ -22,5 +22,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["../src"],
-  "exclude": ["../src/**/*.test.ts", "../src/**/*.test.tsx"]
+  "exclude": ["../src/**/*.test.ts", "../src/**/*.test.tsx", "../src/experimental/cm6-editor-spike/candidates/**"]
 }

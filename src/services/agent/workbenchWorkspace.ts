@@ -1,9 +1,6 @@
-import { directoryFromPath } from '../terminalService';
-
 export type WorkbenchWorkspaceInputs = {
   configuredWorkspaceRoot?: string;
-  fileTreeRoot?: string;
-  currentFilePath?: string;
+  defaultWorkspaceRoot?: string;
 };
 
 function nonEmpty(value?: string): string | undefined {
@@ -13,10 +10,8 @@ function nonEmpty(value?: string): string | undefined {
 
 export function resolveWorkbenchWorkspaceRoot({
   configuredWorkspaceRoot,
-  fileTreeRoot,
-  currentFilePath,
+  defaultWorkspaceRoot,
 }: WorkbenchWorkspaceInputs): string | undefined {
   return nonEmpty(configuredWorkspaceRoot)
-    ?? nonEmpty(fileTreeRoot)
-    ?? directoryFromPath(nonEmpty(currentFilePath));
+    ?? nonEmpty(defaultWorkspaceRoot);
 }

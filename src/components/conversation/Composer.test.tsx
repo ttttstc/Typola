@@ -324,7 +324,13 @@ describe('Composer', () => {
       );
     });
 
-    const picker = host.querySelector<HTMLElement>('.conversation-provider-picker');
+    const trigger = host.querySelector<HTMLButtonElement>('.avatar-agent-trigger');
+    expect(trigger).toBeTruthy();
+    await act(async () => {
+      trigger!.click();
+    });
+
+    const picker = host.querySelector<HTMLElement>('.agent-provider-popover');
     const openCodeButton = Array.from(picker?.querySelectorAll('button') ?? [])
       .find((button) => button.textContent?.includes('OpenCode'));
     expect(openCodeButton).toBeTruthy();
@@ -333,6 +339,33 @@ describe('Composer', () => {
     });
 
     expect(onSwitchProvider).toHaveBeenCalledWith('opencode');
+  });
+
+  it('shows Codex in the provider menu as detection-only', async () => {
+    const onSwitchProvider = vi.fn();
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="claude"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={onSwitchProvider}
+          onSend={() => undefined}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.avatar-agent-trigger')?.click();
+    });
+
+    const codex = Array.from(host.querySelectorAll<HTMLButtonElement>('.agent-provider-option'))
+      .find((button) => button.textContent?.includes('Codex'));
+    expect(codex).toBeTruthy();
+    expect(codex?.disabled).toBe(true);
+    expect(codex?.textContent).toContain('暂不支持发送');
   });
 
   it('uses OpenCode copy when OpenCode is the active provider', () => {
@@ -355,5 +388,81 @@ describe('Composer', () => {
     expect(textarea?.placeholder).not.toContain('Claude');
     expect(host.textContent).toContain('OpenCode');
     expect(host.textContent).toContain('默认模型');
+  });
+
+  it('handles local slash commands without sending them to the agent', async () => {
+    const onSend = vi.fn();
+    const onClearConversation = vi.fn();
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="claude"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
+          onClearConversation={onClearConversation}
+          onSend={onSend}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+    const send = host.querySelector<HTMLButtonElement>('button[title*="Ctrl+Enter"]');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, '/clear');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      send?.click();
+    });
+
+    expect(onClearConversation).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('opens MCP panel and command help from slash commands', async () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="claude"
+          cwd="D:\\docs"
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
+          onSend={onSend}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+    const send = host.querySelector<HTMLButtonElement>('button[title*="Ctrl+Enter"]');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+
+    await act(async () => {
+      setter?.call(textarea, '/mcp');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      send?.click();
+    });
+    expect(host.textContent).toContain('MCP');
+    expect(onSend).not.toHaveBeenCalled();
+
+    await act(async () => {
+      setter?.call(textarea, '/help');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      send?.click();
+    });
+    expect(host.textContent).toContain('可用命令');
+    expect(host.textContent).toContain('/clear');
+    expect(onSend).not.toHaveBeenCalled();
   });
 });

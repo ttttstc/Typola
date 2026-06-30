@@ -70,6 +70,19 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['src/experimental/cm6-editor-spike/candidates/**'],
     setupFiles: ['./src/test/setupVitest.ts'],
+    server: {
+      deps: {
+        inline: ['@atomic-editor/editor'],
+      },
+    },
+    deps: {
+      optimizer: {
+        client: {
+          include: ['@atomic-editor/editor'],
+        },
+      },
+    },
   },
 })

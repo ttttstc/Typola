@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { EditorCommandHandle } from '../types/editorCommands';
+import type { EditorCoreHandle } from '../types/editorCore';
 import {
   SELECTION_ACTIONS,
   buildInjectionText,
@@ -45,7 +45,7 @@ const INPUT_PRE_ACTIONS: ReadonlyArray<SelectionActionId> = ['polish'];
 type RunOneshot = (prompt: string, signal: AbortSignal) => Promise<string>;
 
 type UseEditorSelectionBridgeOptions = {
-  editorCommandRef: MutableRefObject<EditorCommandHandle | null>;
+  editorCommandRef: MutableRefObject<EditorCoreHandle | null>;
   setLeftRailMode: Dispatch<SetStateAction<LeftRailMode>>;
   convManager: ConversationBridge;
   /** AppLayout 装填的 oneshot 调用 wrapper(已绑定 cwd/agentPath/...);

@@ -1,14 +1,12 @@
-import { forwardRef, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { ClipboardCopy, FileOutput, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
-import { detectMarkdownRenderFeatures } from '../services/markdownFeatureDetector';
 import { translate } from '../services/i18n';
 import {
   listEnabledHtmlExportPresets,
   setHtmlExportPreset,
 } from '../services/settingsService';
-import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import {
   copyWechatPreviewToClipboard,
   createHtmlExportArticleStyles,
@@ -18,14 +16,14 @@ import {
 } from '../services/wechatPreviewService';
 import { getHtmlExportPresetDefinition } from '../services/htmlExportPresets';
 import type { HtmlExportPresetId } from '../services/htmlExportPresets';
-import { resolveLocalImages } from '../services/localImageResolver';
-import { renderMermaidIn } from '../services/mermaidRenderer';
+import { markdownToExportHtml } from '../services/markdownExportRenderer';
 
 type WechatPreviewPaneProps = {
   source: string;
   fileName?: string;
   onClose: () => void;
   filePath?: string;
+  onPreviewHeadingScroll?: (change: { index: number; withinRatio: number }) => void;
 };
 
 type ActionStatus = {
@@ -35,7 +33,7 @@ type ActionStatus = {
 };
 
 export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPaneProps>(function WechatPreviewPane(
-  { source, fileName = 'document.md', onClose, filePath },
+  { source, fileName = 'document.md', onClose, filePath, onPreviewHeadingScroll },
   ref,
 ) {
   const settings = useSettings();
@@ -52,16 +50,24 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
       if (max <= 0) return;
       scroller.scrollTop = Math.max(0, Math.min(max, ratio * max));
     },
+    scrollToHeading(headingIndex: number, withinRatio: number) {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const headings = scroller.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
+      const target = headings[headingIndex];
+      if (!target) return;
+      const offset = target.offsetTop;
+      const nextSection = headings[headingIndex + 1];
+      const sectionHeight = nextSection ? nextSection.offsetTop - offset : Math.max(0, scroller.scrollHeight - offset);
+      const within = Math.max(0, Math.min(1, withinRatio));
+      scroller.scrollTop = Math.max(0, offset + sectionHeight * within - 8);
+    },
   }), []);
   const renderIdRef = useRef(0);
   const [previewResult, setPreviewResult] = useState<WechatPreviewResult | null>(null);
   const [actionStatus, setActionStatus] = useState<ActionStatus | null>(null);
   const [status, setStatus] = useState<'empty' | 'loading' | 'ready' | 'error'>(
     source.trim() ? 'loading' : 'empty',
-  );
-  const renderFeatures = useMemo(
-    () => detectMarkdownRenderFeatures(deferredSource),
-    [deferredSource],
   );
   const htmlExportPreset = useMemo(
     () => getHtmlExportPresetDefinition(settings.htmlExportPresetId, settings.customHtmlExportPresets),
@@ -72,6 +78,57 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
     [settings],
   );
   const sourceIsEmpty = deferredSource.trim() === '';
+  const handlePreviewScroll = useCallback(() => {
+    if (!onPreviewHeadingScroll) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const headings = scroller.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
+    if (headings.length === 0) {
+      onPreviewHeadingScroll({ index: -1, withinRatio: 0 });
+      return;
+    }
+    const scrollTop = scroller.scrollTop;
+    let lo = 0;
+    let hi = headings.length - 1;
+    let idx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (headings[mid].offsetTop <= scrollTop) {
+        idx = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (idx < 0) {
+      onPreviewHeadingScroll({ index: -1, withinRatio: 0 });
+      return;
+    }
+    const start = headings[idx].offsetTop;
+    const end = idx + 1 < headings.length ? headings[idx + 1].offsetTop : scroller.scrollHeight;
+    const sectionHeight = Math.max(1, end - start);
+    const within = (scrollTop - start) / sectionHeight;
+    onPreviewHeadingScroll({ index: idx, withinRatio: Math.max(0, Math.min(1, within)) });
+  }, [onPreviewHeadingScroll]);
+
+  useEffect(() => {
+    if (!onPreviewHeadingScroll) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    let rafId: number | null = null;
+    const handle = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        handlePreviewScroll();
+      });
+    };
+    scroller.addEventListener('scroll', handle, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', handle);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
+  }, [onPreviewHeadingScroll, handlePreviewScroll]);
 
   useEffect(() => {
     const el = renderRef.current;
@@ -94,43 +151,18 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
       };
     }
 
-    void Promise.all([
-      import('vditor/dist/index.css'),
-      import('vditor'),
-    ]).then(async ([, { default: Vditor }]) => {
+    void markdownToExportHtml(deferredSource, {
+      target: el,
+      filePath,
+      theme: 'light',
+      mermaidTheme: settings.theme === 'dark' ? 'dark' : 'default',
+    }).then((renderedHtml) => {
       if (cancelled || renderIdRef.current !== renderId) return;
-      await Vditor.preview(el, deferredSource, {
-        mode: 'light',
-        anchor: 0,
-        cdn: '/vditor',
-        i18n: VDITOR_PREVIEW_I18N,
-        icon: undefined,
-        theme: {
-          current: 'light',
-          path: '',
-        },
-        hljs: {
-          style: 'github',
-          enable: renderFeatures.hasHighlightableCode,
-          lineNumber: false,
-        },
-        markdown: {
-          sanitize: true,
-        },
-        after() {
-          if (cancelled || renderIdRef.current !== renderId) return;
-          void (async () => {
-            await renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
-            await resolveLocalImages(el, filePath);
-            if (cancelled || renderIdRef.current !== renderId) return;
-            setPreviewResult(createHtmlExportResult(deferredSource, el.innerHTML, {
-              preset: htmlExportPreset,
-              title: fileName,
-            }));
-            setStatus('ready');
-          })();
-        },
-      });
+      setPreviewResult(createHtmlExportResult(deferredSource, renderedHtml, {
+        preset: htmlExportPreset,
+        title: fileName,
+      }));
+      setStatus('ready');
     }).catch((error) => {
       if (cancelled || renderIdRef.current !== renderId) return;
       console.warn('Failed to render HTML export preview:', error);
@@ -142,7 +174,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, fileName, filePath, htmlExportPreset, renderFeatures.hasHighlightableCode, sourceIsEmpty]);
+  }, [deferredSource, fileName, filePath, htmlExportPreset, settings.theme, sourceIsEmpty]);
 
   const effectiveStatus = sourceIsEmpty ? 'empty' : status;
   const effectiveActionStatus = sourceIsEmpty ? null : actionStatus;

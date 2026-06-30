@@ -144,6 +144,10 @@ function joinPath(root: string, ...parts: string[]): string {
   return [root.replace(/[\\/]+$/u, ''), ...parts.map((p) => p.replace(/^[\\/]+|[\\/]+$/gu, ''))].filter(Boolean).join(separator);
 }
 
+function isAbsolutePath(path: string): boolean {
+  return /^[a-zA-Z]:[\\/]/u.test(path) || path.startsWith('/') || path.startsWith('\\\\');
+}
+
 function safeSegment(value: string): string {
   return value.replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '') || 'conversation';
 }
@@ -151,6 +155,15 @@ function safeSegment(value: string): string {
 function summarizeTitle(text: string): string {
   const clean = text.replace(/\s+/gu, ' ').trim();
   return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || '自由对话';
+}
+
+function withArtifactWriteGuard(prompt: string, cwd?: string): string {
+  if (!cwd) return prompt;
+  return `${prompt}\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
+}
+
+function outputCwdForConversation(workspaceRoot: string | undefined, convId: string): string | undefined {
+  return workspaceRoot ? joinPath(workspaceRoot, '.typola-output', safeSegment(convId)) : undefined;
 }
 
 let nextConvCounter = 1;
@@ -231,9 +244,14 @@ export function useConversationManager({
     });
   }, []);
 
+  const cwd = useMemo(() => outputCwdForConversation(workspaceRoot, activeConvId), [workspaceRoot, activeConvId]);
+  const extraAllowedDirs = useMemo(() => (workspaceRoot ? [workspaceRoot] : undefined), [workspaceRoot]);
+
   const appendAssistantEvent = useCallback((convId: string, event: AgentEvent) => {
     if (event.type === 'artifact_file') {
-      artifactFileRef.current?.({ path: event.path, content: event.content, toolName: event.toolName });
+      const eventCwd = outputCwdForConversation(workspaceRoot, convId);
+      const artifactPath = isAbsolutePath(event.path) || !eventCwd ? event.path : joinPath(eventCwd, event.path);
+      artifactFileRef.current?.({ path: artifactPath, content: event.content, toolName: event.toolName });
       return;
     }
     // status 事件携带 claude 进程实际跑的模型 → 落到 ConversationData,Composer 显示
@@ -244,7 +262,7 @@ export function useConversationManager({
       }
     }
     updateConv(convId, { messages: appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? [], event) });
-  }, [updateConv]);
+  }, [updateConv, workspaceRoot]);
 
   const flushQueuedEvents = useCallback(() => {
     eventFrameRef.current = null;
@@ -360,11 +378,6 @@ export function useConversationManager({
     };
   }, [appendAssistantEvent, flushQueuedEvents, queueAssistantEvent, resolveExitWaiters, updateConv]);
 
-  const cwd = useMemo(() => (
-    workspaceRoot ? joinPath(workspaceRoot, '.typola-output', safeSegment(activeConvId)) : undefined
-  ), [workspaceRoot, activeConvId]);
-  const extraAllowedDirs = useMemo(() => (workspaceRoot ? [workspaceRoot] : undefined), [workspaceRoot]);
-
   // send(prompt, opts?):opts.conversationId 显式指定目标 conv;省略则用当前 active。
   // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
   const send = useCallback(async (
@@ -394,13 +407,14 @@ export function useConversationManager({
     });
     const provider = conv.provider ?? DEFAULT_AGENT_PROVIDER;
     const runtime = providerRuntimeOptions(provider, { claudePath, claudeModel, openCodePath, openCodeModel, pluginDirs });
+    const runCwd = outputCwdForConversation(workspaceRoot, convId);
     const handler = createProviderStreamHandler(provider, (event) => queueAssistantEvent(convId, event));
     handlersRef.current.set(convId, handler);
     const request = {
       provider,
       conversationId: convId,
-      prompt: trimmed,
-      cwd,
+      prompt: withArtifactWriteGuard(trimmed, runCwd),
+      cwd: runCwd,
       agentPath: runtime.agentPath,
       model: runtime.model,
       pluginDirs: runtime.pluginDirs,
@@ -439,7 +453,7 @@ export function useConversationManager({
       updateConv(convId, { runState: 'error', lastError: displayMessage });
       appendAssistantEvent(convId, { type: 'error', message: displayMessage });
     }
-  }, [appendAssistantEvent, claudeModel, claudePath, cwd, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv]);
+  }, [appendAssistantEvent, claudeModel, claudePath, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv, workspaceRoot]);
 
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;

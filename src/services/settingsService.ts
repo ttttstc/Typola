@@ -228,6 +228,7 @@ export interface AppSettings {
   aiClaudeModel: string;
   aiOpenCodePath: string;
   aiOpenCodeModel: string;
+  aiCodexPath: string;
   aiWorkspaceRoot: string;
   aiWorkspaceRecents: string[];
   aiPluginDirs: string[];
@@ -290,6 +291,7 @@ const defaults: AppSettings = {
   aiClaudeModel: '',
   aiOpenCodePath: '',
   aiOpenCodeModel: '',
+  aiCodexPath: '',
   aiWorkspaceRoot: '',
   aiWorkspaceRecents: [],
   aiPluginDirs: [],
@@ -841,6 +843,7 @@ export function getSettings(): AppSettings {
       aiClaudeModel: normalizeModelString(stored.aiClaudeModel),
       aiOpenCodePath: normalizeExecutablePath(stored.aiOpenCodePath),
       aiOpenCodeModel: normalizeModelString(stored.aiOpenCodeModel),
+      aiCodexPath: normalizeExecutablePath(stored.aiCodexPath),
       aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
       aiWorkspaceRecents: normalizePathList(stored.aiWorkspaceRecents).slice(0, 8),
       aiPluginDirs: normalizePathList(stored.aiPluginDirs),
@@ -927,6 +930,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     aiClaudeModel: normalizeModelString(patch.aiClaudeModel ?? current.aiClaudeModel),
     aiOpenCodePath: normalizeExecutablePath(patch.aiOpenCodePath ?? current.aiOpenCodePath),
     aiOpenCodeModel: normalizeModelString(patch.aiOpenCodeModel ?? current.aiOpenCodeModel),
+    aiCodexPath: normalizeExecutablePath(patch.aiCodexPath ?? current.aiCodexPath),
     aiWorkspaceRoot: normalizeExecutablePath(patch.aiWorkspaceRoot ?? current.aiWorkspaceRoot),
     aiWorkspaceRecents: normalizePathList(patch.aiWorkspaceRecents ?? current.aiWorkspaceRecents).slice(0, 8),
     aiPluginDirs: normalizePathList(patch.aiPluginDirs ?? current.aiPluginDirs),

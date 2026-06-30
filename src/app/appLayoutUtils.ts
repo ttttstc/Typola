@@ -5,12 +5,13 @@ export const RIGHT_PANEL_MAX_WIDTH = 760;
 export const RIGHT_PANEL_RESIZER_GAP = 9;
 export const LEFT_PANEL_MIN_WIDTH = 220;
 export const LEFT_PANEL_MAX_WIDTH = 560;
-// 三栏布局默认比例:屏宽 1920 → 左 ~460 / 编辑器 ~1100 / 右 ~360。
-// 左栏 460:AI 工作台对话需要够宽放消息流(原 366 偏窄)。
-// 右栏 360:场景模板/产物列表紧凑,把空间让给编辑器(原 1/3 容器宽 ~640 偏宽)。
-export const WORKSPACE_PANEL_DEFAULT_WIDTH = 460;
-export const FLOW_LEFT_PANEL_WIDTH = 460;
+// 三栏布局默认比例:屏宽 1920 → 左 360 / 编辑器 ~700 / 右 ~830。
+// 左栏 360:文件树紧凑为主,AI 工作台场景自动扩宽(由 LeftRail 内部处理)。
+// 右栏 = 容器宽 * 0.45:场景模板/产物列表更宽,接近 Typora 排版。
+export const WORKSPACE_PANEL_DEFAULT_WIDTH = 360;
+export const FLOW_LEFT_PANEL_WIDTH = 360;
 export const FLOW_RIGHT_PANEL_WIDTH = 360;
+export const RIGHT_PANEL_DEFAULT_RATIO = 0.45;
 
 export function pathBasename(path: string): string {
   return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
@@ -26,6 +27,18 @@ export function joinLocalPath(root: string, ...parts: string[]): string {
 
 export function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+/** 给定 source 字符 offset,返回 0-based line index。
+ *  超界或空字符串时返回 0;只数 '\n',最后一段无 '\n' 也算一行。 */
+export function lineIndexAtOffset(source: string, offset: number): number {
+  if (offset <= 0) return 0;
+  let line = 0;
+  const upper = Math.min(offset, source.length);
+  for (let i = 0; i < upper; i++) {
+    if (source.charCodeAt(i) === 10) line++;
+  }
+  return line;
 }
 
 export function imageExtensionFromMime(type: string): string {

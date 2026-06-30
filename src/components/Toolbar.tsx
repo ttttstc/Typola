@@ -6,6 +6,7 @@ import {
   FilePlus,
   FileText,
   FolderOpen,
+  PackageOpen,
   ImagePlus,
   Newspaper,
   PanelLeft,
@@ -36,6 +37,7 @@ type ToolbarProps = {
   workspacePanelVisible: boolean;
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
+  artifactsVisible?: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
   docMode: DocMode;
@@ -44,6 +46,7 @@ type ToolbarProps = {
   onToggleWorkspacePanel: () => void;
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
+  onToggleArtifacts?: () => void;
   onToggleTerminal: () => void;
   onSetDocMode: (next: DocMode) => void;
   onNew: () => void;
@@ -64,9 +67,9 @@ type ToolbarProps = {
 
 export function Toolbar({
   dirty, fileName,
-  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible,
+  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
   terminalVisible, editingDisabled, docMode, reviewDirty,
-  onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview,
+  onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
   onToggleTerminal, onSetDocMode,
   onNew, onOpen, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
@@ -266,6 +269,18 @@ export function Toolbar({
             {/* lucide 无 wechat 品牌图标,沿用 Newspaper(评审已确认) */}
             <Newspaper size={iconSize} strokeWidth={strokeWidth} />
           </button>
+          {onToggleArtifacts && (
+            <button
+              className={artifactsVisible ? 'active' : ''}
+              onClick={onToggleArtifacts}
+              disabled={editingDisabled}
+              data-no-window-drag="true"
+              data-tooltip="AI 产物"
+              aria-label="AI 产物"
+            >
+              <PackageOpen size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
           <button
             className={terminalVisible ? 'active' : ''}
             onClick={onToggleTerminal}

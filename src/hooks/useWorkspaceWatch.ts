@@ -19,6 +19,7 @@ type UseWorkspaceWatchOptions = {
 type UseWorkspaceWatchResult = {
   agentChangedPaths: Map<string, number>;
   workspaceTreeVersion: number;
+  rememberArtifact: (path: string) => void;
   clearArtifacts: () => void;
   forgetArtifact: (path: string) => void;
   bumpWorkspaceTreeVersion: () => void;
@@ -46,6 +47,8 @@ export function useWorkspaceWatch({
 
     void import('../services/workspaceWatchService')
       .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
+        const { mkdir } = await import('@tauri-apps/plugin-fs');
+        await mkdir(outputRoot, { recursive: true });
         await watchWorkspace(watchRoot);
         return onWorkspaceChanged((payload) => {
           const now = Date.now();
@@ -83,6 +86,14 @@ export function useWorkspaceWatch({
     setAgentChangedPaths(new Map());
   }, []);
 
+  const rememberArtifact = useCallback((path: string) => {
+    setAgentChangedPaths((prev) => {
+      const next = new Map(prev);
+      next.set(path, Date.now());
+      return next;
+    });
+  }, []);
+
   const forgetArtifact = useCallback((path: string) => {
     setAgentChangedPaths((prev) => {
       const next = new Map(prev);
@@ -98,6 +109,7 @@ export function useWorkspaceWatch({
   return {
     agentChangedPaths,
     workspaceTreeVersion,
+    rememberArtifact,
     clearArtifacts,
     forgetArtifact,
     bumpWorkspaceTreeVersion,

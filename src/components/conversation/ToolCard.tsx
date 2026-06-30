@@ -20,7 +20,7 @@ export function ToolCard({ tool, message }: Props) {
   return (
     <ToolCardDispatcher
       name={tool.name}
-      input={tool.input}
+      input={tool.input ?? tool.inputDelta}
       result={result}
       runStreaming={runStreaming}
       runSucceeded={runSucceeded}

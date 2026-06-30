@@ -1,47 +1,97 @@
 // Heading 折叠服务 — 移植 markra heading-toggle.ts 的 section 扫描算法,
 // 适配 Vditor IR(无 ProseMirror Decorations,改为直接 DOM 操作)。
 //
-// 折叠状态按 `<level>:<text>` 键保存,而非 source line。这样用户在 source 里
-// 上方插入行时折叠不会"漂移"到错误 heading;删/改 heading 文本时自然失效。
+// 折叠状态按 `<level>:<sectionIndex>:<text>` 键保存(而非 source line)。
+// 同级同名 heading 多次出现时 sectionIndex 区分(同一文档插新 heading 之前,
+// sectionIndex 会顺移;这是已知权衡,用于保证折叠不"串段")。
+// 这样用户在 source 里上方插入行时折叠不会"漂移"到错误 heading;
+// 删/改 heading 文本时自然失效。
 
 export type HeadingSection = {
   headingLine: number;
   level: number;
   endLine: number;
+  sectionIndex: number;
+  text: string;
 };
 
-export type FoldKey = string; // `${level}:${text}`
+export type FoldKey = string; // `${level}:${sectionIndex}:${text}`
 
 const FOLD_TOGGLE_CLASS = 'typola-heading-fold-toggle';
 const FOLDED_CLASS = 'typola-heading-folded';
 const DATA_LEVEL = 'data-typola-fold-level';
+const DATA_INDEX = 'data-typola-fold-index';
 const DATA_TEXT = 'data-typola-fold-text';
 
 // 移植自 markra heading-toggle.ts:扫描 markdown source,收集所有 heading section。
 // section = 从 heading 行到下一个同级或更高级 heading 之前的所有行。
+// sectionIndex(0-based,严格单调递增,与 heading 扫描顺序一一对应)用于 fold key
+// 区分同名 heading。注意:不能用 sections.length 当 counter,因为 pop 时
+// sections.length 会回退,导致重复的 sectionIndex。
 export function collectHeadingSections(source: string): HeadingSection[] {
   const lines = source.split('\n');
   const sections: HeadingSection[] = [];
-  const stack: Array<{ line: number; level: number }> = [];
+  const stack: Array<{ headingLine: number; level: number; sectionIndex: number; text: string }> = [];
+  let counter = 0;
+  let fenceMarker: '`' | '~' | null = null;
   for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(/^(#{1,6})\s+/);
-    if (!match) continue;
-    const level = match[1].length;
+    const fence = lines[i].match(/^\s*(`{3,}|~{3,})/);
+    if (fence) {
+      const marker = fence[1]![0] as '`' | '~';
+      if (fenceMarker === marker) fenceMarker = null;
+      else if (!fenceMarker) fenceMarker = marker;
+      continue;
+    }
+    if (fenceMarker) continue;
+
+    const heading = parseAtxHeadingLine(lines[i]);
+    if (!heading) continue;
+    const { level, text } = heading;
     while (stack.length > 0 && stack[stack.length - 1].level >= level) {
       const top = stack.pop()!;
-      sections.push({ headingLine: top.line, level: top.level, endLine: i - 1 });
+      sections.push({
+        headingLine: top.headingLine,
+        level: top.level,
+        endLine: i - 1,
+        sectionIndex: top.sectionIndex,
+        text: top.text,
+      });
     }
-    stack.push({ line: i, level });
+    stack.push({ headingLine: i, level, sectionIndex: counter++, text });
   }
   while (stack.length > 0) {
     const top = stack.pop()!;
-    sections.push({ headingLine: top.line, level: top.level, endLine: lines.length - 1 });
+    sections.push({
+      headingLine: top.headingLine,
+      level: top.level,
+      endLine: lines.length - 1,
+      sectionIndex: top.sectionIndex,
+      text: top.text,
+    });
   }
+  // 按 headingLine 升序 — pop 顺序可能穿插,折叠时需要按扫描顺序找"下一个 peer"。
+  sections.sort((a, b) => a.headingLine - b.headingLine);
   return sections;
 }
 
-export function foldKey(level: number, text: string): FoldKey {
-  return `${level}:${text}`;
+export function extractAtxHeadingText(line: string): string {
+  return parseAtxHeadingLine(line)?.text ?? '';
+}
+
+function parseAtxHeadingLine(line: string): { level: number; text: string } | null {
+  const match = line.match(/^(#{1,6})(?:[ \t]+|$)(.*)$/);
+  if (!match) return null;
+  const level = match[1]!.length;
+  const text = match[2]!
+    .replace(/[ \t]+#+[ \t]*$/u, '')
+    .trim()
+    .normalize('NFC');
+  if (!text) return null;
+  return { level, text };
+}
+
+export function foldKey(level: number, text: string, sectionIndex = 0): FoldKey {
+  return `${level}:${sectionIndex}:${text}`;
 }
 
 // 把当前 sections + 折叠集合应用到 IR DOM。幂等:每次调用前清掉旧标记再贴新标记。
@@ -57,17 +107,15 @@ export function applyHeadingFolds(
   const blocks = getTopLevelBlocks(ir);
   if (blocks.length === 0) return;
 
-  // 按 heading text 找 DOM 块索引(同一文档 heading 文本通常唯一;
-  // 重复则取首个,后续重复 folding 仅影响第一个匹配)。
-  const headingBlockIdxByText = new Map<string, number>();
-  const textByBlockIdx = new Map<number, string>();
+  // 用 (level, sectionIndex, text) 找 DOM 块索引。
+  // 同名 heading 多次出现时,foldKey 区分,apply 只针对单个 DOM 块。
+  const headingBlockIdxByKey = new Map<FoldKey, number>();
 
   for (const section of sections) {
-    const headingLine = source.split('\n')[section.headingLine] ?? '';
-    const text = headingLine.replace(/^#+\s+/, '').trim();
+    const text = section.text;
     if (!text) continue;
-    const key = foldKey(section.level, text);
-    if (headingBlockIdxByText.has(key)) continue;
+    const key = foldKey(section.level, text, section.sectionIndex);
+    if (headingBlockIdxByKey.has(key)) continue;
 
     let blockIdx = -1;
     for (let i = 0; i < blocks.length; i++) {
@@ -77,43 +125,41 @@ export function applyHeadingFolds(
       break;
     }
     if (blockIdx < 0) continue;
-    headingBlockIdxByText.set(key, blockIdx);
-    textByBlockIdx.set(blockIdx, text);
+    headingBlockIdxByKey.set(key, blockIdx);
   }
 
   // 注入 toggle button(所有 heading,无论折叠与否)
-  for (const [key, blockIdx] of headingBlockIdxByText.entries()) {
-    const [levelStr, text] = key.split(':');
+  for (const [key, blockIdx] of headingBlockIdxByKey.entries()) {
+    const [levelStr, indexStr, ...rest] = key.split(':');
     const level = Number(levelStr);
+    const sectionIndex = Number(indexStr);
+    const text = rest.join(':');
     const headingEl = blocks[blockIdx];
     const toggle = document.createElement('span');
     toggle.className = FOLD_TOGGLE_CLASS;
     toggle.setAttribute(DATA_LEVEL, String(level));
+    toggle.setAttribute(DATA_INDEX, String(sectionIndex));
     toggle.setAttribute(DATA_TEXT, text);
     toggle.setAttribute('role', 'button');
     toggle.setAttribute('aria-label', foldedHeadings.has(key) ? '展开' : '折叠');
+    toggle.setAttribute('aria-expanded', String(!foldedHeadings.has(key)));
+    toggle.tabIndex = 0;
     toggle.textContent = foldedHeadings.has(key) ? '▼' : '▶';
     headingEl.insertBefore(toggle, headingEl.firstChild);
   }
 
   // 折叠:对每个被折叠的 heading,从它的 DOM 块后一个块开始,
   // 直到遇到下一个更高/同级 heading 块为止,全部加 folded class。
-  for (const section of sections) {
-    const headingLine = source.split('\n')[section.headingLine] ?? '';
-    const text = headingLine.replace(/^#+\s+/, '').trim();
-    const key = foldKey(section.level, text);
+  // headingBlockIdxByKey 的插入顺序 == sections 扫描顺序 == headingLine 顺序,
+  // 找 startIdx 之后第一个 level <= 当前 level 的 heading 即为下一个 peer。
+  for (const [key, startIdx] of headingBlockIdxByKey.entries()) {
     if (!foldedHeadings.has(key)) continue;
 
-    const startIdx = headingBlockIdxByText.get(key);
-    if (startIdx === undefined) continue;
-
-    // 找下一个 ≥ level 的 heading block idx
     let endIdx = blocks.length;
-    for (const [otherKey, otherIdx] of headingBlockIdxByText.entries()) {
+    for (const [otherKey, otherIdx] of headingBlockIdxByKey.entries()) {
       if (otherIdx <= startIdx) continue;
-      const [otherLevelStr] = otherKey.split(':');
-      const otherLevel = Number(otherLevelStr);
-      if (otherLevel <= section.level) {
+      const otherLevel = Number(otherKey.split(':')[0]);
+      if (otherLevel <= levelOf(key)) {
         endIdx = otherIdx;
         break;
       }
@@ -123,6 +169,10 @@ export function applyHeadingFolds(
       blocks[i].classList.add(FOLDED_CLASS);
     }
   }
+}
+
+function levelOf(key: FoldKey): number {
+  return Number(key.split(':')[0]);
 }
 
 function cleanupOldFolds(ir: HTMLElement): void {
@@ -141,9 +191,10 @@ export function getFoldKeyFromTarget(target: EventTarget | null): FoldKey | null
   const el = (target as Element | null)?.closest(`.${FOLD_TOGGLE_CLASS}`);
   if (!el) return null;
   const level = el.getAttribute(DATA_LEVEL);
+  const sectionIndex = el.getAttribute(DATA_INDEX);
   const text = el.getAttribute(DATA_TEXT);
-  if (level === null || text === null) return null;
-  return foldKey(Number(level), text);
+  if (level === null || sectionIndex === null || text === null) return null;
+  return foldKey(Number(level), text, Number(sectionIndex));
 }
 
 export function toggleFoldKey(set: ReadonlySet<FoldKey>, key: FoldKey): Set<FoldKey> {
