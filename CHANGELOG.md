@@ -76,7 +76,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- 修复 PR #120 检视指出的 CM6 polish 稳定性问题：图片加载失败 fallback 改为捕获真实 `img error`，图片粘贴/拖放避免重复插入，标题折叠搜索会展开完整父链并在切换文档时清理折叠状态。
+- 修复 PR #120 检视指出的 CM6 polish 稳定性问题：图片加载失败 fallback 改为捕获真实 `img error`，图片粘贴/拖放避免重复插入，标题折叠搜索会展开完整父链并在切换文档时清理折叠状态；补齐折叠操作的 CM6 userEvent 标记、Tauri event listen 权限和本地 asset 协议基础 scope。
 - 修复 PR #102 检视指出的 AI 产物中心安全与稳定性问题：覆盖/撤销原文会在 Rust 侧校验目标文档白名单，产物时间戳排序兼容 ISO 与历史毫秒格式，补齐 `.typola-output` 文件系统权限、CSS token 兼容别名和 artifact scanner / 覆盖白名单回归测试。
 - 调整 AI 产物中心：产物统一生成到当前 AI 工作目录下的 `.typola-output/<当前会话>/`，扫描当前 AI 工作目录下的 `.typola-output/`；未指定工作目录时使用用户默认目录下的 `.typola-output/`。产物中心移除“当前文档”视图和“全部状态”筛选，保留当前会话 / 全部产物与类型筛选。
 - 修复 PR #100 检视指出的 AI Runtime 空抽象问题：移除未接入实际 spawn 的 commandSpec / promptBudget 层，Claude / OpenCode runtime 定义收敛为 CLI 检测配置表。

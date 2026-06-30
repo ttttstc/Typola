@@ -14,7 +14,7 @@
 //   editorRef,确保 wheel zoom 等触发扩展重建时折叠能从 React state 恢复。
 
 import { ensureSyntaxTree } from '@codemirror/language';
-import { StateEffect, StateField, type Extension, type Range } from '@codemirror/state';
+import { StateEffect, StateField, Transaction, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { extractAtxHeadingText, foldKey, type FoldKey } from '../../../services/headingFoldService';
 
@@ -181,6 +181,7 @@ function toggleFoldFromEvent(event: MouseEvent | KeyboardEvent, view: EditorView
   event.stopPropagation();
   view.dispatch({
     effects: toggleFoldEffect.of(foldKey(Number(levelStr), text, Number(indexStr))),
+    annotations: Transaction.userEvent.of('fold.toggle'),
   });
 }
 
