@@ -5458,6 +5458,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   margin-left: auto;
 }
 
+.question-form-error {
+  color: var(--danger);
+  font-size: 12px;
+}
+
 .question-form-card.submitted pre {
   margin: 0;
   white-space: pre-wrap;

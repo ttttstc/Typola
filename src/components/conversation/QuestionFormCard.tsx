@@ -19,6 +19,7 @@ function toggleCheckbox(current: AnswerValue | undefined, option: string): strin
 
 export function QuestionFormCard({ form, submittedText, onSubmit }: QuestionFormCardProps) {
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
+  const [error, setError] = useState('');
 
   if (submittedText) {
     return (
@@ -33,10 +34,21 @@ export function QuestionFormCard({ form, submittedText, onSubmit }: QuestionForm
   }
 
   const setAnswer = (id: string, value: AnswerValue) => {
+    setError('');
     setAnswers((current) => ({ ...current, [id]: value }));
   };
 
+  const hasAnyAnswer = form.questions.some((question) => {
+    const value = answers[question.id];
+    if (Array.isArray(value)) return value.length > 0;
+    return typeof value === 'string' && value.trim().length > 0;
+  });
+
   const submit = () => {
+    if (!hasAnyAnswer) {
+      setError('请至少填写一个答案后再提交。');
+      return;
+    }
     onSubmit(formatQuestionFormAnswers(form, answers));
   };
 
@@ -109,7 +121,8 @@ export function QuestionFormCard({ form, submittedText, onSubmit }: QuestionForm
         })}
       </div>
       <footer>
-        <button type="button" onClick={submit}>提交答案</button>
+        {error && <span className="question-form-error" role="alert">{error}</span>}
+        <button type="button" onClick={submit} disabled={!hasAnyAnswer}>提交答案</button>
       </footer>
     </section>
   );

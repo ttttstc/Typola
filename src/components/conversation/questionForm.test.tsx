@@ -103,4 +103,38 @@ describe('QuestionForm', () => {
       '备注: 用于周会',
     ].join('\n'));
   });
+
+  it('keeps submit disabled until at least one answer is provided', async () => {
+    const onSubmit = vi.fn();
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant(`<question-form id="empty-check" title="补充信息">
+{"questions":[{"id":"note","label":"备注","type":"text"}]}
+</question-form>`)}
+          onSubmitQuestionForm={(_, text) => onSubmit(text)}
+        />,
+      );
+    });
+
+    const button = host.querySelector<HTMLButtonElement>('.question-form-card footer button');
+    expect(button?.disabled).toBe(true);
+
+    const text = host.querySelector<HTMLInputElement>('input[type="text"]');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(text, '已经补充');
+      text!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    expect(button?.disabled).toBe(false);
+    await act(async () => {
+      button?.click();
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith([
+      '[form answers - empty-check]',
+      '备注: 已经补充',
+    ].join('\n'));
+  });
 });
