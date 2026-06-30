@@ -30,7 +30,7 @@ src/services/agent/runtime/defs/opencode.ts   ← apps/daemon/src/runtimes/defs/
 | 缺口 | 现状 | 对应 open-design 路径 |
 |---|---|---|
 | Composer slash command 解析 | 无,所有功能按钮触发 | `apps/web/src/components/ChatComposer.tsx:736-815` |
-| 全量 Agent def (codex/gemini/cursor-agent/qwen/grok/...) | 只有 claude / opencode 两个 | `apps/daemon/src/runtimes/defs/` 25 个文件 |
+| 全量 Agent def (codex/gemini/...) | 只有 claude / opencode 两个 | `apps/daemon/src/runtimes/defs/` 25 个文件(本轮只搬 2 个,见 §8) |
 | Agent capability 检测 (运行后哪些 flag 活着) | 只有 Diagnostics(版本/路径/认证),无 capability map | `apps/daemon/src/runtimes/{capabilities.ts, detection.ts}` |
 | tool_call UI 卡片全量渲染 | `AssistantMessage.tsx`(191 行)+ `ToolCard.tsx`(29 行) 较薄 | `apps/web/src/components/AssistantMessage.tsx` + `ToolCards/*` |
 | thinking/extended_thinking 折叠块 | 只有 `ThoughtCard.tsx`(粗略) | `apps/web/src/components/ThoughtBlock.tsx` |
@@ -57,20 +57,24 @@ src/services/agent/runtime/defs/opencode.ts   ← apps/daemon/src/runtimes/defs/
 
 ### 3.2 runtime 层(搬模式 + 补 def)
 
-**新增目录** `src/services/agent/runtime/defs/` 补 5 个 agent def(让 `listAgentRuntimeDefs()` 真正列出全量):
+**新增目录** `src/services/agent/runtime/defs/` 补 2 个 agent def(让 `listAgentRuntimeDefs()` 真正列出本轮需要的扩展):
 
 ```ts
 // 抄自 apps/daemon/src/runtimes/defs/<agent>.ts,只保留 Typola Tauri 调用需要的字段
 codex.ts        // OpenAI Codex CLI
-gemini.ts       // Google Gemini CLI  
-cursor-agent.ts // Cursor CLI agent 模式
-qwen.ts         // 阿里通义千问 CLI
-grok.ts         // xAI Grok CLI
+gemini.ts       // Google Gemini CLI
 ```
+
+**暂不做** 的 3 个高频但本轮不引入(避免引入未验证的 stream format):
+- `cursor-agent.ts` —— Cursor agent mode 还在快速迭代,stream-json 输出格式未稳定
+- `qwen.ts` —— 阿里通义 CLI 在 Windows 上 PATH/认证路径差异大
+- `grok.ts` —— xAI CLI 尚未发布稳定二进制
+
+3 个文件预留为后续 PR,标记 `// TODO: codex/cm6-ai-workbench-cli-reuse follow-up`。
 
 每个文件结构对齐 `claude.ts`(已搬),字段从 open-design 同名 def 拷过来后删 OD 私有字段(`promptInputFormat` / `promptBudget` / `capabilities` 等 Typola 用不上的)。
 
-**扩展** `src/services/agent/runtime/types.ts`:补 `AgentRuntimeId` union(从 `'claude' | 'opencode'` 扩到 7 项),同步 `registry.ts`。
+**扩展** `src/services/agent/runtime/types.ts`:补 `AgentRuntimeId` union(从 `'claude' | 'opencode'` 扩到 4 项),同步 `registry.ts`。
 
 ### 3.3 Slash Command 派发层(搬 dispatcher 模式)
 
@@ -171,14 +175,14 @@ mocks/
 
 ## 4. 文件改动清单(预计)
 
-新增(11):
+新增(8):
 ```
 src/components/conversation/useSlashCommands.ts
 src/components/conversation/commandRegistry.ts
 src/components/conversation/toolCards/{Read,Write,Edit,Bash,Grep,Glob,WebFetch,TodoWrite,Default}.tsx
 src/services/agent/runtime/capabilities.ts
 src/services/agent/runtime/detection.ts
-src/services/agent/runtime/defs/{codex,gemini,cursor-agent,qwen,grok}.ts
+src/services/agent/runtime/defs/{codex,gemini}.ts
 src/hooks/useAgentCapabilities.ts
 mocks/                                              // 整目录
 ```
@@ -209,7 +213,7 @@ src/services/agent/types.ts                         // AgentEvent 不变,确认 
 
 | 风险 | 对策 |
 |---|---|
-| open-design 25 个 def 中大多数 Typola 永远不会用 | 只搬 5 个高频,def 文件加注释 `// pruned from OD; other defs available upstream` |
+| open-design 25 个 def 中大多数 Typola 永远不会用 | 只搬 2 个本轮需要(codex/gemini),3 个(cursor-agent/qwen/grok)留待 follow-up |
 | Composer 按钮入口(skill/MCP/...)和 slash 命令重复触发 | slash 优先级最高,按钮保留为"非键盘用户的等价入口",dispatcher 共享底层 |
 | 5 个 tool card 一次性实现量大 | 分 PR:① shell (Read/Write/Edit/Bash) ② search (Grep/Glob) ③ net (WebFetch) ④ task (TodoWrite) ⑤ fallback (Default) |
 | mock CLI 跟真实 CLI 输出有差 | golden test 维护一份真实 CLI 输出快照,format-*.mjs 跟它对齐 |
@@ -219,9 +223,11 @@ src/services/agent/types.ts                         // AgentEvent 不变,确认 
 
 ```
 PR1 (foundation):
-  - runtime/types.ts union 扩展
+  - runtime/types.ts union 扩展 (claude | opencode → 4 项)
   - runtime/registry.ts includeExperimental
-  - runtime/defs/{codex,gemini,cursor-agent,qwen,grok}.ts
+  - runtime/defs/{codex,gemini}.ts
+  
+  **不做** (cursor-agent / qwen / grok,留 TODO 注释)
   
 PR2 (slash commands):
   - useSlashCommands.ts + commandRegistry.ts
@@ -249,10 +255,10 @@ PR6 (mocks):
 
 用户已确认范围:
 
-1. **Agent def**: 补 5 个新 def(codex / gemini / cursor-agent / qwen / grok),从 open-design `apps/daemon/src/runtimes/defs/` 对应文件搬运
+1. **Agent def**: 补 **2 个**新 def(codex / gemini),从 open-design `apps/daemon/src/runtimes/defs/` 对应文件搬运。**暂不做** cursor-agent / qwen / grok 三个,留 TODO 注释,后续 PR 单独评审(stream-json 格式未稳定或 Windows PATH/认证风险)
 2. **Tool cards**: 完整 9 个一次到位(Read/Write/Edit/Bash/Grep/Glob/WebFetch/TodoWrite/Default)
 3. **Slash 入口**: 只 `/` 前缀拦截,不引入 Cmd+K 弹层
 4. **Mock CLI**: 本 PR 做基础(mocks/ 目录 + 2-3 条 trace + golden tests)
 5. **artifact_file → 产物中心**: 默认做(随 tool cards PR4 一起)
 
-PR 顺序不变(§7)。
+PR 顺序不变(§7),PR1 范围收窄为 2 个 def + union 扩到 4 项。
