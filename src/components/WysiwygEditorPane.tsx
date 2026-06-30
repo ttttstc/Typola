@@ -803,6 +803,21 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       lastEmittedValue.current = value;
       onChange(value);
     },
+    insertTextAt(text: string, _pos: number) {
+      // WYSIWYG 没有显式 doc 位置概念;退化为当前光标插入,
+      // 让图片插入契约在 Vditor fallback 路径上仍能调用。
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      editor.insertValue(text, true);
+      const value = editor.getValue();
+      lastEmittedValue.current = value;
+      onChange(value);
+    },
+    posAtCoords(_x: number, _y: number) {
+      // WYSIWYG 不暴露 pos;返回 null 让 drop handler 回退到当前 selection 末尾。
+      return null;
+    },
     getSelection() {
       const range = getSavedOrCurrentSelection();
       if (!range) return null;

@@ -69,6 +69,7 @@ import {
   resolveCopyDestination,
   resolveImageInsertAction,
 } from '../services/imageInsert';
+import { collectHeadingSections, foldKey, type FoldKey } from '../services/headingFoldService';
 import {
   extractToc,
   escapeRegExp,
@@ -79,6 +80,7 @@ import {
   joinLocalPath,
   LEFT_PANEL_MAX_WIDTH,
   LEFT_PANEL_MIN_WIDTH,
+  lineIndexAtOffset,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_RESIZER_GAP,
@@ -190,6 +192,12 @@ export function AppLayout() {
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
+  // 折叠集合:由 AppLayout 拥有,用于"搜索命中自动展开"等命令式扩展。
+  // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
+  const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
+  const handleEditorFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
+    setFoldedHeadings((prev) => sameFoldSet(prev, next) ? prev : new Set(next));
+  }, []);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
@@ -315,6 +323,9 @@ export function AppLayout() {
     setEditorMode,
     extractToc,
   });
+  useEffect(() => {
+    setFoldedHeadings(new Set());
+  }, [activeTabId]);
   const debouncedStatsSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 260);
   const documentStats = useMemo(
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
@@ -746,6 +757,28 @@ export function AppLayout() {
     // 后续按键打进文档(包括 Esc 再 Ctrl+F 后的 type 会破坏文档内容)。
     // searchOptions:透传到 WYSIWYG 模式的 findTextNodeRange + getSearchMatchOccurrenceIndex,
     // 让 IR 里的 case/regex/wholeWord 匹配跟 FindReplacePanel 的 findSearchMatches 完全一致。
+    //
+    // PR5:折叠区域内命中时先自动展开 — 否则命中位置不可视,scrollIntoView 也无意义。
+    // 用 collectHeadingSections 找覆盖 match 位置的最深 heading section,
+    // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
+    if (editorEngine === 'cm6' && editorMode === 'source') {
+      const sections = collectHeadingSections(file.content);
+      const matchStartLine = lineIndexAtOffset(file.content, match.index);
+      const coveringKeys: FoldKey[] = [];
+      for (const section of sections) {
+        if (section.headingLine <= matchStartLine && matchStartLine <= section.endLine) {
+          // 展开命中行所在的完整父链,否则只展开最深层时父 heading 仍可能折住内容。
+          coveringKeys.push(foldKey(section.level, section.text, section.sectionIndex));
+        }
+      }
+      if (coveringKeys.some((key) => foldedHeadings.has(key))) {
+        setFoldedHeadings((prev) => {
+          const next = new Set(prev);
+          for (const key of coveringKeys) next.delete(key);
+          return sameFoldSet(prev, next) ? prev : next;
+        });
+      }
+    }
     const text = editorMode === 'source' ? match.text : (query || match.text);
     editorCommandRef.current?.revealRange(match.index, match.index + match.length, {
       text,
@@ -753,23 +786,44 @@ export function AppLayout() {
       query,
       searchOptions,
     });
-  }, [editorMode]);
+  }, [editorEngine, editorMode, file.content, foldedHeadings]);
 
-  const insertMarkdown = useCallback((markdown: string) => {
+  // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
+  const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {
     if (fileRef.current.fileType === 'docx') return;
-    editorCommandRef.current?.insertText(markdown);
+    if (pos == null) {
+      editorCommandRef.current?.insertText(markdown);
+      return;
+    }
+    editorCommandRef.current?.insertTextAt(markdown, pos);
+  }, []);
+  const recentImageInsertRef = useRef<{ key: string; at: number } | null>(null);
+
+  // 把视口坐标映射到编辑器 doc 位置。drop / paste 场景使用。
+  const resolveInsertPosition = useCallback((clientX?: number, clientY?: number): number | null => {
+    if (clientX == null || clientY == null) return null;
+    return editorCommandRef.current?.posAtCoords(clientX, clientY) ?? null;
   }, []);
 
   // 三入口统一(粘贴 / 拖拽 / 选本地文件)→ 按 settings.imageInsertAction 走 keep/copy/upload
   // 三态。upload 失败回退本地复制,保证图片不丢。
+  // insertAt:外部 drop/paste 解析出的 doc 位置;null = 当前 selection 末尾。
   const insertImageFromSource = useCallback(async (source: {
     localPath?: string;
     bytes?: Uint8Array;
     fileName?: string;
     mime?: string;
-  }) => {
+  }, insertAt: number | null = null) => {
     const currentFile = fileRef.current;
     if (currentFile.fileType === 'docx') return;
+    const dedupeKey = source.localPath
+      ? `path:${source.localPath}`
+      : `blob:${source.fileName ?? ''}:${source.mime ?? ''}:${source.bytes?.byteLength ?? 0}`;
+    const now = Date.now();
+    if (recentImageInsertRef.current?.key === dedupeKey && now - recentImageInsertRef.current.at < 800) {
+      return;
+    }
+    recentImageInsertRef.current = { key: dedupeKey, at: now };
     if (!currentFile.path) {
       setTransientMessage('请先保存文档，再插入图片。');
       return;
@@ -802,7 +856,7 @@ export function AppLayout() {
     try {
       if (action === 'keep' && source.localPath) {
         const src = formatImageSrc(source.localPath, currentFile.path, settings);
-        insertMarkdown(createImageMarkdown('图片', src));
+        insertMarkdownAt(createImageMarkdown('图片', src), insertAt);
         return;
       }
 
@@ -821,26 +875,26 @@ export function AppLayout() {
           const [url] = uploadResult.urls.length > 0
             ? uploadResult.urls
             : parseUploadUrls(uploadResult.rawStdout, 1);
-          insertMarkdown(createImageMarkdown('图片', url));
+          insertMarkdownAt(createImageMarkdown('图片', url), insertAt);
           setTransientMessage('图片已上传。');
           return;
         } catch (error) {
           console.warn('Image upload failed, falling back to copy:', error);
           setTransientMessage('图片上传失败，已回退为本地复制。');
           const copied = source.localPath ? await copyImage() : uploadPath;
-          insertMarkdown(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)));
+          insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)), insertAt);
           return;
         }
       }
 
       const copiedPath = await copyImage();
-      insertMarkdown(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)));
+      insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)), insertAt);
       setTransientMessage(`图片已保存到 ${copyDestination}。`);
     } catch (error) {
       console.warn('Failed to insert image:', error);
       setTransientMessage('图片插入失败。');
     }
-  }, [insertMarkdown, settings]);
+  }, [insertMarkdownAt, settings]);
 
   // 工具栏/菜单「插入本地图片」入口:打开系统文件对话框 → 走 insertImageFromSource。
   const handleSelectLocalImage = useCallback(async () => {
@@ -925,18 +979,18 @@ export function AppLayout() {
 
   const handlePasteImage = useCallback(async (event: ClipboardEvent) => {
     if (fileRef.current.fileType === 'docx') return;
+    const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    event.preventDefault();
+    event.stopPropagation();
     if (!fileRef.current.path) {
-      const hasImage = Array.from(event.clipboardData?.items ?? []).some((item) => item.type.startsWith('image/'));
-      if (hasImage) setTransientMessage('请先保存文档，再粘贴图片。');
+      setTransientMessage('请先保存文档，再粘贴图片。');
       return;
     }
 
-    const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
-    if (!imageItem) return;
     const blob = imageItem.getAsFile();
     if (!blob) return;
 
-    event.preventDefault();
     try {
       const extension = imageExtensionFromMime(blob.type);
       const fileName = `pasted-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
@@ -944,12 +998,12 @@ export function AppLayout() {
         bytes: new Uint8Array(await blob.arrayBuffer()),
         fileName,
         mime: blob.type,
-      });
+      }, resolveInsertPosition());
     } catch (error) {
       console.warn('Failed to paste image:', error);
       setTransientMessage('图片粘贴失败。');
     }
-  }, [insertImageFromSource]);
+  }, [insertImageFromSource, resolveInsertPosition]);
 
   const startBackgroundUpdateDownload = useCallback((source: UpdateSource, update: AvailableUpdate) => {
     if (updateDownloadVersionRef.current === update.version) return;
@@ -1069,11 +1123,16 @@ export function AppLayout() {
       e.stopPropagation();
       const items = e.dataTransfer?.files;
       if (!items || items.length === 0) return;
+      if (isTauriRuntime) {
+        return;
+      }
       const f = items[0];
       const path = (f as unknown as { path?: string }).path;
+      // drop 落点 → CM6 pos;落点在编辑器外时回退到当前 selection(insertAt=null)。
+      const insertAt = resolveInsertPosition(e.clientX, e.clientY);
       // 优先识别图片:本地路径 or mime type
       if (path && isImagePath(path)) {
-        await insertImageFromSource({ localPath: path });
+        await insertImageFromSource({ localPath: path }, insertAt);
         return;
       }
       if (f.type.startsWith('image/')) {
@@ -1081,7 +1140,7 @@ export function AppLayout() {
           bytes: new Uint8Array(await f.arrayBuffer()),
           fileName: f.name,
           mime: f.type,
-        });
+        }, insertAt);
         return;
       }
       if (path && isOpenableDocumentPath(path)) await handleOpenPath(path);
@@ -1093,7 +1152,17 @@ export function AppLayout() {
       window.removeEventListener('dragover', prevent);
       window.removeEventListener('drop', handler);
     };
-  }, [handleOpenPath, insertImageFromSource]);
+  }, [handleOpenPath, insertImageFromSource, isTauriRuntime, resolveInsertPosition]);
+
+  // 跟踪最后鼠标位置,Tauri drop 不传坐标时 fallback 用。
+  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const track = (e: MouseEvent) => {
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', track);
+    return () => window.removeEventListener('mousemove', track);
+  }, []);
 
   useEffect(() => {
     window.addEventListener('paste', handlePasteImage);
@@ -1109,9 +1178,12 @@ export function AppLayout() {
     void getCurrentWindow()
       .onDragDropEvent((event) => {
         if (event.payload.type !== 'drop') return;
+        const payload = event.payload as typeof event.payload & { position?: { x: number; y: number } };
+        const mouse = payload.position ?? lastMousePosRef.current;
+        const insertAt = mouse ? resolveInsertPosition(mouse.x, mouse.y) : null;
         const imagePath = event.payload.paths.find(isImagePath);
         if (imagePath) {
-          void insertImageFromSource({ localPath: imagePath });
+          void insertImageFromSource({ localPath: imagePath }, insertAt);
           return;
         }
         const path = firstOpenableDocumentPath(event.payload.paths);
@@ -1130,7 +1202,7 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
     };
-  }, [handleOpenPath, isTauriRuntime]);
+  }, [handleOpenPath, insertImageFromSource, isTauriRuntime, resolveInsertPosition]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1406,6 +1478,8 @@ export function AppLayout() {
         onScrollRatio={handleEditorScrollRatio}
         onAIAction={handleEditorAIAction}
         onPreviewHeadingChange={handleEditorHeadingChange}
+        foldedHeadings={foldedHeadings}
+        onFoldChange={handleEditorFoldChange}
       />
     </Suspense>
   ) : (
@@ -1796,4 +1870,11 @@ export function AppLayout() {
       />
     </>
   );
+}
+
+function sameFoldSet(a: ReadonlySet<FoldKey>, b: ReadonlySet<FoldKey>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const key of a) if (!b.has(key)) return false;
+  return true;
 }

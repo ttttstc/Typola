@@ -1,5 +1,6 @@
 import { type Extension } from '@codemirror/state';
 import { imageBlocks, inlinePreview, tables } from '@atomic-editor/editor';
+import { imageFallbackExtension } from './imageFallbackExtension';
 import { mathPreviewExtension } from './mathPreviewExtension';
 import { mermaidPreviewExtension } from './mermaidPreviewExtension';
 import { wheelZoomExtension } from './wheelZoomExtension';
@@ -23,6 +24,7 @@ export function createLivePreviewExtensions(
     inlinePreview(),
     tables(),
     imageBlocks(),
+    imageFallbackExtension(),
     mathPreviewExtension(),
     mermaidPreviewExtension(),
     headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }),
