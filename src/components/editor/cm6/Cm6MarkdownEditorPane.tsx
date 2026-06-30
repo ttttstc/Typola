@@ -90,15 +90,17 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
       }
     }, []);
 
+    // headingFoldExtension 始终传空 initial 集合 — React → editor 的同步走
+    // editorRef.current?.setFoldedHeadings?.(...) 命令式推送(见上面的 useEffect),
+    // 这样 livePreviewExtensions 不依赖 foldedHeadings,折叠切换不再触发整组扩展重建。
     const livePreviewExtensions = useMemo(
       () => createLivePreviewExtensions({
         baseSize: settings.editorFontSize,
         onZoomChange: handleZoomChange,
         onPreviewHeadingChange,
-        foldedHeadings,
         onFoldChange: handleFoldChange,
       }),
-      [settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, foldedHeadings, handleFoldChange],
+      [settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange],
     );
     return (
       <div className="cm6-markdown-editor-pane">

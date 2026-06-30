@@ -181,7 +181,17 @@ export function headingFoldExtension(options: HeadingFoldOptions = {}): Extensio
   ];
 }
 
-/** 外部(React state)把折叠集合同步进 editor;需要 EditorView 实例。 */
+/** 外部(React state)把折叠集合同步进 editor;需要 EditorView 实例。
+ *  值未变时不 dispatch,避免 React state → editor → onChange → React 无限回环。 */
 export function setFoldedHeadings(view: EditorView, folded: ReadonlySet<FoldKey>): void {
+  const current = view.state.field(foldedField);
+  if (sameFoldSet(current, folded)) return;
   view.dispatch({ effects: setFoldedEffect.of(folded) });
+}
+
+function sameFoldSet(a: ReadonlySet<FoldKey>, b: ReadonlySet<FoldKey>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const key of a) if (!b.has(key)) return false;
+  return true;
 }
