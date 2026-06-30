@@ -115,6 +115,7 @@ export function ConversationPanel({
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
   const composerRef = useRef<ComposerHandle>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [submittedQuestionForms, setSubmittedQuestionForms] = useState<Record<string, string>>({});
   const toastTimerRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -183,6 +184,11 @@ export function ConversationPanel({
   useEffect(() => () => {
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
   }, []);
+
+  const handleSubmitQuestionForm = (messageId: string, formId: string, text: string) => {
+    setSubmittedQuestionForms((current) => ({ ...current, [`${messageId}:${formId}`]: text }));
+    onSend(text);
+  };
 
   // 把 messages 切成 (user, assistant[]) 段，渲染时把 user 的 selectionAnchor 沿用到该 user 之后的所有 assistant 消息。
   // 这样在 assistant 消息上点"替换选区"能拿到 anchor。
@@ -295,6 +301,12 @@ export function ConversationPanel({
                 onReplaceSelection={onReplaceEditorSelection}
                 onReplaceAnchor={onReplaceEditorAnchor}
                 validateAnchor={onValidateAnchor}
+                submittedQuestionForms={Object.fromEntries(
+                  Object.entries(submittedQuestionForms)
+                    .filter(([key]) => key.startsWith(`${assistant.id}:`))
+                    .map(([key, value]) => [key.slice(assistant.id.length + 1), value]),
+                )}
+                onSubmitQuestionForm={(formId, text) => handleSubmitQuestionForm(assistant.id, formId, text)}
               />
             ))}
           </div>
@@ -332,6 +344,7 @@ export function ConversationPanel({
         onSelectWorkspace={(path) => void handleWorkspaceChange(path)}
         onClearWorkspace={() => void handleClearWorkspace()}
         onSwitchProvider={(provider) => void handleProviderChange(provider)}
+        onClearConversation={onReset}
         onSend={onSend}
         onCancel={onCancel}
       />

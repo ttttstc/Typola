@@ -7,6 +7,8 @@ import { DoneBar } from './DoneBar';
 import { ErrorRetryCard } from './ErrorRetryCard';
 import { formatAbsoluteTime, formatRelativeTime } from '../../services/timeFormat';
 import { saveFileDialog, messageDialog } from '../../services/dialogService';
+import { QuestionFormCard } from './QuestionFormCard';
+import { parseQuestionForms } from './questionForm';
 
 type AssistantMessageProps = {
   message: Extract<AgentMessage, { role: 'assistant' }>;
@@ -16,6 +18,8 @@ type AssistantMessageProps = {
   onReplaceSelection?: (text: string) => void;
   onReplaceAnchor?: (text: string, anchor: SelectionAnchor) => void;
   validateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
+  submittedQuestionForms?: Record<string, string>;
+  onSubmitQuestionForm?: (formId: string, text: string) => void;
 };
 
 function extractCodeBlocks(markdown: string): Array<{ lang: string; code: string }> {
@@ -126,8 +130,11 @@ export function AssistantMessage({
   onReplaceSelection,
   onReplaceAnchor,
   validateAnchor,
+  submittedQuestionForms = {},
+  onSubmitQuestionForm,
 }: AssistantMessageProps) {
   const codeBlocks = extractCodeBlocks(message.content);
+  const parsed = useMemo(() => parseQuestionForms(message.content), [message.content]);
   return (
     <article className="conversation-message assistant">
       <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>
@@ -136,9 +143,19 @@ export function AssistantMessage({
       <ThoughtCard text={message.thinking} done={message.done ?? false} />
       {message.content ? (
         <>
-          <div className="conversation-assistant-markdown">
-            <PreviewPane source={message.content} tocIds={[]} />
-          </div>
+          {parsed.markdown && (
+            <div className="conversation-assistant-markdown">
+              <PreviewPane source={parsed.markdown} tocIds={[]} />
+            </div>
+          )}
+          {parsed.forms.map((form) => (
+            <QuestionFormCard
+              key={form.id}
+              form={form}
+              submittedText={submittedQuestionForms[form.id]}
+              onSubmit={(text) => onSubmitQuestionForm?.(form.id, text)}
+            />
+          ))}
           {message.done && (
             <MessageActions
               text={message.content}

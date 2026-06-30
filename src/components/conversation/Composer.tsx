@@ -1,13 +1,15 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { Send, Square } from 'lucide-react';
 import type { AgentProvider } from '../../services/agent/provider';
-import { AGENT_PROVIDERS, getAgentProviderConfig } from '../../services/agent/provider';
+import { getAgentProviderConfig } from '../../services/agent/provider';
+import { AgentProviderPicker } from './AgentProviderPicker';
 import { ComposerContextChips } from './ComposerContextChips';
 import { ComposerPlusMenu } from './ComposerPlusMenu';
 import { ComposerMcpPanel } from './ComposerMcpPanel';
 import { ComposerPluginsPanel } from './ComposerPluginsPanel';
 import { WorkingDirPicker } from './WorkingDirPicker';
 import { useComposerContextState } from './useComposerContextState';
+import { useSlashCommands } from './useSlashCommands';
 
 export type ComposerHandle = {
   injectText: (text: string) => void;
@@ -33,6 +35,7 @@ type ComposerProps = {
   onSelectWorkspace: (path: string) => void;
   onClearWorkspace: () => void;
   onSwitchProvider: (provider: AgentProvider) => void;
+  onClearConversation?: () => void;
   onSend: (text: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
   onCancel: () => void;
 };
@@ -54,6 +57,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   onSelectWorkspace,
   onClearWorkspace,
   onSwitchProvider,
+  onClearConversation = () => undefined,
   onSend,
   onCancel,
 }: ComposerProps, ref) {
@@ -119,6 +123,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const handleOpenPlugins = () => {
     setPanel('plugins');
   };
+  const {
+    commands,
+    helpVisible,
+    hideHelp,
+    runLocalCommand,
+  } = useSlashCommands({
+    onClear: onClearConversation,
+    onOpenMcp: handleOpenMcp,
+  });
+
+  const handleSubmit = () => {
+    const text = value.trim();
+    if (!text || disabled || running) return;
+    if (runLocalCommand(text)) {
+      setValue('');
+      return;
+    }
+    submit();
+  };
 
   return (
     <div className="conversation-composer">
@@ -139,10 +162,24 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
             event.preventDefault();
-            submit();
+            handleSubmit();
           }
         }}
       />
+      {helpVisible && (
+        <div className="composer-command-help" role="status">
+          <div className="composer-command-help-title">
+            <strong>可用命令</strong>
+            <button type="button" onClick={hideHelp} aria-label="关闭命令帮助">×</button>
+          </div>
+          {commands.map((command) => (
+            <div key={command.id} className="composer-command-help-row">
+              <code>{command.slash}</code>
+              <span>{command.description}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="conversation-composer-actions">
         <div className="conversation-composer-left-actions">
           <ComposerPlusMenu
@@ -158,24 +195,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             onClear={onClearWorkspace}
             placement="up"
           />
-          <div
-            className="conversation-provider-picker"
-            role="group"
-            aria-label="AI Provider"
-            title="切换 AI Provider 会开始新对话"
-          >
-            {AGENT_PROVIDERS.map((provider) => (
-              <button
-                key={provider.id}
-                type="button"
-                className={provider.id === activeProvider ? 'active' : ''}
-                aria-pressed={provider.id === activeProvider}
-                onClick={() => onSwitchProvider(provider.id)}
-              >
-                {provider.label}
-              </button>
-            ))}
-          </div>
+          <AgentProviderPicker
+            activeProvider={activeProvider}
+            currentModel={currentModel}
+            configuredModel={configuredModel}
+            onSwitchProvider={onSwitchProvider}
+          />
           <span className="conversation-model-placeholder" title="在设置 · AI CLI 配置模型">
             {currentModel
               ? `${providerLabel} · ${currentModel}`
@@ -189,7 +214,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             <Square size={14} /> 停止
           </button>
         ) : (
-          <button type="button" onClick={submit} disabled={disabled || !value.trim()} title="发送 Ctrl+Enter">
+          <button type="button" onClick={handleSubmit} disabled={disabled || !value.trim()} title="发送 Ctrl+Enter">
             <Send size={14} /> 发送
           </button>
         )}
