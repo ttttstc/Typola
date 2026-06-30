@@ -52,6 +52,7 @@ src/services/agent/runtime/defs/opencode.ts
 | Slash 命令 | `apps/web/src/components/ChatComposer.tsx` 中 slash palette / MCP 拦截片段 | 复用模式，做 Typola textarea 版 |
 | ToolCard | `apps/web/src/components/ToolCard.tsx` 单文件分派 | 复用单文件分派模式，不创建假想 `toolCards/<name>.tsx` 复刻 |
 | QuestionForm | `apps/web/src/components/QuestionForm.tsx` + `apps/web/src/artifacts/question-form.ts` | 只搬 parser + 对话内卡片，不搬 QuestionsPanel / genui |
+| CLI 图标/选择器 | `apps/web/src/components/AgentIcon.tsx`、`apps/web/public/agent-icons/*`、`ChatComposer.tsx` composer footer、`styles/chat.css` footer 统一控件样式 | 复刻左下角 CLI 选择器外观与图标体系，裁剪到 Claude/OpenCode/Codex 检测 |
 | Mock CLI | `mocks/mock-agent.mjs`、`mocks/lib/recording-picker.mjs`、`mocks/bin/*`、`mocks/golden/*` | 裁剪到 Claude/OpenCode/Codex 检测需要 |
 | Runtime def | `apps/daemon/src/runtimes/defs/codex.ts` | 只取检测元数据；执行参数/parser 后续再做 |
 
@@ -199,16 +200,76 @@ Assistant message 事件映射：
 - 测试只喂 Typola parser，断言解析后的 `AgentEvent[]`。
 - 不让 `format-*.mjs` 直接输出 Typola 已解析事件，避免假阳。
 
+### 4.7 CLI 图标与左下角选择器复刻
+
+用户明确要求：OpenDesign 的 CLI 图标和左下角选择 CLI 的样式也要复刻过来。这里是 UI 交付项，不是可选美化。
+
+复用来源：
+
+- `D:\AI\workspace\open-design\apps\web\src\components\AgentIcon.tsx`
+- `D:\AI\workspace\open-design\apps\web\public\agent-icons\*.svg|*.png`
+- `D:\AI\workspace\open-design\apps\web\src\components\ChatComposer.tsx` 的 composer footer 控件布局
+- `D:\AI\workspace\open-design\apps\web\src\styles\chat.css` 中 `.composer-row .avatar-agent-trigger`、`.agent-icon`、`.agent-icon-mono`、`.agent-icon-fallback` 等样式规则
+
+Typola 目标形态：
+
+- 新增 `src/components/conversation/AgentIcon.tsx`，保留 Apache-2.0 attribution。
+- 新增 `public/agent-icons/`，只带本轮需要的图标：
+  - `claude.svg`
+  - `opencode.svg`
+  - `codex.svg`
+- 不带 Gemini 图标，不出现 Gemini 入口。
+- Composer 左下角只保留一处 CLI/模型展示与选择入口，替换当前文字按钮组：
+  - `+`
+  - 工作目录 picker
+  - CLI avatar pill
+  - 模型/默认模型文字
+  - 发送/停止
+- CLI avatar pill 复刻 OpenDesign 视觉：
+  - 28px 高度。
+  - 左侧品牌图标，右侧小 chevron。
+  - 当前 CLI 不用文字按钮平铺。
+  - hover / active / disabled 状态与 footer 其他控件统一。
+  - 下拉向上展开，不遮挡输入框。
+- 下拉内容裁剪到 Typola 支持范围：
+  - Claude Code：可选择并发送。
+  - OpenCode：可选择并发送。
+  - Codex：只显示“已检测 / 未检测 / 暂不支持发送”，不可选为发送 provider。
+- 每一项展示：
+  - 图标。
+  - CLI 名称。
+  - 检测状态或版本。
+  - 当前选中状态。
+- 未安装时：
+  - 行可见但置灰。
+  - 展示“未检测到 CLI”。
+  - 提供去设置页/重新检测入口，但不自动运行安装。
+- 模型展示仍然只有左下角这一处：
+  - `Claude · <runtime model>` / `OpenCode · <runtime model>`。
+  - 没拿到模型时显示 `Claude · 默认模型` / `OpenCode · 默认模型`。
+  - 不在 header、消息区域、右侧面板重复展示模型。
+
+验收：
+
+- 与 OpenDesign 一样，用户从 composer 左下角即可识别当前 CLI。
+- Claude/OpenCode/Codex 都使用品牌图标或 fallback 图标，不再只靠文字按钮。
+- 切换 CLI 入口是一个 avatar pill + 上拉菜单，而不是多个平铺按钮。
+- Codex 只检测不发送的边界在菜单里清晰可见。
+- AI 工作台页面其它位置不再重复展示 CLI/模型。
+
 ## 5. Phase 拆分
 
 不拆过碎，按用户可感知能力分 3 个 phase。
 
 ### Phase 1：对话交互输入补齐
 
-目标：AI 能问，用户能答；用户能用最小 slash 命令控制会话。
+目标：AI 能问，用户能答；用户能用最小 slash 命令控制会话；左下角 CLI 选择器先像 OpenDesign。
 
 范围：
 
+- 复刻 OpenDesign `AgentIcon` 与 composer footer 的 CLI avatar pill。
+- 引入 Claude/OpenCode/Codex 最小图标资产。
+- Composer 左下角只保留这一处 CLI/模型选择与展示。
 - QuestionForm parser。
 - 对话内 QuestionForm 卡片。
 - 提交答案后自动发送到当前会话。
@@ -217,6 +278,9 @@ Assistant message 事件映射：
 
 验收：
 
+- 左下角 CLI 选择器是 avatar pill + 上拉菜单，不再是多个文字按钮。
+- Claude/OpenCode/Codex 图标展示正确；Codex 只检测不发送。
+- 页面其它位置不重复展示 CLI/模型。
 - assistant 输出 `<question-form>` 后渲染为卡片，不显示原始标签。
 - 单选/多选/文本输入能提交。
 - 提交后生成一条 user message 并继续当前会话。
