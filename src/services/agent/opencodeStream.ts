@@ -73,6 +73,33 @@ function stringifyToolOutput(output: unknown): string {
   }
 }
 
+const FILE_WRITE_TOOLS = new Set([
+  'write',
+  'edit',
+  'create_file',
+  'write_file',
+  'replace',
+  'str_replace_edit',
+]);
+
+function isFileWriteTool(name: string, input: unknown): boolean {
+  const record = asRecord(input);
+  if (!record) return false;
+  const normalized = name.toLowerCase();
+  const path = firstString(record.file_path, record.filePath, record.path);
+  return FILE_WRITE_TOOLS.has(normalized) && Boolean(path);
+}
+
+function fileWritePath(input: unknown): string | undefined {
+  const record = asRecord(input);
+  return record ? firstString(record.file_path, record.filePath, record.path) : undefined;
+}
+
+function fileWriteContent(input: unknown): string | undefined {
+  const record = asRecord(input);
+  return record ? firstString(record.content, record.new_string) : undefined;
+}
+
 function readToolEvent(record: Record<string, unknown>) {
   const part = asRecord(record.part);
   const state = asRecord(part?.state) ?? asRecord(record.state);
@@ -106,6 +133,7 @@ function isToolEventType(type: string): boolean {
 export function createOpenCodeStreamHandler(onEvent: Emit) {
   let buffer = '';
   const emittedToolResults = new Set<string>();
+  const emittedArtifactTools = new Set<string>();
 
   const handleLine = (line: string) => {
     const trimmed = line.trim();
@@ -128,6 +156,19 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
     if (type && isToolEventType(type)) {
       const tool = readToolEvent(record);
       if (tool) {
+        if (isFileWriteTool(tool.name, tool.input) && !emittedArtifactTools.has(tool.id)) {
+          const path = fileWritePath(tool.input);
+          if (path) {
+            emittedArtifactTools.add(tool.id);
+            const content = fileWriteContent(tool.input);
+            onEvent({
+              type: 'artifact_file',
+              path,
+              ...(content ? { content } : {}),
+              toolName: tool.name,
+            });
+          }
+        }
         onEvent({ type: 'tool_use', id: tool.id, name: tool.name, input: tool.input });
         const hasOutput = tool.output !== undefined && tool.output !== null;
         const finished = tool.status

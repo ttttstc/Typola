@@ -374,15 +374,6 @@ export function AppLayout() {
     flowRightPanelWidth: FLOW_RIGHT_PANEL_WIDTH,
   });
 
-  const convManager = useConversationManager({
-    workspaceRoot: effectiveAiWorkspaceRoot,
-    agentProvider: settings.aiActiveProvider,
-    claudePath: settings.aiClaudePath,
-    claudeModel: settings.aiClaudeModel,
-    openCodePath: settings.aiOpenCodePath,
-    openCodeModel: settings.aiOpenCodeModel,
-    pluginDirs: settings.aiPluginDirs,
-  });
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
   const reviewStateApi = useReviewState(file.path);
   const [reviewEditor, setReviewEditor] = useState<{
@@ -410,6 +401,36 @@ export function AppLayout() {
     });
   }, [effectiveAiWorkspaceRoot, settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs]);
 
+  const { skillHub, skillHubError, handleSaveSkillHub, handleReloadSkillHub } = useSkillHubState();
+  // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
+  const [skillPrefill, setSkillPrefill] = useState<{ tick: number; text: string } | null>(null);
+  const {
+    agentChangedPaths,
+    workspaceTreeVersion,
+    rememberArtifact,
+    clearArtifacts: handleClearArtifacts,
+    forgetArtifact,
+    bumpWorkspaceTreeVersion,
+  } = useWorkspaceWatch({
+    isTauriRuntime,
+    watchRoot: outputBaseDir,
+    outputRoot: outputBaseDir,
+    lastSelfWriteRef,
+  });
+
+  const convManager = useConversationManager({
+    workspaceRoot: effectiveAiWorkspaceRoot,
+    agentProvider: settings.aiActiveProvider,
+    claudePath: settings.aiClaudePath,
+    claudeModel: settings.aiClaudeModel,
+    openCodePath: settings.aiOpenCodePath,
+    openCodeModel: settings.aiOpenCodeModel,
+    pluginDirs: settings.aiPluginDirs,
+    onArtifactFile: (artifact) => {
+      rememberArtifact(artifact.path);
+    },
+  });
+
   const {
     hasEditorSelection,
     handleInsertToEditor,
@@ -429,21 +450,6 @@ export function AppLayout() {
     convManager,
     runOneshot: runEditorOneshot,
     onReviewRequested: handleReviewRequested,
-  });
-  const { skillHub, skillHubError, handleSaveSkillHub, handleReloadSkillHub } = useSkillHubState();
-  // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
-  const [skillPrefill, setSkillPrefill] = useState<{ tick: number; text: string } | null>(null);
-  const {
-    agentChangedPaths,
-    workspaceTreeVersion,
-    clearArtifacts: handleClearArtifacts,
-    forgetArtifact,
-    bumpWorkspaceTreeVersion,
-  } = useWorkspaceWatch({
-    isTauriRuntime,
-    watchRoot: outputBaseDir,
-    outputRoot: outputBaseDir,
-    lastSelfWriteRef,
   });
 
   // AI 改稿列表:跟当前文档相关的 {stem}.ai改{N}.md。Claude 写文件时 agentChangedPaths 变化 → 自动重扫。
