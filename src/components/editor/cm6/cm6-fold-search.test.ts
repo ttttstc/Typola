@@ -13,7 +13,7 @@ import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { createMarkdownExtensions } from './createMarkdownExtensions';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';
-import { foldKey, collectHeadingSections } from '../../../services/headingFoldService';
+import { extractAtxHeadingText, foldKey, collectHeadingSections } from '../../../services/headingFoldService';
 import { lineIndexAtOffset } from '../../../app/appLayoutUtils';
 import type { FoldKey } from '../../../services/headingFoldService';
 import { setFoldedHeadings } from './headingFoldExtension';
@@ -114,6 +114,18 @@ describe('cm6 PR5 — 折叠 key 区分 + 搜索展开契约', () => {
       // `## B` 在 line 6,section A 在它之前结束 → endLine = 5
       expect(a.endLine).toBe(5);
     });
+
+    it('忽略 fenced code block 内的 # 行', () => {
+      const src = ['# Real', '', '```', '# Not heading', '```', '', '## Child'].join('\n');
+      const sections = collectHeadingSections(src);
+      expect(sections.map((s) => s.text)).toEqual(['Real', 'Child']);
+      expect(sections.map((s) => s.headingLine)).toEqual([0, 6]);
+    });
+
+    it('剥离 ATX closing hashes,避免 fold key 被尾部 # 污染', () => {
+      expect(extractAtxHeadingText('## Title ###')).toBe('Title');
+      expect(collectHeadingSections('## Title ###\ntext')[0]!.text).toBe('Title');
+    });
   });
 
   describe('CM6 headingFoldExtension 与新 key 格式', () => {
@@ -128,8 +140,9 @@ describe('cm6 PR5 — 折叠 key 区分 + 搜索展开契约', () => {
 
       // 第一段 heading 之下应有 folded line class,第二段 heading 之下不应有。
       const folded = view.contentDOM.querySelectorAll(`.${FOLDED_LINE_CLASS}`);
-      // 第一段只有 "第一段文字" 一行被折叠,所以至少 1 个 folded element
-      expect(folded.length).toBeGreaterThan(0);
+      const foldedText = Array.from(folded).map((el) => el.textContent ?? '').join('\n');
+      expect(foldedText).toContain('第一段文字');
+      expect(foldedText).not.toContain('第二段文字');
     });
   });
 

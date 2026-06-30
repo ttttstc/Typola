@@ -126,10 +126,11 @@ describe('cm6 PR3 — 图片插入位置 + 加载失败回退', () => {
       const img = wrap!.querySelector('img');
       expect(img).not.toBeNull();
 
-      // 触发 img error 事件;domEventHandlers.error 接收 bubbled error
-      img!.dispatchEvent(new Event('error', { bubbles: true }));
+      // 真实 img error 不冒泡;扩展必须用 capture 监听才能接住。
+      img!.dispatchEvent(new Event('error'));
 
       expect(wrap!.classList.contains('cm-atomic-image--failed')).toBe(true);
+      expect(wrap!.getAttribute('aria-invalid')).toBe('true');
       expect(wrap!.dataset.imageAlt).toBe('alt');
       expect(wrap!.dataset.imageSrc).toBe('https://broken.example/missing.png');
     });

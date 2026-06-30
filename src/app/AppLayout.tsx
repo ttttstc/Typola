@@ -196,7 +196,7 @@ export function AppLayout() {
   // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
   const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
   const handleEditorFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
-    setFoldedHeadings(next);
+    setFoldedHeadings((prev) => sameFoldSet(prev, next) ? prev : new Set(next));
   }, []);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
@@ -323,6 +323,9 @@ export function AppLayout() {
     setEditorMode,
     extractToc,
   });
+  useEffect(() => {
+    setFoldedHeadings(new Set());
+  }, [activeTabId]);
   const debouncedStatsSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 260);
   const documentStats = useMemo(
     () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
@@ -761,23 +764,19 @@ export function AppLayout() {
     if (editorEngine === 'cm6' && editorMode === 'source') {
       const sections = collectHeadingSections(file.content);
       const matchStartLine = lineIndexAtOffset(file.content, match.index);
-      let cover: { level: number; text: string; sectionIndex: number } | null = null;
-      // 找"覆盖 match 行"的最小 section(最深 / 最后 pushed 到 sections 的)。
+      const coveringKeys: FoldKey[] = [];
       for (const section of sections) {
         if (section.headingLine <= matchStartLine && matchStartLine <= section.endLine) {
-          // heading 自己也算(允许用户搜 heading 文字时仍能找到命中)
-          const headingText = (file.content.split('\n')[section.headingLine] ?? '')
-            .replace(/^#+\s+/, '').trim();
-          cover = { level: section.level, text: headingText, sectionIndex: section.sectionIndex };
+          // 展开命中行所在的完整父链,否则只展开最深层时父 heading 仍可能折住内容。
+          coveringKeys.push(foldKey(section.level, section.text, section.sectionIndex));
         }
       }
-      if (cover) {
-        const k = foldKey(cover.level, cover.text, cover.sectionIndex);
-        if (foldedHeadings.has(k)) {
-          const next = new Set(foldedHeadings);
-          next.delete(k);
-          setFoldedHeadings(next);
-        }
+      if (coveringKeys.some((key) => foldedHeadings.has(key))) {
+        setFoldedHeadings((prev) => {
+          const next = new Set(prev);
+          for (const key of coveringKeys) next.delete(key);
+          return sameFoldSet(prev, next) ? prev : next;
+        });
       }
     }
     const text = editorMode === 'source' ? match.text : (query || match.text);
@@ -798,6 +797,7 @@ export function AppLayout() {
     }
     editorCommandRef.current?.insertTextAt(markdown, pos);
   }, []);
+  const recentImageInsertRef = useRef<{ key: string; at: number } | null>(null);
 
   // 把视口坐标映射到编辑器 doc 位置。drop / paste 场景使用。
   const resolveInsertPosition = useCallback((clientX?: number, clientY?: number): number | null => {
@@ -816,6 +816,14 @@ export function AppLayout() {
   }, insertAt: number | null = null) => {
     const currentFile = fileRef.current;
     if (currentFile.fileType === 'docx') return;
+    const dedupeKey = source.localPath
+      ? `path:${source.localPath}`
+      : `blob:${source.fileName ?? ''}:${source.mime ?? ''}:${source.bytes?.byteLength ?? 0}`;
+    const now = Date.now();
+    if (recentImageInsertRef.current?.key === dedupeKey && now - recentImageInsertRef.current.at < 800) {
+      return;
+    }
+    recentImageInsertRef.current = { key: dedupeKey, at: now };
     if (!currentFile.path) {
       setTransientMessage('请先保存文档，再插入图片。');
       return;
@@ -971,18 +979,18 @@ export function AppLayout() {
 
   const handlePasteImage = useCallback(async (event: ClipboardEvent) => {
     if (fileRef.current.fileType === 'docx') return;
+    const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    event.preventDefault();
+    event.stopPropagation();
     if (!fileRef.current.path) {
-      const hasImage = Array.from(event.clipboardData?.items ?? []).some((item) => item.type.startsWith('image/'));
-      if (hasImage) setTransientMessage('请先保存文档，再粘贴图片。');
+      setTransientMessage('请先保存文档，再粘贴图片。');
       return;
     }
 
-    const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
-    if (!imageItem) return;
     const blob = imageItem.getAsFile();
     if (!blob) return;
 
-    event.preventDefault();
     try {
       const extension = imageExtensionFromMime(blob.type);
       const fileName = `pasted-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`;
@@ -1115,6 +1123,9 @@ export function AppLayout() {
       e.stopPropagation();
       const items = e.dataTransfer?.files;
       if (!items || items.length === 0) return;
+      if (isTauriRuntime) {
+        return;
+      }
       const f = items[0];
       const path = (f as unknown as { path?: string }).path;
       // drop 落点 → CM6 pos;落点在编辑器外时回退到当前 selection(insertAt=null)。
@@ -1141,7 +1152,7 @@ export function AppLayout() {
       window.removeEventListener('dragover', prevent);
       window.removeEventListener('drop', handler);
     };
-  }, [handleOpenPath, insertImageFromSource, resolveInsertPosition]);
+  }, [handleOpenPath, insertImageFromSource, isTauriRuntime, resolveInsertPosition]);
 
   // 跟踪最后鼠标位置,Tauri drop 不传坐标时 fallback 用。
   const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
@@ -1167,8 +1178,8 @@ export function AppLayout() {
     void getCurrentWindow()
       .onDragDropEvent((event) => {
         if (event.payload.type !== 'drop') return;
-        // Tauri 2 onDragDropEvent 不传 viewport 坐标;用最后已知鼠标位置估算 pos。
-        const mouse = lastMousePosRef.current;
+        const payload = event.payload as typeof event.payload & { position?: { x: number; y: number } };
+        const mouse = payload.position ?? lastMousePosRef.current;
         const insertAt = mouse ? resolveInsertPosition(mouse.x, mouse.y) : null;
         const imagePath = event.payload.paths.find(isImagePath);
         if (imagePath) {
@@ -1191,7 +1202,7 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
     };
-  }, [handleOpenPath, isTauriRuntime]);
+  }, [handleOpenPath, insertImageFromSource, isTauriRuntime, resolveInsertPosition]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -1859,4 +1870,11 @@ export function AppLayout() {
       />
     </>
   );
+}
+
+function sameFoldSet(a: ReadonlySet<FoldKey>, b: ReadonlySet<FoldKey>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const key of a) if (!b.has(key)) return false;
+  return true;
 }

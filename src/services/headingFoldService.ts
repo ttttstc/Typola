@@ -12,6 +12,7 @@ export type HeadingSection = {
   level: number;
   endLine: number;
   sectionIndex: number;
+  text: string;
 };
 
 export type FoldKey = string; // `${level}:${sectionIndex}:${text}`
@@ -30,25 +31,63 @@ const DATA_TEXT = 'data-typola-fold-text';
 export function collectHeadingSections(source: string): HeadingSection[] {
   const lines = source.split('\n');
   const sections: HeadingSection[] = [];
-  const stack: Array<{ headingLine: number; level: number; sectionIndex: number }> = [];
+  const stack: Array<{ headingLine: number; level: number; sectionIndex: number; text: string }> = [];
   let counter = 0;
+  let fenceMarker: '`' | '~' | null = null;
   for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(/^(#{1,6})\s+/);
-    if (!match) continue;
-    const level = match[1].length;
+    const fence = lines[i].match(/^\s*(`{3,}|~{3,})/);
+    if (fence) {
+      const marker = fence[1]![0] as '`' | '~';
+      if (fenceMarker === marker) fenceMarker = null;
+      else if (!fenceMarker) fenceMarker = marker;
+      continue;
+    }
+    if (fenceMarker) continue;
+
+    const heading = parseAtxHeadingLine(lines[i]);
+    if (!heading) continue;
+    const { level, text } = heading;
     while (stack.length > 0 && stack[stack.length - 1].level >= level) {
       const top = stack.pop()!;
-      sections.push({ headingLine: top.headingLine, level: top.level, endLine: i - 1, sectionIndex: top.sectionIndex });
+      sections.push({
+        headingLine: top.headingLine,
+        level: top.level,
+        endLine: i - 1,
+        sectionIndex: top.sectionIndex,
+        text: top.text,
+      });
     }
-    stack.push({ headingLine: i, level, sectionIndex: counter++ });
+    stack.push({ headingLine: i, level, sectionIndex: counter++, text });
   }
   while (stack.length > 0) {
     const top = stack.pop()!;
-    sections.push({ headingLine: top.headingLine, level: top.level, endLine: lines.length - 1, sectionIndex: top.sectionIndex });
+    sections.push({
+      headingLine: top.headingLine,
+      level: top.level,
+      endLine: lines.length - 1,
+      sectionIndex: top.sectionIndex,
+      text: top.text,
+    });
   }
   // 按 headingLine 升序 — pop 顺序可能穿插,折叠时需要按扫描顺序找"下一个 peer"。
   sections.sort((a, b) => a.headingLine - b.headingLine);
   return sections;
+}
+
+export function extractAtxHeadingText(line: string): string {
+  return parseAtxHeadingLine(line)?.text ?? '';
+}
+
+function parseAtxHeadingLine(line: string): { level: number; text: string } | null {
+  const match = line.match(/^(#{1,6})(?:[ \t]+|$)(.*)$/);
+  if (!match) return null;
+  const level = match[1]!.length;
+  const text = match[2]!
+    .replace(/[ \t]+#+[ \t]*$/u, '')
+    .trim()
+    .normalize('NFC');
+  if (!text) return null;
+  return { level, text };
 }
 
 export function foldKey(level: number, text: string, sectionIndex = 0): FoldKey {
@@ -73,8 +112,7 @@ export function applyHeadingFolds(
   const headingBlockIdxByKey = new Map<FoldKey, number>();
 
   for (const section of sections) {
-    const headingLine = source.split('\n')[section.headingLine] ?? '';
-    const text = headingLine.replace(/^#+\s+/, '').trim();
+    const text = section.text;
     if (!text) continue;
     const key = foldKey(section.level, text, section.sectionIndex);
     if (headingBlockIdxByKey.has(key)) continue;
@@ -104,6 +142,8 @@ export function applyHeadingFolds(
     toggle.setAttribute(DATA_TEXT, text);
     toggle.setAttribute('role', 'button');
     toggle.setAttribute('aria-label', foldedHeadings.has(key) ? '展开' : '折叠');
+    toggle.setAttribute('aria-expanded', String(!foldedHeadings.has(key)));
+    toggle.tabIndex = 0;
     toggle.textContent = foldedHeadings.has(key) ? '▼' : '▶';
     headingEl.insertBefore(toggle, headingEl.firstChild);
   }

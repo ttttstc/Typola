@@ -197,7 +197,7 @@ describe('cm6 PR2 — IME + 表格稳定性', () => {
       const firstBodyRow = finalDoc.split('\n')[2]!;
       const cells = firstBodyRow.split('|').map((c) => c.trim());
       expect(cells.length).toBe(7); // 5 cells + 2 outer empty = 7 tokens via |
-      expect(cells).toContain('你');
+      expect(cells).toEqual(['', '你', '2', '3', '4', '5', '']);
     });
 
     it('isComposing=true 的 input 事件被忽略', () => {

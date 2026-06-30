@@ -16,11 +16,11 @@
 import { ensureSyntaxTree } from '@codemirror/language';
 import { StateEffect, StateField, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate, WidgetType } from '@codemirror/view';
-import { foldKey, type FoldKey } from '../../../services/headingFoldService';
+import { extractAtxHeadingText, foldKey, type FoldKey } from '../../../services/headingFoldService';
 
 const FOLD_TOGGLE_CLASS = 'typola-heading-fold-toggle';
 const FOLDED_LINE_CLASS = 'typola-cm-line-folded';
-const SYNTAX_TREE_BUDGET_MS = 50;
+const SYNTAX_TREE_BUDGET_MS = 200;
 
 const toggleFoldEffect = StateEffect.define<FoldKey>();
 const setFoldedEffect = StateEffect.define<ReadonlySet<FoldKey>>();
@@ -49,10 +49,10 @@ type HeadingFoldOptions = {
 
 type HeadingInfo = { from: number; level: number; text: string; sectionIndex: number };
 
-function collectHeadings(view: EditorView): HeadingInfo[] {
+function collectHeadings(view: EditorView): HeadingInfo[] | null {
   const headings: HeadingInfo[] = [];
   const tree = ensureSyntaxTree(view.state, view.state.doc.length, SYNTAX_TREE_BUDGET_MS);
-  if (!tree) return headings;
+  if (!tree) return null;
   const cursor = tree.cursor();
   let sectionIndex = 0;
   do {
@@ -61,7 +61,7 @@ function collectHeadings(view: EditorView): HeadingInfo[] {
       const level = Number(name.slice('ATXHeading'.length));
       if (level >= 1 && level <= 6) {
         const raw = view.state.doc.sliceString(cursor.from, cursor.to);
-        const text = raw.replace(/^#+\s+/, '').trim();
+        const text = extractAtxHeadingText(raw);
         if (text) {
           headings.push({ from: cursor.from, level, text, sectionIndex: sectionIndex++ });
         }
@@ -95,19 +95,22 @@ class FoldToggleWidget extends WidgetType {
     span.textContent = this.folded ? '▼' : '▶';
     span.setAttribute('role', 'button');
     span.setAttribute('aria-label', this.folded ? '展开' : '折叠');
+    span.setAttribute('aria-expanded', String(!this.folded));
     span.setAttribute('data-typola-fold-level', String(this.level));
     span.setAttribute('data-typola-fold-index', String(this.sectionIndex));
     span.setAttribute('data-typola-fold-text', this.text);
+    span.tabIndex = 0;
     span.contentEditable = 'false';
     return span;
   }
   ignoreEvent(event: Event) {
-    return event.type === 'mousedown' || event.type === 'click';
+    return event.type === 'mousedown' || event.type === 'click' || event.type === 'keydown';
   }
 }
 
-function buildDecorations(view: EditorView, folded: ReadonlySet<FoldKey>): DecorationSet {
+function buildDecorations(view: EditorView, folded: ReadonlySet<FoldKey>): DecorationSet | null {
   const headings = collectHeadings(view);
+  if (headings === null) return null;
   if (headings.length === 0) return Decoration.none;
   const docLen = view.state.doc.length;
   const ranges: Range<Decoration>[] = [];
@@ -146,14 +149,15 @@ function makeFoldPlugin(onChange?: (folded: ReadonlySet<FoldKey>) => void) {
     class {
       decorations: DecorationSet;
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, view.state.field(foldedField));
+        this.decorations = buildDecorations(view, view.state.field(foldedField)) ?? Decoration.none;
       }
       update(update: ViewUpdate) {
         const foldedChanged = update.transactions.some((tr) =>
           tr.effects.some((e) => e.is(toggleFoldEffect) || e.is(setFoldedEffect)),
         );
         if (update.docChanged || foldedChanged) {
-          this.decorations = buildDecorations(update.view, update.state.field(foldedField));
+          const nextDecorations = buildDecorations(update.view, update.state.field(foldedField));
+          if (nextDecorations) this.decorations = nextDecorations;
           if (foldedChanged && onChange) {
             onChange(update.state.field(foldedField));
           }
@@ -164,21 +168,33 @@ function makeFoldPlugin(onChange?: (folded: ReadonlySet<FoldKey>) => void) {
   );
 }
 
+function toggleFoldFromEvent(event: MouseEvent | KeyboardEvent, view: EditorView): void {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const toggle = target.closest(`.${FOLD_TOGGLE_CLASS}`);
+  if (!toggle) return;
+  const levelStr = toggle.getAttribute('data-typola-fold-level');
+  const indexStr = toggle.getAttribute('data-typola-fold-index');
+  const text = toggle.getAttribute('data-typola-fold-text');
+  if (!levelStr || !indexStr || text === null) return;
+  event.preventDefault();
+  event.stopPropagation();
+  view.dispatch({
+    effects: toggleFoldEffect.of(foldKey(Number(levelStr), text, Number(indexStr))),
+  });
+}
+
 const foldClickHandler = EditorView.domEventHandlers({
   click(event, view) {
+    toggleFoldFromEvent(event, view);
+  },
+  keydown(event, view) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
     const target = event.target;
     if (!(target instanceof Element)) return;
     const toggle = target.closest(`.${FOLD_TOGGLE_CLASS}`);
     if (!toggle) return;
-    const levelStr = toggle.getAttribute('data-typola-fold-level');
-    const indexStr = toggle.getAttribute('data-typola-fold-index');
-    const text = toggle.getAttribute('data-typola-fold-text');
-    if (!levelStr || !indexStr || text === null) return;
-    event.preventDefault();
-    event.stopPropagation();
-    view.dispatch({
-      effects: toggleFoldEffect.of(foldKey(Number(levelStr), text, Number(indexStr))),
-    });
+    toggleFoldFromEvent(event, view);
   },
 });
 
