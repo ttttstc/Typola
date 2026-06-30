@@ -117,6 +117,61 @@ describe('createOpenCodeStreamHandler', () => {
     ]);
   });
 
+  it('emits artifact_file for non-whitelisted file extensions', () => {
+    const events: AgentEvent[] = [];
+    const handler = createOpenCodeStreamHandler((event) => events.push(event));
+
+    handler.feed(JSON.stringify({
+      type: 'tool_use',
+      part: {
+        type: 'tool',
+        callID: 'toolu_yaml_1',
+        tool: 'write',
+        state: {
+          status: 'completed',
+          input: { filePath: 'config.yaml' },
+          output: 'created config.yaml',
+        },
+      },
+    }) + '\n');
+    handler.flush();
+
+    expect(events[0]).toEqual({ type: 'artifact_file', path: 'config.yaml', toolName: 'Write' });
+  });
+
+  it('emits artifact_file only once per streaming tool id', () => {
+    const events: AgentEvent[] = [];
+    const handler = createOpenCodeStreamHandler((event) => events.push(event));
+    const base = {
+      type: 'tool_use',
+      part: {
+        type: 'tool',
+        callID: 'toolu_streaming_write',
+        tool: 'write',
+      },
+    };
+
+    handler.feed(JSON.stringify({
+      ...base,
+      part: {
+        ...base.part,
+        state: { status: 'running', input: { filePath: 'draft.md', content: '# Draft\n' } },
+      },
+    }) + '\n');
+    handler.feed(JSON.stringify({
+      ...base,
+      part: {
+        ...base.part,
+        state: { status: 'completed', input: { filePath: 'draft.md', content: '# Draft\n' }, output: 'created' },
+      },
+    }) + '\n');
+    handler.flush();
+
+    expect(events.filter((event) => event.type === 'artifact_file')).toEqual([
+      { type: 'artifact_file', path: 'draft.md', content: '# Draft\n', toolName: 'Write' },
+    ]);
+  });
+
   it('maps OpenCode reasoning-like json fields to thinking deltas when present', () => {
     const events: AgentEvent[] = [];
     const handler = createOpenCodeStreamHandler((event) => events.push(event));

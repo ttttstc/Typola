@@ -73,21 +73,21 @@ function stringifyToolOutput(output: unknown): string {
   }
 }
 
+const FILE_WRITE_TOOLS = new Set([
+  'write',
+  'edit',
+  'create_file',
+  'write_file',
+  'replace',
+  'str_replace_edit',
+]);
+
 function isFileWriteTool(name: string, input: unknown): boolean {
   const record = asRecord(input);
   if (!record) return false;
   const normalized = name.toLowerCase();
   const path = firstString(record.file_path, record.filePath, record.path);
-  const writesFile =
-    normalized === 'write' ||
-    normalized === 'edit' ||
-    normalized === 'create_file' ||
-    normalized === 'write_file' ||
-    normalized === 'replace' ||
-    normalized === 'str_replace_edit';
-  if (!writesFile || !path) return false;
-  if (/\.(html|htm|css|js|jsx|ts|tsx|md|markdown|json|csv|txt)$/iu.test(path)) return true;
-  return typeof record.content === 'string' || typeof record.new_string === 'string';
+  return FILE_WRITE_TOOLS.has(normalized) && Boolean(path);
 }
 
 function fileWritePath(input: unknown): string | undefined {
@@ -133,6 +133,7 @@ function isToolEventType(type: string): boolean {
 export function createOpenCodeStreamHandler(onEvent: Emit) {
   let buffer = '';
   const emittedToolResults = new Set<string>();
+  const emittedArtifactTools = new Set<string>();
 
   const handleLine = (line: string) => {
     const trimmed = line.trim();
@@ -155,9 +156,10 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
     if (type && isToolEventType(type)) {
       const tool = readToolEvent(record);
       if (tool) {
-        if (isFileWriteTool(tool.name, tool.input)) {
+        if (isFileWriteTool(tool.name, tool.input) && !emittedArtifactTools.has(tool.id)) {
           const path = fileWritePath(tool.input);
           if (path) {
+            emittedArtifactTools.add(tool.id);
             const content = fileWriteContent(tool.input);
             onEvent({
               type: 'artifact_file',

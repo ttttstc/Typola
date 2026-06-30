@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- AI 工作台补齐 #112 Phase 2 输出链路：OpenCode 写文件工具现在会进入 `artifact_file` 产物回流，CLI 相对路径会归一到当前会话 `.typola-output/`，工具输入流、工具结果和产物 toast/manifest 链路保持连续。
+- AI 工作台补齐 #112 Phase 2 输出链路：OpenCode 写文件工具现在会进入 `artifact_file` 产物回流，CLI 相对路径会归一到当前会话 `.typola-output/<conversationId>/`，非白名单扩展名（如 `.yaml`/源码文件）也能进入产物 toast/manifest 链路。
 - AI 工作台补齐 #112 Phase 1：Composer 左下角切换器改为 OpenDesign 风格 CLI 图标 pill，新增对话内 QuestionForm 交互卡片，并支持 `/clear`、`/mcp`、`/help` 三个本地 slash 命令。
 - 新增 CM6 编辑器内核 Phase 1/2/3 骨架：增加 `Cm6MarkdownEditorPane`、统一 Markdown extension 构建入口，并将运行时编辑命令收敛到 `EditorCoreHandle`；支持基础 live preview，包括任务列表、表格、图片、KaTeX 数学公式和 Mermaid 图表。
 - 新增 v0.5 AI 产物中心：AI 生成物会标准化为本地 artifact manifest，右栏可按当前会话或全部 `.typola-output` 产物浏览，并支持打开、对比、归档、删除、覆盖原文与撤销覆盖。
