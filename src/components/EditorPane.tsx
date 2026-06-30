@@ -241,6 +241,25 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
       });
       editorView.focus();
     },
+    insertTextAt(text: string, pos: number) {
+      if (!editorView) return;
+      const docLen = editorView.state.doc.length;
+      const safePos = Math.max(0, Math.min(pos, docLen));
+      editorView.dispatch({
+        changes: { from: safePos, to: safePos, insert: text },
+        selection: { anchor: safePos + text.length },
+      });
+      editorView.focus();
+    },
+    posAtCoords(x: number, y: number) {
+      if (!editorView) return null;
+      try {
+        const result = editorView.posAtCoords({ x, y });
+        return result ?? null;
+      } catch {
+        return null;
+      }
+    },
     getSelection() {
       if (!editorView) return null;
       const selection = editorView.state.selection.main;

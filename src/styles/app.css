@@ -1496,6 +1496,21 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-radius: 8px;
 }
 
+/* 图片加载失败回退:imageFallbackExtension 监听 error 事件给容器加 --failed 类,
+ * 这里把坏图藏掉、用 ::before 显示提示文本。原始 markdown 源仍可见,
+ * 用户可以读 URL、检查 alt,或者切到 source 模式重写。 */
+.cm6-markdown-editor-pane .cm-atomic-image--failed img {
+  display: none;
+}
+.cm6-markdown-editor-pane .cm-atomic-image--failed::before {
+  content: '⚠ 图片加载失败';
+  display: block;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  padding: 4px 0;
+}
+
 /* 表格空单元格占位:cell source 无内容时给一个不抢眼的提示文字,
  * 由 CM6 contentEditable 直接走 ::before content,不改 markdown source。 */
 .cm6-markdown-editor-pane .cm-atomic-table-cell-source:empty::before {

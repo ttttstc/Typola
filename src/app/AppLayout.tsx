@@ -755,19 +755,31 @@ export function AppLayout() {
     });
   }, [editorMode]);
 
-  const insertMarkdown = useCallback((markdown: string) => {
+  // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
+  const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {
     if (fileRef.current.fileType === 'docx') return;
-    editorCommandRef.current?.insertText(markdown);
+    if (pos == null) {
+      editorCommandRef.current?.insertText(markdown);
+      return;
+    }
+    editorCommandRef.current?.insertTextAt(markdown, pos);
+  }, []);
+
+  // 把视口坐标映射到编辑器 doc 位置。drop / paste 场景使用。
+  const resolveInsertPosition = useCallback((clientX?: number, clientY?: number): number | null => {
+    if (clientX == null || clientY == null) return null;
+    return editorCommandRef.current?.posAtCoords(clientX, clientY) ?? null;
   }, []);
 
   // 三入口统一(粘贴 / 拖拽 / 选本地文件)→ 按 settings.imageInsertAction 走 keep/copy/upload
   // 三态。upload 失败回退本地复制,保证图片不丢。
+  // insertAt:外部 drop/paste 解析出的 doc 位置;null = 当前 selection 末尾。
   const insertImageFromSource = useCallback(async (source: {
     localPath?: string;
     bytes?: Uint8Array;
     fileName?: string;
     mime?: string;
-  }) => {
+  }, insertAt: number | null = null) => {
     const currentFile = fileRef.current;
     if (currentFile.fileType === 'docx') return;
     if (!currentFile.path) {
@@ -802,7 +814,7 @@ export function AppLayout() {
     try {
       if (action === 'keep' && source.localPath) {
         const src = formatImageSrc(source.localPath, currentFile.path, settings);
-        insertMarkdown(createImageMarkdown('图片', src));
+        insertMarkdownAt(createImageMarkdown('图片', src), insertAt);
         return;
       }
 
@@ -821,26 +833,26 @@ export function AppLayout() {
           const [url] = uploadResult.urls.length > 0
             ? uploadResult.urls
             : parseUploadUrls(uploadResult.rawStdout, 1);
-          insertMarkdown(createImageMarkdown('图片', url));
+          insertMarkdownAt(createImageMarkdown('图片', url), insertAt);
           setTransientMessage('图片已上传。');
           return;
         } catch (error) {
           console.warn('Image upload failed, falling back to copy:', error);
           setTransientMessage('图片上传失败，已回退为本地复制。');
           const copied = source.localPath ? await copyImage() : uploadPath;
-          insertMarkdown(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)));
+          insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)), insertAt);
           return;
         }
       }
 
       const copiedPath = await copyImage();
-      insertMarkdown(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)));
+      insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)), insertAt);
       setTransientMessage(`图片已保存到 ${copyDestination}。`);
     } catch (error) {
       console.warn('Failed to insert image:', error);
       setTransientMessage('图片插入失败。');
     }
-  }, [insertMarkdown, settings]);
+  }, [insertMarkdownAt, settings]);
 
   // 工具栏/菜单「插入本地图片」入口:打开系统文件对话框 → 走 insertImageFromSource。
   const handleSelectLocalImage = useCallback(async () => {
@@ -944,12 +956,12 @@ export function AppLayout() {
         bytes: new Uint8Array(await blob.arrayBuffer()),
         fileName,
         mime: blob.type,
-      });
+      }, resolveInsertPosition());
     } catch (error) {
       console.warn('Failed to paste image:', error);
       setTransientMessage('图片粘贴失败。');
     }
-  }, [insertImageFromSource]);
+  }, [insertImageFromSource, resolveInsertPosition]);
 
   const startBackgroundUpdateDownload = useCallback((source: UpdateSource, update: AvailableUpdate) => {
     if (updateDownloadVersionRef.current === update.version) return;
@@ -1071,9 +1083,11 @@ export function AppLayout() {
       if (!items || items.length === 0) return;
       const f = items[0];
       const path = (f as unknown as { path?: string }).path;
+      // drop 落点 → CM6 pos;落点在编辑器外时回退到当前 selection(insertAt=null)。
+      const insertAt = resolveInsertPosition(e.clientX, e.clientY);
       // 优先识别图片:本地路径 or mime type
       if (path && isImagePath(path)) {
-        await insertImageFromSource({ localPath: path });
+        await insertImageFromSource({ localPath: path }, insertAt);
         return;
       }
       if (f.type.startsWith('image/')) {
@@ -1081,7 +1095,7 @@ export function AppLayout() {
           bytes: new Uint8Array(await f.arrayBuffer()),
           fileName: f.name,
           mime: f.type,
-        });
+        }, insertAt);
         return;
       }
       if (path && isOpenableDocumentPath(path)) await handleOpenPath(path);
@@ -1093,7 +1107,17 @@ export function AppLayout() {
       window.removeEventListener('dragover', prevent);
       window.removeEventListener('drop', handler);
     };
-  }, [handleOpenPath, insertImageFromSource]);
+  }, [handleOpenPath, insertImageFromSource, resolveInsertPosition]);
+
+  // 跟踪最后鼠标位置,Tauri drop 不传坐标时 fallback 用。
+  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const track = (e: MouseEvent) => {
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', track);
+    return () => window.removeEventListener('mousemove', track);
+  }, []);
 
   useEffect(() => {
     window.addEventListener('paste', handlePasteImage);
@@ -1109,9 +1133,12 @@ export function AppLayout() {
     void getCurrentWindow()
       .onDragDropEvent((event) => {
         if (event.payload.type !== 'drop') return;
+        // Tauri 2 onDragDropEvent 不传 viewport 坐标;用最后已知鼠标位置估算 pos。
+        const mouse = lastMousePosRef.current;
+        const insertAt = mouse ? resolveInsertPosition(mouse.x, mouse.y) : null;
         const imagePath = event.payload.paths.find(isImagePath);
         if (imagePath) {
-          void insertImageFromSource({ localPath: imagePath });
+          void insertImageFromSource({ localPath: imagePath }, insertAt);
           return;
         }
         const path = firstOpenableDocumentPath(event.payload.paths);
