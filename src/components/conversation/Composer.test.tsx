@@ -255,6 +255,59 @@ describe('Composer', () => {
     expect(sentContext.referencePaths[0]).toContain('b.md');
   });
 
+  it('appends reference paths to OpenCode command prompts when enabled', async () => {
+    const onSend = vi.fn();
+    openMock.mockResolvedValue([String.raw`D:\docs\brief.md`]);
+    act(() => {
+      root.render(
+        <Composer
+          activeProvider="opencode"
+          currentFileName="b.md"
+          currentFilePath={String.raw`D:\docs\b.md`}
+          promptReferenceTextEnabled
+          onPickWorkspace={() => undefined}
+          onSelectWorkspace={() => undefined}
+          onClearWorkspace={() => undefined}
+          onSwitchProvider={() => undefined}
+          onSend={onSend}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+
+    const plus = host.querySelector<HTMLButtonElement>('.composer-plus-trigger');
+    await act(async () => {
+      plus?.click();
+    });
+
+    const attach = Array.from(host.querySelectorAll<HTMLButtonElement>('.composer-plus-popup button'))
+      .find((button) => button.textContent?.includes('Attach files'));
+    await act(async () => {
+      attach?.click();
+    });
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea');
+    expect(textarea).toBeTruthy();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, '请使用 frontend-slides：生成演示页');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const send = host.querySelector<HTMLButtonElement>('button[title*="Ctrl+Enter"]');
+    await act(async () => {
+      send?.click();
+    });
+
+    const [sentPrompt, sentContext] = onSend.mock.calls[0];
+    expect(sentPrompt).toContain('请使用 frontend-slides');
+    expect(sentPrompt).toContain('参考以下文件');
+    expect(sentPrompt).toContain(String.raw`D:\docs\b.md`);
+    expect(sentPrompt).toContain(String.raw`D:\docs\brief.md`);
+    expect(sentContext.currentFileContextPath).toContain('b.md');
+    expect(sentContext.referencePaths).toEqual([String.raw`D:\docs\b.md`, String.raw`D:\docs\brief.md`]);
+  });
+
   it('calls onSwitchProvider from the composer footer provider picker', async () => {
     const onSwitchProvider = vi.fn();
     act(() => {

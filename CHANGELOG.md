@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 心流模式下 OpenCode 选中场景 skill/command 后，若当前文档或附件参考文件存在，Composer 发送时会像 Claude Code 一样在 prompt 中追加“参考以下文件”路径列表，同时继续通过 `--file` 传递真实文件上下文。
 - AI CLI 检测升级为轻量结构化诊断：设置页现在会展示实际识别到的 CLI 路径、版本、检测时间与多条可读诊断，Windows 下继续优先识别 npm 全局 `.cmd`，但不运行模型请求或污染正式 AI 会话。
 - 设置页 `AI CLI` 升级为简化版 `AI 执行`：Claude/OpenCode 以运行时卡片展示，可设为默认 Provider、配置 CLI 路径并重新检测；AI 工作台仅在 Composer 底部展示当前 Provider / 模型状态。
 - AI 工作台工具调用卡片切换为 OpenDesign 风格的紧凑状态卡，按 Todo / 文件 / 命令 / 搜索等工具类型分派展示，并保留原始 JSON 展开入口。
