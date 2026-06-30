@@ -73,6 +73,33 @@ function stringifyToolOutput(output: unknown): string {
   }
 }
 
+function isFileWriteTool(name: string, input: unknown): boolean {
+  const record = asRecord(input);
+  if (!record) return false;
+  const normalized = name.toLowerCase();
+  const path = firstString(record.file_path, record.filePath, record.path);
+  const writesFile =
+    normalized === 'write' ||
+    normalized === 'edit' ||
+    normalized === 'create_file' ||
+    normalized === 'write_file' ||
+    normalized === 'replace' ||
+    normalized === 'str_replace_edit';
+  if (!writesFile || !path) return false;
+  if (/\.(html|htm|css|js|jsx|ts|tsx|md|markdown|json|csv|txt)$/iu.test(path)) return true;
+  return typeof record.content === 'string' || typeof record.new_string === 'string';
+}
+
+function fileWritePath(input: unknown): string | undefined {
+  const record = asRecord(input);
+  return record ? firstString(record.file_path, record.filePath, record.path) : undefined;
+}
+
+function fileWriteContent(input: unknown): string | undefined {
+  const record = asRecord(input);
+  return record ? firstString(record.content, record.new_string) : undefined;
+}
+
 function readToolEvent(record: Record<string, unknown>) {
   const part = asRecord(record.part);
   const state = asRecord(part?.state) ?? asRecord(record.state);
@@ -128,6 +155,18 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
     if (type && isToolEventType(type)) {
       const tool = readToolEvent(record);
       if (tool) {
+        if (isFileWriteTool(tool.name, tool.input)) {
+          const path = fileWritePath(tool.input);
+          if (path) {
+            const content = fileWriteContent(tool.input);
+            onEvent({
+              type: 'artifact_file',
+              path,
+              ...(content ? { content } : {}),
+              toolName: tool.name,
+            });
+          }
+        }
         onEvent({ type: 'tool_use', id: tool.id, name: tool.name, input: tool.input });
         const hasOutput = tool.output !== undefined && tool.output !== null;
         const finished = tool.status

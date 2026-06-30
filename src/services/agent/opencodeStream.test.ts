@@ -88,6 +88,35 @@ describe('createOpenCodeStreamHandler', () => {
     ]);
   });
 
+  it('emits artifact_file before tool cards for OpenCode file writes', () => {
+    const events: AgentEvent[] = [];
+    const handler = createOpenCodeStreamHandler((event) => events.push(event));
+
+    handler.feed(JSON.stringify({
+      type: 'tool_use',
+      part: {
+        type: 'tool',
+        callID: 'toolu_write_1',
+        tool: 'write',
+        state: {
+          status: 'completed',
+          input: {
+            filePath: 'draft.md',
+            content: '# Draft\n',
+          },
+          output: 'created draft.md',
+        },
+      },
+    }) + '\n');
+    handler.flush();
+
+    expect(events).toEqual([
+      { type: 'artifact_file', path: 'draft.md', content: '# Draft\n', toolName: 'Write' },
+      { type: 'tool_use', id: 'toolu_write_1', name: 'Write', input: { filePath: 'draft.md', content: '# Draft\n' } },
+      { type: 'tool_result', toolUseId: 'toolu_write_1', content: 'created draft.md', isError: false },
+    ]);
+  });
+
   it('maps OpenCode reasoning-like json fields to thinking deltas when present', () => {
     const events: AgentEvent[] = [];
     const handler = createOpenCodeStreamHandler((event) => events.push(event));

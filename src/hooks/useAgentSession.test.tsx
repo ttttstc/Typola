@@ -29,13 +29,15 @@ type HarnessApi = ReturnType<typeof useConversationManager>;
 function Harness({
   workspaceRoot,
   agentProvider,
+  onArtifactFile,
   expose,
 }: {
   workspaceRoot: string;
   agentProvider: AgentProvider;
+  onArtifactFile?: Parameters<typeof useConversationManager>[0]['onArtifactFile'];
   expose: (api: HarnessApi) => void;
 }) {
-  const api = useConversationManager({ workspaceRoot, agentProvider });
+  const api = useConversationManager({ workspaceRoot, agentProvider, onArtifactFile });
   useEffect(() => expose(api), [api, expose]);
   return null;
 }
@@ -150,5 +152,51 @@ describe('useConversationManager', () => {
       message.role === 'assistant' && message.content.includes('late output')
     ))).toBe(false);
     expect(api?.runState).toBe('idle');
+  });
+
+  it('routes relative artifact_file events into the conversation output directory', async () => {
+    const onArtifactFile = vi.fn();
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          onArtifactFile={onArtifactFile}
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('write artifact');
+    });
+    const request = headlessMock.startAgentSession.mock.calls[0][0];
+
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: request.conversationId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({
+          type: 'tool_use',
+          part: {
+            type: 'tool',
+            callID: 'toolu_write',
+            tool: 'write',
+            state: {
+              status: 'completed',
+              input: { filePath: 'draft.md', content: '# Draft\n' },
+              output: 'created',
+            },
+          },
+        }),
+      });
+    });
+
+    expect(onArtifactFile).toHaveBeenCalledWith({
+      path: `D:\\md files\\.typola-output\\${request.conversationId}\\draft.md`,
+      content: '# Draft\n',
+      toolName: 'Write',
+    });
   });
 });
