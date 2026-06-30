@@ -69,6 +69,7 @@ import {
   resolveCopyDestination,
   resolveImageInsertAction,
 } from '../services/imageInsert';
+import { collectHeadingSections, foldKey, type FoldKey } from '../services/headingFoldService';
 import {
   extractToc,
   escapeRegExp,
@@ -79,6 +80,7 @@ import {
   joinLocalPath,
   LEFT_PANEL_MAX_WIDTH,
   LEFT_PANEL_MIN_WIDTH,
+  lineIndexAtOffset,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_RESIZER_GAP,
@@ -190,6 +192,12 @@ export function AppLayout() {
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
+  // 折叠集合:由 AppLayout 拥有,用于"搜索命中自动展开"等命令式扩展。
+  // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
+  const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
+  const handleEditorFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
+    setFoldedHeadings(next);
+  }, []);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
@@ -746,6 +754,32 @@ export function AppLayout() {
     // 后续按键打进文档(包括 Esc 再 Ctrl+F 后的 type 会破坏文档内容)。
     // searchOptions:透传到 WYSIWYG 模式的 findTextNodeRange + getSearchMatchOccurrenceIndex,
     // 让 IR 里的 case/regex/wholeWord 匹配跟 FindReplacePanel 的 findSearchMatches 完全一致。
+    //
+    // PR5:折叠区域内命中时先自动展开 — 否则命中位置不可视,scrollIntoView 也无意义。
+    // 用 collectHeadingSections 找覆盖 match 位置的最深 heading section,
+    // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
+    if (editorEngine === 'cm6' && editorMode === 'source') {
+      const sections = collectHeadingSections(file.content);
+      const matchStartLine = lineIndexAtOffset(file.content, match.index);
+      let cover: { level: number; text: string; sectionIndex: number } | null = null;
+      // 找"覆盖 match 行"的最小 section(最深 / 最后 pushed 到 sections 的)。
+      for (const section of sections) {
+        if (section.headingLine <= matchStartLine && matchStartLine <= section.endLine) {
+          // heading 自己也算(允许用户搜 heading 文字时仍能找到命中)
+          const headingText = (file.content.split('\n')[section.headingLine] ?? '')
+            .replace(/^#+\s+/, '').trim();
+          cover = { level: section.level, text: headingText, sectionIndex: section.sectionIndex };
+        }
+      }
+      if (cover) {
+        const k = foldKey(cover.level, cover.text, cover.sectionIndex);
+        if (foldedHeadings.has(k)) {
+          const next = new Set(foldedHeadings);
+          next.delete(k);
+          setFoldedHeadings(next);
+        }
+      }
+    }
     const text = editorMode === 'source' ? match.text : (query || match.text);
     editorCommandRef.current?.revealRange(match.index, match.index + match.length, {
       text,
@@ -753,7 +787,7 @@ export function AppLayout() {
       query,
       searchOptions,
     });
-  }, [editorMode]);
+  }, [editorEngine, editorMode, file.content, foldedHeadings]);
 
   // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
   const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {
@@ -1433,6 +1467,8 @@ export function AppLayout() {
         onScrollRatio={handleEditorScrollRatio}
         onAIAction={handleEditorAIAction}
         onPreviewHeadingChange={handleEditorHeadingChange}
+        foldedHeadings={foldedHeadings}
+        onFoldChange={handleEditorFoldChange}
       />
     </Suspense>
   ) : (

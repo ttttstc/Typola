@@ -29,6 +29,18 @@ export function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
+/** 给定 source 字符 offset,返回 0-based line index。
+ *  超界或空字符串时返回 0;只数 '\n',最后一段无 '\n' 也算一行。 */
+export function lineIndexAtOffset(source: string, offset: number): number {
+  if (offset <= 0) return 0;
+  let line = 0;
+  const upper = Math.min(offset, source.length);
+  for (let i = 0; i < upper; i++) {
+    if (source.charCodeAt(i) === 10) line++;
+  }
+  return line;
+}
+
 export function imageExtensionFromMime(type: string): string {
   if (type === 'image/jpeg') return 'jpg';
   if (type === 'image/webp') return 'webp';

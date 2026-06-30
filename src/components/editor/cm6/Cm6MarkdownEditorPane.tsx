@@ -19,6 +19,10 @@ type Cm6MarkdownEditorPaneProps = {
   filePath?: string;
   onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
   onPreviewHeadingChange?: (change: PreviewHeadingChange) => void;
+  /** 折叠集合 — 由调用方(AppLayout)持有,以支持"搜索命中自动展开"等命令式扩展。
+   *  若不传,组件内部用 useState 自管,行为与之前保持一致。 */
+  foldedHeadings?: ReadonlySet<FoldKey>;
+  onFoldChange?: (next: ReadonlySet<FoldKey>) => void;
 };
 
 /** 以 atomic-editor 默认 14px 为 100% 参考,滚轮缩放比例都换算到这个基准。 */
@@ -38,18 +42,21 @@ function zoomPercent(size: number): number {
  */
 export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEditorPaneProps>(
   function Cm6MarkdownEditorPane(props, ref) {
-    const { onPreviewHeadingChange, ...rest } = props;
+    const { onPreviewHeadingChange, foldedHeadings: foldedHeadingsProp, onFoldChange, ...rest } = props;
     const settings = useSettings();
     const [zoomIndicator, setZoomIndicator] = useState<{ percent: number; restored: boolean } | null>(null);
-    const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
+    const [internalFoldedHeadings, setInternalFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
+    const foldedHeadings = foldedHeadingsProp ?? internalFoldedHeadings;
     const hideTimerRef = useRef<number | null>(null);
     const editorRef = useRef<EditorCoreHandle | null>(null);
 
-    // onFoldChange:editor 内的折叠变化(用户点击 toggle)镜像到 React state,
-    // 这样 wheel zoom 触发扩展重建时,folds 能从 React state 恢复。
     const handleFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
-      setFoldedHeadings(next);
-    }, []);
+      if (onFoldChange) {
+        onFoldChange(next);
+      } else {
+        setInternalFoldedHeadings(next);
+      }
+    }, [onFoldChange]);
 
     const showZoomIndicator = useCallback((percent: number) => {
       setZoomIndicator({ percent, restored: percent === 100 });
