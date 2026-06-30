@@ -273,7 +273,7 @@ export function SkillHubPanel({
           summary: skillSummary(skill, local),
           system: true,
           installed: Boolean(local),
-          path: local?.path ?? skill.expectedPath,
+          path: local?.path ?? (activeProvider === 'claude' ? skill.expectedPath : undefined),
           template: skill,
         };
       }),

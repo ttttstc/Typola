@@ -69,6 +69,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复心流模式下 OpenCode 场景模板没有可选 skill/command 的问题：内置模板现在声明支持 OpenCode command，已安装的同名本地 command 会直接显示为可点击卡片，未安装项会引导按 OpenCode command 配置。
 - 修复 #90：OpenCode 场景下点击 SkillHub command 卡片会预填 Composer，并继续通过 `opencode run --command` 调用；刷新、扫描错误和安装引导文案改为区分 Claude skill 与 OpenCode command。
 - 修复 PR #100 检视指出的 AI Runtime 空抽象问题：移除未接入实际 spawn 的 commandSpec / promptBudget 层，Claude / OpenCode runtime 定义收敛为 CLI 检测配置表。
 - 修复 AI CLI 检测稳定性：版本探测改用进程级超时等待、限量读取 stdout/stderr 并按字符边界安全截断；诊断操作按钮不再只支持重新检测。

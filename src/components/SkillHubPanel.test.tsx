@@ -92,12 +92,48 @@ describe('SkillHubPanel', () => {
     expect(skillScannerMock.listLocalSkills).toHaveBeenCalledWith('opencode', String.raw`D:\notes`);
   });
 
+  it('renders installed OpenCode commands from system scene templates without custom scene additions', async () => {
+    const onPickSkill = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <SkillHubPanel
+          activeProvider="opencode"
+          activeWorkspaceRoot={String.raw`D:\notes`}
+          hub={{ version: 2, sceneAdditions: {}, hiddenSystemSkills: {} }}
+          onPickSkill={onPickSkill}
+          onInstallSkill={vi.fn()}
+          onSaveHub={vi.fn()}
+          onReload={vi.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+
+    await act(async () => undefined);
+    act(() => findButtonByText(host, 'HTML 制作').click());
+
+    const commandButton = findButtonByText(host, 'frontend-slides');
+    expect(commandButton.closest('li')?.textContent).toContain('已安装');
+
+    act(() => commandButton.click());
+
+    expect(onPickSkill).toHaveBeenCalledWith('frontend-slides');
+  });
+
   it('allows adding an OpenCode command with the same name as a Claude custom skill', async () => {
     const onSaveHub = vi.fn().mockResolvedValue(undefined);
+    skillScannerMock.listLocalSkills.mockResolvedValue([
+      {
+        name: 'write-report',
+        description: 'Write report',
+        source: 'opencode',
+        path: String.raw`D:\notes\.opencode\commands\write-report.md`,
+      },
+    ]);
     const mixedHub: SkillHub = {
       version: 2,
       sceneAdditions: {
-        html: [{ name: 'frontend-slides', description: 'Claude version', supportedProviders: ['claude'] }],
+        html: [{ name: 'write-report', description: 'Claude version', supportedProviders: ['claude'] }],
       },
       hiddenSystemSkills: {},
     };
@@ -120,7 +156,7 @@ describe('SkillHubPanel', () => {
     act(() => findButtonByText(host, 'HTML 制作').click());
     act(() => findButtonByText(host, '添加 OpenCode command').click());
 
-    const localButton = findButtonByText(host, 'frontend-slides');
+    const localButton = findButtonByText(host, 'write-report');
     expect(localButton.disabled).toBe(false);
 
     await act(async () => {
@@ -130,7 +166,7 @@ describe('SkillHubPanel', () => {
     expect(onSaveHub).toHaveBeenCalledWith(expect.objectContaining({
       sceneAdditions: expect.objectContaining({
         html: [expect.objectContaining({
-          name: 'frontend-slides',
+          name: 'write-report',
           supportedProviders: ['claude', 'opencode'],
         })],
       }),

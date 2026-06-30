@@ -127,7 +127,12 @@ describe('skill hub helpers', () => {
       'baoyu-slide-deck',
       'ppt-master',
     ]);
-    expect(getSystemSkillScenesForProvider('opencode').flatMap((scene) => scene.skills)).toEqual([]);
+    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'html')?.skills.map((skill) => skill.name)).toEqual([
+      'frontend-slides',
+      'guizang-ppt-skill',
+      'baoyu-markdown-to-html',
+      'html-ppt-skill',
+    ]);
   });
 
   it('filters user-added Claude skills out for OpenCode provider', () => {
