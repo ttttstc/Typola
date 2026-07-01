@@ -1,4 +1,4 @@
-import type { ComponentProps, CSSProperties, MutableRefObject, ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
 import { FolderOpen, Sparkles, BookOpenText, Newspaper, X } from 'lucide-react';
 import { Toolbar } from './Toolbar';
 import { FloatingToc } from './FloatingToc';
@@ -53,6 +53,41 @@ type AppLayoutChromeProps = {
   statusBarNode: ReactNode;
 };
 
+function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolean) {
+  const containerRef = useRef<T | null>(null);
+  const [style, setStyle] = useState<CSSProperties | null>(null);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const active = container?.querySelector<HTMLElement>('[data-indicator-active="true"]');
+    if (!container || !active) {
+      setStyle(null);
+      return undefined;
+    }
+
+    const update = () => {
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      setStyle({
+        transform: `translateX(${activeRect.left - containerRect.left}px)`,
+        width: `${activeRect.width}px`,
+      });
+    };
+
+    update();
+    const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+    resizeObserver?.observe(container);
+    resizeObserver?.observe(active);
+    window.addEventListener('resize', update);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [activeKey]);
+
+  return { containerRef, indicatorStyle: style };
+}
+
 /**
  * Presentation-only shell for AppLayout's toolbar, center workbench, and status chrome.
  */
@@ -99,6 +134,10 @@ export function AppLayoutChrome({
   terminalNode,
   statusBarNode,
 }: AppLayoutChromeProps) {
+  const leftRailIndicator = useActiveTabIndicator<HTMLDivElement>(leftRailMode);
+  const editorTabIndicator = useActiveTabIndicator<HTMLDivElement>(activeTabId);
+  const rightRailIndicator = useActiveTabIndicator<HTMLDivElement>(rightPanelMode);
+
   return (
     <div className="app-layout" data-theme={theme} style={appStyle}>
       <Toolbar {...toolbarProps} />
@@ -110,10 +149,14 @@ export function AppLayoutChrome({
         {leftRailMode !== 'none' && (
           <>
             <aside className="left-rail-shell" style={{ width: workspacePanelWidth }}>
-              <div className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
+              <div ref={leftRailIndicator.containerRef} className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
+                {leftRailIndicator.indicatorStyle && (
+                  <span className="tab-motion-indicator left-rail-tab-indicator" style={leftRailIndicator.indicatorStyle} aria-hidden="true" />
+                )}
                 <button
                   type="button"
                   className={leftRailMode === 'workspace' ? 'active' : ''}
+                  data-indicator-active={leftRailMode === 'workspace' ? 'true' : undefined}
                   onClick={onToggleWorkspacePanel}
                   aria-label={leftRailMode === 'workspace' ? '收起文件树' : '打开文件树'}
                   title={leftRailMode === 'workspace' ? '收起文件树' : '打开文件树'}
@@ -124,6 +167,7 @@ export function AppLayoutChrome({
                 <button
                   type="button"
                   className={leftRailMode === 'aiWorkbench' ? 'active' : ''}
+                  data-indicator-active={leftRailMode === 'aiWorkbench' ? 'true' : undefined}
                   onClick={onToggleAiPanel}
                   aria-label={leftRailMode === 'aiWorkbench' ? '收起 AI 工作台' : '打开 AI 工作台'}
                   title={leftRailMode === 'aiWorkbench' ? '收起 AI 工作台' : '打开 AI 工作台'}
@@ -167,11 +211,15 @@ export function AppLayoutChrome({
             </div>
           )}
           {shouldShowTabbar && (
-            <div className="editor-tabbar" role="tablist" aria-label="打开的文件">
+            <div ref={editorTabIndicator.containerRef} className="editor-tabbar" role="tablist" aria-label="打开的文件">
+              {editorTabIndicator.indicatorStyle && (
+                <span className="tab-motion-indicator editor-tab-indicator" style={editorTabIndicator.indicatorStyle} aria-hidden="true" />
+              )}
               {openTabs.map((tab) => (
                 <div
                   key={tab.id}
                   className={`editor-tab ${tab.id === activeTabId ? 'active' : ''}`}
+                  data-indicator-active={tab.id === activeTabId ? 'true' : undefined}
                   title={tab.file.path || tab.file.name}
                 >
                   <button
@@ -216,10 +264,14 @@ export function AppLayoutChrome({
         {rightPanelMode !== 'none' && !isDocx ? (
           <aside className="right-rail-shell" style={{ width: rightPanelWidth }}>
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (
-              <div className="right-rail-tabs" role="tablist" aria-label="右侧预览切换">
+              <div ref={rightRailIndicator.containerRef} className="right-rail-tabs" role="tablist" aria-label="右侧预览切换">
+                {rightRailIndicator.indicatorStyle && (
+                  <span className="tab-motion-indicator right-rail-tab-indicator" style={rightRailIndicator.indicatorStyle} aria-hidden="true" />
+                )}
                 <button
                   type="button"
                   className={rightPanelMode === 'word' ? 'active' : ''}
+                  data-indicator-active={rightPanelMode === 'word' ? 'true' : undefined}
                   onClick={() => onSetRightPanelMode('word')}
                   aria-label="Word 预览"
                   title="Word 预览"
@@ -230,6 +282,7 @@ export function AppLayoutChrome({
                 <button
                   type="button"
                   className={rightPanelMode === 'wechat' ? 'active' : ''}
+                  data-indicator-active={rightPanelMode === 'wechat' ? 'true' : undefined}
                   onClick={() => onSetRightPanelMode('wechat')}
                   aria-label="微信预览"
                   title="微信预览"

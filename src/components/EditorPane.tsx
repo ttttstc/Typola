@@ -49,6 +49,22 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
     ? 'var(--font-mono)'
     : `'${settings.editorFontFamily}', var(--font-mono)`;
 
+  const flashRange = useCallback((from: number) => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    window.requestAnimationFrame(() => {
+      const dom = view.domAtPos(Math.max(0, Math.min(from, view.state.doc.length))).node;
+      const element = dom instanceof HTMLElement ? dom : dom.parentElement;
+      const line = element?.closest<HTMLElement>('.cm-line');
+      if (!line) return;
+      line.classList.remove('typola-cm-hit-flash');
+      // Force restart when the user jumps repeatedly within the same line.
+      void line.offsetWidth;
+      line.classList.add('typola-cm-hit-flash');
+      window.setTimeout(() => line.classList.remove('typola-cm-hit-flash'), 850);
+    });
+  }, []);
+
   useEffect(() => { onAIActionRef.current = onAIAction; }, [onAIAction]);
   useEffect(() => { filePathRef.current = filePath; }, [filePath]);
   useEffect(() => { editorViewRef.current = editorView; }, [editorView]);
@@ -310,6 +326,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
         effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
         selection: { anchor: from, head: to },
       });
+      flashRange(from);
       if (!opts?.preserveFocus) editorView.focus();
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     },
@@ -327,6 +344,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
         selection: { anchor: idx, head: to },
         effects: EditorView.scrollIntoView(idx, { y: 'center', yMargin: 80 }),
       });
+      flashRange(idx);
       editorView.focus();
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     },
