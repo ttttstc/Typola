@@ -189,6 +189,8 @@ describe('QuestionForm', () => {
     expect(host.textContent).toContain('选择方向');
     expect(host.textContent).toContain('下一步做什么？');
     expect(host.textContent).not.toContain('{"questions"');
+    expect(host.querySelector('.op-status-question')).toBeTruthy();
+    expect(host.querySelector('.op-status-error')).toBeFalsy();
 
     const radio = Array.from(host.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
       .find((input) => input.parentElement?.textContent?.includes('生成 PPT'));
@@ -203,5 +205,25 @@ describe('QuestionForm', () => {
       '下一步做什么？',
       '生成 PPT',
     ].join('\n'));
+  });
+
+  it('groups low-attention research tools into a scrollable disclosure', () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant('处理中', [
+            { id: 'read-1', name: 'Read', input: { filePath: 'a.md' } },
+            { id: 'grep-1', name: 'Grep', input: { pattern: 'Typola' } },
+            { id: 'glob-1', name: 'Glob', input: { pattern: '*.md' } },
+            { id: 'write-1', name: 'Write', input: { filePath: 'out.md', content: '# Out' } },
+          ])}
+        />,
+      );
+    });
+
+    expect(host.querySelector('.conversation-tool-group')).toBeTruthy();
+    expect(host.textContent).toContain('资料检索与读取');
+    expect(host.textContent).toContain('3 个工具调用');
+    expect(host.textContent).toContain('写入');
   });
 });

@@ -4798,6 +4798,66 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   background: color-mix(in oklch, #dc2626 12%, transparent);
 }
 
+.op-status-question {
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 13%, transparent);
+}
+
+.conversation-tool-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+  overflow: hidden;
+}
+
+.conversation-tool-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.conversation-tool-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.conversation-tool-group > summary::before {
+  content: '▸';
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform 0.16s ease;
+}
+
+.conversation-tool-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.conversation-tool-group > summary span {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.conversation-tool-group > summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-tool-group-scroll {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-subtle);
+  padding: 6px;
+}
+
 .op-expand-chev {
   color: var(--text-muted);
   display: inline-flex;
@@ -5712,8 +5772,68 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .question-form-field label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--muted);
+  gap: 8px;
+  min-height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--control-bg) 86%, transparent);
+  color: var(--text-secondary);
+  padding: 6px 8px;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.question-form-field label:hover {
+  border-color: color-mix(in oklch, var(--accent) 34%, var(--border-subtle));
+  background: color-mix(in oklch, var(--accent-soft) 46%, var(--control-bg));
+  color: var(--text-primary);
+}
+
+.question-form-field input[type="radio"],
+.question-form-field input[type="checkbox"] {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex: 0 0 auto;
+  appearance: none;
+  border: 1.5px solid color-mix(in oklch, var(--muted) 55%, transparent);
+  background: var(--surface);
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.question-form-field input[type="radio"] {
+  border-radius: 999px;
+}
+
+.question-form-field input[type="checkbox"] {
+  border-radius: 5px;
+}
+
+.question-form-field input[type="radio"]:checked,
+.question-form-field input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.question-form-field input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  inset: 3.5px;
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.question-form-field input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--surface);
+  border-width: 0 2px 2px 0;
+  transform: rotate(42deg);
 }
 
 .question-form-field input[type="text"],

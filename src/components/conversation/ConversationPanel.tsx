@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -120,6 +120,24 @@ export function ConversationPanel({
   const [submittedQuestionForms, setSubmittedQuestionForms] = useState<Record<string, string>>({});
   const toastTimerRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const messageBottomRef = useRef<HTMLDivElement>(null);
+  const latestMessageSignal = useMemo(() => {
+    const last = messages[messages.length - 1];
+    if (!last) return 'empty';
+    if (last.role === 'user') return `${last.id}:${last.content.length}`;
+    return [
+      last.id,
+      last.content.length,
+      last.thinking.length,
+      last.tools.length,
+      last.tools.map((tool) => `${tool.id}:${tool.result?.length ?? 0}:${tool.inputDelta?.length ?? 0}`).join('|'),
+      last.done ? 'done' : 'streaming',
+    ].join(':');
+  }, [messages]);
+
+  useLayoutEffect(() => {
+    messageBottomRef.current?.scrollIntoView({ block: 'end' });
+  }, [latestMessageSignal, runState, activeConvId]);
 
   // 产物 toast：只提示最新一条且未被提醒过的
   const [dismissedArtifactPaths, setDismissedArtifactPaths] = useState<Set<string>>(() => new Set());
@@ -314,6 +332,7 @@ export function ConversationPanel({
           </div>
         ))}
         <ErrorRetryCard message={lastError} />
+        <div ref={messageBottomRef} aria-hidden="true" />
       </div>
       {showArtifactToast && onOpenArtifact && onArchiveArtifact && (
         <ArtifactToast

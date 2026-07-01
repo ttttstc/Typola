@@ -184,6 +184,56 @@ describe('useConversationManager', () => {
     expect(api?.runState).toBe('idle');
   });
 
+  it('keeps an unanswered AskUserQuestion idle instead of marking the run failed', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('ask me first');
+    });
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({
+          type: 'tool_use',
+          id: 'toolu_question',
+          name: 'AskUserQuestion',
+          input: {
+            questions: [{
+              question: '下一步做什么？',
+              options: [{ label: '生成报告' }, { label: '生成 PPT' }],
+            }],
+          },
+        }),
+      });
+      exitHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        exitCode: 1,
+        cancelled: false,
+        stderrTail: 'tool_use requires user input',
+      });
+    });
+
+    expect(api?.runState).toBe('idle');
+    expect(api?.lastError).toBe('');
+    const last = api?.activeConv?.messages.at(-1);
+    expect(last?.role).toBe('assistant');
+    expect(last && last.role === 'assistant' ? last.tools[0]?.name : '').toBe('AskUserQuestion');
+  });
+
   it('routes relative artifact_file events into the conversation output directory', async () => {
     const onArtifactFile = vi.fn();
     act(() => {

@@ -8,7 +8,7 @@
 // - 每张卡底部追加 RawJsonDisclosure (用户要求保留展开 JSON)
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, CircleHelp, Loader2, X } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import { translate } from '../../../services/i18n';
 import { QuestionFormCard } from '../QuestionFormCard';
@@ -434,8 +434,6 @@ export function AskUserQuestionCard({
   toolId,
   input,
   result,
-  runStreaming,
-  runSucceeded,
   submittedText,
   onSubmit,
 }: CardProps & {
@@ -450,17 +448,24 @@ export function AskUserQuestionCard({
         name="AskUserQuestion"
         input={input}
         result={result}
-        runStreaming={runStreaming}
-        runSucceeded={runSucceeded}
+        runStreaming={false}
+        runSucceeded={false}
       />
     );
   }
 
   const resultText = result && !result.isError && result.content.trim() ? result.content : undefined;
+  const answered = Boolean(submittedText ?? resultText);
+  const failed = Boolean(result?.isError);
   return (
     <div className="op-card op-question">
       <div className="op-card-head op-card-head-static">
-        <ResultBadge result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />
+        <AskUserQuestionBadge
+          answered={answered}
+          failed={failed}
+          waiting={!answered && !failed}
+          result={result}
+        />
         <span className="op-title">需要你回答</span>
         <span className="op-meta">{form.title}</span>
       </div>
@@ -472,6 +477,49 @@ export function AskUserQuestionCard({
       />
       <RawJsonDisclosure data={{ input, result }} />
     </div>
+  );
+}
+
+function AskUserQuestionBadge({
+  answered,
+  failed,
+  waiting,
+  result,
+}: {
+  answered: boolean;
+  failed: boolean;
+  waiting: boolean;
+  result?: ResultShape;
+}) {
+  if (failed) {
+    return (
+      <span
+        className="op-status op-status-error"
+        title={result?.content || '问题提交失败'}
+        aria-label={result?.content || '问题提交失败'}
+      >
+        <X size={14} />
+      </span>
+    );
+  }
+  if (answered) {
+    return (
+      <span className="op-status op-status-ok" title="已回答" aria-label="已回答">
+        <Check size={14} />
+      </span>
+    );
+  }
+  if (waiting) {
+    return (
+      <span className="op-status op-status-question" title="等待回答" aria-label="等待回答">
+        <CircleHelp size={14} />
+      </span>
+    );
+  }
+  return (
+    <span className="op-status op-status-running" title="正在生成问题" aria-label="正在生成问题">
+      <Loader2 size={14} className="op-status-spinner" />
+    </span>
   );
 }
 

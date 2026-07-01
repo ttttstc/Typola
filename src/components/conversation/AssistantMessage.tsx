@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { PreviewPane } from '../PreviewPane';
-import type { AgentMessage, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
+import type { AgentMessage, AgentToolCall, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
 import { ThoughtCard } from './ThoughtCard';
 import { ToolCard } from './ToolCard';
 import { DoneBar } from './DoneBar';
@@ -21,6 +21,15 @@ type AssistantMessageProps = {
   submittedQuestionForms?: Record<string, string>;
   onSubmitQuestionForm?: (formId: string, text: string) => void;
 };
+
+function isAskUserQuestionTool(tool: AgentToolCall): boolean {
+  return tool.name === 'AskUserQuestion' || tool.name === 'ask_user_question';
+}
+
+function isResearchTool(tool: AgentToolCall): boolean {
+  return ['Read', 'read_file', 'Glob', 'list_files', 'Grep', 'WebFetch', 'web_fetch', 'WebSearch', 'web_search']
+    .includes(tool.name);
+}
 
 function extractCodeBlocks(markdown: string): Array<{ lang: string; code: string }> {
   const blocks: Array<{ lang: string; code: string }> = [];
@@ -135,6 +144,18 @@ export function AssistantMessage({
 }: AssistantMessageProps) {
   const codeBlocks = extractCodeBlocks(message.content);
   const parsed = useMemo(() => parseQuestionForms(message.content), [message.content]);
+  const questionTools = message.tools.filter(isAskUserQuestionTool);
+  const researchTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && isResearchTool(tool));
+  const otherTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && !isResearchTool(tool));
+  const renderTool = (tool: AgentToolCall) => (
+    <ToolCard
+      key={tool.id}
+      tool={tool}
+      message={message}
+      submittedText={submittedQuestionForms[`tool:${tool.id}`]}
+      onSubmitQuestionForm={(text) => onSubmitQuestionForm?.(`tool:${tool.id}`, text)}
+    />
+  );
   return (
     <article className="conversation-message assistant">
       <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>
@@ -200,17 +221,56 @@ export function AssistantMessage({
       ) : (
         !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
-      {message.tools.map((tool) => (
-        <ToolCard
-          key={tool.id}
-          tool={tool}
-          message={message}
-          submittedText={submittedQuestionForms[`tool:${tool.id}`]}
-          onSubmitQuestionForm={(text) => onSubmitQuestionForm?.(`tool:${tool.id}`, text)}
-        />
-      ))}
+      {questionTools.map(renderTool)}
+      <ResearchToolGroup tools={researchTools} message={message} renderTool={renderTool} />
+      {otherTools.map(renderTool)}
       <ErrorRetryCard message={message.error ?? ''} />
       <DoneBar usage={message.usage} />
     </article>
   );
+}
+
+function ResearchToolGroup({
+  tools,
+  message,
+  renderTool,
+}: {
+  tools: AgentToolCall[];
+  message: Extract<AgentMessage, { role: 'assistant' }>;
+  renderTool: (tool: AgentToolCall) => ReactNode;
+}) {
+  if (tools.length === 0) return null;
+  if (tools.length <= 2) return <>{tools.map(renderTool)}</>;
+  const summary = summarizeToolNames(tools);
+  return (
+    <details className="conversation-tool-group" open={!message.done} key={message.done ? 'done' : 'running'}>
+      <summary>
+        <span>资料检索与读取</span>
+        <small>{tools.length} 个工具调用 · {summary}</small>
+      </summary>
+      <div className="conversation-tool-group-scroll">
+        {tools.map(renderTool)}
+      </div>
+    </details>
+  );
+}
+
+function summarizeToolNames(tools: AgentToolCall[]): string {
+  const counts = new Map<string, number>();
+  for (const tool of tools) {
+    const label = normalizeToolLabel(tool.name);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([name, count]) => `${name}×${count}`)
+    .join(' / ');
+}
+
+function normalizeToolLabel(name: string): string {
+  if (name === 'Read' || name === 'read_file') return 'Read';
+  if (name === 'Glob' || name === 'list_files') return 'Glob';
+  if (name === 'Grep') return 'Grep';
+  if (name === 'WebFetch' || name === 'web_fetch') return 'Fetch';
+  if (name === 'WebSearch' || name === 'web_search') return 'Search';
+  return name;
 }

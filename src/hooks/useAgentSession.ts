@@ -97,6 +97,19 @@ function upsertTool(tools: AgentToolCall[], next: AgentToolCall): AgentToolCall[
   ));
 }
 
+function isAskUserQuestionToolName(name: string): boolean {
+  return name === 'AskUserQuestion' || name === 'ask_user_question';
+}
+
+function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
+  const lastAssistant = [...messages].reverse().find((message): message is Extract<AgentMessage, { role: 'assistant' }> => (
+    message.role === 'assistant'
+  ));
+  return Boolean(lastAssistant?.tools.some((tool) => (
+    isAskUserQuestionToolName(tool.name) && !tool.result && !tool.isError
+  )));
+}
+
 function appendEventToMessages(messages: AgentMessage[], event: AgentEvent): AgentMessage[] {
   if (event.type !== 'text_delta' &&
       event.type !== 'thinking_delta' &&
@@ -209,13 +222,12 @@ export function useConversationManager({
   }, [activeConvId]);
 
   const updateConv = useCallback((convId: string, patch: Partial<ConversationData>) => {
-    setConversations((prev) => {
-      const current = prev.get(convId);
-      if (!current) return prev;
-      const next = new Map(prev);
-      next.set(convId, { ...current, ...patch });
-      return next;
-    });
+    const current = conversationsRef.current.get(convId);
+    if (!current) return;
+    const next = new Map(conversationsRef.current);
+    next.set(convId, { ...current, ...patch });
+    conversationsRef.current = next;
+    setConversations(next);
   }, []);
 
   const resolveExitWaiters = useCallback((convId: string) => {
@@ -322,15 +334,29 @@ export function useConversationManager({
       silencedRunIdsRef.current.delete(payload.runId);
       const handler = handlersRef.current.get(convId);
       handler?.flush();
+      if (eventFrameRef.current !== null) {
+        window.cancelAnimationFrame(eventFrameRef.current);
+        eventFrameRef.current = null;
+      }
+      flushQueuedEvents();
       handlersRef.current.delete(convId);
       const conv = conversationsRef.current.get(convId);
       if (!conv) return;
       const wasActive = conv.runState === 'running';
       const wasCancelled = payload.cancelled || conv.cancelRequested;
+      const waitingForUserAnswer = hasUnansweredAskUserQuestion(conv.messages);
       const patch: Partial<ConversationData> = {
         runState: payload.exitCode === 0 || wasCancelled ? 'idle' : 'error',
         cancelRequested: false,
       };
+      if (waitingForUserAnswer && !wasCancelled) {
+        // OpenDesign 的 Claude 适配用 stream-json stdin 在 stop_reason=tool_use 时保持工具等待。
+        // Typola 当前每轮进程会退出,所以 AskUserQuestion 需要转成"等待用户回答"的 idle 状态,
+        // 不能按普通工具缺 result 标成失败,否则用户还没选就看到错误。
+        updateConv(convId, { runState: 'idle', cancelRequested: false, lastError: '' });
+        resolveExitWaiters(convId);
+        return;
+      }
       if (payload.exitCode !== 0 && !wasCancelled) {
         const provider = conv.provider ?? DEFAULT_AGENT_PROVIDER;
         const diagnostic = provider === 'claude'
