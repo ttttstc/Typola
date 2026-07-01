@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ChevronDown,
   Code2,
@@ -25,6 +25,7 @@ import {
   useClick,
   useDismiss,
   useFloating,
+  useInteractions,
   useRole,
 } from '@floating-ui/react';
 import { useSettings } from '../hooks/useSettings';
@@ -92,7 +93,7 @@ export function Toolbar({
   const strokeWidth = 1.6;
 
   // 导出下拉菜单(用 @floating-ui/react 挂到 body 规避 motion 引入后的 stacking trap)
-  const exportTriggerRef = useRef<HTMLButtonElement>(null);
+  const [exportTrigger, setExportTrigger] = useState<HTMLButtonElement | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exporting = pdfExporting || wordExporting;
   const exportFloating = useFloating({
@@ -101,11 +102,16 @@ export function Toolbar({
     placement: 'bottom-end',
     middleware: [offset(4), flip({ padding: 8 }), shift({ padding: 8 })],
   });
-  useClick(exportFloating.context);
-  useDismiss(exportFloating.context);
-  useRole(exportFloating.context, { role: 'menu' });
+  const exportClick = useClick(exportFloating.context);
+  const exportDismiss = useDismiss(exportFloating.context);
+  const exportRole = useRole(exportFloating.context, { role: 'menu' });
+  const { getReferenceProps: getExportReferenceProps, getFloatingProps: getExportFloatingProps } = useInteractions([
+    exportClick,
+    exportDismiss,
+    exportRole,
+  ]);
   const setExportButtonRef = useCallback((node: HTMLButtonElement | null) => {
-    exportTriggerRef.current = node;
+    setExportTrigger(node);
     exportFloating.refs.setReference(node);
   }, [exportFloating.refs.setReference]);
 
@@ -163,10 +169,10 @@ export function Toolbar({
                 ref={setExportButtonRef}
                 data-no-window-drag="true"
                 disabled={editingDisabled || exporting}
-                data-tooltip={exporting ? '正在导出…' : '导出'}
                 aria-label="导出"
                 aria-expanded={exportMenuOpen}
                 aria-haspopup="true"
+                {...getExportReferenceProps()}
               >
                 <FileDown size={iconSize} strokeWidth={strokeWidth} />
                 <ChevronDown size={10} strokeWidth={strokeWidth} className="export-chevron" />
@@ -174,7 +180,7 @@ export function Toolbar({
               <Tooltip
                 label="导出"
                 shortcut="⌘P / ⇧⌘E"
-                reference={exportTriggerRef.current}
+                reference={exportTrigger}
                 placement="bottom"
               />
               {exportMenuOpen && (
@@ -185,6 +191,7 @@ export function Toolbar({
                     className="export-menu"
                     role="menu"
                     aria-label="导出格式"
+                    {...getExportFloatingProps()}
                   >
                     <button
                       type="button"

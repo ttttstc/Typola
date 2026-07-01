@@ -200,7 +200,15 @@ export function AssistantMessage({
       ) : (
         !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
-      {message.tools.map((tool) => <ToolCard key={tool.id} tool={tool} message={message} />)}
+      {message.tools.map((tool) => (
+        <ToolCard
+          key={tool.id}
+          tool={tool}
+          message={message}
+          submittedText={submittedQuestionForms[`tool:${tool.id}`]}
+          onSubmitQuestionForm={(text) => onSubmitQuestionForm?.(`tool:${tool.id}`, text)}
+        />
+      ))}
       <ErrorRetryCard message={message.error ?? ''} />
       <DoneBar usage={message.usage} />
     </article>

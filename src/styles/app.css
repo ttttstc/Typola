@@ -4705,6 +4705,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .op-card.op-web { border-left-color: #0891b2; }
 .op-card.op-generic { border-left-color: #6b7280; }
 .op-card.op-todo { border-left-color: #059669; }
+.op-card.op-question { border-left-color: #f97316; }
 
 .op-card-head {
   display: flex;
@@ -5056,6 +5057,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .op-card.op-web { border-left-color: #0891b2; }
 .op-card.op-generic { border-left-color: #6b7280; }
 .op-card.op-todo { border-left-color: #059669; }
+.op-card.op-question { border-left-color: #f97316; }
 
 .op-card-head {
   display: flex;
