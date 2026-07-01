@@ -7916,6 +7916,40 @@ html[data-theme='dark'] .terminal-session {
   border: 1px solid color-mix(in oklch, var(--accent) 24%, transparent);
 }
 
+.selection-result-diff {
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--control-bg);
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 12.5px;
+}
+
+.selection-result-diff-part {
+  border-radius: 4px;
+  padding: 0 1px;
+}
+
+.selection-result-diff-equal {
+  color: var(--fg);
+}
+
+.selection-result-diff-delete {
+  color: oklch(0.54 0.18 25);
+  background: color-mix(in oklch, oklch(0.62 0.18 25) 18%, transparent);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.selection-result-diff-insert {
+  color: oklch(0.45 0.14 145);
+  background: color-mix(in oklch, oklch(0.65 0.16 145) 20%, transparent);
+}
+
 .selection-result-card-error {
   padding: 8px 10px;
   border-radius: 8px;
@@ -7929,8 +7963,15 @@ html[data-theme='dark'] .terminal-session {
 
 .selection-result-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.selection-result-card-history {
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: right;
 }
 
 .selection-result-card-primary,

@@ -454,6 +454,8 @@ export function AppLayout() {
     closeResultCard,
     acceptResultCard,
     retryResultCard,
+    rejectResultCard,
+    iterateResultCard,
     copyResultCard,
     submitResultCardInput,
   } = useEditorSelectionBridge({
@@ -462,6 +464,16 @@ export function AppLayout() {
     convManager,
     runOneshot: runEditorOneshot,
     onReviewRequested: handleReviewRequested,
+    getSelectionContext: (anchor) => {
+      const content = fileRef.current.content;
+      const title = fileRef.current.path.split(/[\\/]/).pop() || '未命名';
+      return {
+        documentTitle: title,
+        documentStart: content.slice(0, 500),
+        before: content.slice(Math.max(0, anchor.from - 200), anchor.from),
+        after: content.slice(anchor.to, anchor.to + 200),
+      };
+    },
   });
 
   // AI 改稿列表:跟当前文档相关的 {stem}.ai改{N}.md。Claude 写文件时 agentChangedPaths 变化 → 自动重扫。
@@ -1845,8 +1857,11 @@ export function AppLayout() {
         onAccept={acceptResultCard}
         onCancel={closeResultCard}
         onRetry={retryResultCard}
+        onReject={rejectResultCard}
+        onIterate={iterateResultCard}
         onCopy={copyResultCard}
         onSubmitInput={submitResultCardInput}
+        iterations={resultCard?.iterations ?? []}
       />
       {/* 检视意见输入浮卡(任务 #12 浮条入口) */}
       <ReviewCommentEditor

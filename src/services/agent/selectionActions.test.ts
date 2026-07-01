@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SELECTION_ACTIONS, buildInjectionText, fileNameFromPath, findUniqueAnchor } from './selectionActions';
+import { SELECTION_ACTIONS, buildInjectionText, buildOneshotPrompt, fileNameFromPath, findUniqueAnchor } from './selectionActions';
 
 describe('fileNameFromPath', () => {
   it('returns the basename for POSIX-style paths', () => {
@@ -66,6 +66,34 @@ describe('buildInjectionText', () => {
   it('handles Windows path with mixed separators in filename extraction', () => {
     const out = buildInjectionText('polish', 'C:/Users/test/file.md', 'text');
     expect(out).toMatch(/^> 引用自当前文档「file\.md」/);
+  });
+});
+
+describe('buildOneshotPrompt', () => {
+  it('includes document context but limits rewrite to selected text', () => {
+    const prompt = buildOneshotPrompt('polish', '选中段落', {
+      documentTitle: 'demo.md',
+      documentStart: '文档开头',
+      before: '前文',
+      after: '后文',
+    });
+    expect(prompt).toContain('文档标题：demo.md');
+    expect(prompt).toContain('文档开头上下文');
+    expect(prompt).toContain('选段前文');
+    expect(prompt).toContain('选段后文');
+    expect(prompt).toContain('只改写下面“选中原文”这一段');
+    expect(prompt).toContain('选中段落');
+  });
+
+  it('includes iteration history and instruction for multi-round rewrite', () => {
+    const prompt = buildOneshotPrompt('shorten', '原文', {
+      history: ['版本一', '版本二'],
+      iterationInstruction: '更正式',
+    });
+    expect(prompt).toContain('历史改写记录');
+    expect(prompt).toContain('1. 版本一');
+    expect(prompt).toContain('2. 版本二');
+    expect(prompt).toContain('本轮迭代要求：更正式');
   });
 });
 

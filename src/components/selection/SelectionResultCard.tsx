@@ -10,8 +10,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Check, ClipboardCopy, Loader2, RefreshCcw, Send, X } from 'lucide-react';
+import { buildInlineDiffParts } from '../../services/selectionDiff';
 
-export type SelectionResultCardState = 'input' | 'loading' | 'success' | 'error';
+export type SelectionResultCardState = 'input' | 'loading' | 'success' | 'rejected' | 'error';
+
+export type SelectionResultIteration = {
+  text: string;
+  instruction: string;
+  createdAt: number;
+};
 
 type Props = {
   open: boolean;
@@ -30,7 +37,10 @@ type Props = {
   onAccept: () => void;
   onCancel: () => void;
   onRetry: () => void;
+  onReject?: () => void;
+  onIterate?: (instruction: string) => void;
   onCopy?: () => void;
+  iterations?: SelectionResultIteration[];
   /** input 态用户点确认 → 把要求传出去启动真 oneshot */
   onSubmitInput?: (requirements: string) => void;
 };
@@ -49,7 +59,10 @@ export function SelectionResultCard({
   onAccept,
   onCancel,
   onRetry,
+  onReject,
+  onIterate,
   onCopy,
+  iterations = [],
   onSubmitInput,
 }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -170,12 +183,8 @@ export function SelectionResultCard({
           ) : (
             <>
               <div className="selection-result-card-section">
-                <div className="selection-result-card-label">原文</div>
-                <div className="selection-result-card-text selection-result-card-text-original">{originalText}</div>
-              </div>
-              <div className="selection-result-card-section">
-                <div className="selection-result-card-label">新版本</div>
-                <div className="selection-result-card-text selection-result-card-text-new">{newText}</div>
+                <div className="selection-result-card-label">改动预览</div>
+                <InlineSelectionDiff originalText={originalText} newText={newText} />
               </div>
             </>
           )}
@@ -207,9 +216,68 @@ export function SelectionResultCard({
                 <button type="button" className="selection-result-card-secondary" onClick={onCancel}>
                   取消
                 </button>
+                <button type="button" className="selection-result-card-secondary" onClick={onReject}>
+                  拒绝
+                </button>
+                <button type="button" className="selection-result-card-secondary" onClick={onRetry}>
+                  再试一次
+                </button>
+                <button type="button" className="selection-result-card-secondary" onClick={() => onIterate?.('请改得更正式，语气更稳重。')}>
+                  更正式
+                </button>
+                <button type="button" className="selection-result-card-secondary" onClick={() => onIterate?.('请改得更简洁，减少修饰和重复。')}>
+                  更简洁
+                </button>
+                <button type="button" className="selection-result-card-secondary" onClick={() => onIterate?.('请改得更有文采，但不要改变事实。')}>
+                  更文艺
+                </button>
               </>
             )}
           </div>
+          {!displayOnly && iterations.length > 1 && (
+            <div className="selection-result-card-history">
+              已生成 {iterations.length}/5 个版本，可继续换风格。
+            </div>
+          )}
+        </div>
+      )}
+
+      {state === 'rejected' && (
+        <div className="selection-result-card-body">
+          <div className="selection-result-card-section">
+            <div className="selection-result-card-label">已拒绝当前版本</div>
+            <div className="selection-result-card-text selection-result-card-text-original">
+              原文未被修改。可以继续在同一选段上换一种结果。
+            </div>
+          </div>
+          {newText && (
+            <div className="selection-result-card-section">
+              <div className="selection-result-card-label">刚拒绝的版本</div>
+              <div className="selection-result-card-text selection-result-card-text-new">{newText}</div>
+            </div>
+          )}
+          <div className="selection-result-card-actions">
+            <button type="button" className="selection-result-card-primary" onClick={onRetry} autoFocus>
+              <RefreshCcw size={13} /> 再试一次
+            </button>
+            <button type="button" className="selection-result-card-secondary" onClick={() => onIterate?.('请改得更正式，语气更稳重。')}>
+              更正式
+            </button>
+            <button type="button" className="selection-result-card-secondary" onClick={() => onIterate?.('请改得更简洁，减少修饰和重复。')}>
+              更简洁
+            </button>
+            <button type="button" className="selection-result-card-secondary" onClick={() => onIterate?.('请改得更有文采，但不要改变事实。')}>
+              更文艺
+            </button>
+            <button type="button" className="selection-result-card-secondary" onClick={onCancel}>
+              关闭
+            </button>
+          </div>
+          {iterations.length > 0 && (
+            <div className="selection-result-card-history">
+              历史版本 {iterations.length}/5 会作为下一轮参考。
+            </div>
+          )}
         </div>
       )}
 
@@ -231,6 +299,23 @@ export function SelectionResultCard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function InlineSelectionDiff({ originalText, newText }: { originalText: string; newText: string }) {
+  const parts = buildInlineDiffParts(originalText, newText);
+  return (
+    <div className="selection-result-diff" aria-label="AI 改动差异">
+      {parts.map((part, index) => (
+        <span
+          // eslint-disable-next-line react/no-array-index-key
+          key={`${part.type}-${index}`}
+          className={`selection-result-diff-part selection-result-diff-${part.type}`}
+        >
+          {part.text}
+        </span>
+      ))}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   isDisplayOnlyAction,
   isOneshotAction,
   type SelectionActionId,
+  type SelectionOneshotContext,
 } from '../services/agent/selectionActions';
 import type { AnchorStatus, SelectionAnchor } from '../services/agent/types';
 import type { LeftRailMode } from './useLeftRail';
@@ -21,6 +22,12 @@ type ConversationBridge = {
 };
 
 // 选区原地结果卡的可见状态:hook 维护 + AppLayout 渲染 SelectionResultCard。
+export type SelectionIteration = {
+  text: string;
+  instruction: string;
+  createdAt: number;
+};
+
 export type SelectionResultCardData = {
   x: number;
   y: number;
@@ -28,14 +35,15 @@ export type SelectionResultCardData = {
   actionLabel: string;
   originalText: string;
   anchor: SelectionAnchor;
-  /** input = polish 等动作 oneshot 前先让用户写要求;loading/success/error 同前 */
-  state: 'input' | 'loading' | 'success' | 'error';
+  /** input = polish 等动作 oneshot 前先让用户写要求;rejected = 用户拒绝当前结果后等待迭代 */
+  state: 'input' | 'loading' | 'success' | 'rejected' | 'error';
   newText: string | null;
   error: string | null;
   /** 用户在 input 态填的额外要求,提交后冻结在卡上(retry 复用) */
   requirements?: string;
   /** 只展示不替换（如名词解释），结果卡不显示「采纳替换」按钮。 */
   displayOnly?: boolean;
+  iterations: SelectionIteration[];
 };
 
 // 哪些动作需要先弹 input 让用户写要求(目前只有润色)
@@ -53,6 +61,7 @@ type UseEditorSelectionBridgeOptions = {
   runOneshot?: RunOneshot;
   /** 「加检视意见」action 触发回调,AppLayout 据此弹 ReviewCommentEditor 浮卡。 */
   onReviewRequested?: (anchor: SelectionAnchor, origin: { x: number; y: number }) => void;
+  getSelectionContext?: (anchor: SelectionAnchor) => SelectionOneshotContext;
 };
 
 type UseEditorSelectionBridgeResult = {
@@ -70,6 +79,8 @@ type UseEditorSelectionBridgeResult = {
   acceptResultCard: () => void;
   /** error 态点重试:用上次的 action+anchor(+requirements)再跑一次 oneshot。 */
   retryResultCard: () => void;
+  rejectResultCard: () => void;
+  iterateResultCard: (instruction: string) => void;
   /** displayOnly 模式下复制结果文本到剪贴板。 */
   copyResultCard: () => Promise<void>;
   /** input 态提交:把用户写的要求拼进 prompt 真跑 oneshot。 */
@@ -85,6 +96,7 @@ export function useEditorSelectionBridge({
   convManager,
   runOneshot,
   onReviewRequested,
+  getSelectionContext,
 }: UseEditorSelectionBridgeOptions): UseEditorSelectionBridgeResult {
   const [hasEditorSelection, setHasEditorSelection] = useState(false);
   const [resultCard, setResultCard] = useState<SelectionResultCardData | null>(null);
@@ -120,16 +132,20 @@ export function useEditorSelectionBridge({
     action: SelectionActionId,
     anchor: SelectionAnchor,
     requirements: string,
+    iterationInstruction = '',
+    seedIterations?: SelectionIteration[],
   ) => {
     if (!runOneshot) return;
     abortInflightOneshot();
     const controller = new AbortController();
     oneshotAbortRef.current = controller;
     // 拼 prompt:基础模板 + 可选额外要求
-    const base = buildOneshotPrompt(action, anchor.originalText);
-    const prompt = requirements.trim()
-      ? `${base}\n\n额外要求：${requirements.trim()}`
-      : base;
+    const iterations = seedIterations ?? resultCard?.iterations ?? [];
+    const prompt = buildOneshotPrompt(action, anchor.originalText, {
+      ...getSelectionContext?.(anchor),
+      history: iterations.map((item) => item.text).slice(-5),
+      iterationInstruction: [requirements.trim(), iterationInstruction.trim()].filter(Boolean).join('；') || undefined,
+    });
     runOneshot(prompt, controller.signal)
       .then((raw) => {
         if (controller.signal.aborted) return;
@@ -147,6 +163,11 @@ export function useEditorSelectionBridge({
           state: 'success',
           newText,
           error: null,
+          requirements,
+          iterations: [
+            ...iterations,
+            { text: newText, instruction: iterationInstruction || requirements || '初版', createdAt: Date.now() },
+          ].slice(-5),
         } : prev);
       })
       .catch((error: unknown) => {
@@ -161,7 +182,7 @@ export function useEditorSelectionBridge({
       .finally(() => {
         if (oneshotAbortRef.current === controller) oneshotAbortRef.current = null;
       });
-  }, [abortInflightOneshot, runOneshot]);
+  }, [abortInflightOneshot, getSelectionContext, resultCard?.iterations, runOneshot]);
 
   // 入口:决定走 input 前置弹框还是直接 oneshot。
   // polish:入 input 态等用户写要求(可空)→ submitResultCardInput 再真跑。
@@ -186,6 +207,7 @@ export function useEditorSelectionBridge({
       error: null,
       requirements: needInput ? '' : undefined,
       displayOnly: isDisplayOnlyAction(action),
+      iterations: [],
     });
     if (!needInput) executeOneshot(action, anchor, '');
   }, [executeOneshot, runOneshot]);
@@ -301,8 +323,30 @@ export function useEditorSelectionBridge({
   const retryResultCard = useCallback(() => {
     const current = resultCard;
     if (!current) return;
-    startOneshot(current.action, current.anchor, { x: current.x, y: current.y });
-  }, [resultCard, startOneshot]);
+    setResultCard({
+      ...current,
+      state: 'loading',
+      error: null,
+    });
+    executeOneshot(current.action, current.anchor, current.requirements ?? '', '请重新给出一个不同版本。', current.iterations);
+  }, [executeOneshot, resultCard]);
+
+  const rejectResultCard = useCallback(() => {
+    const current = resultCard;
+    if (!current || current.state !== 'success') return;
+    setResultCard({ ...current, state: 'rejected' });
+  }, [resultCard]);
+
+  const iterateResultCard = useCallback((instruction: string) => {
+    const current = resultCard;
+    if (!current) return;
+    setResultCard({
+      ...current,
+      state: 'loading',
+      error: null,
+    });
+    executeOneshot(current.action, current.anchor, current.requirements ?? '', instruction, current.iterations);
+  }, [executeOneshot, resultCard]);
 
   // 复制结果文本到剪贴板（用于 displayOnly 模式如名词解释）。
   const copyResultCard = useCallback(async () => {
@@ -362,6 +406,8 @@ export function useEditorSelectionBridge({
     closeResultCard,
     acceptResultCard,
     retryResultCard,
+    rejectResultCard,
+    iterateResultCard,
     copyResultCard,
     submitResultCardInput,
   };

@@ -246,6 +246,15 @@ export function isDisplayOnlyAction(action: SelectionActionId): boolean {
   return DISPLAY_ONLY_ACTIONS.includes(action);
 }
 
+export type SelectionOneshotContext = {
+  documentTitle?: string;
+  documentStart?: string;
+  before?: string;
+  after?: string;
+  history?: string[];
+  iterationInstruction?: string;
+};
+
 // 构造 oneshot 静默调用的 prompt:
 //   <动作模板,要求只输出替换文本>
 //   ---
@@ -254,12 +263,26 @@ export function isDisplayOnlyAction(action: SelectionActionId): boolean {
 //
 // 不要文件名 header(oneshot 是隐藏会话,目的只是拿替换文本)。
 // 不要"请直接输出替换后的文字"那句外层提示——模板里 "只输出..." 已经够强。
-export function buildOneshotPrompt(action: SelectionActionId, text: string): string {
+export function buildOneshotPrompt(action: SelectionActionId, text: string, context: SelectionOneshotContext = {}): string {
   const tpl = SELECTION_ACTIONS[action].template;
   if (!tpl) {
     throw new Error(`buildOneshotPrompt: action ${action} 没有模板(应走对话框,不应走 oneshot)`);
   }
-  return `${tpl}\n\n---\n${text}\n---`;
+  const contextLines: string[] = [];
+  if (context.documentTitle) contextLines.push(`文档标题：${context.documentTitle}`);
+  if (context.documentStart) contextLines.push(`文档开头上下文：\n${context.documentStart}`);
+  if (context.before) contextLines.push(`选段前文：\n${context.before}`);
+  if (context.after) contextLines.push(`选段后文：\n${context.after}`);
+  if (context.history?.length) {
+    contextLines.push(`历史改写记录（越靠后越新，请避免重复已拒绝版本）：\n${
+      context.history.map((item, index) => `${index + 1}. ${item}`).join('\n')
+    }`);
+  }
+  if (context.iterationInstruction) contextLines.push(`本轮迭代要求：${context.iterationInstruction}`);
+  const contextBlock = contextLines.length
+    ? `\n\n以下上下文只用于保持风格一致，不要改写上下文内容：\n${contextLines.join('\n\n')}`
+    : '';
+  return `${tpl}${contextBlock}\n\n只改写下面“选中原文”这一段，不要扩展到其他段落。\n\n---\n${text}\n---`;
 }
 
 // 从 AI 回复中提取纯文本替换内容。
