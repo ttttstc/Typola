@@ -289,6 +289,7 @@ export function AppLayout() {
     fileRef,
     lastSelfWriteRef,
     dirtyPaths,
+    saveVisualState,
     shouldShowTabbar,
     unsavedDialog,
     renameDialog,
@@ -1747,6 +1748,7 @@ export function AppLayout() {
           <StatusBar
             filePath={file.path}
             dirty={file.dirty}
+            saveState={saveVisualState}
             message={autoSaveError || diskChangeMessage || transientMessage}
             stats={documentStats}
           />
