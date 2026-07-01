@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 基础动效反馈优化：按钮按下增加轻量缩放，状态栏保存状态区分未保存 / 保存中 / 已保存 / 保存失败，并让字数统计变化更平滑。
 - 心流模式下 OpenCode 选中场景 skill/command 后，若当前文档或附件参考文件存在，Composer 发送时会像 Claude Code 一样在 prompt 中追加“参考以下文件”路径列表，同时继续通过 `--file` 传递真实文件上下文。
 - Markdown 默认编辑器切换为 CM6 live preview 内核；Vditor WYSIWYG 暂作为过渡回退保留，可通过本地 `typola.editorEngine=vditor` 切回。
 - AI CLI 检测升级为轻量结构化诊断：设置页现在会展示实际识别到的 CLI 路径、版本、检测时间与多条可读诊断，Windows 下继续优先识别 npm 全局 `.cmd`，但不运行模型请求或污染正式 AI 会话。

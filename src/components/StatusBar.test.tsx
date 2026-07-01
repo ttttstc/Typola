@@ -43,9 +43,9 @@ describe('StatusBar', () => {
     vi.clearAllTimers();
   });
 
-  function render(props: { filePath: string; dirty?: boolean }) {
+  function render(props: Parameters<typeof StatusBar>[0]) {
     act(() => {
-      root.render(<StatusBar filePath={props.filePath} dirty={props.dirty ?? false} />);
+      root.render(<StatusBar {...props} dirty={props.dirty ?? false} />);
     });
   }
 
@@ -63,6 +63,48 @@ describe('StatusBar', () => {
   it('hides the dirty marker when dirty is false', () => {
     render({ filePath: '/Users/demo/case.md' });
     expect(host.querySelector('.status-dirty')).toBeNull();
+  });
+
+  it('renders explicit save states for the calmer save feedback', () => {
+    render({ filePath: '/Users/demo/case.md', dirty: false, saveState: 'saving' });
+    const saving = host.querySelector('.status-save-state');
+    expect(saving?.getAttribute('data-save-state')).toBe('saving');
+    expect(saving?.getAttribute('role')).toBe('status');
+    expect(saving?.getAttribute('aria-live')).toBe('polite');
+    expect(host.querySelector('.status-dirty')?.textContent).toBe('保存中');
+
+    render({ filePath: '/Users/demo/case.md', dirty: false, saveState: 'saved' });
+    expect(host.querySelector('.status-save-state')?.getAttribute('data-save-state')).toBe('saved');
+    expect(host.querySelector('.status-dirty')?.textContent).toBe('已保存');
+
+    render({ filePath: '/Users/demo/case.md', dirty: false, saveState: 'error' });
+    const error = host.querySelector('.status-save-state');
+    expect(error?.getAttribute('data-save-state')).toBe('error');
+    expect(error?.getAttribute('role')).toBe('alert');
+    expect(error?.getAttribute('aria-live')).toBe('assertive');
+    expect(host.querySelector('.status-dirty')?.textContent).toBe('保存失败');
+  });
+
+  it('does not infer save errors from localized message text', () => {
+    render({
+      filePath: '/Users/demo/case.md',
+      dirty: false,
+      message: '保存失败',
+    });
+    expect(host.querySelector('.status-save-state')).toBeNull();
+    expect(host.querySelector('.status-message')?.textContent).toBe('保存失败');
+  });
+
+  it('keeps status stats numeric content readable while tweening', () => {
+    render({
+      filePath: '/Users/demo/case.md',
+      dirty: false,
+      stats: { words: 120, characters: 360, paragraphs: 3, readingMinutes: 2 },
+    });
+
+    const stats = host.querySelector('.status-stats');
+    expect(stats?.textContent).toBe('120 词 · 2 分钟');
+    expect(stats?.getAttribute('title')).toBe('360 chars · 3 para');
   });
 
   it('shows the placeholder and disables double-click copy when no file is open', () => {

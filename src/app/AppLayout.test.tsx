@@ -363,6 +363,38 @@ describe('AppLayout update flow', () => {
     expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
   });
 
+  it('does not show saved feedback when save as is cancelled for a clean file', async () => {
+    const openedFile = {
+      path: '/tmp/clean-save-as.md',
+      name: 'clean-save-as.md',
+      content: '# clean',
+      dirty: false,
+      lastSavedContent: '# clean',
+      fileType: 'markdown' as const,
+    };
+    fileServiceMock.openFile.mockResolvedValue(openedFile);
+    fileServiceMock.saveFileAs.mockResolvedValue(openedFile);
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true, shiftKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(fileServiceMock.saveFileAs).toHaveBeenCalledWith(openedFile);
+    expect(host.textContent).not.toContain('已保存');
+    expect(host.querySelector('.status-save-state')).toBeNull();
+  });
+
   it('keeps a dirty tab open when the user cancels tab close', async () => {
     fileServiceMock.openFile
       .mockResolvedValueOnce({

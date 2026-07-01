@@ -16,6 +16,8 @@ export type OpenFileTab = {
   file: OpenedFile;
 };
 
+export type SaveVisualState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
 type DiffPreview = {
   path: string;
   hunks: import('../services/textDiffService').DiffHunk[];
@@ -45,6 +47,7 @@ type UseFileTabsResult = {
   lastSelfWriteRef: MutableRefObject<{ path: string; at: number }>;
   autoSaveFailureRef: MutableRefObject<{ key: string; count: number; suspended: boolean }>;
   dirtyPaths: Set<string>;
+  saveVisualState: SaveVisualState;
   shouldShowTabbar: boolean;
   unsavedDialog: { message: string } | null;
   renameDialog: { tabId: string; name: string; error?: string } | null;
@@ -118,6 +121,8 @@ export function useFileTabs({
   const defaultEncodingRef = useRef(defaultEncoding);
   const autoSaveFailureRef = useRef({ key: '', count: 0, suspended: false });
   const lastSelfWriteRef = useRef({ path: '', at: 0 });
+  const [saveVisualState, setSaveVisualState] = useState<SaveVisualState>('idle');
+  const saveVisualTimerRef = useRef<number | null>(null);
   const dirtyFilesRef = useRef(false);
   const untitledCounterRef = useRef(1);
   const windowCloseInProgressRef = useRef(false);
@@ -157,6 +162,31 @@ export function useFileTabs({
   useEffect(() => {
     defaultEncodingRef.current = defaultEncoding;
   }, [defaultEncoding]);
+
+  useEffect(() => {
+    return () => {
+      if (saveVisualTimerRef.current !== null) {
+        window.clearTimeout(saveVisualTimerRef.current);
+        saveVisualTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const clearSaveVisualTimer = useCallback(() => {
+    if (saveVisualTimerRef.current !== null) {
+      window.clearTimeout(saveVisualTimerRef.current);
+      saveVisualTimerRef.current = null;
+    }
+  }, []);
+
+  const markSavedSoon = useCallback(() => {
+    clearSaveVisualTimer();
+    setSaveVisualState('saved');
+    saveVisualTimerRef.current = window.setTimeout(() => {
+      setSaveVisualState('idle');
+      saveVisualTimerRef.current = null;
+    }, 900);
+  }, [clearSaveVisualTimer]);
 
   const applyOpenedFile = useCallback((opened: OpenedFile, path?: string) => {
     const id = fileTabId(opened, path);
@@ -433,41 +463,75 @@ export function useFileTabs({
 
   const handleSave = useCallback(async () => {
     if (file.fileType === 'docx') return;
-    const { saveFile } = await import('../services/fileService');
-    const updated = await saveFile(file);
-    if (updated.path) await allowAssetDirectoryForPath(updated.path);
-    lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
-    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
-    setAutoSaveError('');
-    setDiskChangeMessage('');
-    setFile(updated);
-    if (updated.path) setLastOpenedPath(updated.path);
-  }, [file, setAutoSaveError, setDiskChangeMessage]);
+    clearSaveVisualTimer();
+    setSaveVisualState('saving');
+    try {
+      const { saveFile } = await import('../services/fileService');
+      const updated = await saveFile(file);
+      if (updated === file) {
+        setSaveVisualState(file.dirty ? 'dirty' : 'idle');
+        return;
+      }
+      if (updated.path) await allowAssetDirectoryForPath(updated.path);
+      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+      autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+      setAutoSaveError('');
+      setDiskChangeMessage('');
+      setFile(updated);
+      if (updated.path) setLastOpenedPath(updated.path);
+      if (updated.dirty) {
+        setSaveVisualState('dirty');
+      } else {
+        markSavedSoon();
+      }
+    } catch (error) {
+      setSaveVisualState('error');
+      throw error;
+    }
+  }, [clearSaveVisualTimer, file, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
 
   const handleSaveAs = useCallback(async () => {
     if (file.fileType === 'docx') return;
-    const { saveFileAs } = await import('../services/fileService');
-    const updated = await saveFileAs(file);
-    if (updated.path) await allowAssetDirectoryForPath(updated.path);
-    lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
-    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
-    setAutoSaveError('');
-    setDiskChangeMessage('');
-    setFile(updated);
-    if (updated.path) setLastOpenedPath(updated.path);
-  }, [file, setAutoSaveError, setDiskChangeMessage]);
+    clearSaveVisualTimer();
+    setSaveVisualState('saving');
+    try {
+      const { saveFileAs } = await import('../services/fileService');
+      const updated = await saveFileAs(file);
+      if (updated === file) {
+        setSaveVisualState(file.dirty ? 'dirty' : 'idle');
+        return;
+      }
+      if (updated.path) await allowAssetDirectoryForPath(updated.path);
+      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+      autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+      setAutoSaveError('');
+      setDiskChangeMessage('');
+      setFile(updated);
+      if (updated.path) setLastOpenedPath(updated.path);
+      if (updated.dirty) {
+        setSaveVisualState('dirty');
+      } else {
+        markSavedSoon();
+      }
+    } catch (error) {
+      setSaveVisualState('error');
+      throw error;
+    }
+  }, [clearSaveVisualTimer, file, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
 
   const handleContentChange = useCallback((value: string) => {
     setAutoSaveError('');
     setDiskChangeMessage('');
     setTransientMessage('');
+    clearSaveVisualTimer();
     setFile((prev) => ({
       ...prev,
       content: value,
       dirty: value !== prev.lastSavedContent,
     }));
+    setSaveVisualState(value !== fileRef.current.lastSavedContent ? 'dirty' : 'idle');
     setToc(extractToc(value));
-  }, [extractToc, setAutoSaveError, setDiskChangeMessage, setToc, setTransientMessage]);
+  }, [clearSaveVisualTimer, extractToc, setAutoSaveError, setDiskChangeMessage, setToc, setTransientMessage]);
 
   useEffect(() => {
     if (!autoSaveEnabled || !file.path || !file.dirty || file.fileType === 'docx') return;
@@ -476,6 +540,8 @@ export function useFileTabs({
     if (failure.key === saveKey && failure.suspended) return;
 
     const timeout = window.setTimeout(() => {
+      clearSaveVisualTimer();
+      setSaveVisualState('saving');
       void import('../services/fileService')
         .then(({ saveFile }) => saveFile(file))
         .then((updated) => {
@@ -484,6 +550,7 @@ export function useFileTabs({
           setAutoSaveError('');
           setDiskChangeMessage('');
           setFile(updated);
+          markSavedSoon();
         })
         .catch((error) => {
           const current = autoSaveFailureRef.current;
@@ -493,11 +560,12 @@ export function useFileTabs({
           setAutoSaveError(suspended
             ? '自动保存失败，已暂停本次内容的自动重试，请手动保存或继续编辑后再试。'
             : `自动保存失败（${count}/3），稍后将自动重试。`);
+          setSaveVisualState('error');
           console.error('Auto-save failed:', error);
         });
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [autoSaveEnabled, file, setAutoSaveError, setDiskChangeMessage]);
+  }, [autoSaveEnabled, clearSaveVisualTimer, file, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
 
   useEffect(() => {
     if (!isTauriRuntime || !file.path) return;
@@ -637,6 +705,7 @@ export function useFileTabs({
     lastSelfWriteRef,
     autoSaveFailureRef,
     dirtyPaths,
+    saveVisualState,
     shouldShowTabbar,
     unsavedDialog,
     renameDialog,
