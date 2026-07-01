@@ -51,6 +51,7 @@ import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
 import { useRightPanel, type RightPanelMode } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
+import { buildSkillPrefill } from '../services/agent/skillHub';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
@@ -954,11 +955,10 @@ export function AppLayout() {
   }, []);
 
   const handlePickSkill = useCallback((skillName: string) => {
-    convManager.createConversation(skillName, skillName);
+    const provider = convManager.activeProvider;
+    convManager.createConversation(skillName, skillName, provider);
     setLeftRailMode('aiWorkbench');
-    if (convManager.activeProvider === 'claude') {
-      setSkillPrefill({ tick: Date.now(), text: `/${skillName} ` });
-    }
+    setSkillPrefill({ tick: Date.now(), text: buildSkillPrefill(provider, skillName) });
   }, [convManager]);
 
   const handleInstallSkill = useCallback((prompt: string) => {

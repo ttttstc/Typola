@@ -110,6 +110,36 @@ describe('useConversationManager', () => {
     expect(headlessMock.startAgentSession.mock.calls[0][0].prompt).toContain('必须只写入当前进程工作目录');
   });
 
+  it('passes the OpenCode skill conversation as commandName', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    let convId = '';
+    act(() => {
+      convId = api?.createConversation('frontend-slides', 'frontend-slides', 'opencode') ?? '';
+    });
+
+    await act(async () => {
+      await api?.send('生成一页演示稿', { conversationId: convId });
+    });
+
+    expect(headlessMock.startAgentSession).toHaveBeenCalledTimes(1);
+    const request = headlessMock.startAgentSession.mock.calls[0][0];
+    expect(request).toMatchObject({
+      provider: 'opencode',
+      commandName: 'frontend-slides',
+    });
+    expect(request.prompt).toContain('生成一页演示稿');
+    expect(request.prompt).toContain('[Typola 产物写入规则]');
+  });
+
   it('drops late stdout from a cancelled run', async () => {
     act(() => {
       root.render(

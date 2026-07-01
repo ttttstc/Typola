@@ -10,6 +10,7 @@ type UseComposerContextStateOptions = {
   activeProvider: AgentProvider;
   fileContextInjected?: boolean;
   currentFileContextPath?: string;
+  promptReferenceTextEnabled?: boolean;
 };
 
 type AppendedContext = {
@@ -29,6 +30,7 @@ export function useComposerContextState({
   activeProvider,
   fileContextInjected = false,
   currentFileContextPath,
+  promptReferenceTextEnabled = false,
 }: UseComposerContextStateOptions) {
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [currentFileDismissed, setCurrentFileDismissed] = useState(false);
@@ -62,7 +64,7 @@ export function useComposerContextState({
       ...(shouldAppendCurrentFile && currentFilePath ? [currentFilePath] : []),
       ...attachedFiles,
     ];
-    if (activeProvider === 'opencode') {
+    if (activeProvider === 'opencode' && !promptReferenceTextEnabled) {
       return {
         text: prompt,
         currentFileContextPath: shouldAppendCurrentFile ? currentFilePath : undefined,

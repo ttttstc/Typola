@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 心流模式下 OpenCode 选中场景 skill/command 后，若当前文档或附件参考文件存在，Composer 发送时会像 Claude Code 一样在 prompt 中追加“参考以下文件”路径列表，同时继续通过 `--file` 传递真实文件上下文。
 - Markdown 默认编辑器切换为 CM6 live preview 内核；Vditor WYSIWYG 暂作为过渡回退保留，可通过本地 `typola.editorEngine=vditor` 切回。
 - AI CLI 检测升级为轻量结构化诊断：设置页现在会展示实际识别到的 CLI 路径、版本、检测时间与多条可读诊断，Windows 下继续优先识别 npm 全局 `.cmd`，但不运行模型请求或污染正式 AI 会话。
 - 设置页 `AI CLI` 升级为简化版 `AI 执行`：Claude/OpenCode 以运行时卡片展示，可设为默认 Provider、配置 CLI 路径并重新检测；AI 工作台仅在 Composer 底部展示当前 Provider / 模型状态。
@@ -76,6 +77,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 PR #103 后续检视意见：SkillHub 本机能力扫描改为单一 generation token 流程，避免切换 Provider 或 reload 时旧扫描结果覆盖新列表；同时保留旧 `skillHubReloadKey` 兼容字段并补充 OpenCode command prompt 契约说明。
+- 修复心流模式下 OpenCode 场景模板没有可选 skill/command 的问题：内置模板现在声明支持 OpenCode command，已安装的同名本地 command 会直接显示为可点击卡片，未安装项会引导按 OpenCode command 配置。
+- 修复 #90：OpenCode 场景下点击 SkillHub command 卡片会预填 Composer，并继续通过 `opencode run --command` 调用；刷新、扫描错误和安装引导文案改为区分 Claude skill 与 OpenCode command。
 - 修复 PR #120 检视指出的 CM6 polish 稳定性问题：图片加载失败 fallback 改为捕获真实 `img error`，图片粘贴/拖放避免重复插入，标题折叠搜索会展开完整父链并在切换文档时清理折叠状态；补齐折叠操作的 CM6 userEvent 标记、Tauri event listen 权限和本地 asset 协议基础 scope。
 - 修复 PR #102 检视指出的 AI 产物中心安全与稳定性问题：覆盖/撤销原文会在 Rust 侧校验目标文档白名单，产物时间戳排序兼容 ISO 与历史毫秒格式，补齐 `.typola-output` 文件系统权限、CSS token 兼容别名和 artifact scanner / 覆盖白名单回归测试。
 - 调整 AI 产物中心：产物统一生成到当前 AI 工作目录下的 `.typola-output/<当前会话>/`，扫描当前 AI 工作目录下的 `.typola-output/`；未指定工作目录时使用用户默认目录下的 `.typola-output/`。产物中心移除“当前文档”视图和“全部状态”筛选，保留当前会话 / 全部产物与类型筛选。

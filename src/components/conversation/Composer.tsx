@@ -31,6 +31,7 @@ type ComposerProps = {
   /** 本会话是否已注入过"当前文档"context → 后续 send 不再重复啰嗦。 */
   fileContextInjected?: boolean;
   currentFileContextPath?: string;
+  promptReferenceTextEnabled?: boolean;
   onPickWorkspace: () => void;
   onSelectWorkspace: (path: string) => void;
   onClearWorkspace: () => void;
@@ -53,6 +54,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   configuredModel,
   fileContextInjected = false,
   currentFileContextPath,
+  promptReferenceTextEnabled = false,
   onPickWorkspace,
   onSelectWorkspace,
   onClearWorkspace,
@@ -82,6 +84,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     activeProvider,
     fileContextInjected,
     currentFileContextPath,
+    promptReferenceTextEnabled,
   });
 
   useImperativeHandle(ref, () => ({

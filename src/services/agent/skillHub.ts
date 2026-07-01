@@ -39,6 +39,9 @@ export type LoadSkillHubResult = {
   error?: string;
 };
 
+const DEFAULT_SYSTEM_SKILL_PROVIDERS: AgentProvider[] = ['claude'];
+const SYSTEM_TEMPLATE_PROVIDERS: AgentProvider[] = ['claude', 'opencode'];
+
 export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
   {
     id: 'daily',
@@ -69,6 +72,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '生成偏华为汇报风格的结构化 PPT，强调商务汇报、层级标题、稳重版式。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\huawei-style-ppt-skill',
         installSource: 'https://github.com/zuiho-kai/huawei-style-ppt-skill',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -77,6 +81,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '生成归藏风格/内容型 PPT，适合把长文档整理成叙事化演示稿。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\guizang-ppt-skill',
         installSource: 'https://github.com/op7418/guizang-ppt-skill',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -85,6 +90,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '生成话术、销售或表达训练类 slides，适合将材料转成讲稿驱动的演示页。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\huashu-slides',
         installSource: 'https://github.com/alchaincyf/huashu-skills/tree/master/huashu-slides',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -93,6 +99,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '生成面向传播和知识表达的 slide deck，适合文章、课程、观点型内容转演示。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\baoyu-slide-deck',
         installSource: 'https://github.com/JimLiu/baoyu-skills/tree/main/skills/baoyu-slide-deck',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -101,6 +108,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '通用 PPT 生成器，支持多种风格和布局，适合将文档快速转成演示稿。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\ppt-master',
         installSource: 'https://github.com/hugohe3/ppt-master',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
     ],
@@ -118,6 +126,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '生成 HTML/CSS/前端形式的 slides 或演示页面，适合把文档转成可浏览的网页演示。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\frontend-slides',
         installSource: 'https://github.com/zarazhangrui/frontend-slides',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -126,6 +135,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '生成电子杂志风或瑞士国际主义风的单 HTML 翻页 PPT，含 WebGL 背景、Motion One 动效。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\guizang-ppt-skill',
         installSource: 'https://github.com/op7418/guizang-ppt-skill',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -134,6 +144,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '将 Markdown 转为带微信兼容主题的样式化 HTML，支持代码高亮、公式、Mermaid/PlantUML 图表。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\baoyu-markdown-to-html',
         installSource: 'https://github.com/JimLiu/baoyu-skills/tree/main/skills/baoyu-markdown-to-html',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -142,6 +153,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '24 套主题、31 种布局、20+ 动效的专业 HTML 演示生成器。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\html-ppt-skill',
         installSource: 'https://github.com/lewislulu/html-ppt-skill',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
       {
@@ -167,6 +179,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         summary: '面向公众号的写作 skill，从选题到成稿，处理结构、语气、风格化和排版。',
         expectedPath: 'C:\\Users\\泥巴猪\\.claude\\skills\\ni-writer',
         installSource: 'https://github.com/ttttstc/ni-skill/tree/main/skills/ni-writer',
+        supportedProviders: SYSTEM_TEMPLATE_PROVIDERS,
         system: true,
       },
     ],
@@ -187,8 +200,6 @@ export const EMPTY_SKILL_HUB: SkillHub = {
   hiddenSystemSkills: {},
 };
 
-const DEFAULT_SYSTEM_SKILL_PROVIDERS: AgentProvider[] = ['claude'];
-
 export function supportsSkillProvider(skill: SkillTemplateRef, provider: AgentProvider): boolean {
   return (skill.supportedProviders ?? DEFAULT_SYSTEM_SKILL_PROVIDERS).includes(provider);
 }
@@ -204,6 +215,16 @@ export function getSceneAdditionsForProvider(hub: SkillHub, sceneId: string, pro
   return (hub.sceneAdditions[sceneId] ?? []).filter((skill) => (
     skill.supportedProviders ?? DEFAULT_SYSTEM_SKILL_PROVIDERS
   ).includes(provider));
+}
+
+export function skillCapabilityLabel(provider: AgentProvider): string {
+  return provider === 'opencode' ? 'OpenCode command' : 'Claude skill';
+}
+
+export function buildSkillPrefill(provider: AgentProvider, skillName: string): string {
+  const name = skillName.trim().replace(/^\/+/u, '');
+  if (!name) return '';
+  return provider === 'opencode' ? `请使用 ${name}：` : `/${name} `;
 }
 
 function normalizeSkill(raw: unknown): SkillRef | null {
@@ -228,13 +249,25 @@ function normalizeSupportedProviders(raw: unknown): AgentProvider[] | undefined 
 }
 
 function uniqueSkills(skills: SkillRef[]): SkillRef[] {
-  const seen = new Set<string>();
-  return skills.filter((skill) => {
+  const merged = new Map<string, SkillRef>();
+  for (const skill of skills) {
     const key = skill.name.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, skill);
+      continue;
+    }
+    const providers = new Set<AgentProvider>([
+      ...(existing.supportedProviders ?? []),
+      ...(skill.supportedProviders ?? []),
+    ]);
+    merged.set(key, {
+      ...existing,
+      description: existing.description ?? skill.description,
+      supportedProviders: providers.size > 0 ? [...providers] : undefined,
+    });
+  }
+  return [...merged.values()];
 }
 
 function normalizeSceneAdditions(raw: unknown): Record<string, SkillRef[]> {
@@ -333,7 +366,17 @@ export function removeCustomSkillFromScene(hub: SkillHub, sceneId: string, skill
   };
 }
 
-export function buildSkillInstallPrompt(skill: SkillTemplateRef): string {
+export function buildSkillInstallPrompt(skill: SkillTemplateRef, provider: AgentProvider = 'claude'): string {
+  if (provider === 'opencode') {
+    const source = skill.installSource ?? '未提供来源，请根据用途创建 command 内容';
+    return [
+      `请帮我创建或安装 OpenCode command：${skill.name}。`,
+      `用途：${skill.summary}`,
+      `来源：${source}`,
+      `请优先安装到当前工作区 .opencode/commands/${skill.name}.md；如果不适合项目级安装，则安装到全局 ~/.config/opencode/commands/${skill.name}.md（Windows: %USERPROFILE%\\.config\\opencode\\commands\\${skill.name}.md），或写入 opencode.jsonc 的 command.${skill.name} 配置。`,
+      `安装后请确认该 command 可以通过 opencode run --command ${skill.name} 调用。`,
+    ].join('\n');
+  }
   const source = skill.installSource ?? skill.expectedPath ?? skill.name;
   return [
     `请帮我安装 Claude skill：${skill.name}。`,
@@ -373,7 +416,7 @@ export async function migrateFlowScenariosIfStale(): Promise<boolean> {
     if (!parsed.error && hasAdditions) return false;
   }
 
-  let legacyRaw: unknown = '';
+  let legacyRaw: unknown;
   try {
     legacyRaw = await invoke<string>('read_flow_scenarios');
   } catch {

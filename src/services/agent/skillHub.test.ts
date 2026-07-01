@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addSkillToScene,
+  buildSkillPrefill,
   buildSkillInstallPrompt,
   EMPTY_SKILL_HUB,
   getSceneAdditionsForProvider,
@@ -127,7 +128,12 @@ describe('skill hub helpers', () => {
       'baoyu-slide-deck',
       'ppt-master',
     ]);
-    expect(getSystemSkillScenesForProvider('opencode').flatMap((scene) => scene.skills)).toEqual([]);
+    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'html')?.skills.map((skill) => skill.name)).toEqual([
+      'frontend-slides',
+      'guizang-ppt-skill',
+      'baoyu-markdown-to-html',
+      'html-ppt-skill',
+    ]);
   });
 
   it('filters user-added Claude skills out for OpenCode provider', () => {
@@ -145,9 +151,43 @@ describe('skill hub helpers', () => {
     expect(parseSkillHubJson(serializeSkillHub(hub)).hub).toEqual(hub);
   });
 
+  it('merges providers when adding the same custom capability name for another provider', () => {
+    const claudeHub = addSkillToScene(EMPTY_SKILL_HUB, 'html', {
+      name: 'frontend-slides',
+      description: 'Claude version',
+      supportedProviders: ['claude'],
+    });
+    const mixedHub = addSkillToScene(claudeHub, 'html', {
+      name: 'frontend-slides',
+      description: 'OpenCode version',
+      supportedProviders: ['opencode'],
+    });
+
+    expect(mixedHub.sceneAdditions.html).toEqual([
+      { name: 'frontend-slides', description: 'Claude version', supportedProviders: ['claude', 'opencode'] },
+    ]);
+    expect(getSceneAdditionsForProvider(mixedHub, 'html', 'claude')).toHaveLength(1);
+    expect(getSceneAdditionsForProvider(mixedHub, 'html', 'opencode')).toHaveLength(1);
+  });
+
   it('builds install prompt with source fallback', () => {
     const skill = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')!.skills[0];
     expect(buildSkillInstallPrompt(skill)).toContain('请帮我安装 Claude skill：frontend-slides');
     expect(buildSkillInstallPrompt(skill)).toContain(skill.expectedPath);
+  });
+
+  it('builds OpenCode command install prompt without Claude copy', () => {
+    const skill = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')!.skills[0];
+    const prompt = buildSkillInstallPrompt(skill, 'opencode');
+    expect(prompt).toContain('请帮我创建或安装 OpenCode command：frontend-slides');
+    expect(prompt).toContain('opencode run --command frontend-slides');
+    expect(prompt).not.toContain('Claude');
+    expect(prompt).not.toContain('.claude');
+    expect(prompt).toContain('%USERPROFILE%\\.config\\opencode\\commands\\frontend-slides.md');
+  });
+
+  it('builds provider-specific skill prefill text', () => {
+    expect(buildSkillPrefill('claude', 'frontend-slides')).toBe('/frontend-slides ');
+    expect(buildSkillPrefill('opencode', '/frontend-slides')).toBe('请使用 frontend-slides：');
   });
 });

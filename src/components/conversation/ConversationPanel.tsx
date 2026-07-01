@@ -113,6 +113,8 @@ export function ConversationPanel({
   const hasHistory = messages.length > 0;
   const providerConfig = getAgentProviderConfig(activeProvider);
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
+  const activeConversation = conversations.get(activeConvId);
+  const promptReferenceTextEnabled = activeProvider === 'opencode' && Boolean(activeConversation?.skillRef);
   const composerRef = useRef<ComposerHandle>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [submittedQuestionForms, setSubmittedQuestionForms] = useState<Record<string, string>>({});
@@ -340,6 +342,7 @@ export function ConversationPanel({
         configuredModel={configuredModel}
         fileContextInjected={fileContextInjected}
         currentFileContextPath={currentFileContextPath}
+        promptReferenceTextEnabled={promptReferenceTextEnabled}
         onPickWorkspace={() => void handlePickWorkspace()}
         onSelectWorkspace={(path) => void handleWorkspaceChange(path)}
         onClearWorkspace={() => void handleClearWorkspace()}
