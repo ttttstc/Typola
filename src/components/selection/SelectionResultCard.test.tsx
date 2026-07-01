@@ -128,7 +128,7 @@ describe('SelectionResultCard', () => {
     act(() => {
       buttons.find((button) => button.textContent?.includes('更简洁'))?.click();
     });
-    expect(onIterate).toHaveBeenCalledWith(expect.stringContaining('更简洁'));
+    expect(onIterate).toHaveBeenCalledWith('请改得更简洁，减少修饰和重复。');
   });
 
   it('rejected 态保留同一选段的迭代入口', () => {
@@ -147,12 +147,13 @@ describe('SelectionResultCard', () => {
           onAccept={() => {}}
           onCancel={() => {}}
           onRetry={onRetry}
-          iterations={[{ text: '被拒绝版本', instruction: '初版', createdAt: 1 }]}
+          iterations={[{ text: '被拒绝版本', instruction: '初版', createdAt: 1, rejected: true }]}
         />,
       );
     });
     expect(host.textContent).toContain('已拒绝当前版本');
     expect(host.textContent).toContain('历史版本 1/5');
+    expect(host.textContent).toContain('含 1 个已拒绝版本');
     const primary = host.querySelector('.selection-result-card-primary') as HTMLButtonElement | null;
     act(() => primary?.click());
     expect(onRetry).toHaveBeenCalledTimes(1);

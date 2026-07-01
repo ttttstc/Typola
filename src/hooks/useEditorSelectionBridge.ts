@@ -26,6 +26,7 @@ export type SelectionIteration = {
   text: string;
   instruction: string;
   createdAt: number;
+  rejected?: boolean;
 };
 
 export type SelectionResultCardData = {
@@ -334,7 +335,10 @@ export function useEditorSelectionBridge({
   const rejectResultCard = useCallback(() => {
     const current = resultCard;
     if (!current || current.state !== 'success') return;
-    setResultCard({ ...current, state: 'rejected' });
+    const iterations = current.iterations.map((item, index) =>
+      index === current.iterations.length - 1 ? { ...item, rejected: true } : item,
+    );
+    setResultCard({ ...current, state: 'rejected', iterations });
   }, [resultCard]);
 
   const iterateResultCard = useCallback((instruction: string) => {

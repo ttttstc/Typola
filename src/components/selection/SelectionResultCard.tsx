@@ -18,6 +18,7 @@ export type SelectionResultIteration = {
   text: string;
   instruction: string;
   createdAt: number;
+  rejected?: boolean;
 };
 
 type Props = {
@@ -67,6 +68,7 @@ export function SelectionResultCard({
 }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [requirements, setRequirements] = useState(initialRequirements);
+  const rejectedCount = iterations.filter((item) => item.rejected).length;
   // open / state 变化时 reset 输入(避免上次的要求泄漏到下次)
   useEffect(() => {
     if (open && state === 'input') setRequirements(initialRequirements);
@@ -237,6 +239,7 @@ export function SelectionResultCard({
           {!displayOnly && iterations.length > 1 && (
             <div className="selection-result-card-history">
               已生成 {iterations.length}/5 个版本，可继续换风格。
+              {rejectedCount > 0 ? ` 含 ${rejectedCount} 个已拒绝版本。` : ''}
             </div>
           )}
         </div>
@@ -276,6 +279,7 @@ export function SelectionResultCard({
           {iterations.length > 0 && (
             <div className="selection-result-card-history">
               历史版本 {iterations.length}/5 会作为下一轮参考。
+              {rejectedCount > 0 ? ` 含 ${rejectedCount} 个已拒绝版本。` : ''}
             </div>
           )}
         </div>

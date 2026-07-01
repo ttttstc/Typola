@@ -3,24 +3,21 @@ export type InlineDiffPart = {
   text: string;
 };
 
-const MAX_LCS_CHARS = 2400;
+const MAX_LCS_CELLS = 6_000_000;
 
 export function buildInlineDiffParts(original: string, revised: string): InlineDiffPart[] {
   if (original === revised) return [{ type: 'equal', text: original }];
   if (!original) return revised ? [{ type: 'insert', text: revised }] : [];
   if (!revised) return [{ type: 'delete', text: original }];
-  if (original.length * revised.length > MAX_LCS_CHARS * MAX_LCS_CHARS) {
-    return [
-      { type: 'delete', text: original },
-      { type: 'insert', text: revised },
-    ];
-  }
-
   const a = Array.from(original);
   const b = Array.from(revised);
+  if (a.length * b.length > MAX_LCS_CELLS) {
+    return buildPrefixSuffixFallback(a, b);
+  }
+
   const rows = a.length + 1;
   const cols = b.length + 1;
-  const dp = new Uint16Array(rows * cols);
+  const dp = new Uint32Array(rows * cols);
   const at = (i: number, j: number) => i * cols + j;
 
   for (let i = a.length - 1; i >= 0; i--) {
@@ -56,5 +53,32 @@ export function buildInlineDiffParts(original: string, revised: string): InlineD
   }
   while (i < a.length) push('delete', a[i++]!);
   while (j < b.length) push('insert', b[j++]!);
+  return parts;
+}
+
+function buildPrefixSuffixFallback(a: string[], b: string[]): InlineDiffPart[] {
+  let prefix = 0;
+  while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) {
+    prefix++;
+  }
+
+  let suffix = 0;
+  while (
+    suffix < a.length - prefix
+    && suffix < b.length - prefix
+    && a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  const parts: InlineDiffPart[] = [];
+  const push = (type: InlineDiffPart['type'], chars: string[]) => {
+    if (chars.length > 0) parts.push({ type, text: chars.join('') });
+  };
+
+  push('equal', a.slice(0, prefix));
+  push('delete', a.slice(prefix, a.length - suffix));
+  push('insert', b.slice(prefix, b.length - suffix));
+  push('equal', a.slice(a.length - suffix));
   return parts;
 }

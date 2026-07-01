@@ -20,12 +20,27 @@ describe('buildInlineDiffParts', () => {
     expect(parts).toContainEqual({ type: 'equal', text: '资产' });
   });
 
-  it('falls back for very large inputs', () => {
-    const original = 'a'.repeat(3000);
-    const revised = 'b'.repeat(3000);
+  it('falls back for very large inputs while preserving shared edges', () => {
+    const original = `start\n${'a'.repeat(3000)}\nend`;
+    const revised = `start\n${'b'.repeat(3000)}\nend`;
     expect(buildInlineDiffParts(original, revised)).toEqual([
-      { type: 'delete', text: original },
-      { type: 'insert', text: revised },
+      { type: 'equal', text: 'start\n' },
+      { type: 'delete', text: 'a'.repeat(3000) },
+      { type: 'insert', text: 'b'.repeat(3000) },
+      { type: 'equal', text: '\nend' },
+    ]);
+  });
+
+  it('keeps emoji as a complete character', () => {
+    const parts = buildInlineDiffParts('发布 🎉 成功', '发布 成功');
+    expect(parts).toContainEqual({ type: 'delete', text: '🎉 ' });
+  });
+
+  it('handles CRLF text without dropping line breaks', () => {
+    expect(buildInlineDiffParts('第一行\r\n第二行', '第一行\r\n新第二行')).toEqual([
+      { type: 'equal', text: '第一行\r\n' },
+      { type: 'insert', text: '新' },
+      { type: 'equal', text: '第二行' },
     ]);
   });
 });
