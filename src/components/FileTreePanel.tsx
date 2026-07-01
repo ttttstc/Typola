@@ -1,5 +1,4 @@
 import {
-  ChevronDown,
   ChevronRight,
   FileArchive,
   FileCode2,
@@ -10,7 +9,7 @@ import {
   FolderOpen,
   NotebookText,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import {
   listWorkspaceEntries,
   pickWorkspaceDirectory,
@@ -40,6 +39,7 @@ type TreeNodeProps = {
   refreshKey?: number;
   loadingHint: string;
   onOpenFile: (path: string) => void;
+  styleIndex?: number;
 };
 
 function getFileIconMeta(name: string): { Icon: typeof FileText; className: string } {
@@ -52,7 +52,7 @@ function getFileIconMeta(name: string): { Icon: typeof FileText; className: stri
   return { Icon: FileText, className: '' };
 }
 
-function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, refreshKey, loadingHint, onOpenFile }: TreeNodeProps) {
+function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, refreshKey, loadingHint, onOpenFile, styleIndex = 0 }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<WorkspaceEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,7 +71,10 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
   }, [entry.isDir, entry.path, expanded, refreshKey]);
 
   return (
-    <div className="file-tree-node">
+    <div
+      className="file-tree-node"
+      style={{ '--file-tree-stagger-index': Math.min(styleIndex, 8) } as CSSProperties}
+    >
       <button
         type="button"
         className={`file-tree-item ${active ? 'active' : ''} ${isAgentChanged ? 'agent-changed' : ''} ${dirtyPaths.has(entry.path) ? 'dirty' : ''}`}
@@ -83,7 +86,9 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
         title={entry.path}
       >
         {entry.isDir ? (
-          expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />
+          <span className="file-tree-folder-chevron" data-expanded={expanded ? 'true' : 'false'}>
+            <ChevronRight size={13} />
+          </span>
         ) : (
           <span className="file-tree-spacer" />
         )}
@@ -101,7 +106,7 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
       {expanded && (
         <div className="file-tree-children">
           {loading && <div className="file-tree-loading" style={{ paddingLeft: `${24 + depth * 14}px` }}>{loadingHint}</div>}
-          {!loading && children.map((child) => (
+          {!loading && children.map((child, index) => (
             <TreeNode
               key={child.path}
               entry={child}
@@ -112,6 +117,7 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
               refreshKey={refreshKey}
               loadingHint={loadingHint}
               onOpenFile={onOpenFile}
+              styleIndex={index}
             />
           ))}
         </div>
@@ -174,7 +180,7 @@ export function FileTreePanel({
         {!rootPath && <button type="button" className="workspace-empty" onClick={() => void handlePickRoot()}>{t('fileTreePickDirectory')}</button>}
         {loading && <div className="file-tree-loading">{t('fileTreeLoading')}</div>}
         {error && <div className="file-tree-error">{error}</div>}
-        {!loading && entries.map((entry) => (
+        {!loading && entries.map((entry, index) => (
           <TreeNode
             key={entry.path}
             entry={entry}
@@ -185,6 +191,7 @@ export function FileTreePanel({
             refreshKey={refreshKey}
             loadingHint={t('fileTreeLoadingChild')}
             onOpenFile={onOpenFile}
+            styleIndex={index}
           />
         ))}
       </div>

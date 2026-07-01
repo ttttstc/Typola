@@ -913,6 +913,13 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       const element = range.startContainer instanceof Element
         ? range.startContainer
         : range.startContainer.parentElement;
+      const flashTarget = element?.closest<HTMLElement>('p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, table, .vditor-ir__node') ?? element;
+      if (flashTarget instanceof HTMLElement) {
+        flashTarget.classList.remove('typola-search-hit-flash');
+        void flashTarget.offsetWidth;
+        flashTarget.classList.add('typola-search-hit-flash');
+        window.setTimeout(() => flashTarget.classList.remove('typola-search-hit-flash'), 850);
+      }
       element?.scrollIntoView({ block: 'center', inline: 'nearest' });
       // Vditor IR selectionchange 是 microtask async,实测 250ms 足够覆盖 selection
       // commit + IR collapse/expand markers + DOM 重排;时间越短偶尔会让浮条闪一下。

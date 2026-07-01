@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 导航连续性优化：文件树展开增加 chevron 旋转和轻量淡入，文件 tab / 左右栏 tab 增加滑动指示器，搜索跳转命中行会短暂高亮。
 - 基础动效反馈优化：按钮按下增加轻量缩放，状态栏保存状态区分未保存 / 保存中 / 已保存 / 保存失败，并让字数统计变化更平滑。
 - 心流模式下 OpenCode 选中场景 skill/command 后，若当前文档或附件参考文件存在，Composer 发送时会像 Claude Code 一样在 prompt 中追加“参考以下文件”路径列表，同时继续通过 `--file` 传递真实文件上下文。
 - Markdown 默认编辑器切换为 CM6 live preview 内核；Vditor WYSIWYG 暂作为过渡回退保留，可通过本地 `typola.editorEngine=vditor` 切回。
