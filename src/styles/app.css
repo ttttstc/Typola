@@ -664,7 +664,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .editor-tabbar {
   position: relative;
-  height: 42px;
+  height: 44px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -690,7 +690,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .editor-tab-indicator {
   top: 6px;
-  height: 30px;
+  height: 32px;
   z-index: 0;
 }
 
@@ -699,8 +699,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  max-width: 220px;
-  height: 30px;
+  min-width: 118px;
+  max-width: min(320px, 34vw);
+  height: 32px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -718,6 +719,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .editor-tab-main {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
   height: 100%;
   flex: 1;
@@ -727,7 +730,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;
-  padding: 0 6px 0 11px;
+  padding: 0 8px 0 12px;
   text-align: left;
 }
 
@@ -4246,6 +4249,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 @keyframes file-tree-row-in {

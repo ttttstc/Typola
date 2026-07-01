@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- 新增 Calm Workspace 动效基础设施：引入 `motion`、`@floating-ui/react` 与 `@formkit/auto-animate`，并提供统一的 MotionProvider / motion token，供后续面板、tooltip 与列表动效复用。
 - AI 工作台补齐 #112 Phase 3：Codex CLI 进入 AI 执行设置的检测卡片与 runtime registry，但保持检测-only，不进入 Composer 可发送 Provider；新增裁剪版 `mocks/` 目录用于后续 parser/golden 回归。
 - AI 工作台补齐 #112 Phase 2 输出链路：OpenCode 写文件工具现在会进入 `artifact_file` 产物回流，CLI 相对路径会归一到当前会话 `.typola-output/<conversationId>/`，非白名单扩展名（如 `.yaml`/源码文件）也能进入产物 toast/manifest 链路。
 - AI 工作台补齐 #112 Phase 1：Composer 左下角切换器改为 OpenDesign 风格 CLI 图标 pill，新增对话内 QuestionForm 交互卡片，并支持 `/clear`、`/mcp`、`/help` 三个本地 slash 命令。
@@ -29,6 +30,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 左右侧栏与预览面板展开/收起改为低噪声滑入/淡出动效，文件 tab 加宽并优化文字垂直居中与可读长度。
 - 导航连续性优化：文件树展开增加 chevron 旋转和轻量淡入，文件 tab / 左右栏 tab 增加滑动指示器，搜索跳转命中行会短暂高亮。
 - 基础动效反馈优化：按钮按下增加轻量缩放，状态栏保存状态区分未保存 / 保存中 / 已保存 / 保存失败，并让字数统计变化更平滑。
 - 心流模式下 OpenCode 选中场景 skill/command 后，若当前文档或附件参考文件存在，Composer 发送时会像 Claude Code 一样在 prompt 中追加“参考以下文件”路径列表，同时继续通过 `--file` 传递真实文件上下文。
