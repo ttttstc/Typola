@@ -468,6 +468,10 @@ export function useFileTabs({
     try {
       const { saveFile } = await import('../services/fileService');
       const updated = await saveFile(file);
+      if (updated === file) {
+        setSaveVisualState(file.dirty ? 'dirty' : 'idle');
+        return;
+      }
       if (updated.path) await allowAssetDirectoryForPath(updated.path);
       lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
       autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
@@ -493,6 +497,10 @@ export function useFileTabs({
     try {
       const { saveFileAs } = await import('../services/fileService');
       const updated = await saveFileAs(file);
+      if (updated === file) {
+        setSaveVisualState(file.dirty ? 'dirty' : 'idle');
+        return;
+      }
       if (updated.path) await allowAssetDirectoryForPath(updated.path);
       lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
       autoSaveFailureRef.current = { key: '', count: 0, suspended: false };

@@ -35,6 +35,13 @@
   --success: oklch(44% 0.09 145);
   --danger: oklch(52% 0.16 30);
   --select-chevron: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23766f65' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --motion-duration-press: 60ms;
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-slow: 220ms;
+  --motion-duration-ring: 600ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
+  --motion-ease-pop: cubic-bezier(0.2, 0.9, 0.3, 1.1);
 
   /* Font stacks */
   --font-display: 'Iowan Old Style', 'Charter', 'Songti SC', 'STSong',
@@ -107,19 +114,27 @@ html, body, #root {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  button:active:not(:disabled),
-  [role='button']:active:not([aria-disabled='true']) {
+  .app-toolbar button:active:not(:disabled),
+  .left-rail-tabs button:active:not(:disabled),
+  .right-rail-tabs button:active:not(:disabled),
+  .status-bar button:active:not(:disabled),
+  .find-panel button:active:not(:disabled),
+  .settings-modal button:active:not(:disabled),
+  .conversation-composer button:active:not(:disabled),
+  .artifact-preview button:active:not(:disabled),
+  .diff-review-pane button:active:not(:disabled),
+  .unsaved-dialog button:active:not(:disabled) {
     transform: scale(0.97);
-    transition: transform 80ms ease-out;
+    transition: transform var(--motion-duration-press) var(--motion-ease-standard);
   }
 }
 
 .motion-shake {
-  animation: typola-motion-shake 220ms ease-in-out 1;
+  animation: typola-motion-shake var(--motion-duration-slow) ease-in-out 1;
 }
 
 .motion-ring {
-  animation: typola-motion-ring 600ms cubic-bezier(0.2, 0.9, 0.3, 1.1) 1;
+  animation: typola-motion-ring var(--motion-duration-ring) var(--motion-ease-pop) 1;
 }
 
 @keyframes typola-motion-shake {
@@ -3805,7 +3820,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .status-save-state[data-save-state='dirty'] .status-save-dot {
-  animation: save-pulse 1.6s ease-in-out infinite;
+  animation: save-pulse var(--motion-duration-base) ease-out 1 forwards;
 }
 
 .status-save-state[data-save-state='saving'] .status-save-dot {
@@ -3816,7 +3831,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .status-save-state[data-save-state='saved'] .status-save-dot {
   background: var(--success);
-  animation: save-ring 600ms cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+  animation: save-ring var(--motion-duration-ring) var(--motion-ease-pop) forwards;
 }
 
 .status-save-state[data-save-state='saved'] .status-dirty {
@@ -3825,7 +3840,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .status-save-state[data-save-state='error'] .status-save-dot {
   background: var(--danger);
-  animation: save-shake 220ms ease-in-out 3;
+  animation: save-shake var(--motion-duration-slow) ease-in-out 1;
 }
 
 .status-save-state[data-save-state='error'] .status-dirty {
@@ -3873,9 +3888,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 @media (prefers-reduced-motion: reduce) {
   .motion-shake,
   .motion-ring,
+  .status-save-state[data-save-state] .status-save-dot,
   .status-save-dot {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
+    animation: none !important;
+    transform: none !important;
+    box-shadow: none !important;
   }
 }
 

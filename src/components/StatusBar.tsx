@@ -17,7 +17,7 @@ type CopyOutcome = 'copied' | 'failed';
 type CopyMarker = { path: string; outcome: CopyOutcome } | null;
 
 const COPY_FEEDBACK_RESET_MS = 1200;
-const NUMBER_TWEEN_MS = 200;
+const NUMBER_TWEEN_MS = 80;
 
 function prefersReducedMotion(): boolean {
   return typeof window.matchMedia === 'function'
@@ -77,7 +77,7 @@ export function StatusBar({ filePath, dirty, saveState, message, stats }: Status
   const displayWords = useTweenedNumber(stats?.words ?? 0);
   const displayReadingMinutes = useTweenedNumber(stats?.readingMinutes ?? 0);
   const effectiveSaveState: SaveVisualState = saveState
-    ?? (message?.includes('失败') ? 'error' : dirty ? 'dirty' : 'idle');
+    ?? (dirty ? 'dirty' : 'idle');
 
   useEffect(() => {
     return () => {
@@ -143,7 +143,12 @@ export function StatusBar({ filePath, dirty, saveState, message, stats }: Status
         </span>
       )}
       {effectiveSaveState !== 'idle' && (
-        <span className="status-save-state" data-save-state={effectiveSaveState}>
+        <span
+          className="status-save-state"
+          data-save-state={effectiveSaveState}
+          role={effectiveSaveState === 'error' ? 'alert' : 'status'}
+          aria-live={effectiveSaveState === 'error' ? 'assertive' : 'polite'}
+        >
           <span className="status-save-dot" aria-hidden="true" />
           <span className="status-dirty">{getSaveStateLabel(effectiveSaveState, t)}</span>
         </span>

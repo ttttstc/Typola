@@ -67,7 +67,10 @@ describe('StatusBar', () => {
 
   it('renders explicit save states for the calmer save feedback', () => {
     render({ filePath: '/Users/demo/case.md', dirty: false, saveState: 'saving' });
-    expect(host.querySelector('.status-save-state')?.getAttribute('data-save-state')).toBe('saving');
+    const saving = host.querySelector('.status-save-state');
+    expect(saving?.getAttribute('data-save-state')).toBe('saving');
+    expect(saving?.getAttribute('role')).toBe('status');
+    expect(saving?.getAttribute('aria-live')).toBe('polite');
     expect(host.querySelector('.status-dirty')?.textContent).toBe('保存中');
 
     render({ filePath: '/Users/demo/case.md', dirty: false, saveState: 'saved' });
@@ -75,8 +78,21 @@ describe('StatusBar', () => {
     expect(host.querySelector('.status-dirty')?.textContent).toBe('已保存');
 
     render({ filePath: '/Users/demo/case.md', dirty: false, saveState: 'error' });
-    expect(host.querySelector('.status-save-state')?.getAttribute('data-save-state')).toBe('error');
+    const error = host.querySelector('.status-save-state');
+    expect(error?.getAttribute('data-save-state')).toBe('error');
+    expect(error?.getAttribute('role')).toBe('alert');
+    expect(error?.getAttribute('aria-live')).toBe('assertive');
     expect(host.querySelector('.status-dirty')?.textContent).toBe('保存失败');
+  });
+
+  it('does not infer save errors from localized message text', () => {
+    render({
+      filePath: '/Users/demo/case.md',
+      dirty: false,
+      message: '保存失败',
+    });
+    expect(host.querySelector('.status-save-state')).toBeNull();
+    expect(host.querySelector('.status-message')?.textContent).toBe('保存失败');
   });
 
   it('keeps status stats numeric content readable while tweening', () => {
