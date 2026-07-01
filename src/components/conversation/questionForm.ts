@@ -26,10 +26,12 @@ function attr(attrs: string, name: string): string {
   return match?.[1]?.trim() ?? '';
 }
 
-function normalizeType(value: unknown): QuestionFormFieldType {
+function normalizeType(value: unknown, hasOptions = false): QuestionFormFieldType {
   return value === 'checkbox' || value === 'select' || value === 'text' || value === 'radio'
     ? value
-    : 'text';
+    : hasOptions
+      ? 'radio'
+      : 'text';
 }
 
 function normalizeOptions(value: unknown): string[] {
@@ -55,8 +57,8 @@ function normalizeQuestions(payload: unknown): QuestionFormField[] {
     const id = typeof question.id === 'string' && question.id.trim() ? question.id.trim() : `q${index + 1}`;
     const labelCandidate = question.label ?? question.title ?? question.question ?? id;
     const label = typeof labelCandidate === 'string' && labelCandidate.trim() ? labelCandidate.trim() : id;
-    const type = normalizeType(question.type);
     const options = normalizeOptions(question.options ?? question.choices);
+    const type = normalizeType(question.type, options.length > 0);
     return { id, label, type, options };
   }).filter((question) => question.label);
 }
@@ -86,4 +88,39 @@ export function formatQuestionFormAnswers(form: QuestionFormBlock, answers: Reco
     lines.push(`${question.label}: ${text || '未填写'}`);
   }
   return lines.join('\n');
+}
+
+export function questionFormFromAskUserQuestion(input: unknown, fallbackId: string): QuestionFormBlock | null {
+  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const source = Array.isArray(record.questions)
+    ? record.questions
+    : record.question || record.prompt
+      ? [record]
+      : [];
+  const questions = normalizeQuestions({ questions: source });
+  if (questions.length === 0) return null;
+  const titleCandidate = record.title ?? record.header ?? record.name;
+  const firstQuestion = source[0] && typeof source[0] === 'object' ? source[0] as Record<string, unknown> : {};
+  const firstHeader = firstQuestion.header;
+  const title = typeof titleCandidate === 'string' && titleCandidate.trim()
+    ? titleCandidate.trim()
+    : typeof firstHeader === 'string' && firstHeader.trim()
+      ? firstHeader.trim()
+      : '需要你确认';
+  return {
+    id: fallbackId,
+    title,
+    questions,
+    raw: JSON.stringify(input ?? {}),
+  };
+}
+
+export function formatAskUserQuestionAnswers(form: QuestionFormBlock, answers: Record<string, string | string[]>): string {
+  return form.questions.map((question) => {
+    const value = answers[question.id];
+    const lines = Array.isArray(value)
+      ? value.map((item) => `- ${item}`)
+      : [String(value ?? '')];
+    return [question.label, ...lines.filter((line) => line.trim())].join('\n');
+  }).join('\n\n');
 }

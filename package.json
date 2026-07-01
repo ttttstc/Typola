@@ -23,6 +23,8 @@
     "@codemirror/lang-markdown": "6.5.0",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.43.0",
+    "@floating-ui/react": "^0.27.19",
+    "@formkit/auto-animate": "^0.9.0",
     "@tauri-apps/api": "2.11.0",
     "@tauri-apps/plugin-dialog": "2.7.1",
     "@tauri-apps/plugin-fs": "2.5.1",
@@ -40,6 +42,7 @@
     "lucide-react": "1.16.0",
     "mammoth": "1.12.0",
     "mermaid": "^11.15.0",
+    "motion": "^12.42.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "vditor": "3.11.2"

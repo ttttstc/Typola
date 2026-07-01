@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ChevronDown,
   Code2,
@@ -17,10 +17,22 @@ import {
   Terminal,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import {
+  FloatingPortal,
+  flip,
+  offset,
+  shift,
+  useClick,
+  useDismiss,
+  useFloating,
+  useInteractions,
+  useRole,
+} from '@floating-ui/react';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import { handleTitlebarMouseDown } from '../services/titlebarDrag';
 import { DocumentModeSwitcher } from './DocumentModeSwitcher';
+import { Tooltip } from './ui/Tooltip';
 import type { DocMode } from '../hooks/useDocumentMode';
 
 export type EditorMode = 'wysiwyg' | 'source';
@@ -80,25 +92,28 @@ export function Toolbar({
   const iconSize = 18;
   const strokeWidth = 1.6;
 
-  // 导出下拉菜单
+  // 导出下拉菜单(用 @floating-ui/react 挂到 body 规避 motion 引入后的 stacking trap)
+  const [exportTrigger, setExportTrigger] = useState<HTMLButtonElement | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
   const exporting = pdfExporting || wordExporting;
-
-  const closeExportMenu = useCallback(() => {
-    setExportMenuOpen(false);
-  }, []);
-
-  useEffect(() => {
-    if (!exportMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-        closeExportMenu();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [exportMenuOpen, closeExportMenu]);
+  const exportFloating = useFloating({
+    open: exportMenuOpen,
+    onOpenChange: setExportMenuOpen,
+    placement: 'bottom-end',
+    middleware: [offset(4), flip({ padding: 8 }), shift({ padding: 8 })],
+  });
+  const exportClick = useClick(exportFloating.context);
+  const exportDismiss = useDismiss(exportFloating.context);
+  const exportRole = useRole(exportFloating.context, { role: 'menu' });
+  const { getReferenceProps: getExportReferenceProps, getFloatingProps: getExportFloatingProps } = useInteractions([
+    exportClick,
+    exportDismiss,
+    exportRole,
+  ]);
+  const setExportButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    setExportTrigger(node);
+    exportFloating.refs.setReference(node);
+  }, [exportFloating.refs.setReference]);
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!('__TAURI_INTERNALS__' in window)) return;
@@ -149,42 +164,57 @@ export function Toolbar({
             </button>
           )}
           {onExportPdf && (
-            <div className="toolbar-export-dropdown" ref={exportMenuRef}>
+            <div className="toolbar-export-dropdown">
               <button
+                ref={setExportButtonRef}
                 data-no-window-drag="true"
-                onClick={() => setExportMenuOpen((prev) => !prev)}
                 disabled={editingDisabled || exporting}
-                data-tooltip={exporting ? '正在导出…' : '导出（Cmd/Ctrl+P 导出 PDF，Cmd/Ctrl+Shift+E 导出 Word）'}
                 aria-label="导出"
                 aria-expanded={exportMenuOpen}
                 aria-haspopup="true"
+                {...getExportReferenceProps()}
               >
                 <FileDown size={iconSize} strokeWidth={strokeWidth} />
                 <ChevronDown size={10} strokeWidth={strokeWidth} className="export-chevron" />
               </button>
+              <Tooltip
+                label="导出"
+                shortcut="⌘P / ⇧⌘E"
+                reference={exportTrigger}
+                placement="bottom"
+              />
               {exportMenuOpen && (
-                <div className="export-menu" role="menu" aria-label="导出格式">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-no-window-drag="true"
-                    onClick={() => { closeExportMenu(); onExportPdf(); }}
-                    disabled={editingDisabled}
+                <FloatingPortal>
+                  <div
+                    ref={exportFloating.refs.setFloating}
+                    style={{ ...exportFloating.floatingStyles, zIndex: 9999 }}
+                    className="export-menu"
+                    role="menu"
+                    aria-label="导出格式"
+                    {...getExportFloatingProps()}
                   >
-                    导出 PDF
-                  </button>
-                  {onExportWord && (
                     <button
                       type="button"
                       role="menuitem"
                       data-no-window-drag="true"
-                      onClick={() => { closeExportMenu(); onExportWord(); }}
+                      onClick={() => { setExportMenuOpen(false); onExportPdf(); }}
                       disabled={editingDisabled}
                     >
-                      导出 Word
+                      导出 PDF
                     </button>
-                  )}
-                </div>
+                    {onExportWord && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-no-window-drag="true"
+                        onClick={() => { setExportMenuOpen(false); onExportWord(); }}
+                        disabled={editingDisabled}
+                      >
+                        导出 Word
+                      </button>
+                    )}
+                  </div>
+                </FloatingPortal>
               )}
             </div>
           )}

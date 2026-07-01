@@ -664,7 +664,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .editor-tabbar {
   position: relative;
-  height: 42px;
+  height: 44px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -690,7 +690,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .editor-tab-indicator {
   top: 6px;
-  height: 30px;
+  height: 32px;
   z-index: 0;
 }
 
@@ -699,8 +699,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  max-width: 220px;
-  height: 30px;
+  min-width: 118px;
+  max-width: min(320px, 34vw);
+  height: 32px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -718,6 +719,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .editor-tab-main {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
   height: 100%;
   flex: 1;
@@ -727,7 +730,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;
-  padding: 0 6px 0 11px;
+  padding: 0 8px 0 12px;
   text-align: left;
 }
 
@@ -4246,6 +4249,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 @keyframes file-tree-row-in {
@@ -4701,6 +4705,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .op-card.op-web { border-left-color: #0891b2; }
 .op-card.op-generic { border-left-color: #6b7280; }
 .op-card.op-todo { border-left-color: #059669; }
+.op-card.op-question { border-left-color: #f97316; }
 
 .op-card-head {
   display: flex;
@@ -4791,6 +4796,66 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .op-status-error {
   color: #dc2626;
   background: color-mix(in oklch, #dc2626 12%, transparent);
+}
+
+.op-status-question {
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 13%, transparent);
+}
+
+.conversation-tool-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+  overflow: hidden;
+}
+
+.conversation-tool-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.conversation-tool-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.conversation-tool-group > summary::before {
+  content: '▸';
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform 0.16s ease;
+}
+
+.conversation-tool-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.conversation-tool-group > summary span {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.conversation-tool-group > summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-tool-group-scroll {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-subtle);
+  padding: 6px;
 }
 
 .op-expand-chev {
@@ -5052,6 +5117,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .op-card.op-web { border-left-color: #0891b2; }
 .op-card.op-generic { border-left-color: #6b7280; }
 .op-card.op-todo { border-left-color: #059669; }
+.op-card.op-question { border-left-color: #f97316; }
 
 .op-card-head {
   display: flex;
@@ -5706,8 +5772,68 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .question-form-field label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--muted);
+  gap: 8px;
+  min-height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--control-bg) 86%, transparent);
+  color: var(--text-secondary);
+  padding: 6px 8px;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.question-form-field label:hover {
+  border-color: color-mix(in oklch, var(--accent) 34%, var(--border-subtle));
+  background: color-mix(in oklch, var(--accent-soft) 46%, var(--control-bg));
+  color: var(--text-primary);
+}
+
+.question-form-field input[type="radio"],
+.question-form-field input[type="checkbox"] {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex: 0 0 auto;
+  appearance: none;
+  border: 1.5px solid color-mix(in oklch, var(--muted) 55%, transparent);
+  background: var(--surface);
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.question-form-field input[type="radio"] {
+  border-radius: 999px;
+}
+
+.question-form-field input[type="checkbox"] {
+  border-radius: 5px;
+}
+
+.question-form-field input[type="radio"]:checked,
+.question-form-field input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.question-form-field input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  inset: 3.5px;
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.question-form-field input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--surface);
+  border-width: 0 2px 2px 0;
+  transform: rotate(42deg);
 }
 
 .question-form-field input[type="text"],
@@ -8956,7 +9082,9 @@ button[data-tooltip]::before {
   opacity: 0;
   transform: translate(-50%, -2px);
   transition: opacity 120ms ease 350ms, transform 120ms ease 350ms;
-  z-index: 200;
+  /* P0 修复:z:200 在 motion 引入后被 modal/overlay 遮挡 → 9999 抬到顶层。
+     @floating-ui/react 的 Tooltip 组件用更高优先级(z:9999 inline),此值仅作兜底。 */
+  z-index: 9999;
 }
 
 button[data-tooltip]::after {
@@ -8992,6 +9120,62 @@ button[data-tooltip]:focus-visible::before {
 button[data-tooltip]:disabled::after,
 button[data-tooltip]:disabled::before {
   display: none;
+}
+
+/* Floating tooltip(@floating-ui/react + FloatingPortal 挂到 body)
+   用于 Toolbar 导出按钮等 stacking-trap 敏感场景;z:9999 inline 已设,
+   此处只补外观。 */
+.typola-floating-tooltip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--fg) 92%, transparent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--shadow-soft) 60%, transparent);
+  pointer-events: none;
+  animation: typola-floating-tooltip-in 120ms ease 350ms both;
+}
+
+.typola-floating-tooltip-label {
+  font-weight: 500;
+}
+
+.typola-floating-tooltip-shortcut {
+  color: color-mix(in oklch, var(--bg) 60%, transparent);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+@keyframes typola-floating-tooltip-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 触摸设备不显示 hover 提示(避免长按误触) */
+@media (hover: none) {
+  button[data-tooltip]::after,
+  button[data-tooltip]::before,
+  .typola-floating-tooltip {
+    display: none !important;
+  }
+}
+
+/* 用户偏好 reduced-motion:去掉 enter 动画与旧 ::after 的渐入延迟 */
+@media (prefers-reduced-motion: reduce) {
+  button[data-tooltip]::after,
+  button[data-tooltip]::before {
+    transition: none;
+  }
+  .typola-floating-tooltip {
+    animation: none;
+  }
 }
 
 /* ============================

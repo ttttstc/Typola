@@ -6,13 +6,16 @@
 // - 折叠内容(`.op-card-detail`)按 card 复杂度:文件类显路径,bash 类显 cmd+output,其它不展开
 // - 错误结果(`.op-output`)单独在头下方铺一条红色 pre
 // - 每张卡底部追加 RawJsonDisclosure (用户要求保留展开 JSON)
-//
-// OpenDesign 的 LegacyAskUserQuestionCard 在 Typola 不适用(已迁 selectionActions.ts),跳过。
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, CircleHelp, Loader2, X } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import { translate } from '../../../services/i18n';
+import { QuestionFormCard } from '../QuestionFormCard';
+import {
+  formatAskUserQuestionAnswers,
+  questionFormFromAskUserQuestion,
+} from '../questionForm';
 import {
   basenameOf,
   describeInput,
@@ -418,6 +421,105 @@ export function WebSearchCard({ input, runStreaming, runSucceeded, result }: Car
       </div>
       <RawJsonDisclosure data={{ input, result }} />
     </div>
+  );
+}
+
+// ============= AskUserQuestionCard =============
+//
+// Claude / OpenDesign 历史工具形态:
+// { questions: [{ question, header?, options?: [{ label }] | string[] }] }
+// Typola 当前 runner 不能 mid-turn 发送 tool_result,所以提交后以普通 user
+// message resume 当前会话；用户视角仍是可填写、可提交、可继续的真实交互。
+export function AskUserQuestionCard({
+  toolId,
+  input,
+  result,
+  submittedText,
+  onSubmit,
+}: CardProps & {
+  toolId: string;
+  submittedText?: string;
+  onSubmit?: (text: string) => void;
+}) {
+  const form = questionFormFromAskUserQuestion(input, `ask-user-question-${toolId}`);
+  if (!form) {
+    return (
+      <GenericCard
+        name="AskUserQuestion"
+        input={input}
+        result={result}
+        runStreaming={false}
+        runSucceeded={false}
+      />
+    );
+  }
+
+  const resultText = result && !result.isError && result.content.trim() ? result.content : undefined;
+  const answered = Boolean(submittedText ?? resultText);
+  const failed = Boolean(result?.isError);
+  return (
+    <div className="op-card op-question">
+      <div className="op-card-head op-card-head-static">
+        <AskUserQuestionBadge
+          answered={answered}
+          failed={failed}
+          waiting={!answered && !failed}
+          result={result}
+        />
+        <span className="op-title">需要你回答</span>
+        <span className="op-meta">{form.title}</span>
+      </div>
+      <QuestionFormCard
+        form={form}
+        submittedText={submittedText ?? resultText}
+        onSubmit={onSubmit ?? (() => undefined)}
+        formatAnswers={formatAskUserQuestionAnswers}
+      />
+      <RawJsonDisclosure data={{ input, result }} />
+    </div>
+  );
+}
+
+function AskUserQuestionBadge({
+  answered,
+  failed,
+  waiting,
+  result,
+}: {
+  answered: boolean;
+  failed: boolean;
+  waiting: boolean;
+  result?: ResultShape;
+}) {
+  if (failed) {
+    return (
+      <span
+        className="op-status op-status-error"
+        title={result?.content || '问题提交失败'}
+        aria-label={result?.content || '问题提交失败'}
+      >
+        <X size={14} />
+      </span>
+    );
+  }
+  if (answered) {
+    return (
+      <span className="op-status op-status-ok" title="已回答" aria-label="已回答">
+        <Check size={14} />
+      </span>
+    );
+  }
+  if (waiting) {
+    return (
+      <span className="op-status op-status-question" title="等待回答" aria-label="等待回答">
+        <CircleHelp size={14} />
+      </span>
+    );
+  }
+  return (
+    <span className="op-status op-status-running" title="正在生成问题" aria-label="正在生成问题">
+      <Loader2 size={14} className="op-status-spinner" />
+    </span>
   );
 }
 

@@ -3,7 +3,12 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssistantMessage } from './AssistantMessage';
-import { formatQuestionFormAnswers, parseQuestionForms } from './questionForm';
+import {
+  formatAskUserQuestionAnswers,
+  formatQuestionFormAnswers,
+  parseQuestionForms,
+  questionFormFromAskUserQuestion,
+} from './questionForm';
 import type { AgentMessage } from '../../services/agent/types';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -12,13 +17,13 @@ vi.mock('../PreviewPane', () => ({
   PreviewPane: ({ source }: { source: string }) => <div data-testid="preview">{source}</div>,
 }));
 
-function assistant(content: string): Extract<AgentMessage, { role: 'assistant' }> {
+function assistant(content: string, tools: Extract<AgentMessage, { role: 'assistant' }>['tools'] = []): Extract<AgentMessage, { role: 'assistant' }> {
   return {
     id: 'a1',
     role: 'assistant',
     content,
     thinking: '',
-    tools: [],
+    tools,
     createdAt: Date.now(),
     done: true,
   };
@@ -62,6 +67,27 @@ describe('QuestionForm', () => {
       '[form answers - f1]',
       '选项: A, B',
       '说明: 补充',
+    ].join('\n'));
+  });
+
+  it('normalizes AskUserQuestion tool input into a form payload', () => {
+    const form = questionFormFromAskUserQuestion({
+      questions: [{
+        header: '确认输出类型',
+        question: '你想生成什么？',
+        options: [{ label: '报告' }, { label: 'PPT' }],
+      }],
+    }, 'tool-1');
+
+    expect(form?.title).toBe('确认输出类型');
+    expect(form?.questions[0]).toMatchObject({
+      label: '你想生成什么？',
+      type: 'radio',
+      options: ['报告', 'PPT'],
+    });
+    expect(formatAskUserQuestionAnswers(form!, { q1: 'PPT' })).toBe([
+      '你想生成什么？',
+      'PPT',
     ].join('\n'));
   });
 
@@ -136,5 +162,68 @@ describe('QuestionForm', () => {
       '[form answers - empty-check]',
       '备注: 已经补充',
     ].join('\n'));
+  });
+
+  it('renders AskUserQuestion tool_use as an interactive card and submits the answer', async () => {
+    const onSubmit = vi.fn();
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant('', [{
+            id: 'toolu_question',
+            name: 'AskUserQuestion',
+            input: {
+              questions: [{
+                header: '选择方向',
+                question: '下一步做什么？',
+                options: [{ label: '生成报告' }, { label: '生成 PPT' }],
+              }],
+            },
+          }])}
+          onSubmitQuestionForm={(formId, text) => onSubmit(formId, text)}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain('需要你回答');
+    expect(host.textContent).toContain('选择方向');
+    expect(host.textContent).toContain('下一步做什么？');
+    expect(host.textContent).not.toContain('{"questions"');
+    expect(host.querySelector('.op-status-question')).toBeTruthy();
+    expect(host.querySelector('.op-status-error')).toBeFalsy();
+
+    const radio = Array.from(host.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+      .find((input) => input.parentElement?.textContent?.includes('生成 PPT'));
+    await act(async () => {
+      radio?.click();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.question-form-card footer button')?.click();
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith('tool:toolu_question', [
+      '下一步做什么？',
+      '生成 PPT',
+    ].join('\n'));
+  });
+
+  it('groups low-attention research tools into a scrollable disclosure', () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant('处理中', [
+            { id: 'read-1', name: 'Read', input: { filePath: 'a.md' } },
+            { id: 'grep-1', name: 'Grep', input: { pattern: 'Typola' } },
+            { id: 'glob-1', name: 'Glob', input: { pattern: '*.md' } },
+            { id: 'write-1', name: 'Write', input: { filePath: 'out.md', content: '# Out' } },
+          ])}
+        />,
+      );
+    });
+
+    expect(host.querySelector('.conversation-tool-group')).toBeTruthy();
+    expect(host.textContent).toContain('资料检索与读取');
+    expect(host.textContent).toContain('3 个工具调用');
+    expect(host.textContent).toContain('写入');
   });
 });

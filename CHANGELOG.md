@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- 新增 Calm Workspace 动效基础设施：引入 `motion`、`@floating-ui/react` 与 `@formkit/auto-animate`，并提供统一的 MotionProvider / motion token，供后续面板、tooltip 与列表动效复用。
 - AI 工作台补齐 #112 Phase 3：Codex CLI 进入 AI 执行设置的检测卡片与 runtime registry，但保持检测-only，不进入 Composer 可发送 Provider；新增裁剪版 `mocks/` 目录用于后续 parser/golden 回归。
 - AI 工作台补齐 #112 Phase 2 输出链路：OpenCode 写文件工具现在会进入 `artifact_file` 产物回流，CLI 相对路径会归一到当前会话 `.typola-output/<conversationId>/`，非白名单扩展名（如 `.yaml`/源码文件）也能进入产物 toast/manifest 链路。
 - AI 工作台补齐 #112 Phase 1：Composer 左下角切换器改为 OpenDesign 风格 CLI 图标 pill，新增对话内 QuestionForm 交互卡片，并支持 `/clear`、`/mcp`、`/help` 三个本地 slash 命令。
@@ -29,6 +30,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 左右侧栏与预览面板展开/收起改为低噪声滑入/淡出动效，文件 tab 加宽并优化文字垂直居中与可读长度。
 - 导航连续性优化：文件树展开增加 chevron 旋转和轻量淡入，文件 tab / 左右栏 tab 增加滑动指示器，搜索跳转命中行会短暂高亮。
 - 基础动效反馈优化：按钮按下增加轻量缩放，状态栏保存状态区分未保存 / 保存中 / 已保存 / 保存失败，并让字数统计变化更平滑。
 - 心流模式下 OpenCode 选中场景 skill/command 后，若当前文档或附件参考文件存在，Composer 发送时会像 Claude Code 一样在 prompt 中追加“参考以下文件”路径列表，同时继续通过 `--file` 传递真实文件上下文。
@@ -107,6 +109,7 @@ All notable changes to this project will be documented in this file.
 - 新增当前文件重命名能力：可双击顶部文件名或 tab 文件名打开重命名弹窗，真实重命名磁盘文件并同步 tab / 最近文件。
 - 修复 tab 关闭与窗口关闭未保存确认在 Tauri WebView2 下不弹窗的问题：原 `window.confirm` 会被 WebView 静默吞掉，造成 tab 关闭时静默丢失编辑；改为自定义 React 模态对话框（保存 / 不保存 / 取消 三按钮），并补全 `dialog:allow-confirm` / `dialog:allow-message` capability。
 - 修复 WYSIWYG 模式下 Markdown 代码块或行内代码编辑时光标频繁跳回开头的问题：Vditor IR 归一化让受控同步 `editor.getValue() === source` 判断失效，触发 `setValue` 重置光标；改为记录"自身回显值"，自身回显时跳过 `setValue`，外部写入仍正常刷新。
+- 修复 PR #125 引入的 3 个用户可感知回归：(1) 左右栏弹出/收起的 motion spring settle 约 500-700ms 与 PR2 `transition: width 0.46s` 并发导致双通道打架，改为 motion 仅补 opacity 淡入/淡出、保留 PR2 宽度 transition，移除 `motion.div` 拖拽分隔条的不必要 fade；(2) 工具栏导出下拉菜单被 motion transform 创建的 stacking context 遮挡导致 PDF / Word 选项点不到，改为 `@floating-ui/react` `FloatingPortal` 挂到 `document.body` 并把 `z-index` 抬到 9999；(3) tooltip 文案冗长且 `::after` `z-index: 200` 在 modal overlay 之下被遮挡，新增 `src/components/ui/Tooltip.tsx` 用 `FloatingPortal + useHover + useFocus` 渲染到 body 层（短 label + 灰色 shortcut），旧 `data-tooltip::after` `z-index` 同步抬到 9999 作兜底，并补 `prefers-reduced-motion` 与触摸设备的 `@media (hover: none)` 守门。同时把 `MotionProvider` 的 duration 从 CSS `--motion-duration-base` 读取并对齐到 180ms，删除未使用的 `calmSpring` export，避免后续动效 token 双轨。
 - 修复多文件 tab 中当前活动文件刚被编辑后，关闭 tab 或关闭窗口可能没有提示未保存修改的问题。
 - 彻底修复右上角关闭按钮可能无响应的问题：关闭请求现在先拦截确认，再显式销毁窗口；销毁过程中的重复关闭事件会直接放行，并提供 Rust 后端强制关闭兜底。
 - 关闭存在未保存文档的窗口时改为“保存并关闭 / 不保存关闭 / 取消关闭”流程，选择保存会先写回所有未保存文档，保存失败则取消关闭，降低数据丢失风险。

@@ -10,12 +10,13 @@
 //  7. Grep                                              → GrepCard
 //  8. WebFetch / web_fetch                              → WebFetchCard
 //  9. WebSearch / web_search                            → WebSearchCard
-// 10. else                                              → GenericCard
+// 10. AskUserQuestion / ask_user_question               → AskUserQuestionCard
+// 11. else                                              → GenericCard
 //
-// v1 跳过:OpenDesign 的 getToolRenderer 第三方注册表 / LegacyAskUserQuestionCard
-// (Typola 无对应基础设施)。
+// v1 只跳过 OpenDesign 的 getToolRenderer 第三方注册表。
 
 import {
+  AskUserQuestionCard,
   BashCard,
   FileEditCard,
   FileReadCard,
@@ -30,14 +31,30 @@ import {
 import { isTodoWriteToolName, type ResultShape } from './shared';
 
 type Props = {
+  id: string;
   name: string;
   input: unknown;
   result?: ResultShape;
   runStreaming: boolean;
   runSucceeded: boolean;
+  submittedText?: string;
+  onSubmitQuestionForm?: (text: string) => void;
 };
 
-export function ToolCardDispatcher({ name, input, result, runStreaming, runSucceeded }: Props) {
+function isAskUserQuestionName(name: string): boolean {
+  return name === 'AskUserQuestion' || name === 'ask_user_question';
+}
+
+export function ToolCardDispatcher({
+  id,
+  name,
+  input,
+  result,
+  runStreaming,
+  runSucceeded,
+  submittedText,
+  onSubmitQuestionForm,
+}: Props) {
   if (isTodoWriteToolName(name)) {
     return <TodoCard input={input} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />;
   }
@@ -64,6 +81,19 @@ export function ToolCardDispatcher({ name, input, result, runStreaming, runSucce
   }
   if (name === 'WebSearch' || name === 'web_search') {
     return <WebSearchCard input={input} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />;
+  }
+  if (isAskUserQuestionName(name)) {
+    return (
+      <AskUserQuestionCard
+        toolId={id}
+        input={input}
+        result={result}
+        runStreaming={runStreaming}
+        runSucceeded={runSucceeded}
+        submittedText={submittedText}
+        onSubmit={onSubmitQuestionForm}
+      />
+    );
   }
   return (
     <GenericCard

@@ -8,6 +8,7 @@ type QuestionFormCardProps = {
   form: QuestionFormBlock;
   submittedText?: string;
   onSubmit: (text: string) => void;
+  formatAnswers?: (form: QuestionFormBlock, answers: Record<string, string | string[]>) => string;
 };
 
 function toggleCheckbox(current: AnswerValue | undefined, option: string): string[] {
@@ -17,7 +18,12 @@ function toggleCheckbox(current: AnswerValue | undefined, option: string): strin
     : [...values, option];
 }
 
-export function QuestionFormCard({ form, submittedText, onSubmit }: QuestionFormCardProps) {
+export function QuestionFormCard({
+  form,
+  submittedText,
+  onSubmit,
+  formatAnswers = formatQuestionFormAnswers,
+}: QuestionFormCardProps) {
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [error, setError] = useState('');
 
@@ -49,7 +55,7 @@ export function QuestionFormCard({ form, submittedText, onSubmit }: QuestionForm
       setError('请至少填写一个答案后再提交。');
       return;
     }
-    onSubmit(formatQuestionFormAnswers(form, answers));
+    onSubmit(formatAnswers(form, answers));
   };
 
   return (
