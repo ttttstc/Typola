@@ -8960,7 +8960,9 @@ button[data-tooltip]::before {
   opacity: 0;
   transform: translate(-50%, -2px);
   transition: opacity 120ms ease 350ms, transform 120ms ease 350ms;
-  z-index: 200;
+  /* P0 修复:z:200 在 motion 引入后被 modal/overlay 遮挡 → 9999 抬到顶层。
+     @floating-ui/react 的 Tooltip 组件用更高优先级(z:9999 inline),此值仅作兜底。 */
+  z-index: 9999;
 }
 
 button[data-tooltip]::after {
@@ -8996,6 +8998,62 @@ button[data-tooltip]:focus-visible::before {
 button[data-tooltip]:disabled::after,
 button[data-tooltip]:disabled::before {
   display: none;
+}
+
+/* Floating tooltip(@floating-ui/react + FloatingPortal 挂到 body)
+   用于 Toolbar 导出按钮等 stacking-trap 敏感场景;z:9999 inline 已设,
+   此处只补外观。 */
+.typola-floating-tooltip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--fg) 92%, transparent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px color-mix(in oklch, var(--shadow-soft) 60%, transparent);
+  pointer-events: none;
+  animation: typola-floating-tooltip-in 120ms ease 350ms both;
+}
+
+.typola-floating-tooltip-label {
+  font-weight: 500;
+}
+
+.typola-floating-tooltip-shortcut {
+  color: color-mix(in oklch, var(--bg) 60%, transparent);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+@keyframes typola-floating-tooltip-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 触摸设备不显示 hover 提示(避免长按误触) */
+@media (hover: none) {
+  button[data-tooltip]::after,
+  button[data-tooltip]::before,
+  .typola-floating-tooltip {
+    display: none !important;
+  }
+}
+
+/* 用户偏好 reduced-motion:去掉 enter 动画与旧 ::after 的渐入延迟 */
+@media (prefers-reduced-motion: reduce) {
+  button[data-tooltip]::after,
+  button[data-tooltip]::before {
+    transition: none;
+  }
+  .typola-floating-tooltip {
+    animation: none;
+  }
 }
 
 /* ============================

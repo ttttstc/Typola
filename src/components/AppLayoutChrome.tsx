@@ -5,7 +5,7 @@ import { Toolbar } from './Toolbar';
 import { FloatingToc } from './FloatingToc';
 import { FileTreePanel } from './FileTreePanel';
 import { ConversationPanel } from './conversation/ConversationPanel';
-import { calmSpring, calmTransition, MotionProvider } from './motion/MotionProvider';
+import { calmTransition, MotionProvider } from './motion/MotionProvider';
 import type { OpenFileTab } from '../hooks/useFileTabs';
 import type { LeftRailMode } from '../hooks/useLeftRail';
 import type { RightPanelMode } from '../hooks/useRightPanel';
@@ -78,6 +78,9 @@ function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolea
 
     update();
     const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+    // 必须同时 observe container + active:容器 resize 时 active 位置会发生位移,
+    // 仅 observe container 会漏 active 自身尺寸变化(如 tab 标题加长、icon 切换)。
+    // 删任一 observe 都会让 indicator 在某个边界情况下跳到旧位置。
     resizeObserver?.observe(container);
     resizeObserver?.observe(active);
     window.addEventListener('resize', update);
@@ -156,10 +159,10 @@ export function AppLayoutChrome({
                   key="left-rail"
                   className="left-rail-shell"
                   style={{ width: workspacePanelWidth }}
-                  initial={{ opacity: 0, x: -14 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -12 }}
-                  transition={calmSpring}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={calmTransition}
                 >
               <div ref={leftRailIndicator.containerRef} className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
                 {leftRailIndicator.indicatorStyle && (
@@ -194,7 +197,7 @@ export function AppLayoutChrome({
                 <FileTreePanel {...fileTreeProps} />
               )}
                 </motion.aside>
-                <motion.div
+                <div
                   key="left-rail-resizer"
                   className={`left-panel-resizer ${leftResizing === 'workspace' ? 'dragging' : ''}`}
                   role="separator"
@@ -202,10 +205,6 @@ export function AppLayoutChrome({
                   aria-orientation="vertical"
                   title="拖拽调整目录栏宽度"
                   onPointerDown={onLeftPanelResize}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={calmTransition}
                 />
               </Fragment>
             )}
@@ -267,7 +266,7 @@ export function AppLayoutChrome({
         </section>
         <AnimatePresence initial={false}>
           {rightPanelMode !== 'none' && !isDocx && (
-            <motion.div
+            <div
               key="right-rail-resizer"
               className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
               role="separator"
@@ -279,10 +278,6 @@ export function AppLayoutChrome({
               title={rightPanelResizeTitle}
               onPointerDown={onRightPanelResize}
               onDoubleClick={onResetRightPanelWidth}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={calmTransition}
             />
           )}
         </AnimatePresence>
@@ -292,10 +287,10 @@ export function AppLayoutChrome({
               key="right-rail"
               className="right-rail-shell"
               style={{ width: rightPanelWidth }}
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 14 }}
-              transition={calmSpring}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={calmTransition}
             >
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (
               <div ref={rightRailIndicator.containerRef} className="right-rail-tabs" role="tablist" aria-label="右侧预览切换">
