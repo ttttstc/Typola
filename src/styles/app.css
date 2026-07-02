@@ -33,6 +33,7 @@
   --paper-shadow: oklch(20% 0.02 60 / 0.08);
   --toc-panel-bg: oklch(99% 0.012 80 / 0.72);
   --success: oklch(44% 0.09 145);
+  --ok: oklch(70% 0.15 145);
   --danger: oklch(52% 0.16 30);
   --select-chevron: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23766f65' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --motion-duration-press: 60ms;
@@ -91,6 +92,7 @@ html[data-theme='dark'] {
   --paper-shadow: oklch(8% 0.01 70 / 0.35);
   --toc-panel-bg: oklch(25% 0.012 70 / 0.7);
   --success: oklch(70% 0.1 145);
+  --ok: oklch(75% 0.13 145);
   --danger: oklch(70% 0.14 30);
   --select-chevron: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23aaa49a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
@@ -4710,7 +4712,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .op-card.op-web { border-left-color: #0891b2; }
 .op-card.op-generic { border-left-color: #6b7280; }
 .op-card.op-todo { border-left-color: #059669; }
-.op-card.op-question { border-left-color: #f97316; }
+.op-card.op-question { border-left-color: var(--accent); }
 
 .op-card-head {
   display: flex;
@@ -5122,7 +5124,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .op-card.op-web { border-left-color: #0891b2; }
 .op-card.op-generic { border-left-color: #6b7280; }
 .op-card.op-todo { border-left-color: #059669; }
-.op-card.op-question { border-left-color: #f97316; }
+.op-card.op-question { border-left-color: var(--accent); }
 
 .op-card-head {
   display: flex;
@@ -6010,7 +6012,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   gap: 6px;
   min-height: 28px;
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   padding: 0 10px;
@@ -6032,7 +6034,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   margin-left: auto;
   min-height: 28px;
   border: 1px solid color-mix(in oklch, var(--accent) 45%, var(--border-subtle));
-  border-radius: 999px;
+  border-radius: 6px;
   background: color-mix(in oklch, var(--accent-soft) 52%, var(--surface));
   color: var(--accent);
   padding: 0 12px;
