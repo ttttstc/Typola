@@ -44,6 +44,7 @@ type ConversationPanelProps = {
   onRenameConversation: (id: string, title: string) => void;
   onSwitchProvider: (provider: AgentProvider) => void;
   onSend: (prompt: string, context?: { currentFileContextPath?: string; referencePaths?: string[]; toolAnswer?: boolean }) => void;
+  onSubmitToolResult: (toolUseId: string, content: string) => void;
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
@@ -95,6 +96,7 @@ export function ConversationPanel({
   onRenameConversation,
   onSwitchProvider,
   onSend,
+  onSubmitToolResult,
   onCancel,
   onReset,
   onClose,
@@ -209,6 +211,10 @@ export function ConversationPanel({
 
   const handleSubmitQuestionForm = (messageId: string, formId: string, text: string) => {
     setSubmittedQuestionForms((current) => ({ ...current, [`${messageId}:${formId}`]: text }));
+    if (formId.startsWith('tool:')) {
+      onSubmitToolResult(formId.slice('tool:'.length), text);
+      return;
+    }
     onSend(text, { toolAnswer: true });
   };
 

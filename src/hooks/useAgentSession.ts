@@ -13,6 +13,7 @@ import {
   onAgentStdout,
   resumeAgentSession,
   startAgentSession,
+  submitAgentToolResult,
 } from '../services/agent/headlessService';
 import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
 import type { AgentDiagnostic } from '../services/agent/runtime/types';
@@ -101,12 +102,6 @@ function isAskUserQuestionToolName(name: string): boolean {
   return name === 'AskUserQuestion' || name === 'ask_user_question';
 }
 
-// OpenDesign 的 question-form 是 markdown artifact,turn 自然结束,系统
-// prompt 引导模型输出 `<question-form>...</question-form>`,答案走 Composer
-// 下一条 user message。
-// 这里保留 hasUnansweredAskUserQuestion 是因为 message.tools 里可能仍有
-// 历史 AUQ 工具调用残留(用户从旧版本升级带来的对话),仍要正确切到
-// waitingForUser 避免 Composer 误开启新一轮。新的交互不再发 AskUserQuestion。
 function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
   const lastAssistant = [...messages].reverse().find((message): message is Extract<AgentMessage, { role: 'assistant' }> => (
     message.role === 'assistant'
@@ -114,6 +109,17 @@ function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
   return Boolean(lastAssistant?.tools.some((tool) => (
     isAskUserQuestionToolName(tool.name) && !tool.result && !tool.isError
   )));
+}
+
+function findAskUserQuestionTool(messages: AgentMessage[], toolUseId?: string): AgentToolCall | null {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== 'assistant') continue;
+    for (const tool of message.tools) {
+      if (!isAskUserQuestionToolName(tool.name) || tool.result || tool.isError) continue;
+      if (!toolUseId || tool.id === toolUseId) return tool;
+    }
+  }
+  return null;
 }
 
 function hasToolUseTurnEnd(events: AgentEvent[]): boolean {
@@ -184,7 +190,7 @@ function summarizeTitle(text: string): string {
 
 function withArtifactWriteGuard(prompt: string, cwd?: string): string {
   if (!cwd) return prompt;
-  return `${prompt}\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}\n\n[Typola 提问规则]\n需要向用户澄清或确认选项时，禁止调用 AskUserQuestion 工具。在正文中输出一个 <question-form id="..." title="...">{ "questions": [{ "id", "label", "type": "radio"|"checkbox"|"select"|"text", "options" }] }</question-form> Markdown 块(JSON 体, id 与本轮唯一)。Typola 会渲染成表单卡片，用户提交后，下一条 user 消息会带上 [form answers - <form_id>] 段，请基于那段回答继续。`;
+  return `${prompt}\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
 }
 
 function outputCwdForConversation(workspaceRoot: string | undefined, convId: string): string | undefined {
@@ -502,6 +508,43 @@ export function useConversationManager({
     }
   }, [appendAssistantEvent, claudeModel, claudePath, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv, workspaceRoot]);
 
+  const submitToolResult = useCallback(async (toolUseId: string, content: string) => {
+    const convId = activeConvIdRef.current;
+    const conv = conversationsRef.current.get(convId);
+    const tool = conv ? findAskUserQuestionTool(conv.messages, toolUseId) : null;
+    if (!conv || !tool || !conv.runId || conv.runState !== 'waitingForUser') return;
+    updateConv(convId, {
+      runState: 'running',
+      lastError: '',
+      messages: appendEventToMessages(conv.messages, {
+        type: 'tool_result',
+        toolUseId: tool.id,
+        content,
+        isError: false,
+      }),
+    });
+    try {
+      await submitAgentToolResult({
+        runId: conv.runId,
+        toolUseId: tool.id,
+        content,
+        isError: false,
+      });
+    } catch (error) {
+      const message = String(error);
+      updateConv(convId, {
+        runState: 'waitingForUser',
+        lastError: message,
+        messages: appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? conv.messages, {
+          type: 'tool_result',
+          toolUseId: tool.id,
+          content: message,
+          isError: true,
+        }),
+      });
+    }
+  }, [updateConv]);
+
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;
     const conv = conversationsRef.current.get(convId);
@@ -642,6 +685,7 @@ export function useConversationManager({
     lastError: activeConv?.lastError ?? '',
     // Actions
     send,
+    submitToolResult,
     cancel,
     reset,
     createConversation,
