@@ -1726,44 +1726,20 @@ fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
     candidate
 }
 
-fn claude_stream_json_user_message(content: &str) -> Result<String, String> {
-    serde_json::to_string(&serde_json::json!({
-        "type": "user",
-        "message": {
-            "role": "user",
-            "content": [{ "type": "text", "text": content }],
-        },
-    }))
-    .map_err(|error| format!("failed to encode Claude stream-json user message: {error}"))
-}
-
-fn close_agent_stdin(stdin: &Arc<Mutex<Option<std::process::ChildStdin>>>) {
-    if let Ok(mut stdin) = stdin.lock() {
-        stdin.take();
-    }
-}
-
-fn claude_stream_json_terminal_stop_reason(line: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(line).ok()?;
-    if value.get("type").and_then(|value| value.as_str()) == Some("assistant") {
-        return value
-            .get("message")
-            .and_then(|message| message.get("stop_reason"))
-            .and_then(|value| value.as_str())
-            .map(str::to_string);
-    }
-    if value.get("type").and_then(|value| value.as_str()) == Some("result") {
-        return value
-            .get("stop_reason")
-            .and_then(|value| value.as_str())
-            .map(str::to_string);
-    }
-    None
-}
-
+// `stream_json_stdin` used to mean "keep stdin open and feed stream-json
+// user/tool_result messages mid-turn". That transport was retired with the
+// submit_tool_result command (PR #128) — we now feed tool results through
+// the structured chat surface and Claude naturally ends its turn when no
+// mid-turn tool callback is available. The field is preserved (rather
+// than deleted) so existing call sites compile, but the semantic is now
+// "does this provider emit stream-json output" rather than anything about
+// stdin. New call sites should treat the field as output-format only.
 struct AgentCommandSpec {
     args: Vec<String>,
     prompt_stdin: bool,
+    // No production reads after the stdin transport was retired; kept for
+    // API stability and consumed by tests. Safe to remove in a follow-up.
+    #[allow(dead_code)]
     stream_json_stdin: bool,
 }
 
@@ -1866,7 +1842,7 @@ fn start_agent_headless_run(
             provider.display_name()
         )
     })?;
-    let stdin = child
+    let mut stdin = child
         .stdin
         .take()
         .ok_or_else(|| format!("failed to open {} stdin", provider.display_name()))?;
@@ -1879,34 +1855,23 @@ fn start_agent_headless_run(
         .take()
         .ok_or_else(|| format!("failed to open {} stderr", provider.display_name()))?;
 
-    let stdin = Arc::new(Mutex::new(Some(stdin)));
+    // Stdin is single-shot: we hand the initial prompt (plain text, regardless
+    // of whether output uses stream-json) and close it. Mid-turn tool
+    // callbacks used to be written here too; submit_tool_result was removed in
+    // PR #128 so the long-lived Arc<Mutex<Option<ChildStdin>>> chain is no
+    // longer needed.
     if command_spec.prompt_stdin {
-        let payload = if command_spec.stream_json_stdin {
-            format!("{}\n", claude_stream_json_user_message(&request.prompt)?)
-        } else {
-            request.prompt.clone()
-        };
-        {
-            let mut stdin_guard = stdin
-                .lock()
-                .map_err(|_| "agent stdin poisoned".to_string())?;
-            let stdin_writer = stdin_guard
-                .as_mut()
-                .ok_or_else(|| format!("{} stdin is closed", provider.display_name()))?;
-            stdin_writer
-                .write_all(payload.as_bytes())
-                .and_then(|_| stdin_writer.flush())
-                .map_err(|error| {
-                    format!(
-                        "failed to write {} prompt: {error}",
-                        provider.display_name()
-                    )
-                })?;
-        }
+        stdin
+            .write_all(request.prompt.as_bytes())
+            .and_then(|_| stdin.flush())
+            .map_err(|error| {
+                format!(
+                    "failed to write {} prompt: {error}",
+                    provider.display_name()
+                )
+            })?;
     }
-    if !command_spec.stream_json_stdin {
-        close_agent_stdin(&stdin);
-    }
+    drop(stdin);
 
     let pid = child.id();
     let child = Arc::new(Mutex::new(child));
@@ -1934,11 +1899,6 @@ fn start_agent_headless_run(
         conversation_id.to_string(),
         session_uuid.clone(),
         stdout,
-        if command_spec.stream_json_stdin {
-            Some(Arc::clone(&stdin))
-        } else {
-            None
-        },
     );
     spawn_agent_waiter(
         app,
@@ -1993,10 +1953,15 @@ fn build_claude_headless_args(
     plugin_dirs: &[String],
     extra_allowed_dirs: &[String],
 ) -> Vec<String> {
+    // Claude is invoked in headless mode with stream-json output and a
+    // single-shot plain-text stdin prompt. The mid-turn tool_use path used to
+    // keep stdin open and stream JSON user/tool_result messages back into the
+    // process; that wiring was removed (PR #128 dropped submit_tool_result)
+    // because we now feed tool results through the structured chat surface
+    // instead. `--input-format text` is the CLI default, so the flag is
+    // omitted entirely.
     let mut args = vec![
         "-p".to_string(),
-        "--input-format".to_string(),
-        "stream-json".to_string(),
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
@@ -2101,6 +2066,8 @@ fn build_agent_headless_command(
                 extra_allowed_dirs,
             ),
             prompt_stdin: true,
+            // See AgentCommandSpec doc: now means "Claude emits stream-json
+            // output" (the stdin half of the old semantic is gone).
             stream_json_stdin: true,
         },
         AgentProvider::Opencode => AgentCommandSpec {
@@ -2130,15 +2097,11 @@ fn spawn_agent_stdout_forwarder(
     conversation_id: String,
     session_uuid: String,
     stdout: impl Read + Send + 'static,
-    stdin: Option<Arc<Mutex<Option<std::process::ChildStdin>>>>,
 ) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             let Ok(line) = line else { break };
-            let stop_reason = stdin
-                .as_ref()
-                .and_then(|_| claude_stream_json_terminal_stop_reason(&line));
             let _ = app.emit(
                 "agent-stdout",
                 AgentStdoutPayload {
@@ -2148,11 +2111,6 @@ fn spawn_agent_stdout_forwarder(
                     line,
                 },
             );
-            if let (Some(stdin), Some(stop_reason)) = (stdin.as_ref(), stop_reason) {
-                if stop_reason != "tool_use" {
-                    close_agent_stdin(stdin);
-                }
-            }
         }
     });
 }
@@ -3338,7 +3296,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_headless_args_use_stream_json_stdin_and_output() {
+    fn claude_headless_args_use_stream_json_output_and_text_stdin() {
         let plugin_dirs = vec![
             "D:\\plugins\\one".to_string(),
             "D:\\plugins\\two".to_string(),
@@ -3352,9 +3310,10 @@ mod tests {
             &extra_allowed_dirs,
         );
 
-        assert!(args
-            .windows(2)
-            .any(|pair| pair == ["--input-format", "stream-json"]));
+        // Mid-turn stream-json stdin transport was removed with submit_tool_result
+        // (PR #128), so --input-format is no longer pinned here. Text is the CLI
+        // default and we hand the prompt in as a single write.
+        assert!(!args.contains(&"--input-format".to_string()));
         assert!(args
             .windows(2)
             .any(|pair| pair == ["--output-format", "stream-json"]));
@@ -3476,7 +3435,7 @@ mod tests {
     }
 
     #[test]
-    fn agent_headless_command_keeps_claude_on_stdin_and_opencode_on_argv() {
+    fn agent_headless_command_uses_stream_json_output_for_claude_and_argv_for_opencode() {
         let claude = build_agent_headless_command(
             AgentProvider::Claude,
             "session-123",
@@ -3502,9 +3461,14 @@ mod tests {
             "hello",
         );
 
+        // Claude still consumes the prompt via stdin, but as plain text in a
+        // single write. stream_json_stdin now signals "stream-json output
+        // format" (see AgentCommandSpec doc); it is no longer about stdin
+        // transport.
         assert!(claude.prompt_stdin);
         assert!(claude.stream_json_stdin);
         assert!(!claude.args.contains(&"hello".to_string()));
+        assert!(!claude.args.contains(&"--input-format".to_string()));
         assert!(!opencode.prompt_stdin);
         assert!(!opencode.stream_json_stdin);
         assert_eq!(opencode.args.last().map(String::as_str), Some("hello"));
