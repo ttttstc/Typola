@@ -47,7 +47,6 @@ export type AgentToolCall = {
   inputDelta?: string;
   result?: string;
   isError?: boolean;
-  waitingForUser?: boolean;
 };
 
 export type AgentUsageSummary = {

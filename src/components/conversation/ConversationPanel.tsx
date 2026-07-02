@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useSettings } from '../../hooks/useSettings';
 import { confirmDialog } from '../../services/dialogService';
 import { updateSettings } from '../../services/settingsService';
-import type { AgentMessage, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
+import type { AgentMessage } from '../../services/agent/types';
 import type { AgentProvider } from '../../services/agent/provider';
 import { getAgentProviderConfig } from '../../services/agent/provider';
 import type { ConversationData } from '../../services/agent/conversationStore';
@@ -33,24 +33,18 @@ type ConversationPanelProps = {
   /** 当前活动会话是否已注入过"当前文档" context → 后续 send 不再重复 */
   fileContextInjected?: boolean;
   currentFileContextPath?: string;
-  hasEditorSelection?: boolean;
-  onInsertToEditor?: (text: string) => void;
-  onReplaceEditorSelection?: (text: string) => void;
-  onReplaceEditorAnchor?: (text: string, anchor: SelectionAnchor) => void;
-  onValidateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
   onSelectConversation: (id: string) => void;
   onCreateConversation: () => void;
   onCloseConversation: (id: string) => void;
   onRenameConversation: (id: string, title: string) => void;
   onSwitchProvider: (provider: AgentProvider) => void;
-  onSend: (prompt: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
+  onSend: (
+    prompt: string,
+    context?: { currentFileContextPath?: string; referencePaths?: string[]; toolAnswer?: true },
+  ) => void;
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
-  // AskUserQuestion 工具调用(stream-json 同轮 tool_result 通道):toolUseId 是 Claude
-  // tool_use.id。Submission 走 useConversationManager.submitAskUserQuestionAnswer,
-  // 会根据 inputMode 决定 JSONL tool_result 还是新轮 resume。
-  onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
   onConsumePendingInjection?: (convId: string) => { text: string; queuedAt: number } | undefined;
   injectionReadyTick?: number;
   injectionReadyConvId?: string | null;
@@ -61,6 +55,8 @@ type ConversationPanelProps = {
   latestArtifact?: ArtifactItem;
   onOpenArtifact?: (path: string) => void;
   onArchiveArtifact?: (path: string) => void;
+  // 写入对话持久化字段(question-form 提交记录等)
+  updateConv?: (convId: string, patch: Partial<ConversationData>) => void;
 };
 
 function UserMessage({ message }: { message: Extract<AgentMessage, { role: 'user' }> }) {
@@ -88,11 +84,6 @@ export function ConversationPanel({
   currentModel,
   fileContextInjected = false,
   currentFileContextPath,
-  hasEditorSelection = false,
-  onInsertToEditor,
-  onReplaceEditorSelection,
-  onReplaceEditorAnchor,
-  onValidateAnchor,
   onSelectConversation,
   onCreateConversation,
   onCloseConversation,
@@ -102,7 +93,6 @@ export function ConversationPanel({
   onCancel,
   onReset,
   onClose,
-  onSubmitAskUserQuestionToolResult,
   onConsumePendingInjection,
   injectionReadyTick,
   injectionReadyConvId,
@@ -111,13 +101,12 @@ export function ConversationPanel({
   latestArtifact,
   onOpenArtifact,
   onArchiveArtifact,
+  updateConv,
 }: ConversationPanelProps) {
   const settings = useSettings();
   const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
-  // waitingForUser 期间 Claude stream-json 进程仍在 stdin 等待 tool_result,
-  // 必须视为 busy:Composer 禁用普通发送,影响活跃进程的判断也要拦。
-  const agentBusy = running || runState === 'waitingForUser';
+  const busy = running;
   const hasHistory = messages.length > 0;
   const providerConfig = getAgentProviderConfig(activeProvider);
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
@@ -125,7 +114,7 @@ export function ConversationPanel({
   const promptReferenceTextEnabled = activeProvider === 'opencode' && Boolean(activeConversation?.skillRef);
   const composerRef = useRef<ComposerHandle>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [submittedQuestionForms, setSubmittedQuestionForms] = useState<Record<string, string>>({});
+  const submittedQuestionForms = activeConversation?.submittedQuestionForms ?? {};
   const toastTimerRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const messageBottomRef = useRef<HTMLDivElement>(null);
@@ -214,8 +203,11 @@ export function ConversationPanel({
   }, []);
 
   const handleSubmitQuestionForm = (messageId: string, formId: string, text: string) => {
-    setSubmittedQuestionForms((current) => ({ ...current, [`${messageId}:${formId}`]: text }));
-    onSend(text);
+    const key = `${messageId}:${formId}`;
+    const next = { ...submittedQuestionForms, [key]: text };
+    updateConv?.(activeConvId, { submittedQuestionForms: next });
+    // toolAnswer: true 表示 form 答案,允许在 mid-turn (running + 未闭合 form) 状态下提交
+    onSend(text, { toolAnswer: true });
   };
 
   // 把 messages 切成 (user, assistant[]) 段，渲染时把 user 的 selectionAnchor 沿用到该 user 之后的所有 assistant 消息。
@@ -248,7 +240,7 @@ export function ConversationPanel({
   };
 
   const confirmWorkspaceChange = async (): Promise<boolean> => {
-    if (!hasHistory && !agentBusy) return true;
+    if (!hasHistory && !busy) return true;
     return confirmDialog('切换 AI 工作区会开始新对话，确定继续？', {
       title: '切换 AI 工作区',
       okLabel: '切换并新建对话',
@@ -265,14 +257,14 @@ export function ConversationPanel({
       cancelLabel: '取消',
     });
     if (!confirmed) return;
-    if (agentBusy) await onCancel();
+    if (busy) await onCancel();
     updateSettings({ aiActiveProvider: provider });
     onSwitchProvider(provider);
   };
 
   const handleWorkspaceChange = async (path: string) => {
     if (!(await confirmWorkspaceChange())) return;
-    if (agentBusy) await onCancel();
+    if (busy) await onCancel();
     onReset();
     rememberWorkspace(path);
   };
@@ -286,7 +278,7 @@ export function ConversationPanel({
 
   const handleClearWorkspace = async () => {
     if (!(await confirmWorkspaceChange())) return;
-    if (agentBusy) await onCancel();
+    if (busy) await onCancel();
     onReset();
     updateSettings({ aiWorkspaceRoot: '' });
   };
@@ -323,20 +315,12 @@ export function ConversationPanel({
               <AssistantMessage
                 key={assistant.id}
                 message={assistant}
-                hasSelection={hasEditorSelection}
-                selectionAnchor={seg.user?.selectionAnchor}
-                onInsertText={onInsertToEditor}
-                onReplaceSelection={onReplaceEditorSelection}
-                onReplaceAnchor={onReplaceEditorAnchor}
-                validateAnchor={onValidateAnchor}
                 submittedQuestionForms={Object.fromEntries(
                   Object.entries(submittedQuestionForms)
                     .filter(([key]) => key.startsWith(`${assistant.id}:`))
                     .map(([key, value]) => [key.slice(assistant.id.length + 1), value]),
                 )}
-                submittedToolResults={activeConversation?.submittedToolResults}
                 onSubmitQuestionForm={(formId, text) => handleSubmitQuestionForm(assistant.id, formId, text)}
-                onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
               />
             ))}
           </div>
@@ -360,8 +344,8 @@ export function ConversationPanel({
       )}
       <Composer
         ref={composerRef}
-        running={agentBusy}
-        disabled={agentBusy}
+        running={busy}
+        disabled={false}
         cwd={cwd}
         workspaceSuggestion={workspaceSuggestion}
         workspaceRecents={settings.aiWorkspaceRecents}

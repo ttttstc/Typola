@@ -12,7 +12,6 @@ import {
   onAgentExit,
   onAgentStdout,
   resumeAgentSession,
-  sendAgentSessionInput,
   startAgentSession,
 } from '../services/agent/headlessService';
 import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
@@ -98,29 +97,6 @@ function upsertTool(tools: AgentToolCall[], next: AgentToolCall): AgentToolCall[
   ));
 }
 
-function isAskUserQuestionToolName(name: string): boolean {
-  return name === 'AskUserQuestion' || name === 'ask_user_question';
-}
-
-// stream-json 模式下 Claude 流 AskUserQuestion tool_use 时 stdIn 保持打开,
-// 进程不会退出 → 切到 waitingForUser 让 UI 知道当前会话在等用户回答。
-function applyStreamJsonSideEffects(conv: ConversationData, event: AgentEvent): ConversationData | undefined {
-  if (conv.runState !== 'running' || conv.inputMode !== 'streamJson') return undefined;
-  if (event.type === 'tool_use' && isAskUserQuestionToolName(toolName(event.name))) {
-    return { ...conv, runState: 'waitingForUser' };
-  }
-  return undefined;
-}
-
-function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
-  const lastAssistant = [...messages].reverse().find((message): message is Extract<AgentMessage, { role: 'assistant' }> => (
-    message.role === 'assistant'
-  ));
-  return Boolean(lastAssistant?.tools.some((tool) => (
-    isAskUserQuestionToolName(tool.name) && !tool.result && !tool.isError
-  )));
-}
-
 function appendEventToMessages(messages: AgentMessage[], event: AgentEvent): AgentMessage[] {
   if (event.type !== 'text_delta' &&
       event.type !== 'thinking_delta' &&
@@ -176,14 +152,61 @@ function safeSegment(value: string): string {
   return value.replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '') || 'conversation';
 }
 
+function hasOpenQuestionForm(content: string): boolean {
+  // 模型输出 <question-form...> 但还没匹配到 </question-form> → mid-turn 等用户
+  const openIndex = content.lastIndexOf('<question-form');
+  if (openIndex === -1) return false;
+  const closeIndex = content.indexOf('</question-form>', openIndex);
+  return closeIndex === -1;
+}
+
+function validateArtifactOutput(text: string, conv: ConversationData | undefined): { ok: true } | { ok: false, reason: string } {
+  if (!conv || conv.runState !== 'running') return { ok: true };
+  // 模型开了 <question-form 但 turn 还没结束 → 强制切到 waitingForUser
+  if (hasOpenQuestionForm(text)) {
+    return { ok: false, reason: 'model opened <question-form> without closing tag mid-turn' };
+  }
+  return { ok: true };
+}
+
 function summarizeTitle(text: string): string {
   const clean = text.replace(/\s+/gu, ' ').trim();
   return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || '自由对话';
 }
 
+const FORM_ANSWERS_HEADER_RE = /^\[form answers — ([^\]]+)\]/u;
+
+function composeUserRequestForAgent(userText: string): string {
+  const match = userText.match(FORM_ANSWERS_HEADER_RE);
+  if (!match) return userText;
+  const formId = match[1];
+  return [
+    `The user has answered the previous question form "${formId}".`,
+    'Use the answers below to continue the task.',
+    'Do not ask the same question again.',
+    'Do not emit another <question-form> unless there is a new, materially different blocking ambiguity.',
+    '',
+    userText,
+  ].join('\n');
+}
+
 function withArtifactWriteGuard(prompt: string, cwd?: string): string {
-  if (!cwd) return prompt;
-  return `${prompt}\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
+  let wrapped = composeUserRequestForAgent(prompt);
+  wrapped += [
+    '',
+    '[交互规则]',
+    'Do not use AskUserQuestion.',
+    'Do not call any question-asking tool.',
+    'Typola does not support tool-based user questions.',
+    '当需要用户做选择或确认时，只能使用 <question-form> markdown artifact 输出表单，不要使用 AskUserQuestion 工具。',
+    '<question-form> 内部必须直接输出合法 JSON，不要包裹 ```json 代码围栏，不要添加尾逗号或注释。',
+    '输出完 <question-form> 后立即停止当前 turn；不要在同一 turn 里继续生成文档、调用工具或写文件。',
+    '收到 [form answers — ...] 后必须使用答案继续任务，不要重复提出同一组问题。',
+  ].join('\n');
+  if (cwd) {
+    wrapped += `\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
+  }
+  return wrapped;
 }
 
 function outputCwdForConversation(workspaceRoot: string | undefined, convId: string): string | undefined {
@@ -284,14 +307,19 @@ export function useConversationManager({
         updateConv(convId, { currentModel: event.model });
       }
     }
+    const nextMessages = appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? [], event);
     const conv = conversationsRef.current.get(convId);
-    updateConv(convId, { messages: appendEventToMessages(conv?.messages ?? [], event) });
-    // stream-json 模式下 Claude 输出 AskUserQuestion tool_use 时 stdIn 保持打开,
-    // 进程不会退出 → 切到 waitingForUser 让 Composer / UI 知道当前会话在等用户回答。
-    const waitingForUser = conv ? applyStreamJsonSideEffects(conversationsRef.current.get(convId) ?? conv, event) : undefined;
-    if (waitingForUser && waitingForUser.runState !== conv?.runState) {
-      updateConv(convId, { runState: waitingForUser.runState });
+    const patch: Partial<ConversationData> = { messages: nextMessages };
+    // P0-4 / P0-8: 模型输出未闭合 <question-form → 提前切到 waitingForUser,挡住 Composer 抢答
+    if (event.type === 'text_delta') {
+      const lastAssistant = [...nextMessages].reverse().find((m) => m.role === 'assistant');
+      const lastContent = lastAssistant && lastAssistant.role === 'assistant' ? lastAssistant.content : '';
+      const validation = validateArtifactOutput(lastContent, conv);
+      if (!validation.ok && conv && conv.runState === 'running') {
+        patch.runState = 'waitingForUser';
+      }
     }
+    updateConv(convId, patch);
   }, [updateConv, workspaceRoot]);
 
   const flushQueuedEvents = useCallback(() => {
@@ -299,19 +327,18 @@ export function useConversationManager({
     const queued = eventQueueRef.current;
     eventQueueRef.current = new Map();
     queued.forEach((events, convId) => {
-      const before = conversationsRef.current.get(convId);
-      const messages = events.reduce(appendEventToMessages, before?.messages ?? []);
-      updateConv(convId, { messages });
-      // rAF queue 路径同样需要触发 stream-json side effects(waitingForUser 等)。
-      const after = conversationsRef.current.get(convId);
-      if (!before || !after) return;
-      for (const event of events) {
-        const next = applyStreamJsonSideEffects(after, event);
-        if (next && next.runState !== after.runState) {
-          updateConv(convId, { runState: next.runState });
-          break;
-        }
+      const current = conversationsRef.current.get(convId)?.messages ?? [];
+      const messages = events.reduce(appendEventToMessages, current);
+      const conv = conversationsRef.current.get(convId);
+      const patch: Partial<ConversationData> = { messages };
+      // P0-4 / P0-8: 批量 flush 后也检查最后一条 assistant 是否开了未闭合 <question-form
+      const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+      const lastContent = lastAssistant && lastAssistant.role === 'assistant' ? lastAssistant.content : '';
+      const validation = validateArtifactOutput(lastContent, conv);
+      if (!validation.ok && conv && conv.runState === 'running') {
+        patch.runState = 'waitingForUser';
       }
+      updateConv(convId, patch);
     });
   }, [updateConv]);
 
@@ -372,19 +399,10 @@ export function useConversationManager({
       if (!conv) return;
       const wasActive = conv.runState === 'running';
       const wasCancelled = payload.cancelled || conv.cancelRequested;
-      const waitingForUserAnswer = hasUnansweredAskUserQuestion(conv.messages);
       const patch: Partial<ConversationData> = {
         runState: payload.exitCode === 0 || wasCancelled ? 'idle' : 'error',
         cancelRequested: false,
       };
-      if (waitingForUserAnswer && !wasCancelled) {
-        // OpenDesign 的 Claude 适配用 stream-json stdin 在 stop_reason=tool_use 时保持工具等待。
-        // Typola 当前每轮进程会退出,所以 AskUserQuestion 需要转成"等待用户回答"的 idle 状态,
-        // 不能按普通工具缺 result 标成失败,否则用户还没选就看到错误。
-        updateConv(convId, { runState: 'idle', cancelRequested: false, lastError: '' });
-        resolveExitWaiters(convId);
-        return;
-      }
       if (payload.exitCode !== 0 && !wasCancelled) {
         const provider = conv.provider ?? DEFAULT_AGENT_PROVIDER;
         const diagnostic = provider === 'claude'
@@ -436,13 +454,23 @@ export function useConversationManager({
   // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
   const send = useCallback(async (
     prompt: string,
-    opts?: { conversationId?: string; currentFileContextPath?: string; referencePaths?: string[] },
+    opts?: {
+      conversationId?: string;
+      currentFileContextPath?: string;
+      referencePaths?: string[];
+      /** true 表示这是 question-form 答案,允许在 mid-turn 提交(模型正在 streaming 但已检测到未闭合 form) */
+      toolAnswer?: boolean;
+    },
   ) => {
     const convId = opts?.conversationId ?? activeConvIdRef.current;
     const trimmed = prompt.trim();
     if (!trimmed) return;
     const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState === 'running' || conv.runState === 'waitingForUser') return;
+    if (!conv) return;
+    if (conv.runState === 'running') return;
+    // P0-5 mid-turn 保护:模型已检测到未闭合 <question-form> (runState=waitingForUser) 时,
+    // 普通 send 阻挡,只允许 toolAnswer: true 的 form 提交。
+    if (!opts?.toolAnswer && conv.runState === 'waitingForUser') return;
     // 首条消息且仍是默认标题 → 用首句自动命名（skill 会话/已手动改名的不动）
     const nextTitle = conv.messages.length === 0 && conv.title === '自由对话'
       ? summarizeTitle(trimmed)
@@ -486,7 +514,6 @@ export function useConversationManager({
       updateConv(convId, {
         sessionStarted: true,
         runId: result.runId,
-        inputMode: result.inputMode,
         fileContextInjected: true,
         ...(opts?.currentFileContextPath ? { currentFileContextPath: opts.currentFileContextPath } : {}),
       });
@@ -527,61 +554,6 @@ export function useConversationManager({
       await exitWait;
     }
   }, [updateConv, waitForConversationExit]);
-
-  // AskUserQuestion 卡片提交:Rust stream-json 模式下把答案 JSONL tool_result 写回原进程 stdin,
-  // 进程继续同轮生成。text 模式 fallback 走 send(text) 触发下一轮 resume。
-  // 同时在 conv.submittedToolResults[toolUseId] 记录 submitting / submitted / error 三态,
-  // 卡片据此显示"提交中/已提交/失败重试"。
-  const submitAskUserQuestionAnswer = useCallback(async (toolUseId: string, text: string) => {
-    const convId = activeConvIdRef.current;
-    const conv = conversationsRef.current.get(convId);
-    if (!conv) return;
-    // 幂等保护:已 submitting 或 submitted 不再重复,error 允许重试。
-    const existing = conv.submittedToolResults?.[toolUseId];
-    if (existing?.status === 'submitting' || existing?.status === 'submitted') {
-      return;
-    }
-    if (conv.inputMode === 'streamJson' && conv.runId && conv.runState === 'waitingForUser') {
-      const frame = {
-        type: 'user',
-        message: {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: toolUseId, content: text, is_error: false }],
-        },
-      };
-      // 立即标 submitting,卡片禁用按钮防双击 + 用户立刻看到反馈。
-      updateConv(convId, {
-        submittedToolResults: {
-          ...(conv.submittedToolResults ?? {}),
-          [toolUseId]: { status: 'submitting', text },
-        },
-      });
-      try {
-        await sendAgentSessionInput({ runId: conv.runId, message: JSON.stringify(frame) });
-        // 成功:标 submitted,runState 回到 running 让 stream 事件继续驱动。
-        const latest = conversationsRef.current.get(convId);
-        updateConv(convId, {
-          runState: 'running',
-          submittedToolResults: {
-            ...(latest?.submittedToolResults ?? {}),
-            [toolUseId]: { status: 'submitted', text },
-          },
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        // 失败:标 error,保留 runState=waitingForUser 让用户能改答案后重试。
-        const latest = conversationsRef.current.get(convId);
-        updateConv(convId, {
-          submittedToolResults: {
-            ...(latest?.submittedToolResults ?? {}),
-            [toolUseId]: { status: 'error', text, error: message },
-          },
-        });
-      }
-      return;
-    }
-    await send(text);
-  }, [send, updateConv]);
 
   const reset = useCallback(() => {
     const convId = activeConvIdRef.current;
@@ -672,8 +644,7 @@ export function useConversationManager({
     const handler = handlersRef.current.get(id);
     handler?.flush();
     handlersRef.current.delete(id);
-    // Cancel run if active:stream-json waitingForUser 期间 Claude 进程仍在 stdin 等 tool_result,
-    // 关会话不 cancel 会留下后台进程和 registry run。
+    // Cancel run if active
     const conv = conversationsRef.current.get(id);
     if (conv && (conv.runState === 'running' || conv.runState === 'waitingForUser') && conv.runId) {
       void cancelAgentSession(conv.runId);
@@ -714,7 +685,7 @@ export function useConversationManager({
     renameConversation,
     closeConversation,
     setActiveConvId,
-    submitAskUserQuestionAnswer,
+    updateConv,
     cwd,
     extraAllowedDirs,
     // 选区注入暂存

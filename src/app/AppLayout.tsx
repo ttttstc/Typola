@@ -445,12 +445,7 @@ export function AppLayout() {
   });
 
   const {
-    hasEditorSelection,
-    handleInsertToEditor,
-    handleReplaceEditorSelection,
     handleEditorAIAction,
-    handleReplaceEditorAnchor,
-    validateEditorAnchor,
     resultCard,
     closeResultCard,
     acceptResultCard,
@@ -1659,11 +1654,6 @@ export function AppLayout() {
           currentModel: convManager.activeConv?.currentModel,
           fileContextInjected: convManager.activeConv?.fileContextInjected ?? false,
           currentFileContextPath: convManager.activeConv?.currentFileContextPath,
-          hasEditorSelection,
-          onInsertToEditor: handleInsertToEditor,
-          onReplaceEditorSelection: handleReplaceEditorSelection,
-          onReplaceEditorAnchor: handleReplaceEditorAnchor,
-          onValidateAnchor: validateEditorAnchor,
           onSelectConversation: convManager.switchConversation,
           onCreateConversation: () => convManager.createConversation(),
           onCloseConversation: convManager.closeConversation,
@@ -1671,7 +1661,6 @@ export function AppLayout() {
           onSwitchProvider: convManager.switchProvider,
           onSend: convManager.send,
           onCancel: convManager.cancel,
-          onSubmitAskUserQuestionToolResult: convManager.submitAskUserQuestionAnswer,
           onReset: convManager.reset,
           onClose: () => setLeftRailMode('none'),
           onConsumePendingInjection: convManager.consumePendingInjection,
@@ -1684,6 +1673,7 @@ export function AppLayout() {
             void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
           },
           onArchiveArtifact: handleArchiveArtifact,
+          updateConv: convManager.updateConv,
         }}
         fileTreeProps={{
           rootPath: workspaceRoot,

@@ -1,41 +1,46 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PreviewPane } from '../PreviewPane';
-import type { AgentMessage, AgentToolCall, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
-import type { SubmittedToolResult } from '../../services/agent/conversationStore';
+import type { AgentMessage, AgentToolCall } from '../../services/agent/types';
 import { ThoughtCard } from './ThoughtCard';
 import { ToolCard } from './ToolCard';
 import { DoneBar } from './DoneBar';
 import { ErrorRetryCard } from './ErrorRetryCard';
 import { formatAbsoluteTime, formatRelativeTime } from '../../services/timeFormat';
 import { saveFileDialog, messageDialog } from '../../services/dialogService';
-import { QuestionFormCard } from './QuestionFormCard';
-import { parseQuestionForms } from './questionForm';
+import { QuestionsBanner } from './QuestionsBanner';
+import { QuestionsPanel } from './QuestionsPanel';
+import { parseQuestionForms, stripTrailingOpenQuestionForm, hasOpenQuestionForm, type QuestionFormBlock } from './questionForm';
 
 type AssistantMessageProps = {
   message: Extract<AgentMessage, { role: 'assistant' }>;
-  hasSelection?: boolean;
-  selectionAnchor?: SelectionAnchor;
-  onInsertText?: (text: string) => void;
-  onReplaceSelection?: (text: string) => void;
-  onReplaceAnchor?: (text: string, anchor: SelectionAnchor) => void;
-  validateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
   submittedQuestionForms?: Record<string, string>;
   onSubmitQuestionForm?: (formId: string, text: string) => void;
-  // AskUserQuestion 工具调用(stream-json 同轮 tool_result 通道):toolUseId 是 Claude
-  // tool_use.id,前端把答案以 tool_result JSONL 写回原进程 stdin。
-  onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
-  // stream-json 工具提交状态:按 tool_use_id 索引 submitting/submitted/error。
-  // 卡片据此展示"提交中/已提交/失败重试"。
-  submittedToolResults?: Record<string, SubmittedToolResult>;
 };
 
-function isAskUserQuestionTool(tool: AgentToolCall): boolean {
-  return tool.name === 'AskUserQuestion' || tool.name === 'ask_user_question';
+function isResearchTool(tool: AgentToolCall): boolean {
+  return [
+    'Read',
+    'read_file',
+    'Glob',
+    'list_files',
+    'Grep',
+    'WebFetch',
+    'web_fetch',
+    'WebSearch',
+    'web_search',
+    'Bash',
+    'bash',
+    'Shell',
+    'shell',
+    'run_command',
+    'execute_command',
+  ]
+    .includes(tool.name);
 }
 
-function isResearchTool(tool: AgentToolCall): boolean {
-  return ['Read', 'read_file', 'Glob', 'list_files', 'Grep', 'WebFetch', 'web_fetch', 'WebSearch', 'web_search']
-    .includes(tool.name);
+function isTodoTool(tool: AgentToolCall): boolean {
+  const name = tool.name.toLowerCase();
+  return name === 'todowrite' || name === 'todo_write' || name === 'update_plan';
 }
 
 function extractCodeBlocks(markdown: string): Array<{ lang: string; code: string }> {
@@ -79,97 +84,51 @@ async function handleSaveAs(lang: string, code: string) {
   }
 }
 
-function MessageActions({
-  text,
-  hasSelection,
-  selectionAnchor,
-  onInsertText,
-  onReplaceSelection,
-  onReplaceAnchor,
-  validateAnchor,
-}: {
-  text: string;
-  hasSelection?: boolean;
-  selectionAnchor?: SelectionAnchor;
-  onInsertText?: (text: string) => void;
-  onReplaceSelection?: (text: string) => void;
-  onReplaceAnchor?: (text: string, anchor: SelectionAnchor) => void;
-  validateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
-}) {
-  const copy = () => {
-    void navigator.clipboard?.writeText(text).catch((error) => {
-      console.warn('Failed to copy assistant text:', error);
-    });
-  };
-
-  const anchorStatus: AnchorStatus | null = useMemo(() => {
-    if (!selectionAnchor || !validateAnchor) return null;
-    return validateAnchor(selectionAnchor);
-  }, [selectionAnchor, validateAnchor]);
-
-  // 优先用 anchor 替换；fallback 走当前选区
-  const canReplaceAnchor = !!selectionAnchor && anchorStatus === 'valid' && !!onReplaceAnchor;
-  const canReplaceSelection = !selectionAnchor && !!onReplaceSelection && hasSelection;
-  const replaceDisabled = !(canReplaceAnchor || canReplaceSelection);
-  const replaceTitle = anchorStatus === 'wrong-file'
-    ? '原文档已切换，请回到原文档'
-    : anchorStatus === 'stale'
-      ? '原选区已变，请手动定位'
-      : !hasSelection && !selectionAnchor
-        ? '无选区时不可替换'
-        : '';
-
-  return (
-    <div className="conversation-message-actions">
-      <button type="button" onClick={copy}>复制</button>
-      <button type="button" onClick={() => onInsertText?.(text)} disabled={!onInsertText}>插入光标处</button>
-      <button
-        type="button"
-        onClick={() => {
-          if (canReplaceAnchor && selectionAnchor) onReplaceAnchor?.(text, selectionAnchor);
-          else if (canReplaceSelection) onReplaceSelection?.(text);
-        }}
-        disabled={replaceDisabled}
-        title={replaceTitle}
-      >
-        替换选区
-      </button>
-    </div>
-  );
-}
-
 export function AssistantMessage({
   message,
-  hasSelection = false,
-  selectionAnchor,
-  onInsertText,
-  onReplaceSelection,
-  onReplaceAnchor,
-  validateAnchor,
   submittedQuestionForms = {},
   onSubmitQuestionForm,
-  onSubmitAskUserQuestionToolResult,
-  submittedToolResults,
 }: AssistantMessageProps) {
-  const codeBlocks = extractCodeBlocks(message.content);
-  const parsed = useMemo(() => parseQuestionForms(message.content), [message.content]);
-  const questionTools = message.tools.filter(isAskUserQuestionTool);
-  const researchTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && isResearchTool(tool));
-  const otherTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && !isResearchTool(tool));
-  const renderTool = (tool: AgentToolCall) => {
-    const toolResult = submittedToolResults?.[tool.id];
-    return (
-      <ToolCard
-        key={tool.id}
-        tool={tool}
-        message={message}
-        submittedText={toolResult?.status === 'submitted' ? toolResult.text : undefined}
-        submitStatus={toolResult?.status}
-        submitError={toolResult?.status === 'error' ? toolResult.error : undefined}
-        onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
-      />
-    );
+  const visibleQuestionFormContent = useMemo(
+    () => stripTrailingOpenQuestionForm(message.content).visibleContent,
+    [message.content],
+  );
+  const codeBlocks = extractCodeBlocks(visibleQuestionFormContent);
+  const parsed = useMemo(() => parseQuestionForms(visibleQuestionFormContent), [visibleQuestionFormContent]);
+  // P0-7: 检测未闭合 <question-form> (模型正在 streaming,JSON 还没写完) → 渲染"表单加载中"占位 banner
+  const streamingOpenForm = useMemo(
+    () => hasOpenQuestionForm(message.content) && parsed.forms.length === 0,
+    [message.content, parsed.forms.length],
+  );
+  const [openFormId, setOpenFormId] = useState<string | null>(null);
+  // P1-9: 仅在用户还没主动展开某个 form 时自动展开第一个。
+  // 用 current ?? firstPending 守卫:openFormId=null 才自动打开,避免 effect 覆盖用户当前选择。
+  useEffect(() => {
+    const firstPending = parsed.forms.find((form) => !submittedQuestionForms[form.id]);
+    if (firstPending) setOpenFormId((current) => current ?? firstPending.id);
+  }, [parsed.forms, submittedQuestionForms]);
+
+  // 工具分类：TodoCard 一级展示，其余折叠
+  const todoTools = message.tools.filter(isTodoTool);
+  const researchTools = message.tools.filter((tool) => !isTodoTool(tool) && isResearchTool(tool));
+  const otherTools = message.tools.filter((tool) => !isTodoTool(tool) && !isResearchTool(tool));
+  const foldedTools = [...researchTools, ...otherTools];
+
+  const renderTool = (tool: AgentToolCall) => (
+    <ToolCard
+      key={tool.id}
+      tool={tool}
+      message={message}
+    />
+  );
+
+  // 每个 form 的状态：pending / answered / skipped
+  const getFormStatus = (form: QuestionFormBlock): 'pending' | 'answered' | 'skipped' => {
+    const submitted = submittedQuestionForms[form.id];
+    if (!submitted) return 'pending';
+    return submitted.includes('Form status: skipped') ? 'skipped' : 'answered';
   };
+
   return (
     <article className="conversation-message assistant">
       <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>
@@ -183,49 +142,65 @@ export function AssistantMessage({
               <PreviewPane source={parsed.markdown} tocIds={[]} />
             </div>
           )}
-          {parsed.forms.map((form) => (
-            <QuestionFormCard
-              key={form.id}
-              form={form}
-              submittedText={submittedQuestionForms[form.id]}
-              onSubmit={(text) => onSubmitQuestionForm?.(form.id, text)}
+          {/* TodoCard: 一级展示，不折叠 */}
+          {todoTools.map((tool) => (
+            <ToolCard
+              key={tool.id}
+              tool={tool}
+              message={message}
             />
           ))}
-          {message.done && (
-            <MessageActions
-              text={message.content}
-              hasSelection={hasSelection}
-              selectionAnchor={selectionAnchor}
-              onInsertText={onInsertText}
-              onReplaceSelection={onReplaceSelection}
-              onReplaceAnchor={onReplaceAnchor}
-              validateAnchor={validateAnchor}
-            />
+          {/* QuestionForm: QuestionsBanner + QuestionsPanel */}
+          {parsed.forms.map((form) => {
+            const status = getFormStatus(form);
+            const isOpen = openFormId === form.id;
+            return (
+              <div key={form.id} className="question-form-container">
+                <QuestionsBanner
+                  form={form}
+                  status={status}
+                  open={isOpen}
+                  onOpen={() => setOpenFormId(isOpen ? null : form.id)}
+                />
+                {isOpen && (
+                  <QuestionsPanel
+                    form={form}
+                    status={status}
+                    submittedText={submittedQuestionForms[form.id]}
+                    onSubmit={(text) => {
+                      onSubmitQuestionForm?.(form.id, text);
+                      setOpenFormId(null);
+                    }}
+                    onClose={() => setOpenFormId(null)}
+                  />
+                )}
+              </div>
+            );
+          })}
+          {/* P0-7: 流式输出但 JSON 还没闭合时,渲染"表单加载中"占位 banner */}
+          {streamingOpenForm && (
+            <div className="question-form-container">
+              <QuestionsBanner
+                form={{ id: '__loading__', title: '正在准备表单', questions: [], raw: '' }}
+                status="loading"
+                open={false}
+                onOpen={() => undefined}
+              />
+            </div>
           )}
-          {codeBlocks.length > 0 && (
+          {message.done && (
             <div className="conversation-code-actions">
               {codeBlocks.map((block, index) => (
                 <div key={`${block.lang}-${index}`} className="conversation-code-action-row">
                   <span>{block.lang || 'code'} #{index + 1}</span>
                   {message.done && (
-                    <>
-                      <MessageActions
-                        text={block.code}
-                        hasSelection={hasSelection}
-                        selectionAnchor={selectionAnchor}
-                      onInsertText={onInsertText}
-                      onReplaceSelection={onReplaceSelection}
-                      onReplaceAnchor={onReplaceAnchor}
-                      validateAnchor={validateAnchor}
-                    />
-                      <button
-                        type="button"
-                        className="conversation-code-save"
-                        onClick={() => void handleSaveAs(block.lang, block.code)}
-                      >
-                        另存为
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      className="conversation-code-save"
+                      onClick={() => void handleSaveAs(block.lang, block.code)}
+                    >
+                      另存为
+                    </button>
                   )}
                 </div>
               ))}
@@ -235,31 +210,26 @@ export function AssistantMessage({
       ) : (
         !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
-      {questionTools.map(renderTool)}
-      <ResearchToolGroup tools={researchTools} message={message} renderTool={renderTool} />
-      {otherTools.map(renderTool)}
+      <ToolCallGroup tools={foldedTools} renderTool={renderTool} />
       <ErrorRetryCard message={message.error ?? ''} />
       <DoneBar usage={message.usage} />
     </article>
   );
 }
 
-function ResearchToolGroup({
+function ToolCallGroup({
   tools,
-  message,
   renderTool,
 }: {
   tools: AgentToolCall[];
-  message: Extract<AgentMessage, { role: 'assistant' }>;
   renderTool: (tool: AgentToolCall) => ReactNode;
 }) {
   if (tools.length === 0) return null;
-  if (tools.length <= 2) return <>{tools.map(renderTool)}</>;
   const summary = summarizeToolNames(tools);
   return (
-    <details className="conversation-tool-group" open={!message.done} key={message.done ? 'done' : 'running'}>
+    <details className="conversation-tool-group">
       <summary>
-        <span>资料检索与读取</span>
+        <span>工具调用</span>
         <small>{tools.length} 个工具调用 · {summary}</small>
       </summary>
       <div className="conversation-tool-group-scroll">
@@ -286,5 +256,6 @@ function normalizeToolLabel(name: string): string {
   if (name === 'Grep') return 'Grep';
   if (name === 'WebFetch' || name === 'web_fetch') return 'Fetch';
   if (name === 'WebSearch' || name === 'web_search') return 'Search';
+  if (name === 'Bash' || name === 'bash' || name === 'Shell' || name === 'shell' || name === 'run_command' || name === 'execute_command') return 'Command';
   return name;
 }
