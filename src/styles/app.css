@@ -5971,6 +5971,37 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   opacity: 0.85;
 }
 
+.questions-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.questions-panel-close {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  font-size: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.questions-panel-close:hover {
+  color: var(--text);
+  background: color-mix(in oklch, var(--control-bg) 80%, transparent);
+}
+
+.questions-panel-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .questions-panel-desc {
   color: var(--muted);
   font-size: 12px;
