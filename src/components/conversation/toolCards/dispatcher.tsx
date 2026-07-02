@@ -10,13 +10,11 @@
 //  7. Grep                                              → GrepCard
 //  8. WebFetch / web_fetch                              → WebFetchCard
 //  9. WebSearch / web_search                            → WebSearchCard
-// 10. AskUserQuestion / ask_user_question               → AskUserQuestionCard
-// 11. else                                              → GenericCard
+// 10. else                                              → GenericCard
 //
 // v1 只跳过 OpenDesign 的 getToolRenderer 第三方注册表。
 
 import {
-  AskUserQuestionCard,
   BashCard,
   FileEditCard,
   FileReadCard,
@@ -37,13 +35,7 @@ type Props = {
   result?: ResultShape;
   runStreaming: boolean;
   runSucceeded: boolean;
-  submittedText?: string;
-  onSubmitQuestionForm?: (text: string) => void;
 };
-
-function isAskUserQuestionName(name: string): boolean {
-  return name === 'AskUserQuestion' || name === 'ask_user_question';
-}
 
 export function ToolCardDispatcher({
   id,
@@ -52,8 +44,6 @@ export function ToolCardDispatcher({
   result,
   runStreaming,
   runSucceeded,
-  submittedText,
-  onSubmitQuestionForm,
 }: Props) {
   if (isTodoWriteToolName(name)) {
     return <TodoCard input={input} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />;
@@ -81,19 +71,6 @@ export function ToolCardDispatcher({
   }
   if (name === 'WebSearch' || name === 'web_search') {
     return <WebSearchCard input={input} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />;
-  }
-  if (isAskUserQuestionName(name)) {
-    return (
-      <AskUserQuestionCard
-        toolId={id}
-        input={input}
-        result={result}
-        runStreaming={runStreaming}
-        runSucceeded={runSucceeded}
-        submittedText={submittedText}
-        onSubmit={onSubmitQuestionForm}
-      />
-    );
   }
   return (
     <GenericCard

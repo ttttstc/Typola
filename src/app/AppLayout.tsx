@@ -1670,7 +1670,6 @@ export function AppLayout() {
           onRenameConversation: convManager.renameConversation,
           onSwitchProvider: convManager.switchProvider,
           onSend: convManager.send,
-          onSubmitToolResult: convManager.submitToolResult,
           onCancel: convManager.cancel,
           onReset: convManager.reset,
           onClose: () => setLeftRailMode('none'),

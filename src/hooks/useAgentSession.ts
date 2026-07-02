@@ -13,10 +13,10 @@ import {
   onAgentStdout,
   resumeAgentSession,
   startAgentSession,
-  submitAgentToolResult,
 } from '../services/agent/headlessService';
 import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
 import type { AgentDiagnostic } from '../services/agent/runtime/types';
+import { parseQuestionForms } from '../components/conversation/questionForm';
 
 type UseConversationManagerOptions = {
   workspaceRoot?: string;
@@ -98,34 +98,17 @@ function upsertTool(tools: AgentToolCall[], next: AgentToolCall): AgentToolCall[
   ));
 }
 
-function isAskUserQuestionToolName(name: string): boolean {
-  return name === 'AskUserQuestion' || name === 'ask_user_question';
-}
-
-function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
+function hasPendingQuestionForms(messages: AgentMessage[]): boolean {
   const lastAssistant = [...messages].reverse().find((message): message is Extract<AgentMessage, { role: 'assistant' }> => (
     message.role === 'assistant'
   ));
-  return Boolean(lastAssistant?.tools.some((tool) => (
-    isAskUserQuestionToolName(tool.name) && !tool.result && !tool.isError
-  )));
+  if (!lastAssistant?.content) return false;
+  const parsed = parseQuestionForms(lastAssistant.content);
+  return parsed.forms.length > 0;
 }
 
-function findAskUserQuestionTool(messages: AgentMessage[], toolUseId?: string): AgentToolCall | null {
-  for (const message of [...messages].reverse()) {
-    if (message.role !== 'assistant') continue;
-    for (const tool of message.tools) {
-      if (!isAskUserQuestionToolName(tool.name) || tool.result || tool.isError) continue;
-      if (!toolUseId || tool.id === toolUseId) return tool;
-    }
-  }
-  return null;
-}
-
-function hasToolUseTurnEnd(events: AgentEvent[]): boolean {
-  return events.some((event) => (
-    (event.type === 'turn_end' || event.type === 'usage') && event.stopReason === 'tool_use'
-  ));
+function hasTurnEnd(events: AgentEvent[]): boolean {
+  return events.some((event) => event.type === 'turn_end' || event.type === 'usage');
 }
 
 function appendEventToMessages(messages: AgentMessage[], event: AgentEvent): AgentMessage[] {
@@ -189,8 +172,12 @@ function summarizeTitle(text: string): string {
 }
 
 function withArtifactWriteGuard(prompt: string, cwd?: string): string {
-  if (!cwd) return prompt;
-  return `${prompt}\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
+  let wrapped = prompt;
+  wrapped += '\n\n[交互规则]\n当需要用户做选择或确认时，使用 <question-form> markdown artifact 输出表单，不要使用 AskUserQuestion 工具。输出完 <question-form> 后立即停止，等待用户填写答案后再继续后续流程。';
+  if (cwd) {
+    wrapped += `\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
+  }
+  return wrapped;
 }
 
 function outputCwdForConversation(workspaceRoot: string | undefined, convId: string): string | undefined {
@@ -302,10 +289,7 @@ export function useConversationManager({
       const current = conversationsRef.current.get(convId)?.messages ?? [];
       const messages = events.reduce(appendEventToMessages, current);
       const patch: Partial<ConversationData> = { messages };
-      if (hasToolUseTurnEnd(events) && hasUnansweredAskUserQuestion(messages)) {
-        // OpenDesign 的 claude-stream-json 在 stop_reason=tool_use 时保持 stdin 打开等待工具结果。
-        // Typola 当前仍是一轮一进程,这里把同一语义落到前端状态:只允许问题卡提交答案,
-        // 普通 Composer 发送会被禁用,避免用户还没回答时继续推进下一步。
+      if (hasTurnEnd(events) && hasPendingQuestionForms(messages)) {
         patch.runState = 'waitingForUser';
         patch.lastError = '';
       }
@@ -370,7 +354,7 @@ export function useConversationManager({
       if (!conv) return;
       const wasActive = conv.runState === 'running';
       const wasCancelled = payload.cancelled || conv.cancelRequested;
-      const waitingForUserAnswer = conv.runState === 'waitingForUser' || hasUnansweredAskUserQuestion(conv.messages);
+      const waitingForUserAnswer = conv.runState === 'waitingForUser' || hasPendingQuestionForms(conv.messages);
       const patch: Partial<ConversationData> = {
         runState: waitingForUserAnswer && !wasCancelled
           ? 'waitingForUser'
@@ -507,43 +491,6 @@ export function useConversationManager({
       appendAssistantEvent(convId, { type: 'error', message: displayMessage });
     }
   }, [appendAssistantEvent, claudeModel, claudePath, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv, workspaceRoot]);
-
-  const submitToolResult = useCallback(async (toolUseId: string, content: string) => {
-    const convId = activeConvIdRef.current;
-    const conv = conversationsRef.current.get(convId);
-    const tool = conv ? findAskUserQuestionTool(conv.messages, toolUseId) : null;
-    if (!conv || !tool || !conv.runId || conv.runState !== 'waitingForUser') return;
-    updateConv(convId, {
-      runState: 'running',
-      lastError: '',
-      messages: appendEventToMessages(conv.messages, {
-        type: 'tool_result',
-        toolUseId: tool.id,
-        content,
-        isError: false,
-      }),
-    });
-    try {
-      await submitAgentToolResult({
-        runId: conv.runId,
-        toolUseId: tool.id,
-        content,
-        isError: false,
-      });
-    } catch (error) {
-      const message = String(error);
-      updateConv(convId, {
-        runState: 'waitingForUser',
-        lastError: message,
-        messages: appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? conv.messages, {
-          type: 'tool_result',
-          toolUseId: tool.id,
-          content: message,
-          isError: true,
-        }),
-      });
-    }
-  }, [updateConv]);
 
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;
@@ -685,7 +632,6 @@ export function useConversationManager({
     lastError: activeConv?.lastError ?? '',
     // Actions
     send,
-    submitToolResult,
     cancel,
     reset,
     createConversation,

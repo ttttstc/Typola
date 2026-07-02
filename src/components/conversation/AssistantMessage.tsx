@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { PreviewPane } from '../PreviewPane';
 import type { AgentMessage, AgentToolCall, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
 import { ThoughtCard } from './ThoughtCard';
@@ -7,8 +7,9 @@ import { DoneBar } from './DoneBar';
 import { ErrorRetryCard } from './ErrorRetryCard';
 import { formatAbsoluteTime, formatRelativeTime } from '../../services/timeFormat';
 import { saveFileDialog, messageDialog } from '../../services/dialogService';
-import { QuestionFormCard } from './QuestionFormCard';
-import { parseQuestionForms } from './questionForm';
+import { QuestionsBanner } from './QuestionsBanner';
+import { QuestionsPanel } from './QuestionsPanel';
+import { parseQuestionForms, type QuestionFormBlock } from './questionForm';
 
 type AssistantMessageProps = {
   message: Extract<AgentMessage, { role: 'assistant' }>;
@@ -21,10 +22,6 @@ type AssistantMessageProps = {
   submittedQuestionForms?: Record<string, string>;
   onSubmitQuestionForm?: (formId: string, text: string) => void;
 };
-
-function isAskUserQuestionTool(tool: AgentToolCall): boolean {
-  return tool.name === 'AskUserQuestion' || tool.name === 'ask_user_question';
-}
 
 function isResearchTool(tool: AgentToolCall): boolean {
   return [
@@ -45,6 +42,11 @@ function isResearchTool(tool: AgentToolCall): boolean {
     'execute_command',
   ]
     .includes(tool.name);
+}
+
+function isTodoTool(tool: AgentToolCall): boolean {
+  const name = tool.name.toLowerCase();
+  return name === 'todowrite' || name === 'todo_write' || name === 'update_plan';
 }
 
 function extractCodeBlocks(markdown: string): Array<{ lang: string; code: string }> {
@@ -116,7 +118,6 @@ function MessageActions({
     return validateAnchor(selectionAnchor);
   }, [selectionAnchor, validateAnchor]);
 
-  // 优先用 anchor 替换；fallback 走当前选区
   const canReplaceAnchor = !!selectionAnchor && anchorStatus === 'valid' && !!onReplaceAnchor;
   const canReplaceSelection = !selectionAnchor && !!onReplaceSelection && hasSelection;
   const replaceDisabled = !(canReplaceAnchor || canReplaceSelection);
@@ -160,19 +161,29 @@ export function AssistantMessage({
 }: AssistantMessageProps) {
   const codeBlocks = extractCodeBlocks(message.content);
   const parsed = useMemo(() => parseQuestionForms(message.content), [message.content]);
-  const questionTools = message.tools.filter(isAskUserQuestionTool);
-  const researchTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && isResearchTool(tool));
-  const otherTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && !isResearchTool(tool));
+  const [openFormId, setOpenFormId] = useState<string | null>(null);
+
+  // 工具分类：TodoCard 一级展示，其余折叠
+  const todoTools = message.tools.filter(isTodoTool);
+  const researchTools = message.tools.filter((tool) => !isTodoTool(tool) && isResearchTool(tool));
+  const otherTools = message.tools.filter((tool) => !isTodoTool(tool) && !isResearchTool(tool));
   const foldedTools = [...researchTools, ...otherTools];
+
   const renderTool = (tool: AgentToolCall) => (
     <ToolCard
       key={tool.id}
       tool={tool}
       message={message}
-      submittedText={submittedQuestionForms[`tool:${tool.id}`]}
-      onSubmitQuestionForm={(text) => onSubmitQuestionForm?.(`tool:${tool.id}`, text)}
     />
   );
+
+  // 每个 form 的状态：pending / answered / skipped
+  const getFormStatus = (form: QuestionFormBlock): 'pending' | 'answered' | 'skipped' => {
+    const submitted = submittedQuestionForms[form.id];
+    if (!submitted) return 'pending';
+    return submitted.includes('Form status: skipped') ? 'skipped' : 'answered';
+  };
+
   return (
     <article className="conversation-message assistant">
       <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>
@@ -186,14 +197,40 @@ export function AssistantMessage({
               <PreviewPane source={parsed.markdown} tocIds={[]} />
             </div>
           )}
-          {parsed.forms.map((form) => (
-            <QuestionFormCard
-              key={form.id}
-              form={form}
-              submittedText={submittedQuestionForms[form.id]}
-              onSubmit={(text) => onSubmitQuestionForm?.(form.id, text)}
+          {/* TodoCard: 一级展示，不折叠 */}
+          {todoTools.map((tool) => (
+            <ToolCard
+              key={tool.id}
+              tool={tool}
+              message={message}
             />
           ))}
+          {/* QuestionForm: QuestionsBanner + QuestionsPanel */}
+          {parsed.forms.map((form) => {
+            const status = getFormStatus(form);
+            const isOpen = openFormId === form.id;
+            return (
+              <div key={form.id} className="question-form-container">
+                <QuestionsBanner
+                  form={form}
+                  status={status}
+                  onOpen={() => setOpenFormId(isOpen ? null : form.id)}
+                />
+                {isOpen && (
+                  <QuestionsPanel
+                    form={form}
+                    status={status}
+                    submittedText={submittedQuestionForms[form.id]}
+                    onSubmit={(text) => {
+                      onSubmitQuestionForm?.(form.id, text);
+                      setOpenFormId(null);
+                    }}
+                    onClose={() => setOpenFormId(null)}
+                  />
+                )}
+              </div>
+            );
+          })}
           {message.done && (
             <MessageActions
               text={message.content}
@@ -238,7 +275,6 @@ export function AssistantMessage({
       ) : (
         !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
-      {questionTools.map(renderTool)}
       <ToolCallGroup tools={foldedTools} renderTool={renderTool} />
       <ErrorRetryCard message={message.error ?? ''} />
       <DoneBar usage={message.usage} />

@@ -50,7 +50,6 @@ struct AgentHeadlessRegistry {
 struct AgentRunHandle {
     #[allow(dead_code)]
     child: Arc<Mutex<Child>>,
-    stdin: Arc<Mutex<Option<std::process::ChildStdin>>>,
     pid: u32,
     cancel_requested: Arc<AtomicBool>,
 }
@@ -168,15 +167,6 @@ struct OverwriteArtifactRequest {
 #[serde(rename_all = "camelCase")]
 struct AgentSessionCancelRequest {
     run_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AgentSessionToolResultRequest {
-    run_id: String,
-    tool_use_id: String,
-    content: String,
-    is_error: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -966,43 +956,6 @@ fn agent_session_cancel(
 }
 
 #[tauri::command]
-fn agent_session_submit_tool_result(
-    state: tauri::State<'_, AgentHeadlessStore>,
-    request: AgentSessionToolResultRequest,
-) -> Result<(), String> {
-    let run = {
-        let registry = state
-            .0
-            .lock()
-            .map_err(|_| "agent headless store poisoned".to_string())?;
-        registry
-            .runs
-            .get(&request.run_id)
-            .cloned()
-            .ok_or_else(|| "agent run not found".to_string())?
-    };
-    let line = format!(
-        "{}\n",
-        claude_stream_json_tool_result(
-            request.tool_use_id.trim(),
-            &request.content,
-            request.is_error.unwrap_or(false),
-        )?
-    );
-    let mut stdin_guard = run
-        .stdin
-        .lock()
-        .map_err(|_| "agent stdin poisoned".to_string())?;
-    let stdin = stdin_guard
-        .as_mut()
-        .ok_or_else(|| "agent stdin is closed".to_string())?;
-    stdin
-        .write_all(line.as_bytes())
-        .and_then(|_| stdin.flush())
-        .map_err(|error| format!("failed to submit agent tool result: {error}"))
-}
-
-#[tauri::command]
 fn read_mcp_config(request: McpConfigReadRequest) -> Result<Option<String>, String> {
     let cwd = PathBuf::from(request.cwd.trim());
     if !cwd.is_dir() {
@@ -1509,7 +1462,6 @@ pub fn run() {
             agent_session_start,
             agent_session_resume,
             agent_session_cancel,
-            agent_session_submit_tool_result,
             read_mcp_config,
             write_mcp_config,
             list_directory_entries,
@@ -1785,26 +1737,6 @@ fn claude_stream_json_user_message(content: &str) -> Result<String, String> {
     .map_err(|error| format!("failed to encode Claude stream-json user message: {error}"))
 }
 
-fn claude_stream_json_tool_result(
-    tool_use_id: &str,
-    content: &str,
-    is_error: bool,
-) -> Result<String, String> {
-    serde_json::to_string(&serde_json::json!({
-        "type": "user",
-        "message": {
-            "role": "user",
-            "content": [{
-                "type": "tool_result",
-                "tool_use_id": tool_use_id,
-                "content": content,
-                "is_error": is_error,
-            }],
-        },
-    }))
-    .map_err(|error| format!("failed to encode Claude stream-json tool result: {error}"))
-}
-
 fn close_agent_stdin(stdin: &Arc<Mutex<Option<std::process::ChildStdin>>>) {
     if let Ok(mut stdin) = stdin.lock() {
         stdin.take();
@@ -1988,7 +1920,6 @@ fn start_agent_headless_run(
             run_id.clone(),
             AgentRunHandle {
                 child: Arc::clone(&child),
-                stdin: Arc::clone(&stdin),
                 pid,
                 cancel_requested: Arc::clone(&cancel_requested),
             },
