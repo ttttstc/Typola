@@ -89,38 +89,3 @@ export function formatQuestionFormAnswers(form: QuestionFormBlock, answers: Reco
   }
   return lines.join('\n');
 }
-
-export function questionFormFromAskUserQuestion(input: unknown, fallbackId: string): QuestionFormBlock | null {
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  const source = Array.isArray(record.questions)
-    ? record.questions
-    : record.question || record.prompt
-      ? [record]
-      : [];
-  const questions = normalizeQuestions({ questions: source });
-  if (questions.length === 0) return null;
-  const titleCandidate = record.title ?? record.header ?? record.name;
-  const firstQuestion = source[0] && typeof source[0] === 'object' ? source[0] as Record<string, unknown> : {};
-  const firstHeader = firstQuestion.header;
-  const title = typeof titleCandidate === 'string' && titleCandidate.trim()
-    ? titleCandidate.trim()
-    : typeof firstHeader === 'string' && firstHeader.trim()
-      ? firstHeader.trim()
-      : '需要你确认';
-  return {
-    id: fallbackId,
-    title,
-    questions,
-    raw: JSON.stringify(input ?? {}),
-  };
-}
-
-export function formatAskUserQuestionAnswers(form: QuestionFormBlock, answers: Record<string, string | string[]>): string {
-  return form.questions.map((question) => {
-    const value = answers[question.id];
-    const lines = Array.isArray(value)
-      ? value.map((item) => `- ${item}`)
-      : [String(value ?? '')];
-    return [question.label, ...lines.filter((line) => line.trim())].join('\n');
-  }).join('\n\n');
-}

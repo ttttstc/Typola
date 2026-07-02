@@ -22,10 +22,6 @@ type AssistantMessageProps = {
   onSubmitQuestionForm?: (formId: string, text: string) => void;
 };
 
-function isAskUserQuestionTool(tool: AgentToolCall): boolean {
-  return tool.name === 'AskUserQuestion' || tool.name === 'ask_user_question';
-}
-
 function isResearchTool(tool: AgentToolCall): boolean {
   return [
     'Read',
@@ -160,17 +156,14 @@ export function AssistantMessage({
 }: AssistantMessageProps) {
   const codeBlocks = extractCodeBlocks(message.content);
   const parsed = useMemo(() => parseQuestionForms(message.content), [message.content]);
-  const questionTools = message.tools.filter(isAskUserQuestionTool);
-  const researchTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && isResearchTool(tool));
-  const otherTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && !isResearchTool(tool));
+  const researchTools = message.tools.filter(isResearchTool);
+  const otherTools = message.tools.filter((tool) => !isResearchTool(tool));
   const foldedTools = [...researchTools, ...otherTools];
   const renderTool = (tool: AgentToolCall) => (
     <ToolCard
       key={tool.id}
       tool={tool}
       message={message}
-      submittedText={submittedQuestionForms[`tool:${tool.id}`]}
-      onSubmitQuestionForm={(text) => onSubmitQuestionForm?.(`tool:${tool.id}`, text)}
     />
   );
   return (
@@ -238,7 +231,6 @@ export function AssistantMessage({
       ) : (
         !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
-      {questionTools.map(renderTool)}
       <ToolCallGroup tools={foldedTools} renderTool={renderTool} />
       <ErrorRetryCard message={message.error ?? ''} />
       <DoneBar usage={message.usage} />
