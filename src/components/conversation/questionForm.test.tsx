@@ -180,7 +180,7 @@ describe('QuestionForm', () => {
               }],
             },
           }])}
-          onSubmitQuestionForm={(formId, text) => onSubmit(formId, text)}
+          onSubmitAskUserQuestionToolResult={(toolUseId, text) => onSubmit(toolUseId, text)}
         />,
       );
     });
@@ -201,7 +201,7 @@ describe('QuestionForm', () => {
       host.querySelector<HTMLButtonElement>('.question-form-card footer button')?.click();
     });
 
-    expect(onSubmit).toHaveBeenCalledWith('tool:toolu_question', [
+    expect(onSubmit).toHaveBeenCalledWith('toolu_question', [
       '下一步做什么？',
       '生成 PPT',
     ].join('\n'));

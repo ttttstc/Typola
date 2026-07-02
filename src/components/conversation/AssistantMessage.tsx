@@ -20,6 +20,9 @@ type AssistantMessageProps = {
   validateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
   submittedQuestionForms?: Record<string, string>;
   onSubmitQuestionForm?: (formId: string, text: string) => void;
+  // AskUserQuestion 工具调用(stream-json 同轮 tool_result 通道):toolUseId 是 Claude
+  // tool_use.id,前端把答案以 tool_result JSONL 写回原进程 stdin。
+  onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
 };
 
 function isAskUserQuestionTool(tool: AgentToolCall): boolean {
@@ -141,6 +144,7 @@ export function AssistantMessage({
   validateAnchor,
   submittedQuestionForms = {},
   onSubmitQuestionForm,
+  onSubmitAskUserQuestionToolResult,
 }: AssistantMessageProps) {
   const codeBlocks = extractCodeBlocks(message.content);
   const parsed = useMemo(() => parseQuestionForms(message.content), [message.content]);
@@ -152,8 +156,8 @@ export function AssistantMessage({
       key={tool.id}
       tool={tool}
       message={message}
-      submittedText={submittedQuestionForms[`tool:${tool.id}`]}
-      onSubmitQuestionForm={(text) => onSubmitQuestionForm?.(`tool:${tool.id}`, text)}
+      submittedText={submittedQuestionForms[tool.id]}
+      onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
     />
   );
   return (

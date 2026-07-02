@@ -50,6 +50,7 @@ struct AgentHeadlessRegistry {
 struct AgentRunHandle {
     #[allow(dead_code)]
     child: Arc<Mutex<Child>>,
+    stdin: Option<Arc<Mutex<std::process::ChildStdin>>>,
     pid: u32,
     cancel_requested: Arc<AtomicBool>,
 }
@@ -117,6 +118,13 @@ impl AgentProvider {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum AgentInputMode {
+    Text,
+    StreamJson,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentSessionStartRequest {
@@ -167,6 +175,13 @@ struct OverwriteArtifactRequest {
 #[serde(rename_all = "camelCase")]
 struct AgentSessionCancelRequest {
     run_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSessionSendInputRequest {
+    run_id: String,
+    message: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -312,6 +327,7 @@ struct AgentSessionStartResult {
     resumed: bool,
     agent_path: String,
     provider: AgentProvider,
+    input_mode: AgentInputMode,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -927,6 +943,42 @@ fn agent_session_cancel(
 }
 
 #[tauri::command]
+fn agent_session_send_input(
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionSendInputRequest,
+) -> Result<(), String> {
+    let run = {
+        let registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        registry
+            .runs
+            .get(&request.run_id)
+            .cloned()
+            .ok_or_else(|| "agent run not found".to_string())?
+    };
+    let stdin = run
+        .stdin
+        .as_ref()
+        .ok_or_else(|| "agent run stdin not available (text mode)".to_string())?;
+    let mut bytes = request.message.into_bytes();
+    if !bytes.ends_with(b"\n") {
+        bytes.push(b'\n');
+    }
+    {
+        let mut guard = stdin
+            .lock()
+            .map_err(|_| "agent stdin mutex poisoned".to_string())?;
+        guard
+            .write_all(&bytes)
+            .and_then(|_| guard.flush())
+            .map_err(|error| format!("failed to write agent stdin: {error}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn read_mcp_config(request: McpConfigReadRequest) -> Result<Option<String>, String> {
     let cwd = PathBuf::from(request.cwd.trim());
     if !cwd.is_dir() {
@@ -1433,6 +1485,7 @@ pub fn run() {
             agent_session_start,
             agent_session_resume,
             agent_session_cancel,
+            agent_session_send_input,
             read_mcp_config,
             write_mcp_config,
             list_directory_entries,
@@ -1700,6 +1753,7 @@ fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
 struct AgentCommandSpec {
     args: Vec<String>,
     prompt_stdin: bool,
+    input_mode: AgentInputMode,
 }
 
 fn normalize_agent_path(provider: AgentProvider, path: Option<&str>) -> String {
@@ -1815,8 +1869,24 @@ fn start_agent_headless_run(
         .ok_or_else(|| format!("failed to open {} stderr", provider.display_name()))?;
 
     if command_spec.prompt_stdin {
+        let initial_bytes: Vec<u8> = if command_spec.input_mode == AgentInputMode::StreamJson {
+            let frame = serde_json::json!({
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [{"type": "text", "text": request.prompt}],
+                }
+            });
+            let mut line = serde_json::to_string(&frame)
+                .map_err(|error| format!("failed to encode stream-json prompt: {error}"))?
+                .into_bytes();
+            line.push(b'\n');
+            line
+        } else {
+            request.prompt.as_bytes().to_vec()
+        };
         stdin
-            .write_all(request.prompt.as_bytes())
+            .write_all(&initial_bytes)
             .and_then(|_| stdin.flush())
             .map_err(|error| {
                 format!(
@@ -1825,7 +1895,13 @@ fn start_agent_headless_run(
                 )
             })?;
     }
-    drop(stdin);
+
+    let stdin_writer = if command_spec.input_mode == AgentInputMode::StreamJson {
+        Some(Arc::new(Mutex::new(stdin)))
+    } else {
+        drop(stdin);
+        None
+    };
 
     let pid = child.id();
     let child = Arc::new(Mutex::new(child));
@@ -1839,6 +1915,7 @@ fn start_agent_headless_run(
             run_id.clone(),
             AgentRunHandle {
                 child: Arc::clone(&child),
+                stdin: stdin_writer,
                 pid,
                 cancel_requested: Arc::clone(&cancel_requested),
             },
@@ -1872,6 +1949,7 @@ fn start_agent_headless_run(
         resumed,
         agent_path,
         provider,
+        input_mode: command_spec.input_mode,
     })
 }
 
@@ -1906,11 +1984,16 @@ fn build_claude_headless_args(
     model: Option<&str>,
     plugin_dirs: &[String],
     extra_allowed_dirs: &[String],
+    input_mode: AgentInputMode,
 ) -> Vec<String> {
+    let input_format = match input_mode {
+        AgentInputMode::Text => "text",
+        AgentInputMode::StreamJson => "stream-json",
+    };
     let mut args = vec![
         "-p".to_string(),
         "--input-format".to_string(),
-        "text".to_string(),
+        input_format.to_string(),
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
@@ -2011,8 +2094,10 @@ fn build_agent_headless_command(
                 model,
                 plugin_dirs,
                 extra_allowed_dirs,
+                AgentInputMode::StreamJson,
             ),
             prompt_stdin: true,
+            input_mode: AgentInputMode::StreamJson,
         },
         AgentProvider::Opencode => AgentCommandSpec {
             args: build_opencode_headless_args(
@@ -2025,10 +2110,12 @@ fn build_agent_headless_command(
                 prompt,
             ),
             prompt_stdin: false,
+            input_mode: AgentInputMode::Text,
         },
         AgentProvider::Codex => AgentCommandSpec {
             args: Vec::new(),
             prompt_stdin: true,
+            input_mode: AgentInputMode::Text,
         },
     }
 }
@@ -3238,7 +3325,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_headless_args_use_text_stdin_and_stream_json_output() {
+    fn claude_headless_args_use_stream_json_input_by_default() {
         let plugin_dirs = vec![
             "D:\\plugins\\one".to_string(),
             "D:\\plugins\\two".to_string(),
@@ -3250,11 +3337,12 @@ mod tests {
             Some("sonnet"),
             &plugin_dirs,
             &extra_allowed_dirs,
+            AgentInputMode::StreamJson,
         );
 
         assert!(args
             .windows(2)
-            .any(|pair| pair == ["--input-format", "text"]));
+            .any(|pair| pair == ["--input-format", "stream-json"]));
         assert!(args
             .windows(2)
             .any(|pair| pair == ["--output-format", "stream-json"]));
@@ -3276,12 +3364,38 @@ mod tests {
 
     #[test]
     fn claude_headless_resume_args_reuse_session_uuid() {
-        let args = build_claude_headless_args("session-123", true, None, &[], &[]);
+        let args = build_claude_headless_args(
+            "session-123",
+            true,
+            None,
+            &[],
+            &[],
+            AgentInputMode::StreamJson,
+        );
 
         assert!(args
             .windows(2)
             .any(|pair| pair == ["--resume", "session-123"]));
         assert!(!args.contains(&"--session-id".to_string()));
+    }
+
+    #[test]
+    fn claude_headless_args_preserve_text_fallback_for_legacy_clients() {
+        let args = build_claude_headless_args(
+            "session-123",
+            false,
+            None,
+            &[],
+            &[],
+            AgentInputMode::Text,
+        );
+
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--input-format", "text"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--output-format", "stream-json"]));
     }
 
     #[test]

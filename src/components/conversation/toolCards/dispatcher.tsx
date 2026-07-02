@@ -39,6 +39,7 @@ type Props = {
   runSucceeded: boolean;
   submittedText?: string;
   onSubmitQuestionForm?: (text: string) => void;
+  onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
 };
 
 function isAskUserQuestionName(name: string): boolean {
@@ -54,6 +55,7 @@ export function ToolCardDispatcher({
   runSucceeded,
   submittedText,
   onSubmitQuestionForm,
+  onSubmitAskUserQuestionToolResult,
 }: Props) {
   if (isTodoWriteToolName(name)) {
     return <TodoCard input={input} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />;
@@ -91,7 +93,11 @@ export function ToolCardDispatcher({
         runStreaming={runStreaming}
         runSucceeded={runSucceeded}
         submittedText={submittedText}
-        onSubmit={onSubmitQuestionForm}
+        onSubmit={
+          onSubmitAskUserQuestionToolResult
+            ? (text) => onSubmitAskUserQuestionToolResult(id, text)
+            : onSubmitQuestionForm
+        }
       />
     );
   }

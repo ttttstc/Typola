@@ -23,6 +23,12 @@ export type AgentSessionStartResult = {
   resumed: boolean;
   agentPath: string;
   provider: AgentProvider;
+  inputMode: 'text' | 'streamJson';
+};
+
+export type AgentSessionSendInputRequest = {
+  runId: string;
+  message: string;
 };
 
 export function startAgentSession(request: AgentSessionStartRequest): Promise<AgentSessionStartResult> {
@@ -35,6 +41,10 @@ export function resumeAgentSession(request: AgentSessionStartRequest): Promise<A
 
 export function cancelAgentSession(runId: string): Promise<void> {
   return invoke('agent_session_cancel', { request: { runId } });
+}
+
+export function sendAgentSessionInput(request: AgentSessionSendInputRequest): Promise<void> {
+  return invoke('agent_session_send_input', { request });
 }
 
 export function onAgentStdout(handler: (payload: AgentStdoutPayload) => void): Promise<UnlistenFn> {

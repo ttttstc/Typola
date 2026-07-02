@@ -47,6 +47,10 @@ type ConversationPanelProps = {
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
+  // AskUserQuestion 工具调用(stream-json 同轮 tool_result 通道):toolUseId 是 Claude
+  // tool_use.id。Submission 走 useConversationManager.submitAskUserQuestionAnswer,
+  // 会根据 inputMode 决定 JSONL tool_result 还是新轮 resume。
+  onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
   onConsumePendingInjection?: (convId: string) => { text: string; queuedAt: number } | undefined;
   injectionReadyTick?: number;
   injectionReadyConvId?: string | null;
@@ -98,6 +102,7 @@ export function ConversationPanel({
   onCancel,
   onReset,
   onClose,
+  onSubmitAskUserQuestionToolResult,
   onConsumePendingInjection,
   injectionReadyTick,
   injectionReadyConvId,
@@ -327,6 +332,7 @@ export function ConversationPanel({
                     .map(([key, value]) => [key.slice(assistant.id.length + 1), value]),
                 )}
                 onSubmitQuestionForm={(formId, text) => handleSubmitQuestionForm(assistant.id, formId, text)}
+                onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
               />
             ))}
           </div>

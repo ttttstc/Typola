@@ -47,6 +47,7 @@ export type AgentToolCall = {
   inputDelta?: string;
   result?: string;
   isError?: boolean;
+  waitingForUser?: boolean;
 };
 
 export type AgentUsageSummary = {
@@ -56,7 +57,7 @@ export type AgentUsageSummary = {
   stopReason: unknown;
 };
 
-export type AgentRunState = 'idle' | 'running' | 'error';
+export type AgentRunState = 'idle' | 'running' | 'waitingForUser' | 'error';
 
 export type AgentStdoutPayload = {
   runId: string;

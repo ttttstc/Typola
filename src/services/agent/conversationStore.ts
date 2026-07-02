@@ -18,6 +18,9 @@ export type ConversationData = {
   lastError: string;
   sessionStarted: boolean; // 首轮后置 true → send 改走 resume；session UUID 不在前端存，由 Rust 按 conversationId 维护(registry)
   runId?: string;
+  // 当前 run 是否支持 stream-json 同轮 tool_result 写回:Rust 启动 Claude 默认 stream-json,
+  // OpenCode 走 text。AskUserQuestion 提交时分流(stream-json → stdin tool_result;text → 新一轮 resume)。
+  inputMode?: 'text' | 'streamJson';
   cancelRequested?: boolean;
   pendingInjection?: PendingInjection;
   // 最近一次投递到 Composer 的选区 anchor。send() 把它附到新 user 消息上,便于后续「替换选区」按钮锚定。
