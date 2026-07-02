@@ -442,7 +442,7 @@ export function useConversationManager({
     const trimmed = prompt.trim();
     if (!trimmed) return;
     const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState === 'running') return;
+    if (!conv || conv.runState === 'running' || conv.runState === 'waitingForUser') return;
     // 首条消息且仍是默认标题 → 用首句自动命名（skill 会话/已手动改名的不动）
     const nextTitle = conv.messages.length === 0 && conv.title === '自由对话'
       ? summarizeTitle(trimmed)
@@ -530,10 +530,17 @@ export function useConversationManager({
 
   // AskUserQuestion 卡片提交:Rust stream-json 模式下把答案 JSONL tool_result 写回原进程 stdin,
   // 进程继续同轮生成。text 模式 fallback 走 send(text) 触发下一轮 resume。
+  // 同时在 conv.submittedToolResults[toolUseId] 记录 submitting / submitted / error 三态,
+  // 卡片据此显示"提交中/已提交/失败重试"。
   const submitAskUserQuestionAnswer = useCallback(async (toolUseId: string, text: string) => {
     const convId = activeConvIdRef.current;
     const conv = conversationsRef.current.get(convId);
     if (!conv) return;
+    // 幂等保护:已 submitting 或 submitted 不再重复,error 允许重试。
+    const existing = conv.submittedToolResults?.[toolUseId];
+    if (existing?.status === 'submitting' || existing?.status === 'submitted') {
+      return;
+    }
     if (conv.inputMode === 'streamJson' && conv.runId && conv.runState === 'waitingForUser') {
       const frame = {
         type: 'user',
@@ -542,11 +549,34 @@ export function useConversationManager({
           content: [{ type: 'tool_result', tool_use_id: toolUseId, content: text, is_error: false }],
         },
       };
+      // 立即标 submitting,卡片禁用按钮防双击 + 用户立刻看到反馈。
+      updateConv(convId, {
+        submittedToolResults: {
+          ...(conv.submittedToolResults ?? {}),
+          [toolUseId]: { status: 'submitting', text },
+        },
+      });
       try {
         await sendAgentSessionInput({ runId: conv.runId, message: JSON.stringify(frame) });
-        updateConv(convId, { runState: 'running' });
+        // 成功:标 submitted,runState 回到 running 让 stream 事件继续驱动。
+        const latest = conversationsRef.current.get(convId);
+        updateConv(convId, {
+          runState: 'running',
+          submittedToolResults: {
+            ...(latest?.submittedToolResults ?? {}),
+            [toolUseId]: { status: 'submitted', text },
+          },
+        });
       } catch (error) {
-        console.warn('Failed to write tool_result to agent stdin:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        // 失败:标 error,保留 runState=waitingForUser 让用户能改答案后重试。
+        const latest = conversationsRef.current.get(convId);
+        updateConv(convId, {
+          submittedToolResults: {
+            ...(latest?.submittedToolResults ?? {}),
+            [toolUseId]: { status: 'error', text, error: message },
+          },
+        });
       }
       return;
     }
@@ -642,9 +672,10 @@ export function useConversationManager({
     const handler = handlersRef.current.get(id);
     handler?.flush();
     handlersRef.current.delete(id);
-    // Cancel run if active
+    // Cancel run if active:stream-json waitingForUser 期间 Claude 进程仍在 stdin 等 tool_result,
+    // 关会话不 cancel 会留下后台进程和 registry run。
     const conv = conversationsRef.current.get(id);
-    if (conv && conv.runState === 'running' && conv.runId) {
+    if (conv && (conv.runState === 'running' || conv.runState === 'waitingForUser') && conv.runId) {
       void cancelAgentSession(conv.runId);
     }
     setConversations((prev) => {

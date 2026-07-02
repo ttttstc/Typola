@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { PreviewPane } from '../PreviewPane';
 import type { AgentMessage, AgentToolCall, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
+import type { SubmittedToolResult } from '../../services/agent/conversationStore';
 import { ThoughtCard } from './ThoughtCard';
 import { ToolCard } from './ToolCard';
 import { DoneBar } from './DoneBar';
@@ -23,6 +24,9 @@ type AssistantMessageProps = {
   // AskUserQuestion 工具调用(stream-json 同轮 tool_result 通道):toolUseId 是 Claude
   // tool_use.id,前端把答案以 tool_result JSONL 写回原进程 stdin。
   onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
+  // stream-json 工具提交状态:按 tool_use_id 索引 submitting/submitted/error。
+  // 卡片据此展示"提交中/已提交/失败重试"。
+  submittedToolResults?: Record<string, SubmittedToolResult>;
 };
 
 function isAskUserQuestionTool(tool: AgentToolCall): boolean {
@@ -145,21 +149,27 @@ export function AssistantMessage({
   submittedQuestionForms = {},
   onSubmitQuestionForm,
   onSubmitAskUserQuestionToolResult,
+  submittedToolResults,
 }: AssistantMessageProps) {
   const codeBlocks = extractCodeBlocks(message.content);
   const parsed = useMemo(() => parseQuestionForms(message.content), [message.content]);
   const questionTools = message.tools.filter(isAskUserQuestionTool);
   const researchTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && isResearchTool(tool));
   const otherTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && !isResearchTool(tool));
-  const renderTool = (tool: AgentToolCall) => (
-    <ToolCard
-      key={tool.id}
-      tool={tool}
-      message={message}
-      submittedText={submittedQuestionForms[tool.id]}
-      onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
-    />
-  );
+  const renderTool = (tool: AgentToolCall) => {
+    const toolResult = submittedToolResults?.[tool.id];
+    return (
+      <ToolCard
+        key={tool.id}
+        tool={tool}
+        message={message}
+        submittedText={toolResult?.status === 'submitted' ? toolResult.text : undefined}
+        submitStatus={toolResult?.status}
+        submitError={toolResult?.status === 'error' ? toolResult.error : undefined}
+        onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
+      />
+    );
+  };
   return (
     <article className="conversation-message assistant">
       <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>

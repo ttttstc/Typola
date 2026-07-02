@@ -1,4 +1,5 @@
 import type { AgentMessage, AgentToolCall } from '../../services/agent/types';
+import type { SubmittedToolResultStatus } from '../../services/agent/conversationStore';
 import { ToolCardDispatcher } from './toolCards/dispatcher';
 
 type Props = {
@@ -10,6 +11,9 @@ type Props = {
   // 把答案作为 JSONL `tool_result` 写回原进程 stdin。useConversationManager.submitAskUserQuestionAnswer
   // 负责根据 inputMode 决定 stream-json 还是 text fallback。
   onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
+  // stream-json 提交状态:驱动卡片显示"提交中/已提交/失败重试"。
+  submitStatus?: SubmittedToolResultStatus;
+  submitError?: string;
 };
 
 // 薄包装:把 Typola 的 AgentToolCall (result:string) 适配成 OpenDesign
@@ -22,6 +26,8 @@ export function ToolCard({
   submittedText,
   onSubmitQuestionForm,
   onSubmitAskUserQuestionToolResult,
+  submitStatus,
+  submitError,
 }: Props) {
   const runStreaming = !message.done && !tool.result;
   const runSucceeded = !!message.done && !tool.isError;
@@ -40,6 +46,8 @@ export function ToolCard({
       submittedText={submittedText}
       onSubmitQuestionForm={onSubmitQuestionForm}
       onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
+      submitStatus={submitStatus}
+      submitError={submitError}
     />
   );
 }

@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { Check, ChevronDown, ChevronRight, CircleHelp, Loader2, X } from 'lucide-react';
 import { useSettings } from '../../../hooks/useSettings';
 import { translate } from '../../../services/i18n';
+import type { SubmittedToolResultStatus } from '../../../services/agent/conversationStore';
 import { QuestionFormCard } from '../QuestionFormCard';
 import {
   formatAskUserQuestionAnswers,
@@ -428,17 +429,20 @@ export function WebSearchCard({ input, runStreaming, runSucceeded, result }: Car
 //
 // Claude / OpenDesign 历史工具形态:
 // { questions: [{ question, header?, options?: [{ label }] | string[] }] }
-// Typola 当前 runner 不能 mid-turn 发送 tool_result,所以提交后以普通 user
-// message resume 当前会话；用户视角仍是可填写、可提交、可继续的真实交互。
+// stream-json 模式下 submitStatus / submitError 驱动卡片展示"提交中/已提交/失败重试"。
 export function AskUserQuestionCard({
   toolId,
   input,
   result,
   submittedText,
+  submitStatus,
+  submitError,
   onSubmit,
 }: CardProps & {
   toolId: string;
   submittedText?: string;
+  submitStatus?: SubmittedToolResultStatus;
+  submitError?: string;
   onSubmit?: (text: string) => void;
 }) {
   const form = questionFormFromAskUserQuestion(input, `ask-user-question-${toolId}`);
@@ -456,15 +460,19 @@ export function AskUserQuestionCard({
 
   const resultText = result && !result.isError && result.content.trim() ? result.content : undefined;
   const answered = Boolean(submittedText ?? resultText);
-  const failed = Boolean(result?.isError);
+  // 失败优先于服务端 result(服务端可能还没回 error,前端 write 失败就要立即看到)。
+  const failed = Boolean(submitError ?? result?.isError);
+  const submitting = submitStatus === 'submitting';
   return (
     <div className="op-card op-question">
       <div className="op-card-head op-card-head-static">
         <AskUserQuestionBadge
           answered={answered}
           failed={failed}
-          waiting={!answered && !failed}
+          waiting={!answered && !failed && !submitting}
           result={result}
+          submitError={submitError}
+          submitting={submitting}
         />
         <span className="op-title">需要你回答</span>
         <span className="op-meta">{form.title}</span>
@@ -472,6 +480,8 @@ export function AskUserQuestionCard({
       <QuestionFormCard
         form={form}
         submittedText={submittedText ?? resultText}
+        submitError={submitError}
+        submitting={submitting}
         onSubmit={onSubmit ?? (() => undefined)}
         formatAnswers={formatAskUserQuestionAnswers}
       />
@@ -485,18 +495,22 @@ function AskUserQuestionBadge({
   failed,
   waiting,
   result,
+  submitError,
+  submitting,
 }: {
   answered: boolean;
   failed: boolean;
   waiting: boolean;
   result?: ResultShape;
+  submitError?: string;
+  submitting?: boolean;
 }) {
   if (failed) {
     return (
       <span
         className="op-status op-status-error"
-        title={result?.content || '问题提交失败'}
-        aria-label={result?.content || '问题提交失败'}
+        title={submitError || result?.content || '问题提交失败'}
+        aria-label={submitError || result?.content || '问题提交失败'}
       >
         <X size={14} />
       </span>
@@ -506,6 +520,13 @@ function AskUserQuestionBadge({
     return (
       <span className="op-status op-status-ok" title="已回答" aria-label="已回答">
         <Check size={14} />
+      </span>
+    );
+  }
+  if (submitting) {
+    return (
+      <span className="op-status op-status-running" title="提交中" aria-label="提交中">
+        <Loader2 size={14} className="op-status-spinner" />
       </span>
     );
   }

@@ -115,6 +115,9 @@ export function ConversationPanel({
   const settings = useSettings();
   const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
+  // waitingForUser 期间 Claude stream-json 进程仍在 stdin 等待 tool_result,
+  // 必须视为 busy:Composer 禁用普通发送,影响活跃进程的判断也要拦。
+  const agentBusy = running || runState === 'waitingForUser';
   const hasHistory = messages.length > 0;
   const providerConfig = getAgentProviderConfig(activeProvider);
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
@@ -245,7 +248,7 @@ export function ConversationPanel({
   };
 
   const confirmWorkspaceChange = async (): Promise<boolean> => {
-    if (!hasHistory && !running) return true;
+    if (!hasHistory && !agentBusy) return true;
     return confirmDialog('切换 AI 工作区会开始新对话，确定继续？', {
       title: '切换 AI 工作区',
       okLabel: '切换并新建对话',
@@ -262,14 +265,14 @@ export function ConversationPanel({
       cancelLabel: '取消',
     });
     if (!confirmed) return;
-    if (running) await onCancel();
+    if (agentBusy) await onCancel();
     updateSettings({ aiActiveProvider: provider });
     onSwitchProvider(provider);
   };
 
   const handleWorkspaceChange = async (path: string) => {
     if (!(await confirmWorkspaceChange())) return;
-    if (running) await onCancel();
+    if (agentBusy) await onCancel();
     onReset();
     rememberWorkspace(path);
   };
@@ -283,7 +286,7 @@ export function ConversationPanel({
 
   const handleClearWorkspace = async () => {
     if (!(await confirmWorkspaceChange())) return;
-    if (running) await onCancel();
+    if (agentBusy) await onCancel();
     onReset();
     updateSettings({ aiWorkspaceRoot: '' });
   };
@@ -331,6 +334,7 @@ export function ConversationPanel({
                     .filter(([key]) => key.startsWith(`${assistant.id}:`))
                     .map(([key, value]) => [key.slice(assistant.id.length + 1), value]),
                 )}
+                submittedToolResults={activeConversation?.submittedToolResults}
                 onSubmitQuestionForm={(formId, text) => handleSubmitQuestionForm(assistant.id, formId, text)}
                 onSubmitAskUserQuestionToolResult={onSubmitAskUserQuestionToolResult}
               />
@@ -356,7 +360,8 @@ export function ConversationPanel({
       )}
       <Composer
         ref={composerRef}
-        running={running}
+        running={agentBusy}
+        disabled={agentBusy}
         cwd={cwd}
         workspaceSuggestion={workspaceSuggestion}
         workspaceRecents={settings.aiWorkspaceRecents}
