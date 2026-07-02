@@ -9,7 +9,7 @@ import { formatAbsoluteTime, formatRelativeTime } from '../../services/timeForma
 import { saveFileDialog, messageDialog } from '../../services/dialogService';
 import { QuestionsBanner } from './QuestionsBanner';
 import { QuestionsPanel } from './QuestionsPanel';
-import { parseQuestionForms, stripTrailingOpenQuestionForm, type QuestionFormBlock } from './questionForm';
+import { parseQuestionForms, stripTrailingOpenQuestionForm, hasOpenQuestionForm, type QuestionFormBlock } from './questionForm';
 
 type AssistantMessageProps = {
   message: Extract<AgentMessage, { role: 'assistant' }>;
@@ -165,7 +165,14 @@ export function AssistantMessage({
   );
   const codeBlocks = extractCodeBlocks(visibleQuestionFormContent);
   const parsed = useMemo(() => parseQuestionForms(visibleQuestionFormContent), [visibleQuestionFormContent]);
+  // P0-7: 检测未闭合 <question-form> (模型正在 streaming,JSON 还没写完) → 渲染"表单加载中"占位 banner
+  const streamingOpenForm = useMemo(
+    () => hasOpenQuestionForm(message.content) && parsed.forms.length === 0,
+    [message.content, parsed.forms.length],
+  );
   const [openFormId, setOpenFormId] = useState<string | null>(null);
+  // P1-9: 仅在用户还没主动展开某个 form 时自动展开第一个。
+  // 用 current ?? firstPending 守卫:openFormId=null 才自动打开,避免 effect 覆盖用户当前选择。
   useEffect(() => {
     const firstPending = parsed.forms.find((form) => !submittedQuestionForms[form.id]);
     if (firstPending) setOpenFormId((current) => current ?? firstPending.id);
@@ -234,11 +241,23 @@ export function AssistantMessage({
                       onSubmitQuestionForm?.(form.id, text);
                       setOpenFormId(null);
                     }}
+                    onClose={() => setOpenFormId(null)}
                   />
                 )}
               </div>
             );
           })}
+          {/* P0-7: 流式输出但 JSON 还没闭合时,渲染"表单加载中"占位 banner */}
+          {streamingOpenForm && (
+            <div className="question-form-container">
+              <QuestionsBanner
+                form={{ id: '__loading__', title: '正在准备表单', questions: [], raw: '' }}
+                status="loading"
+                open={false}
+                onOpen={() => undefined}
+              />
+            </div>
+          )}
           {message.done && (
             <MessageActions
               text={message.content}

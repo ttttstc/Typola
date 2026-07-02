@@ -152,6 +152,23 @@ function safeSegment(value: string): string {
   return value.replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '') || 'conversation';
 }
 
+function hasOpenQuestionForm(content: string): boolean {
+  // 模型输出 <question-form...> 但还没匹配到 </question-form> → mid-turn 等用户
+  const openIndex = content.lastIndexOf('<question-form');
+  if (openIndex === -1) return false;
+  const closeIndex = content.indexOf('</question-form>', openIndex);
+  return closeIndex === -1;
+}
+
+function validateArtifactOutput(text: string, conv: ConversationData | undefined): { ok: true } | { ok: false, reason: string } {
+  if (!conv || conv.runState !== 'running') return { ok: true };
+  // 模型开了 <question-form 但 turn 还没结束 → 强制切到 waitingForUser
+  if (hasOpenQuestionForm(text)) {
+    return { ok: false, reason: 'model opened <question-form> without closing tag mid-turn' };
+  }
+  return { ok: true };
+}
+
 function summarizeTitle(text: string): string {
   const clean = text.replace(/\s+/gu, ' ').trim();
   return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || '自由对话';
@@ -290,7 +307,19 @@ export function useConversationManager({
         updateConv(convId, { currentModel: event.model });
       }
     }
-    updateConv(convId, { messages: appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? [], event) });
+    const nextMessages = appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? [], event);
+    const conv = conversationsRef.current.get(convId);
+    const patch: Partial<ConversationData> = { messages: nextMessages };
+    // P0-4 / P0-8: 模型输出未闭合 <question-form → 提前切到 waitingForUser,挡住 Composer 抢答
+    if (event.type === 'text_delta') {
+      const lastAssistant = [...nextMessages].reverse().find((m) => m.role === 'assistant');
+      const lastContent = lastAssistant && lastAssistant.role === 'assistant' ? lastAssistant.content : '';
+      const validation = validateArtifactOutput(lastContent, conv);
+      if (!validation.ok && conv && conv.runState === 'running') {
+        patch.runState = 'waitingForUser';
+      }
+    }
+    updateConv(convId, patch);
   }, [updateConv, workspaceRoot]);
 
   const flushQueuedEvents = useCallback(() => {
@@ -300,7 +329,16 @@ export function useConversationManager({
     queued.forEach((events, convId) => {
       const current = conversationsRef.current.get(convId)?.messages ?? [];
       const messages = events.reduce(appendEventToMessages, current);
-      updateConv(convId, { messages });
+      const conv = conversationsRef.current.get(convId);
+      const patch: Partial<ConversationData> = { messages };
+      // P0-4 / P0-8: 批量 flush 后也检查最后一条 assistant 是否开了未闭合 <question-form
+      const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+      const lastContent = lastAssistant && lastAssistant.role === 'assistant' ? lastAssistant.content : '';
+      const validation = validateArtifactOutput(lastContent, conv);
+      if (!validation.ok && conv && conv.runState === 'running') {
+        patch.runState = 'waitingForUser';
+      }
+      updateConv(convId, patch);
     });
   }, [updateConv]);
 
@@ -416,13 +454,23 @@ export function useConversationManager({
   // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
   const send = useCallback(async (
     prompt: string,
-    opts?: { conversationId?: string; currentFileContextPath?: string; referencePaths?: string[] },
+    opts?: {
+      conversationId?: string;
+      currentFileContextPath?: string;
+      referencePaths?: string[];
+      /** true 表示这是 question-form 答案,允许在 mid-turn 提交(模型正在 streaming 但已检测到未闭合 form) */
+      toolAnswer?: boolean;
+    },
   ) => {
     const convId = opts?.conversationId ?? activeConvIdRef.current;
     const trimmed = prompt.trim();
     if (!trimmed) return;
     const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState === 'running') return;
+    if (!conv) return;
+    if (conv.runState === 'running') return;
+    // P0-5 mid-turn 保护:模型已检测到未闭合 <question-form> (runState=waitingForUser) 时,
+    // 普通 send 阻挡,只允许 toolAnswer: true 的 form 提交。
+    if (!opts?.toolAnswer && conv.runState === 'waitingForUser') return;
     // 首条消息且仍是默认标题 → 用首句自动命名（skill 会话/已手动改名的不动）
     const nextTitle = conv.messages.length === 0 && conv.title === '自由对话'
       ? summarizeTitle(trimmed)
@@ -637,6 +685,7 @@ export function useConversationManager({
     renameConversation,
     closeConversation,
     setActiveConvId,
+    updateConv,
     cwd,
     extraAllowedDirs,
     // 选区注入暂存

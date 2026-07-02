@@ -26,12 +26,6 @@ export type ParsedQuestionForms = {
   forms: QuestionFormBlock[];
 };
 
-// ── Segment types for splitOnQuestionForms ──
-
-export type MessageSegment =
-  | { type: 'text'; content: string }
-  | { type: 'question_form'; raw: string; form: QuestionFormBlock };
-
 const QUESTION_FORM_RE = /<question-form\b([^>]*)>([\s\S]*?)<\/question-form>/gi;
 
 function attr(attrs: string, name: string): string {
@@ -133,86 +127,6 @@ export function formatQuestionFormSkipped(form: QuestionFormBlock, autoSkipped: 
   ].join('\n');
 }
 
-export function questionFormFromAskUserQuestion(input: unknown, fallbackId: string): QuestionFormBlock | null {
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  const source = Array.isArray(record.questions)
-    ? record.questions
-    : record.question || record.prompt
-      ? [record]
-      : [];
-  const questions = normalizeQuestions({ questions: source });
-  if (questions.length === 0) return null;
-  const titleCandidate = record.title ?? record.header ?? record.name;
-  const firstQuestion = source[0] && typeof source[0] === 'object' ? source[0] as Record<string, unknown> : {};
-  const firstHeader = firstQuestion.header;
-  const title = typeof titleCandidate === 'string' && titleCandidate.trim()
-    ? titleCandidate.trim()
-    : typeof firstHeader === 'string' && firstHeader.trim()
-      ? firstHeader.trim()
-      : '需要你确认';
-  return {
-    id: fallbackId,
-    title,
-    questions,
-    raw: JSON.stringify(input ?? {}),
-  };
-}
-
-export function formatAskUserQuestionAnswers(form: QuestionFormBlock, answers: Record<string, string | string[]>): string {
-  return form.questions.map((question) => {
-    const value = answers[question.id];
-    const lines = Array.isArray(value)
-      ? value.map((item) => `- ${item}`)
-      : [String(value ?? '')];
-    return [question.label, ...lines.filter((line) => line.trim())].join('\n');
-  }).join('\n\n');
-}
-
-// ── Segment parser: split assistant text into text + question-form segments ──
-
-export function splitOnQuestionForms(content: string): MessageSegment[] {
-  const segments: MessageSegment[] = [];
-  const regex = /<question-form\b([^>]*)>([\s\S]*?)<\/question-form>/gi;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let formIndex = 0;
-
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: 'text', content: content.slice(lastIndex, match.index) });
-    }
-    try {
-      const parsed = parseQuestionFormPayload(match[2]);
-      const parsedRecord = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
-      const id = attr(match[1], 'id') || (typeof parsedRecord.id === 'string' ? parsedRecord.id : '') || `form-${++formIndex}`;
-      const title = attr(match[1], 'title') || (typeof parsedRecord.title === 'string' ? parsedRecord.title : '') || '需要你确认';
-      const description = typeof parsedRecord.description === 'string' ? parsedRecord.description : undefined;
-      const submitLabel = typeof parsedRecord.submitLabel === 'string' ? parsedRecord.submitLabel : undefined;
-      const skipLabel = typeof parsedRecord.skipLabel === 'string' ? parsedRecord.skipLabel : undefined;
-      const autoSkipSeconds = typeof parsedRecord.autoSkipSeconds === 'number' ? parsedRecord.autoSkipSeconds : undefined;
-      const questions = normalizeQuestions(parsed);
-      if (questions.length > 0) {
-        segments.push({
-          type: 'question_form',
-          raw: match[0],
-          form: { id, title, description, questions, raw: match[0], submitLabel, skipLabel, autoSkipSeconds },
-        });
-      } else {
-        segments.push({ type: 'text', content: match[0] });
-      }
-    } catch {
-      segments.push({ type: 'text', content: match[0] });
-    }
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < content.length) {
-    segments.push({ type: 'text', content: content.slice(lastIndex) });
-  }
-
-  return segments;
-}
-
 // ── Streaming: strip unclosed <question-form> from the tail ──
 
 export function stripTrailingOpenQuestionForm(content: string): {
@@ -224,4 +138,10 @@ export function stripTrailingOpenQuestionForm(content: string): {
   const closeIndex = content.indexOf('</question-form>', openIndex);
   if (closeIndex !== -1) return { visibleContent: content, hasOpenForm: false };
   return { visibleContent: content.slice(0, openIndex), hasOpenForm: true };
+}
+
+// ── Streaming: detect if there's any unclosed <question-form> mid-stream ──
+// P0-7: streaming 兜底用,即使 JSON 还没写完也能识别已开口的 form,展示"加载中"占位。
+export function hasOpenQuestionForm(content: string): boolean {
+  return stripTrailingOpenQuestionForm(content).hasOpenForm;
 }

@@ -31,6 +31,9 @@ export type ConversationData = {
   // Composer 优先显示这个,fallback 才用 settings 里的 provider 模型。
   // 跟着中转/CC Switch 走,跟用户终端 claude 看到的一致。
   currentModel?: string;
+  // 已提交的 question-form 答案(messageId+formId → 已提交文本)。
+  // 下沉到 conv 持久化层,避免 panel 局部 state 在切换/卸载时丢失。
+  submittedQuestionForms?: Record<string, string>;
 };
 
 export type ConversationStoreState = {

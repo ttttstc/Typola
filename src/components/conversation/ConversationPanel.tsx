@@ -43,7 +43,10 @@ type ConversationPanelProps = {
   onCloseConversation: (id: string) => void;
   onRenameConversation: (id: string, title: string) => void;
   onSwitchProvider: (provider: AgentProvider) => void;
-  onSend: (prompt: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
+  onSend: (
+    prompt: string,
+    context?: { currentFileContextPath?: string; referencePaths?: string[]; toolAnswer?: true },
+  ) => void;
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
@@ -57,6 +60,8 @@ type ConversationPanelProps = {
   latestArtifact?: ArtifactItem;
   onOpenArtifact?: (path: string) => void;
   onArchiveArtifact?: (path: string) => void;
+  // 写入对话持久化字段(question-form 提交记录等)
+  updateConv?: (convId: string, patch: Partial<ConversationData>) => void;
 };
 
 function UserMessage({ message }: { message: Extract<AgentMessage, { role: 'user' }> }) {
@@ -106,6 +111,7 @@ export function ConversationPanel({
   latestArtifact,
   onOpenArtifact,
   onArchiveArtifact,
+  updateConv,
 }: ConversationPanelProps) {
   const settings = useSettings();
   const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
@@ -118,7 +124,7 @@ export function ConversationPanel({
   const promptReferenceTextEnabled = activeProvider === 'opencode' && Boolean(activeConversation?.skillRef);
   const composerRef = useRef<ComposerHandle>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [submittedQuestionForms, setSubmittedQuestionForms] = useState<Record<string, string>>({});
+  const submittedQuestionForms = activeConversation?.submittedQuestionForms ?? {};
   const toastTimerRef = useRef<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const messageBottomRef = useRef<HTMLDivElement>(null);
@@ -207,8 +213,11 @@ export function ConversationPanel({
   }, []);
 
   const handleSubmitQuestionForm = (messageId: string, formId: string, text: string) => {
-    setSubmittedQuestionForms((current) => ({ ...current, [`${messageId}:${formId}`]: text }));
-    onSend(text);
+    const key = `${messageId}:${formId}`;
+    const next = { ...submittedQuestionForms, [key]: text };
+    updateConv?.(activeConvId, { submittedQuestionForms: next });
+    // toolAnswer: true 表示 form 答案,允许在 mid-turn (running + 未闭合 form) 状态下提交
+    onSend(text, { toolAnswer: true });
   };
 
   // 把 messages 切成 (user, assistant[]) 段，渲染时把 user 的 selectionAnchor 沿用到该 user 之后的所有 assistant 消息。

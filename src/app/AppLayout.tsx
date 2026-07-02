@@ -1683,6 +1683,7 @@ export function AppLayout() {
             void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
           },
           onArchiveArtifact: handleArchiveArtifact,
+          updateConv: convManager.updateConv,
         }}
         fileTreeProps={{
           rootPath: workspaceRoot,

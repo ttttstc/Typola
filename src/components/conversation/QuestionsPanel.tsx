@@ -9,6 +9,7 @@ type QuestionsPanelProps = {
   status: 'pending' | 'answered' | 'skipped';
   submittedText?: string;
   onSubmit: (text: string) => void;
+  onClose?: () => void;
 };
 
 function toggleCheckbox(current: AnswerValue | undefined, option: string): string[] {
@@ -145,7 +146,7 @@ function formatCountdown(seconds: number): string {
   return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
-export function QuestionsPanel({ form, status, submittedText, onSubmit }: QuestionsPanelProps) {
+export function QuestionsPanel({ form, status, submittedText, onSubmit, onClose }: QuestionsPanelProps) {
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [error, setError] = useState('');
   const autoSkipSeconds = form.autoSkipSeconds ?? 300;
@@ -214,7 +215,18 @@ export function QuestionsPanel({ form, status, submittedText, onSubmit }: Questi
 
   return (
     <div className="questions-panel">
-      {form.description && <p className="questions-panel-desc">{form.description}</p>}
+      <div className="questions-panel-header">
+        {form.description && <p className="questions-panel-desc">{form.description}</p>}
+        {/* P1-12: panel 右上角关闭按钮,通知父组件收起 */}
+        <button
+          type="button"
+          className="questions-panel-close"
+          onClick={() => onClose?.()}
+          aria-label="关闭表单"
+        >
+          ×
+        </button>
+      </div>
       <div className="questions-panel-fields">
         {form.questions.map((question) => (
           <QuestionField
