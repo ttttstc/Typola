@@ -43,7 +43,7 @@ type ConversationPanelProps = {
   onCloseConversation: (id: string) => void;
   onRenameConversation: (id: string, title: string) => void;
   onSwitchProvider: (provider: AgentProvider) => void;
-  onSend: (prompt: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
+  onSend: (prompt: string, context?: { currentFileContextPath?: string; referencePaths?: string[]; toolAnswer?: boolean }) => void;
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
@@ -110,6 +110,7 @@ export function ConversationPanel({
   const settings = useSettings();
   const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
+  const waitingForUser = runState === 'waitingForUser';
   const hasHistory = messages.length > 0;
   const providerConfig = getAgentProviderConfig(activeProvider);
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
@@ -207,7 +208,7 @@ export function ConversationPanel({
 
   const handleSubmitQuestionForm = (messageId: string, formId: string, text: string) => {
     setSubmittedQuestionForms((current) => ({ ...current, [`${messageId}:${formId}`]: text }));
-    onSend(text);
+    onSend(text, { toolAnswer: true });
   };
 
   // 把 messages 切成 (user, assistant[]) 段，渲染时把 user 的 selectionAnchor 沿用到该 user 之后的所有 assistant 消息。
@@ -351,6 +352,7 @@ export function ConversationPanel({
       <Composer
         ref={composerRef}
         running={running}
+        disabled={waitingForUser}
         cwd={cwd}
         workspaceSuggestion={workspaceSuggestion}
         workspaceRecents={settings.aiWorkspaceRecents}

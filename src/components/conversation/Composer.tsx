@@ -37,7 +37,7 @@ type ComposerProps = {
   onClearWorkspace: () => void;
   onSwitchProvider: (provider: AgentProvider) => void;
   onClearConversation?: () => void;
-  onSend: (text: string, context?: { currentFileContextPath?: string; referencePaths?: string[] }) => void;
+  onSend: (text: string, context?: { currentFileContextPath?: string; referencePaths?: string[]; toolAnswer?: boolean }) => void;
   onCancel: () => void;
 };
 

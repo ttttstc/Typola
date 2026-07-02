@@ -456,7 +456,7 @@ export function AskUserQuestionCard({
 
   const resultText = result && !result.isError && result.content.trim() ? result.content : undefined;
   const answered = Boolean(submittedText ?? resultText);
-  const failed = Boolean(result?.isError);
+  const failed = Boolean(result?.isError && submittedText);
   return (
     <div className="op-card op-question">
       <div className="op-card-head op-card-head-static">

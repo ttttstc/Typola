@@ -56,7 +56,7 @@ export type AgentUsageSummary = {
   stopReason: unknown;
 };
 
-export type AgentRunState = 'idle' | 'running' | 'error';
+export type AgentRunState = 'idle' | 'running' | 'waitingForUser' | 'error';
 
 export type AgentStdoutPayload = {
   runId: string;

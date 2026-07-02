@@ -184,7 +184,7 @@ describe('useConversationManager', () => {
     expect(api?.runState).toBe('idle');
   });
 
-  it('keeps an unanswered AskUserQuestion idle instead of marking the run failed', async () => {
+  it('keeps an unanswered AskUserQuestion waiting instead of marking the run failed', async () => {
     act(() => {
       root.render(
         <Harness
@@ -227,11 +227,77 @@ describe('useConversationManager', () => {
       });
     });
 
-    expect(api?.runState).toBe('idle');
+    expect(api?.runState).toBe('waitingForUser');
     expect(api?.lastError).toBe('');
     const last = api?.activeConv?.messages.at(-1);
     expect(last?.role).toBe('assistant');
     expect(last && last.role === 'assistant' ? last.tools[0]?.name : '').toBe('AskUserQuestion');
+  });
+
+  it('blocks regular sends while waiting for AskUserQuestion and allows the answer submit', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('ask me first');
+    });
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({
+          type: 'tool_use',
+          id: 'toolu_question',
+          name: 'AskUserQuestion',
+          input: {
+            questions: [{
+              question: '主要用途是什么？',
+              options: [{ label: '技术分享' }, { label: '内部分享' }],
+            }],
+          },
+        }),
+      });
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({ type: 'turn_end', stopReason: 'tool_use' }),
+      });
+      exitHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        exitCode: 0,
+        cancelled: false,
+        stderrTail: '',
+      });
+    });
+
+    expect(api?.runState).toBe('waitingForUser');
+
+    await act(async () => {
+      await api?.send('普通追问不应该发出去');
+    });
+    expect(headlessMock.resumeAgentSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await api?.send('主要用途是什么？\n技术分享', { toolAnswer: true });
+    });
+    expect(headlessMock.resumeAgentSession).toHaveBeenCalledTimes(1);
+    expect(headlessMock.resumeAgentSession.mock.calls[0][0]).toMatchObject({
+      conversationId: convId,
+      prompt: expect.stringContaining('技术分享'),
+    });
   });
 
   it('routes relative artifact_file events into the conversation output directory', async () => {

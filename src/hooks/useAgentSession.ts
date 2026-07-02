@@ -110,6 +110,12 @@ function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
   )));
 }
 
+function hasToolUseTurnEnd(events: AgentEvent[]): boolean {
+  return events.some((event) => (
+    (event.type === 'turn_end' || event.type === 'usage') && event.stopReason === 'tool_use'
+  ));
+}
+
 function appendEventToMessages(messages: AgentMessage[], event: AgentEvent): AgentMessage[] {
   if (event.type !== 'text_delta' &&
       event.type !== 'thinking_delta' &&
@@ -283,7 +289,15 @@ export function useConversationManager({
     queued.forEach((events, convId) => {
       const current = conversationsRef.current.get(convId)?.messages ?? [];
       const messages = events.reduce(appendEventToMessages, current);
-      updateConv(convId, { messages });
+      const patch: Partial<ConversationData> = { messages };
+      if (hasToolUseTurnEnd(events) && hasUnansweredAskUserQuestion(messages)) {
+        // OpenDesign 的 claude-stream-json 在 stop_reason=tool_use 时保持 stdin 打开等待工具结果。
+        // Typola 当前仍是一轮一进程,这里把同一语义落到前端状态:只允许问题卡提交答案,
+        // 普通 Composer 发送会被禁用,避免用户还没回答时继续推进下一步。
+        patch.runState = 'waitingForUser';
+        patch.lastError = '';
+      }
+      updateConv(convId, patch);
     });
   }, [updateConv]);
 
@@ -344,16 +358,17 @@ export function useConversationManager({
       if (!conv) return;
       const wasActive = conv.runState === 'running';
       const wasCancelled = payload.cancelled || conv.cancelRequested;
-      const waitingForUserAnswer = hasUnansweredAskUserQuestion(conv.messages);
+      const waitingForUserAnswer = conv.runState === 'waitingForUser' || hasUnansweredAskUserQuestion(conv.messages);
       const patch: Partial<ConversationData> = {
-        runState: payload.exitCode === 0 || wasCancelled ? 'idle' : 'error',
+        runState: waitingForUserAnswer && !wasCancelled
+          ? 'waitingForUser'
+          : payload.exitCode === 0 || wasCancelled
+            ? 'idle'
+            : 'error',
         cancelRequested: false,
       };
       if (waitingForUserAnswer && !wasCancelled) {
-        // OpenDesign 的 Claude 适配用 stream-json stdin 在 stop_reason=tool_use 时保持工具等待。
-        // Typola 当前每轮进程会退出,所以 AskUserQuestion 需要转成"等待用户回答"的 idle 状态,
-        // 不能按普通工具缺 result 标成失败,否则用户还没选就看到错误。
-        updateConv(convId, { runState: 'idle', cancelRequested: false, lastError: '' });
+        updateConv(convId, { runState: 'waitingForUser', cancelRequested: false, lastError: '' });
         resolveExitWaiters(convId);
         return;
       }
@@ -408,13 +423,13 @@ export function useConversationManager({
   // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
   const send = useCallback(async (
     prompt: string,
-    opts?: { conversationId?: string; currentFileContextPath?: string; referencePaths?: string[] },
+    opts?: { conversationId?: string; currentFileContextPath?: string; referencePaths?: string[]; toolAnswer?: boolean },
   ) => {
     const convId = opts?.conversationId ?? activeConvIdRef.current;
     const trimmed = prompt.trim();
     if (!trimmed) return;
     const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState === 'running') return;
+    if (!conv || conv.runState === 'running' || (conv.runState === 'waitingForUser' && !opts?.toolAnswer)) return;
     // 首条消息且仍是默认标题 → 用首句自动命名（skill 会话/已手动改名的不动）
     const nextTitle = conv.messages.length === 0 && conv.title === '自由对话'
       ? summarizeTitle(trimmed)

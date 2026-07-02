@@ -81,6 +81,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 AI 工作台 AskUserQuestion 未回答就显示失败的问题：对齐 OpenDesign 的 `stop_reason=tool_use` 等待语义，等待用户提交期间禁用普通 Composer 发送，并将 Bash/命令类低关注工具调用默认纳入折叠组。
 - 修复 PR #103 后续检视意见：SkillHub 本机能力扫描改为单一 generation token 流程，避免切换 Provider 或 reload 时旧扫描结果覆盖新列表；同时保留旧 `skillHubReloadKey` 兼容字段并补充 OpenCode command prompt 契约说明。
 - 修复心流模式下 OpenCode 场景模板没有可选 skill/command 的问题：内置模板现在声明支持 OpenCode command，已安装的同名本地 command 会直接显示为可点击卡片，未安装项会引导按 OpenCode command 配置。
 - 修复 #90：OpenCode 场景下点击 SkillHub command 卡片会预填 Composer，并继续通过 `opencode run --command` 调用；刷新、扫描错误和安装引导文案改为区分 Claude skill 与 OpenCode command。

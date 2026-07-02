@@ -27,7 +27,23 @@ function isAskUserQuestionTool(tool: AgentToolCall): boolean {
 }
 
 function isResearchTool(tool: AgentToolCall): boolean {
-  return ['Read', 'read_file', 'Glob', 'list_files', 'Grep', 'WebFetch', 'web_fetch', 'WebSearch', 'web_search']
+  return [
+    'Read',
+    'read_file',
+    'Glob',
+    'list_files',
+    'Grep',
+    'WebFetch',
+    'web_fetch',
+    'WebSearch',
+    'web_search',
+    'Bash',
+    'bash',
+    'Shell',
+    'shell',
+    'run_command',
+    'execute_command',
+  ]
     .includes(tool.name);
 }
 
@@ -222,7 +238,7 @@ export function AssistantMessage({
         !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
       {questionTools.map(renderTool)}
-      <ResearchToolGroup tools={researchTools} message={message} renderTool={renderTool} />
+      <ResearchToolGroup tools={researchTools} renderTool={renderTool} />
       {otherTools.map(renderTool)}
       <ErrorRetryCard message={message.error ?? ''} />
       <DoneBar usage={message.usage} />
@@ -232,18 +248,16 @@ export function AssistantMessage({
 
 function ResearchToolGroup({
   tools,
-  message,
   renderTool,
 }: {
   tools: AgentToolCall[];
-  message: Extract<AgentMessage, { role: 'assistant' }>;
   renderTool: (tool: AgentToolCall) => ReactNode;
 }) {
   if (tools.length === 0) return null;
   if (tools.length <= 2) return <>{tools.map(renderTool)}</>;
   const summary = summarizeToolNames(tools);
   return (
-    <details className="conversation-tool-group" open={!message.done} key={message.done ? 'done' : 'running'}>
+    <details className="conversation-tool-group">
       <summary>
         <span>资料检索与读取</span>
         <small>{tools.length} 个工具调用 · {summary}</small>
@@ -272,5 +286,6 @@ function normalizeToolLabel(name: string): string {
   if (name === 'Grep') return 'Grep';
   if (name === 'WebFetch' || name === 'web_fetch') return 'Fetch';
   if (name === 'WebSearch' || name === 'web_search') return 'Search';
+  if (name === 'Bash' || name === 'bash' || name === 'Shell' || name === 'shell' || name === 'run_command' || name === 'execute_command') return 'Command';
   return name;
 }

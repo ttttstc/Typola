@@ -207,6 +207,56 @@ describe('QuestionForm', () => {
     ].join('\n'));
   });
 
+  it('keeps AskUserQuestion waiting when an error-shaped result arrives before user submit', () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant('', [{
+            id: 'toolu_question',
+            name: 'AskUserQuestion',
+            input: {
+              questions: [{
+                header: 'Purpose',
+                question: '这份演示的主要用途是什么？',
+                options: [{ label: '技术分享' }, { label: '内部分享' }],
+              }],
+            },
+            result: 'tool waiting for user input',
+            isError: true,
+          }])}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain('需要你回答');
+    expect(host.querySelector('.op-status-question')).toBeTruthy();
+    expect(host.querySelector('.op-status-error')).toBeFalsy();
+  });
+
+  it('shows AskUserQuestion failure only after the submitted answer is known', () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant('', [{
+            id: 'toolu_question',
+            name: 'AskUserQuestion',
+            input: {
+              questions: [{
+                question: '下一步做什么？',
+                options: [{ label: '生成报告' }, { label: '生成 PPT' }],
+              }],
+            },
+            result: '提交失败',
+            isError: true,
+          }])}
+          submittedQuestionForms={{ 'tool:toolu_question': '下一步做什么？\n生成 PPT' }}
+        />,
+      );
+    });
+
+    expect(host.querySelector('.op-status-error')).toBeTruthy();
+  });
+
   it('groups low-attention research tools into a scrollable disclosure', () => {
     act(() => {
       root.render(
@@ -215,6 +265,7 @@ describe('QuestionForm', () => {
             { id: 'read-1', name: 'Read', input: { filePath: 'a.md' } },
             { id: 'grep-1', name: 'Grep', input: { pattern: 'Typola' } },
             { id: 'glob-1', name: 'Glob', input: { pattern: '*.md' } },
+            { id: 'bash-1', name: 'Bash', input: { command: 'npm test' } },
             { id: 'write-1', name: 'Write', input: { filePath: 'out.md', content: '# Out' } },
           ])}
         />,
@@ -223,7 +274,8 @@ describe('QuestionForm', () => {
 
     expect(host.querySelector('.conversation-tool-group')).toBeTruthy();
     expect(host.textContent).toContain('资料检索与读取');
-    expect(host.textContent).toContain('3 个工具调用');
+    expect(host.textContent).toContain('4 个工具调用');
+    expect(host.textContent).toContain('Command×1');
     expect(host.textContent).toContain('写入');
   });
 });
