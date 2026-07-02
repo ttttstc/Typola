@@ -445,12 +445,7 @@ export function AppLayout() {
   });
 
   const {
-    hasEditorSelection,
-    handleInsertToEditor,
-    handleReplaceEditorSelection,
     handleEditorAIAction,
-    handleReplaceEditorAnchor,
-    validateEditorAnchor,
     resultCard,
     closeResultCard,
     acceptResultCard,
@@ -1659,11 +1654,6 @@ export function AppLayout() {
           currentModel: convManager.activeConv?.currentModel,
           fileContextInjected: convManager.activeConv?.fileContextInjected ?? false,
           currentFileContextPath: convManager.activeConv?.currentFileContextPath,
-          hasEditorSelection,
-          onInsertToEditor: handleInsertToEditor,
-          onReplaceEditorSelection: handleReplaceEditorSelection,
-          onReplaceEditorAnchor: handleReplaceEditorAnchor,
-          onValidateAnchor: validateEditorAnchor,
           onSelectConversation: convManager.switchConversation,
           onCreateConversation: () => convManager.createConversation(),
           onCloseConversation: convManager.closeConversation,

@@ -301,4 +301,202 @@ describe('useConversationManager', () => {
     expect(resumeRequest.prompt).toContain('Do not ask the same question again.');
     expect(resumeRequest.prompt).toContain('[form answers — purpose]');
   });
+
+  // ----------------------------------------------------------------------
+  // P0-10 (C): artifact guard / form-pending gate coverage
+  // ----------------------------------------------------------------------
+
+  it('withArtifactWriteGuard: wraps every send with the AskUserQuestion ban and cwd rule', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('纯文本不带 question-form');
+    });
+
+    const request = headlessMock.startAgentSession.mock.calls[0][0];
+    const prompt = request.prompt as string;
+    // 注入的规则应至少有一条出现,且 cwd 规则必须出现(因为 workspaceRoot 给定)
+    expect(prompt).toContain('Do not use AskUserQuestion.');
+    expect(prompt).toContain('<question-form>');
+    expect(prompt).toContain('当前进程工作目录是:');
+    expect(prompt).toMatch(/D:\\md files\\.typola-output\\/);
+  });
+
+  it('withArtifactWriteGuard: does not duplicate the rule block on a resume that already contains it', async () => {
+    // 先发一条让 session 进入 resume 路径,然后用 form-answers 续问,验证 prompt 里规则出现且不重复
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('第一条问题');
+    });
+    // 模拟 turn 结束,让 session 标记为已 started
+    const firstConvId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+    await act(async () => {
+      exitHandler?.({
+        runId: 'run-1',
+        conversationId: firstConvId,
+        sessionUuid: 'session-1',
+        exitCode: 0,
+        cancelled: false,
+        stderrTail: '',
+      });
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      await api?.send('[form answers — purpose]\n- 用途: 试一下');
+    });
+    expect(headlessMock.resumeAgentSession).toHaveBeenCalledTimes(1);
+    const prompt = headlessMock.resumeAgentSession.mock.calls[0][0].prompt as string;
+    // 规则块只出现一次
+    const ruleMatches = prompt.match(/Do not use AskUserQuestion\./g) ?? [];
+    expect(ruleMatches.length).toBe(1);
+    expect(prompt).toContain('The user has answered the previous question form "purpose".');
+    expect(prompt).toContain('Use the answers below to continue the task.');
+  });
+
+  it('validateArtifactOutput: streaming assistant content with an unclosed <question-form> flips runState to waitingForUser', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('先问用户');
+    });
+    expect(api?.runState).toBe('running');
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+
+    // 模型流式写到一半 —— 已开口但未闭合
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({
+          type: 'message',
+          role: 'assistant',
+          content: '先确认\n<question-form id="purpose">\n{"questions":[{"id":"q"',
+        }),
+      });
+      // 等 rAF → flushQueuedEvents → updateConv
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => {
+          // 再让 React 的 commit 走完
+          window.setTimeout(resolve, 0);
+        });
+      });
+    });
+
+    expect(api?.runState).toBe('waitingForUser');
+    expect(api?.activeConv?.messages.at(-1)?.content).toContain('<question-form id="purpose">');
+  });
+
+  it('send: a plain user prompt is blocked while runState is waitingForUser', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('问点什么');
+    });
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({
+          type: 'message',
+          role: 'assistant',
+          content: '<question-form id="purpose">\n{"questions":[{',
+        }),
+      });
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
+      });
+    });
+
+    expect(api?.runState).toBe('waitingForUser');
+    headlessMock.startAgentSession.mockClear();
+    headlessMock.resumeAgentSession.mockClear();
+
+    // 普通 send 应被挡
+    await act(async () => {
+      await api?.send('抢答');
+    });
+    expect(headlessMock.startAgentSession).not.toHaveBeenCalled();
+    expect(headlessMock.resumeAgentSession).not.toHaveBeenCalled();
+  });
+
+  it('send: toolAnswer=true bypasses the waitingForUser gate and resumes the session', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await api?.send('先问用户');
+    });
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+
+    await act(async () => {
+      stdoutHandler?.({
+        runId: 'run-1',
+        conversationId: convId,
+        sessionUuid: 'session-1',
+        line: JSON.stringify({
+          type: 'message',
+          role: 'assistant',
+          content: '<question-form id="purpose">\n{',
+        }),
+      });
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
+      });
+    });
+    expect(api?.runState).toBe('waitingForUser');
+
+    headlessMock.resumeAgentSession.mockClear();
+    await act(async () => {
+      await api?.send('[form answers — purpose]\n- q: answer', { toolAnswer: true });
+    });
+    expect(headlessMock.resumeAgentSession).toHaveBeenCalledTimes(1);
+    const request = headlessMock.resumeAgentSession.mock.calls[0][0];
+    expect(request.prompt).toContain('The user has answered the previous question form "purpose".');
+    expect(request.prompt).toContain('[form answers — purpose]');
+  });
 });

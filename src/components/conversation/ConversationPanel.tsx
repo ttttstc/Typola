@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useSettings } from '../../hooks/useSettings';
 import { confirmDialog } from '../../services/dialogService';
 import { updateSettings } from '../../services/settingsService';
-import type { AgentMessage, AnchorStatus, SelectionAnchor } from '../../services/agent/types';
+import type { AgentMessage } from '../../services/agent/types';
 import type { AgentProvider } from '../../services/agent/provider';
 import { getAgentProviderConfig } from '../../services/agent/provider';
 import type { ConversationData } from '../../services/agent/conversationStore';
@@ -33,11 +33,6 @@ type ConversationPanelProps = {
   /** 当前活动会话是否已注入过"当前文档" context → 后续 send 不再重复 */
   fileContextInjected?: boolean;
   currentFileContextPath?: string;
-  hasEditorSelection?: boolean;
-  onInsertToEditor?: (text: string) => void;
-  onReplaceEditorSelection?: (text: string) => void;
-  onReplaceEditorAnchor?: (text: string, anchor: SelectionAnchor) => void;
-  onValidateAnchor?: (anchor: SelectionAnchor) => AnchorStatus;
   onSelectConversation: (id: string) => void;
   onCreateConversation: () => void;
   onCloseConversation: (id: string) => void;
@@ -89,11 +84,6 @@ export function ConversationPanel({
   currentModel,
   fileContextInjected = false,
   currentFileContextPath,
-  hasEditorSelection = false,
-  onInsertToEditor,
-  onReplaceEditorSelection,
-  onReplaceEditorAnchor,
-  onValidateAnchor,
   onSelectConversation,
   onCreateConversation,
   onCloseConversation,
@@ -325,12 +315,6 @@ export function ConversationPanel({
               <AssistantMessage
                 key={assistant.id}
                 message={assistant}
-                hasSelection={hasEditorSelection}
-                selectionAnchor={seg.user?.selectionAnchor}
-                onInsertText={onInsertToEditor}
-                onReplaceSelection={onReplaceEditorSelection}
-                onReplaceAnchor={onReplaceEditorAnchor}
-                validateAnchor={onValidateAnchor}
                 submittedQuestionForms={Object.fromEntries(
                   Object.entries(submittedQuestionForms)
                     .filter(([key]) => key.startsWith(`${assistant.id}:`))
