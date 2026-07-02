@@ -12,6 +12,7 @@ import {
   onAgentExit,
   onAgentStdout,
   resumeAgentSession,
+  sendAgentSessionInput,
   startAgentSession,
 } from '../services/agent/headlessService';
 import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
@@ -99,6 +100,16 @@ function upsertTool(tools: AgentToolCall[], next: AgentToolCall): AgentToolCall[
 
 function isAskUserQuestionToolName(name: string): boolean {
   return name === 'AskUserQuestion' || name === 'ask_user_question';
+}
+
+// stream-json 模式下 Claude 流 AskUserQuestion tool_use 时 stdIn 保持打开,
+// 进程不会退出 → 切到 waitingForUser 让 UI 知道当前会话在等用户回答。
+function applyStreamJsonSideEffects(conv: ConversationData, event: AgentEvent): ConversationData | undefined {
+  if (conv.runState !== 'running' || conv.inputMode !== 'streamJson') return undefined;
+  if (event.type === 'tool_use' && isAskUserQuestionToolName(toolName(event.name))) {
+    return { ...conv, runState: 'waitingForUser' };
+  }
+  return undefined;
 }
 
 function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
@@ -273,7 +284,14 @@ export function useConversationManager({
         updateConv(convId, { currentModel: event.model });
       }
     }
-    updateConv(convId, { messages: appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? [], event) });
+    const conv = conversationsRef.current.get(convId);
+    updateConv(convId, { messages: appendEventToMessages(conv?.messages ?? [], event) });
+    // stream-json 模式下 Claude 输出 AskUserQuestion tool_use 时 stdIn 保持打开,
+    // 进程不会退出 → 切到 waitingForUser 让 Composer / UI 知道当前会话在等用户回答。
+    const waitingForUser = conv ? applyStreamJsonSideEffects(conversationsRef.current.get(convId) ?? conv, event) : undefined;
+    if (waitingForUser && waitingForUser.runState !== conv?.runState) {
+      updateConv(convId, { runState: waitingForUser.runState });
+    }
   }, [updateConv, workspaceRoot]);
 
   const flushQueuedEvents = useCallback(() => {
@@ -281,9 +299,19 @@ export function useConversationManager({
     const queued = eventQueueRef.current;
     eventQueueRef.current = new Map();
     queued.forEach((events, convId) => {
-      const current = conversationsRef.current.get(convId)?.messages ?? [];
-      const messages = events.reduce(appendEventToMessages, current);
+      const before = conversationsRef.current.get(convId);
+      const messages = events.reduce(appendEventToMessages, before?.messages ?? []);
       updateConv(convId, { messages });
+      // rAF queue 路径同样需要触发 stream-json side effects(waitingForUser 等)。
+      const after = conversationsRef.current.get(convId);
+      if (!before || !after) return;
+      for (const event of events) {
+        const next = applyStreamJsonSideEffects(after, event);
+        if (next && next.runState !== after.runState) {
+          updateConv(convId, { runState: next.runState });
+          break;
+        }
+      }
     });
   }, [updateConv]);
 
@@ -414,7 +442,7 @@ export function useConversationManager({
     const trimmed = prompt.trim();
     if (!trimmed) return;
     const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState === 'running') return;
+    if (!conv || conv.runState === 'running' || conv.runState === 'waitingForUser') return;
     // 首条消息且仍是默认标题 → 用首句自动命名（skill 会话/已手动改名的不动）
     const nextTitle = conv.messages.length === 0 && conv.title === '自由对话'
       ? summarizeTitle(trimmed)
@@ -458,6 +486,7 @@ export function useConversationManager({
       updateConv(convId, {
         sessionStarted: true,
         runId: result.runId,
+        inputMode: result.inputMode,
         fileContextInjected: true,
         ...(opts?.currentFileContextPath ? { currentFileContextPath: opts.currentFileContextPath } : {}),
       });
@@ -484,7 +513,7 @@ export function useConversationManager({
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;
     const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState !== 'running') return;
+    if (!conv || (conv.runState !== 'running' && conv.runState !== 'waitingForUser')) return;
     updateConv(convId, { cancelRequested: true });
     const handler = handlersRef.current.get(convId);
     handler?.flush();
@@ -498,6 +527,61 @@ export function useConversationManager({
       await exitWait;
     }
   }, [updateConv, waitForConversationExit]);
+
+  // AskUserQuestion 卡片提交:Rust stream-json 模式下把答案 JSONL tool_result 写回原进程 stdin,
+  // 进程继续同轮生成。text 模式 fallback 走 send(text) 触发下一轮 resume。
+  // 同时在 conv.submittedToolResults[toolUseId] 记录 submitting / submitted / error 三态,
+  // 卡片据此显示"提交中/已提交/失败重试"。
+  const submitAskUserQuestionAnswer = useCallback(async (toolUseId: string, text: string) => {
+    const convId = activeConvIdRef.current;
+    const conv = conversationsRef.current.get(convId);
+    if (!conv) return;
+    // 幂等保护:已 submitting 或 submitted 不再重复,error 允许重试。
+    const existing = conv.submittedToolResults?.[toolUseId];
+    if (existing?.status === 'submitting' || existing?.status === 'submitted') {
+      return;
+    }
+    if (conv.inputMode === 'streamJson' && conv.runId && conv.runState === 'waitingForUser') {
+      const frame = {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: toolUseId, content: text, is_error: false }],
+        },
+      };
+      // 立即标 submitting,卡片禁用按钮防双击 + 用户立刻看到反馈。
+      updateConv(convId, {
+        submittedToolResults: {
+          ...(conv.submittedToolResults ?? {}),
+          [toolUseId]: { status: 'submitting', text },
+        },
+      });
+      try {
+        await sendAgentSessionInput({ runId: conv.runId, message: JSON.stringify(frame) });
+        // 成功:标 submitted,runState 回到 running 让 stream 事件继续驱动。
+        const latest = conversationsRef.current.get(convId);
+        updateConv(convId, {
+          runState: 'running',
+          submittedToolResults: {
+            ...(latest?.submittedToolResults ?? {}),
+            [toolUseId]: { status: 'submitted', text },
+          },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // 失败:标 error,保留 runState=waitingForUser 让用户能改答案后重试。
+        const latest = conversationsRef.current.get(convId);
+        updateConv(convId, {
+          submittedToolResults: {
+            ...(latest?.submittedToolResults ?? {}),
+            [toolUseId]: { status: 'error', text, error: message },
+          },
+        });
+      }
+      return;
+    }
+    await send(text);
+  }, [send, updateConv]);
 
   const reset = useCallback(() => {
     const convId = activeConvIdRef.current;
@@ -588,9 +672,10 @@ export function useConversationManager({
     const handler = handlersRef.current.get(id);
     handler?.flush();
     handlersRef.current.delete(id);
-    // Cancel run if active
+    // Cancel run if active:stream-json waitingForUser 期间 Claude 进程仍在 stdin 等 tool_result,
+    // 关会话不 cancel 会留下后台进程和 registry run。
     const conv = conversationsRef.current.get(id);
-    if (conv && conv.runState === 'running' && conv.runId) {
+    if (conv && (conv.runState === 'running' || conv.runState === 'waitingForUser') && conv.runId) {
       void cancelAgentSession(conv.runId);
     }
     setConversations((prev) => {
@@ -629,6 +714,7 @@ export function useConversationManager({
     renameConversation,
     closeConversation,
     setActiveConvId,
+    submitAskUserQuestionAnswer,
     cwd,
     extraAllowedDirs,
     // 选区注入暂存

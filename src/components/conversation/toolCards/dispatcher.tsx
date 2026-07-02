@@ -28,6 +28,7 @@ import {
   WebFetchCard,
   WebSearchCard,
 } from './cards';
+import type { SubmittedToolResultStatus } from '../../../services/agent/conversationStore';
 import { isTodoWriteToolName, type ResultShape } from './shared';
 
 type Props = {
@@ -39,6 +40,10 @@ type Props = {
   runSucceeded: boolean;
   submittedText?: string;
   onSubmitQuestionForm?: (text: string) => void;
+  onSubmitAskUserQuestionToolResult?: (toolUseId: string, text: string) => void;
+  // stream-json 提交状态:AskUserQuestionCard 用 submitStatus/submitError 驱动 UI。
+  submitStatus?: SubmittedToolResultStatus;
+  submitError?: string;
 };
 
 function isAskUserQuestionName(name: string): boolean {
@@ -54,6 +59,9 @@ export function ToolCardDispatcher({
   runSucceeded,
   submittedText,
   onSubmitQuestionForm,
+  onSubmitAskUserQuestionToolResult,
+  submitStatus,
+  submitError,
 }: Props) {
   if (isTodoWriteToolName(name)) {
     return <TodoCard input={input} result={result} runStreaming={runStreaming} runSucceeded={runSucceeded} />;
@@ -91,7 +99,13 @@ export function ToolCardDispatcher({
         runStreaming={runStreaming}
         runSucceeded={runSucceeded}
         submittedText={submittedText}
-        onSubmit={onSubmitQuestionForm}
+        submitStatus={submitStatus}
+        submitError={submitError}
+        onSubmit={
+          onSubmitAskUserQuestionToolResult
+            ? (text) => onSubmitAskUserQuestionToolResult(id, text)
+            : onSubmitQuestionForm
+        }
       />
     );
   }
