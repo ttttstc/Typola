@@ -7,10 +7,6 @@ type AnswerValue = string | string[];
 type QuestionFormCardProps = {
   form: QuestionFormBlock;
   submittedText?: string;
-  // stream-json 通道:write 失败时显示错误条并允许重试(answers 由组件本地 state 保留)。
-  submitError?: string;
-  // 提交中:禁用输入框 + 提交按钮 + 改文案,防双击 / 重复 write stdin。
-  submitting?: boolean;
   onSubmit: (text: string) => void;
   formatAnswers?: (form: QuestionFormBlock, answers: Record<string, string | string[]>) => string;
 };
@@ -25,8 +21,6 @@ function toggleCheckbox(current: AnswerValue | undefined, option: string): strin
 export function QuestionFormCard({
   form,
   submittedText,
-  submitError,
-  submitting = false,
   onSubmit,
   formatAnswers = formatQuestionFormAnswers,
 }: QuestionFormCardProps) {
@@ -57,32 +51,25 @@ export function QuestionFormCard({
   });
 
   const submit = () => {
-    if (submitting) return;
     if (!hasAnyAnswer) {
       setError('请至少填写一个答案后再提交。');
       return;
     }
-    setError('');
     onSubmit(formatAnswers(form, answers));
   };
 
   return (
-    <section className={`question-form-card${submitError ? ' has-error' : ''}`}>
+    <section className="question-form-card">
       <header>
         <strong>{form.title}</strong>
         <span>需要你补充</span>
       </header>
-      {submitError && (
-        <div className="question-form-error" role="alert">
-          提交失败:{submitError}
-        </div>
-      )}
       <div className="question-form-fields">
         {form.questions.map((question) => {
           const value = answers[question.id];
           if (question.type === 'checkbox') {
             return (
-              <fieldset key={question.id} className="question-form-field" disabled={submitting}>
+              <fieldset key={question.id} className="question-form-field">
                 <legend>{question.label}</legend>
                 {question.options.map((option) => (
                   <label key={option}>
@@ -99,7 +86,7 @@ export function QuestionFormCard({
           }
           if (question.type === 'radio') {
             return (
-              <fieldset key={question.id} className="question-form-field" disabled={submitting}>
+              <fieldset key={question.id} className="question-form-field">
                 <legend>{question.label}</legend>
                 {question.options.map((option) => (
                   <label key={option}>
@@ -119,11 +106,7 @@ export function QuestionFormCard({
             return (
               <label key={question.id} className="question-form-field">
                 <span>{question.label}</span>
-                <select
-                  value={typeof value === 'string' ? value : ''}
-                  onChange={(event) => setAnswer(question.id, event.target.value)}
-                  disabled={submitting}
-                >
+                <select value={typeof value === 'string' ? value : ''} onChange={(event) => setAnswer(question.id, event.target.value)}>
                   <option value="">请选择</option>
                   {question.options.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
@@ -138,7 +121,6 @@ export function QuestionFormCard({
                 value={typeof value === 'string' ? value : ''}
                 onChange={(event) => setAnswer(question.id, event.target.value)}
                 placeholder="输入答案"
-                disabled={submitting}
               />
             </label>
           );
@@ -146,9 +128,7 @@ export function QuestionFormCard({
       </div>
       <footer>
         {error && <span className="question-form-error" role="alert">{error}</span>}
-        <button type="button" onClick={submit} disabled={submitting || !hasAnyAnswer}>
-          {submitting ? '提交中...' : submitError ? '重新提交' : '提交答案'}
-        </button>
+        <button type="button" onClick={submit} disabled={!hasAnyAnswer}>提交答案</button>
       </footer>
     </section>
   );

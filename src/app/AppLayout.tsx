@@ -1671,7 +1671,6 @@ export function AppLayout() {
           onSwitchProvider: convManager.switchProvider,
           onSend: convManager.send,
           onCancel: convManager.cancel,
-          onSubmitAskUserQuestionToolResult: convManager.submitAskUserQuestionAnswer,
           onReset: convManager.reset,
           onClose: () => setLeftRailMode('none'),
           onConsumePendingInjection: convManager.consumePendingInjection,

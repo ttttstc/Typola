@@ -12,7 +12,6 @@ const headlessMock = vi.hoisted(() => ({
   startAgentSession: vi.fn(),
   resumeAgentSession: vi.fn(),
   cancelAgentSession: vi.fn(),
-  sendAgentSessionInput: vi.fn(),
   onAgentStdout: vi.fn(),
   onAgentExit: vi.fn(),
 }));
@@ -21,7 +20,6 @@ vi.mock('../services/agent/headlessService', () => ({
   startAgentSession: headlessMock.startAgentSession,
   resumeAgentSession: headlessMock.resumeAgentSession,
   cancelAgentSession: headlessMock.cancelAgentSession,
-  sendAgentSessionInput: headlessMock.sendAgentSessionInput,
   onAgentStdout: headlessMock.onAgentStdout,
   onAgentExit: headlessMock.onAgentExit,
 }));
@@ -65,11 +63,16 @@ describe('useConversationManager', () => {
       resumed: false,
       agentPath: 'opencode',
       provider: 'opencode',
-      inputMode: 'streamJson',
     }));
-    headlessMock.resumeAgentSession.mockReset();
+    headlessMock.resumeAgentSession.mockReset().mockImplementation(async (request) => ({
+      runId: 'run-2',
+      conversationId: request.conversationId,
+      sessionUuid: 'session-1',
+      resumed: true,
+      agentPath: 'opencode',
+      provider: 'opencode',
+    }));
     headlessMock.cancelAgentSession.mockReset().mockResolvedValue(undefined);
-    headlessMock.sendAgentSessionInput.mockReset().mockResolvedValue(undefined);
     headlessMock.onAgentStdout.mockReset().mockImplementation(async (handler) => {
       stdoutHandler = handler;
       return () => undefined;
@@ -188,56 +191,6 @@ describe('useConversationManager', () => {
     expect(api?.runState).toBe('idle');
   });
 
-  it('keeps an unanswered AskUserQuestion idle instead of marking the run failed', async () => {
-    act(() => {
-      root.render(
-        <Harness
-          workspaceRoot={String.raw`D:\md files`}
-          agentProvider="opencode"
-          expose={(next) => { api = next; }}
-        />,
-      );
-    });
-
-    await act(async () => {
-      await api?.send('ask me first');
-    });
-    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
-
-    await act(async () => {
-      stdoutHandler?.({
-        runId: 'run-1',
-        conversationId: convId,
-        sessionUuid: 'session-1',
-        line: JSON.stringify({
-          type: 'tool_use',
-          id: 'toolu_question',
-          name: 'AskUserQuestion',
-          input: {
-            questions: [{
-              question: '下一步做什么？',
-              options: [{ label: '生成报告' }, { label: '生成 PPT' }],
-            }],
-          },
-        }),
-      });
-      exitHandler?.({
-        runId: 'run-1',
-        conversationId: convId,
-        sessionUuid: 'session-1',
-        exitCode: 1,
-        cancelled: false,
-        stderrTail: 'tool_use requires user input',
-      });
-    });
-
-    expect(api?.runState).toBe('idle');
-    expect(api?.lastError).toBe('');
-    const last = api?.activeConv?.messages.at(-1);
-    expect(last?.role).toBe('assistant');
-    expect(last && last.role === 'assistant' ? last.tools[0]?.name : '').toBe('AskUserQuestion');
-  });
-
   it('routes relative artifact_file events into the conversation output directory', async () => {
     const onArtifactFile = vi.fn();
     act(() => {
@@ -284,337 +237,68 @@ describe('useConversationManager', () => {
     });
   });
 
-  it('transitions to waitingForUser on AskUserQuestion tool_use and writes tool_result JSONL on submit', async () => {
+  it('returns to idle after a question-form turn and resumes with ordinary form answers', async () => {
     act(() => {
       root.render(
         <Harness
           workspaceRoot={String.raw`D:\md files`}
-          agentProvider="claude"
+          agentProvider="opencode"
           expose={(next) => { api = next; }}
         />,
       );
     });
 
     await act(async () => {
-      await api?.send('ask me first');
+      await api?.send('需要先问用户');
     });
-    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+    const request = headlessMock.startAgentSession.mock.calls[0][0];
 
     await act(async () => {
       stdoutHandler?.({
         runId: 'run-1',
-        conversationId: convId,
+        conversationId: request.conversationId,
         sessionUuid: 'session-1',
         line: JSON.stringify({
-          type: 'assistant',
-          message: {
-            id: 'msg_1',
-            role: 'assistant',
-            content: [{
-              type: 'tool_use',
-              id: 'toolu_question',
-              name: 'AskUserQuestion',
-              input: {
-                questions: [{
-                  question: '下一步做什么？',
-                  options: [{ label: '生成报告' }, { label: '生成 PPT' }],
-                }],
-              },
-            }],
-          },
+          type: 'message',
+          role: 'assistant',
+          content: [
+            '继续前需要确认。',
+            '<question-form id="purpose">',
+            '{"questions":[{"id":"goal","label":"用途","type":"text"}]}',
+            '</question-form>',
+          ].join('\n'),
         }),
       });
-      // 等 rAF 跑完 flush
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-
-    expect(api?.runState).toBe('waitingForUser');
-    expect(api?.activeConv?.inputMode).toBe('streamJson');
-
-    await act(async () => {
-      await api?.submitAskUserQuestionAnswer('toolu_question', '生成报告');
-    });
-
-    expect(headlessMock.sendAgentSessionInput).toHaveBeenCalledTimes(1);
-    const call = headlessMock.sendAgentSessionInput.mock.calls[0][0];
-    expect(call.runId).toBe('run-1');
-    const frame = JSON.parse(call.message);
-    expect(frame).toMatchObject({
-      type: 'user',
-      message: {
-        role: 'user',
-        content: [{
-          type: 'tool_result',
-          tool_use_id: 'toolu_question',
-          content: '生成报告',
-          is_error: false,
-        }],
-      },
-    });
-    expect(api?.runState).toBe('running');
-  });
-
-  it('cancel works on a waitingForUser run', async () => {
-    act(() => {
-      root.render(
-        <Harness
-          workspaceRoot={String.raw`D:\md files`}
-          agentProvider="claude"
-          expose={(next) => { api = next; }}
-        />,
-      );
-    });
-
-    await act(async () => {
-      await api?.send('ask me first');
-    });
-    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
-
-    await act(async () => {
       stdoutHandler?.({
         runId: 'run-1',
-        conversationId: convId,
+        conversationId: request.conversationId,
         sessionUuid: 'session-1',
-        line: JSON.stringify({
-          type: 'assistant',
-          message: {
-            id: 'msg_1',
-            role: 'assistant',
-            content: [{
-              type: 'tool_use',
-              id: 'toolu_question',
-              name: 'AskUserQuestion',
-              input: { questions: [{ question: '?', options: [{ label: 'A' }] }] },
-            }],
-          },
-        }),
+        line: JSON.stringify({ type: 'done', stopReason: 'end_turn' }),
       });
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-    expect(api?.runState).toBe('waitingForUser');
-
-    await act(async () => {
-      await api?.cancel();
-    });
-    expect(headlessMock.cancelAgentSession).toHaveBeenCalledWith('run-1');
-  });
-
-  it('waitingForUser blocks normal send from creating a second run', async () => {
-    act(() => {
-      root.render(
-        <Harness
-          workspaceRoot={String.raw`D:\md files`}
-          agentProvider="claude"
-          expose={(next) => { api = next; }}
-        />,
-      );
-    });
-
-    await act(async () => {
-      await api?.send('ask me first');
-    });
-    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
-
-    await act(async () => {
-      stdoutHandler?.({
+      exitHandler?.({
         runId: 'run-1',
-        conversationId: convId,
+        conversationId: request.conversationId,
         sessionUuid: 'session-1',
-        line: JSON.stringify({
-          type: 'assistant',
-          message: {
-            id: 'msg_1',
-            role: 'assistant',
-            content: [{
-              type: 'tool_use',
-              id: 'toolu_question',
-              name: 'AskUserQuestion',
-              input: { questions: [{ question: '?', options: [{ label: 'A' }] }] },
-            }],
-          },
-        }),
+        exitCode: 0,
+        cancelled: false,
+        stderrTail: '',
       });
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-    expect(api?.runState).toBe('waitingForUser');
-
-    const startCallsBefore = headlessMock.startAgentSession.mock.calls.length;
-    const resumeCallsBefore = headlessMock.resumeAgentSession.mock.calls.length;
-    await act(async () => {
-      await api?.send('another message');
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
 
-    expect(api?.runState).toBe('waitingForUser');
-    expect(headlessMock.startAgentSession.mock.calls.length).toBe(startCallsBefore);
-    expect(headlessMock.resumeAgentSession.mock.calls.length).toBe(resumeCallsBefore);
-  });
-
-  it('closeConversation cancels waitingForUser run', async () => {
-    act(() => {
-      root.render(
-        <Harness
-          workspaceRoot={String.raw`D:\md files`}
-          agentProvider="claude"
-          expose={(next) => { api = next; }}
-        />,
-      );
-    });
+    expect(api?.runState).toBe('idle');
+    expect(api?.activeConv?.messages.some((message) => (
+      message.role === 'assistant' && message.content.includes('<question-form')
+    ))).toBe(true);
 
     await act(async () => {
-      await api?.send('ask me first');
-    });
-    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
-
-    await act(async () => {
-      stdoutHandler?.({
-        runId: 'run-1',
-        conversationId: convId,
-        sessionUuid: 'session-1',
-        line: JSON.stringify({
-          type: 'assistant',
-          message: {
-            id: 'msg_1',
-            role: 'assistant',
-            content: [{
-              type: 'tool_use',
-              id: 'toolu_question',
-              name: 'AskUserQuestion',
-              input: { questions: [{ question: '?', options: [{ label: 'A' }] }] },
-            }],
-          },
-        }),
-      });
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-    expect(api?.runState).toBe('waitingForUser');
-
-    headlessMock.cancelAgentSession.mockClear();
-    await act(async () => {
-      api?.closeConversation(api.activeConvId);
-    });
-    expect(headlessMock.cancelAgentSession).toHaveBeenCalledWith('run-1');
-  });
-
-  it('AskUserQuestion submit records submitted status and flips runState back to running', async () => {
-    headlessMock.sendAgentSessionInput.mockResolvedValueOnce(undefined);
-    act(() => {
-      root.render(
-        <Harness
-          workspaceRoot={String.raw`D:\md files`}
-          agentProvider="claude"
-          expose={(next) => { api = next; }}
-        />,
-      );
+      await api?.send('[form answers — purpose]\n- 用途: 技术分享');
     });
 
-    await act(async () => {
-      await api?.send('ask me first');
-    });
-    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
-
-    await act(async () => {
-      stdoutHandler?.({
-        runId: 'run-1',
-        conversationId: convId,
-        sessionUuid: 'session-1',
-        line: JSON.stringify({
-          type: 'assistant',
-          message: {
-            id: 'msg_1',
-            role: 'assistant',
-            content: [{
-              type: 'tool_use',
-              id: 'toolu_question',
-              name: 'AskUserQuestion',
-              input: { questions: [{ question: '?', options: [{ label: 'A' }] }] },
-            }],
-          },
-        }),
-      });
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-
-    await act(async () => {
-      await api?.submitAskUserQuestionAnswer('toolu_question', 'A');
-    });
-
-    const conv = api?.activeConv;
-    expect(conv?.submittedToolResults?.['toolu_question']?.status).toBe('submitted');
-    expect(conv?.submittedToolResults?.['toolu_question']?.text).toBe('A');
-    expect(api?.runState).toBe('running');
-    expect(headlessMock.sendAgentSessionInput).toHaveBeenCalledTimes(1);
-  });
-
-  it('AskUserQuestion submit failure surfaces error, keeps runState and allows retry', async () => {
-    headlessMock.sendAgentSessionInput.mockRejectedValueOnce(new Error('broken pipe'));
-    act(() => {
-      root.render(
-        <Harness
-          workspaceRoot={String.raw`D:\md files`}
-          agentProvider="claude"
-          expose={(next) => { api = next; }}
-        />,
-      );
-    });
-
-    await act(async () => {
-      await api?.send('ask me first');
-    });
-    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
-
-    await act(async () => {
-      stdoutHandler?.({
-        runId: 'run-1',
-        conversationId: convId,
-        sessionUuid: 'session-1',
-        line: JSON.stringify({
-          type: 'assistant',
-          message: {
-            id: 'msg_1',
-            role: 'assistant',
-            content: [{
-              type: 'tool_use',
-              id: 'toolu_question',
-              name: 'AskUserQuestion',
-              input: { questions: [{ question: '?', options: [{ label: 'A' }] }] },
-            }],
-          },
-        }),
-      });
-      await new Promise<void>((resolve) => {
-        window.requestAnimationFrame(() => resolve());
-      });
-    });
-
-    await act(async () => {
-      await api?.submitAskUserQuestionAnswer('toolu_question', 'A');
-    });
-
-    // 失败:status=error,runState 保持 waitingForUser 让用户能重试
-    let conv = api?.activeConv;
-    expect(conv?.submittedToolResults?.['toolu_question']?.status).toBe('error');
-    expect(conv?.submittedToolResults?.['toolu_question']?.error).toContain('broken pipe');
-    expect(conv?.submittedToolResults?.['toolu_question']?.text).toBe('A');
-    expect(api?.runState).toBe('waitingForUser');
-
-    // 重试成功:第二次 sendAgentSessionInput 调用,status 变 submitted
-    headlessMock.sendAgentSessionInput.mockResolvedValueOnce(undefined);
-    await act(async () => {
-      await api?.submitAskUserQuestionAnswer('toolu_question', 'A');
-    });
-    conv = api?.activeConv;
-    expect(conv?.submittedToolResults?.['toolu_question']?.status).toBe('submitted');
-    expect(api?.runState).toBe('running');
-    expect(headlessMock.sendAgentSessionInput).toHaveBeenCalledTimes(2);
+    expect(headlessMock.resumeAgentSession).toHaveBeenCalledTimes(1);
+    const resumeRequest = headlessMock.resumeAgentSession.mock.calls[0][0];
+    expect(resumeRequest.prompt).toContain('The user has answered the previous question form "purpose".');
+    expect(resumeRequest.prompt).toContain('Do not ask the same question again.');
+    expect(resumeRequest.prompt).toContain('[form answers — purpose]');
   });
 });

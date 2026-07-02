@@ -7,7 +7,6 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - 新增 Calm Workspace 动效基础设施：引入 `motion`、`@floating-ui/react` 与 `@formkit/auto-animate`，并提供统一的 MotionProvider / motion token，供后续面板、tooltip 与列表动效复用。
-- AI 工作台补齐 #126：Claude CLI 启用 `--input-format stream-json` 长驻 stdin，新增 Tauri command `agent_session_send_input` 把 AskUserQuestion 用户回答以 JSONL `tool_result` 写回同进程，Claude 在同轮继续生成而非触发下一轮 resume；`AgentRunState` 扩展 `waitingForUser` 状态；`useConversationManager.submitAskUserQuestionAnswer(toolUseId, text)` 根据 `inputMode` 自动分流（stream-json 写 stdin，text 模式 fallback 到 `onSend`）。保留 `--input-format text` 旧路径作为 fallback。Spike 记录于 `docs/changes/2026-07-01-claude-stream-json-spike.md`。
 - AI 工作台补齐 #112 Phase 3：Codex CLI 进入 AI 执行设置的检测卡片与 runtime registry，但保持检测-only，不进入 Composer 可发送 Provider；新增裁剪版 `mocks/` 目录用于后续 parser/golden 回归。
 - AI 工作台补齐 #112 Phase 2 输出链路：OpenCode 写文件工具现在会进入 `artifact_file` 产物回流，CLI 相对路径会归一到当前会话 `.typola-output/<conversationId>/`，非白名单扩展名（如 `.yaml`/源码文件）也能进入产物 toast/manifest 链路。
 - AI 工作台补齐 #112 Phase 1：Composer 左下角切换器改为 OpenDesign 风格 CLI 图标 pill，新增对话内 QuestionForm 交互卡片，并支持 `/clear`、`/mcp`、`/help` 三个本地 slash 命令。
@@ -82,6 +81,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 AI 工作台 Question Form 会卡住整个对话流的问题：`<question-form>` 现在作为 Typola 自定义 artifact 渲染，进程结束后会话回到 idle，用户提交答案会作为普通下一轮消息继续执行，并显式禁用 Claude `AskUserQuestion` 工具路径；同时所有非问答工具调用默认折叠。
 - 修复 PR #103 后续检视意见：SkillHub 本机能力扫描改为单一 generation token 流程，避免切换 Provider 或 reload 时旧扫描结果覆盖新列表；同时保留旧 `skillHubReloadKey` 兼容字段并补充 OpenCode command prompt 契约说明。
 - 修复心流模式下 OpenCode 场景模板没有可选 skill/command 的问题：内置模板现在声明支持 OpenCode command，已安装的同名本地 command 会直接显示为可点击卡片，未安装项会引导按 OpenCode command 配置。
 - 修复 #90：OpenCode 场景下点击 SkillHub command 卡片会预填 Composer，并继续通过 `opencode run --command` 调用；刷新、扫描错误和安装引导文案改为区分 Claude skill 与 OpenCode command。

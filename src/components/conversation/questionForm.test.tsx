@@ -4,10 +4,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssistantMessage } from './AssistantMessage';
 import {
-  formatAskUserQuestionAnswers,
   formatQuestionFormAnswers,
   parseQuestionForms,
-  questionFormFromAskUserQuestion,
 } from './questionForm';
 import type { AgentMessage } from '../../services/agent/types';
 
@@ -58,36 +56,50 @@ describe('QuestionForm', () => {
     expect(parsed.forms[0]?.questions[0]?.options).toEqual(['日报', 'PPT']);
   });
 
+  it('parses question-form blocks whose json body is fenced by markdown', () => {
+    const parsed = parseQuestionForms(`开始
+<question-form id="purpose">
+\`\`\`json
+{
+  "title": "补充用途",
+  "questions": [
+    { "id": "goal", "label": "用途", "type": "single_select", "options": [{ "label": "技术分享", "value": "talk" }] }
+  ]
+}
+\`\`\`
+</question-form>
+结束`);
+
+    expect(parsed.markdown).toContain('开始');
+    expect(parsed.markdown).toContain('结束');
+    expect(parsed.markdown).not.toContain('```json');
+    expect(parsed.forms[0]?.id).toBe('purpose');
+    expect(parsed.forms[0]?.title).toBe('补充用途');
+    expect(parsed.forms[0]?.questions[0]?.options).toEqual(['技术分享']);
+  });
+
+  it('keeps a visible fallback when question-form json is invalid', () => {
+    const parsed = parseQuestionForms(`前文
+<question-form id="broken">
+{ "questions": [
+</question-form>
+后文`);
+
+    expect(parsed.forms).toHaveLength(0);
+    expect(parsed.markdown).toContain('Question Form 解析失败');
+    expect(parsed.markdown).toContain('前文');
+    expect(parsed.markdown).toContain('后文');
+  });
+
   it('formats submitted answers as a user message payload', () => {
     const form = parseQuestionForms(`<question-form id="f1" title="T">
 {"questions":[{"id":"a","label":"选项","type":"checkbox","options":["A","B"]},{"id":"b","label":"说明","type":"text"}]}
 </question-form>`).forms[0]!;
 
     expect(formatQuestionFormAnswers(form, { a: ['A', 'B'], b: '补充' })).toBe([
-      '[form answers - f1]',
-      '选项: A, B',
-      '说明: 补充',
-    ].join('\n'));
-  });
-
-  it('normalizes AskUserQuestion tool input into a form payload', () => {
-    const form = questionFormFromAskUserQuestion({
-      questions: [{
-        header: '确认输出类型',
-        question: '你想生成什么？',
-        options: [{ label: '报告' }, { label: 'PPT' }],
-      }],
-    }, 'tool-1');
-
-    expect(form?.title).toBe('确认输出类型');
-    expect(form?.questions[0]).toMatchObject({
-      label: '你想生成什么？',
-      type: 'radio',
-      options: ['报告', 'PPT'],
-    });
-    expect(formatAskUserQuestionAnswers(form!, { q1: 'PPT' })).toBe([
-      '你想生成什么？',
-      'PPT',
+      '[form answers — f1]',
+      '- 选项: A, B',
+      '- 说明: 补充',
     ].join('\n'));
   });
 
@@ -108,6 +120,8 @@ describe('QuestionForm', () => {
     expect(host.textContent).toContain('请先选择');
     expect(host.textContent).toContain('选择任务类型');
     expect(host.textContent).not.toContain('<question-form');
+    expect(host.querySelector('.questions-panel')).toBeTruthy();
+    expect(host.textContent).toContain('5:00');
 
     const radio = Array.from(host.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
       .find((input) => input.parentElement?.textContent?.includes('PPT'));
@@ -120,13 +134,13 @@ describe('QuestionForm', () => {
     });
 
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('.question-form-card footer button')?.click();
+      host.querySelector<HTMLButtonElement>('.questions-panel-submit')?.click();
     });
 
     expect(onSubmit).toHaveBeenCalledWith([
-      '[form answers - task-type]',
-      '类型: PPT',
-      '备注: 用于周会',
+      '[form answers — task-type]',
+      '- 类型: PPT',
+      '- 备注: 用于周会',
     ].join('\n'));
   });
 
@@ -143,7 +157,12 @@ describe('QuestionForm', () => {
       );
     });
 
-    const button = host.querySelector<HTMLButtonElement>('.question-form-card footer button');
+    // 点击 QuestionsBanner 展开面板
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.questions-banner')?.click();
+    });
+
+    const button = host.querySelector<HTMLButtonElement>('.questions-panel-submit');
     expect(button?.disabled).toBe(true);
 
     const text = host.querySelector<HTMLInputElement>('input[type="text"]');
@@ -159,51 +178,8 @@ describe('QuestionForm', () => {
     });
 
     expect(onSubmit).toHaveBeenCalledWith([
-      '[form answers - empty-check]',
-      '备注: 已经补充',
-    ].join('\n'));
-  });
-
-  it('renders AskUserQuestion tool_use as an interactive card and submits the answer', async () => {
-    const onSubmit = vi.fn();
-    act(() => {
-      root.render(
-        <AssistantMessage
-          message={assistant('', [{
-            id: 'toolu_question',
-            name: 'AskUserQuestion',
-            input: {
-              questions: [{
-                header: '选择方向',
-                question: '下一步做什么？',
-                options: [{ label: '生成报告' }, { label: '生成 PPT' }],
-              }],
-            },
-          }])}
-          onSubmitAskUserQuestionToolResult={(toolUseId, text) => onSubmit(toolUseId, text)}
-        />,
-      );
-    });
-
-    expect(host.textContent).toContain('需要你回答');
-    expect(host.textContent).toContain('选择方向');
-    expect(host.textContent).toContain('下一步做什么？');
-    expect(host.textContent).not.toContain('{"questions"');
-    expect(host.querySelector('.op-status-question')).toBeTruthy();
-    expect(host.querySelector('.op-status-error')).toBeFalsy();
-
-    const radio = Array.from(host.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
-      .find((input) => input.parentElement?.textContent?.includes('生成 PPT'));
-    await act(async () => {
-      radio?.click();
-    });
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('.question-form-card footer button')?.click();
-    });
-
-    expect(onSubmit).toHaveBeenCalledWith('toolu_question', [
-      '下一步做什么？',
-      '生成 PPT',
+      '[form answers — empty-check]',
+      '- 备注: 已经补充',
     ].join('\n'));
   });
 
@@ -215,6 +191,7 @@ describe('QuestionForm', () => {
             { id: 'read-1', name: 'Read', input: { filePath: 'a.md' } },
             { id: 'grep-1', name: 'Grep', input: { pattern: 'Typola' } },
             { id: 'glob-1', name: 'Glob', input: { pattern: '*.md' } },
+            { id: 'bash-1', name: 'Bash', input: { command: 'npm test' } },
             { id: 'write-1', name: 'Write', input: { filePath: 'out.md', content: '# Out' } },
           ])}
         />,
@@ -222,8 +199,9 @@ describe('QuestionForm', () => {
     });
 
     expect(host.querySelector('.conversation-tool-group')).toBeTruthy();
-    expect(host.textContent).toContain('资料检索与读取');
-    expect(host.textContent).toContain('3 个工具调用');
+    expect(host.textContent).toContain('工具调用');
+    expect(host.textContent).toContain('5 个工具调用');
+    expect(host.textContent).toContain('Command×1');
     expect(host.textContent).toContain('写入');
   });
 });

@@ -1,4 +1,4 @@
-﻿use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -7,7 +7,7 @@ use std::{
     ffi::OsStr,
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -50,7 +50,6 @@ struct AgentHeadlessRegistry {
 struct AgentRunHandle {
     #[allow(dead_code)]
     child: Arc<Mutex<Child>>,
-    stdin: Option<Arc<Mutex<std::process::ChildStdin>>>,
     pid: u32,
     cancel_requested: Arc<AtomicBool>,
 }
@@ -118,13 +117,6 @@ impl AgentProvider {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum AgentInputMode {
-    Text,
-    StreamJson,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentSessionStartRequest {
@@ -175,13 +167,6 @@ struct OverwriteArtifactRequest {
 #[serde(rename_all = "camelCase")]
 struct AgentSessionCancelRequest {
     run_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AgentSessionSendInputRequest {
-    run_id: String,
-    message: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -327,7 +312,6 @@ struct AgentSessionStartResult {
     resumed: bool,
     agent_path: String,
     provider: AgentProvider,
-    input_mode: AgentInputMode,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -667,13 +651,28 @@ fn is_artifact_candidate(path: &Path) -> bool {
     if name.eq_ignore_ascii_case("artifact.json") {
         return false;
     }
-    let Some(extension) = path.extension().and_then(OsStr::to_str).map(|value| value.to_ascii_lowercase()) else {
+    let Some(extension) = path
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(|value| value.to_ascii_lowercase())
+    else {
         return false;
     };
     matches!(
         extension.as_str(),
-        "md" | "markdown" | "html" | "htm" | "txt" | "json" | "csv" | "tsv" | "png" | "jpg"
-            | "jpeg" | "gif" | "webp" | "svg"
+        "md" | "markdown"
+            | "html"
+            | "htm"
+            | "txt"
+            | "json"
+            | "csv"
+            | "tsv"
+            | "png"
+            | "jpg"
+            | "jpeg"
+            | "gif"
+            | "webp"
+            | "svg"
     )
 }
 
@@ -684,7 +683,11 @@ fn system_time_millis(value: SystemTime) -> Option<u128> {
         .map(|duration| duration.as_millis())
 }
 
-fn scan_artifact_files(root: &Path, depth: usize, output: &mut Vec<ScannedArtifactFile>) -> Result<(), String> {
+fn scan_artifact_files(
+    root: &Path,
+    depth: usize,
+    output: &mut Vec<ScannedArtifactFile>,
+) -> Result<(), String> {
     if depth > 5 {
         return Ok(());
     }
@@ -787,7 +790,8 @@ fn update_manifest_overwrite(
     if !manifest.is_object() {
         manifest = serde_json::json!({});
     }
-    manifest["primaryFile"] = serde_json::Value::String(artifact_path.to_string_lossy().to_string());
+    manifest["primaryFile"] =
+        serde_json::Value::String(artifact_path.to_string_lossy().to_string());
     manifest["updatedAt"] = serde_json::Value::String(now.clone());
     if let Some(backup_path) = backup_path {
         manifest["overwrite"] = serde_json::json!({
@@ -795,13 +799,19 @@ fn update_manifest_overwrite(
             "backupPath": backup_path.to_string_lossy().to_string(),
             "appliedAt": now,
         });
-        if !manifest.get("actions").is_some_and(|value| value.is_object()) {
+        if !manifest
+            .get("actions")
+            .is_some_and(|value| value.is_object())
+        {
             manifest["actions"] = serde_json::json!({});
         }
         manifest["actions"]["undoOverwrite"] = serde_json::Value::Bool(true);
     } else if let Some(object) = manifest.as_object_mut() {
         object.remove("overwrite");
-        if let Some(actions) = object.get_mut("actions").and_then(|value| value.as_object_mut()) {
+        if let Some(actions) = object
+            .get_mut("actions")
+            .and_then(|value| value.as_object_mut())
+        {
             actions.remove("undoOverwrite");
         }
     }
@@ -829,7 +839,10 @@ fn overwrite_artifact_to_document(request: OverwriteArtifactRequest) -> Result<S
     let backup_dir = artifact_parent.join("backups");
     std::fs::create_dir_all(&backup_dir)
         .map_err(|error| format!("failed to create backup directory: {error}"))?;
-    let target_name = target_path.file_name().and_then(OsStr::to_str).unwrap_or("document");
+    let target_name = target_path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .unwrap_or("document");
     let backup_path = unique_file_path(&backup_dir, &format!("{target_name}.bak"));
     std::fs::copy(&target_path, &backup_path)
         .map_err(|error| format!("failed to backup target document: {error}"))?;
@@ -940,42 +953,6 @@ fn agent_session_cancel(
 
     run.cancel_requested.store(true, Ordering::Relaxed);
     kill_agent_process_tree(&run)
-}
-
-#[tauri::command]
-fn agent_session_send_input(
-    state: tauri::State<'_, AgentHeadlessStore>,
-    request: AgentSessionSendInputRequest,
-) -> Result<(), String> {
-    let run = {
-        let registry = state
-            .0
-            .lock()
-            .map_err(|_| "agent headless store poisoned".to_string())?;
-        registry
-            .runs
-            .get(&request.run_id)
-            .cloned()
-            .ok_or_else(|| "agent run not found".to_string())?
-    };
-    let stdin = run
-        .stdin
-        .as_ref()
-        .ok_or_else(|| "agent run stdin not available (text mode)".to_string())?;
-    let mut bytes = request.message.into_bytes();
-    if !bytes.ends_with(b"\n") {
-        bytes.push(b'\n');
-    }
-    {
-        let mut guard = stdin
-            .lock()
-            .map_err(|_| "agent stdin mutex poisoned".to_string())?;
-        guard
-            .write_all(&bytes)
-            .and_then(|_| guard.flush())
-            .map_err(|error| format!("failed to write agent stdin: {error}"))?;
-    }
-    Ok(())
 }
 
 #[tauri::command]
@@ -1485,7 +1462,6 @@ pub fn run() {
             agent_session_start,
             agent_session_resume,
             agent_session_cancel,
-            agent_session_send_input,
             read_mcp_config,
             write_mcp_config,
             list_directory_entries,
@@ -1750,226 +1726,45 @@ fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
     candidate
 }
 
+fn claude_stream_json_user_message(content: &str) -> Result<String, String> {
+    serde_json::to_string(&serde_json::json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [{ "type": "text", "text": content }],
+        },
+    }))
+    .map_err(|error| format!("failed to encode Claude stream-json user message: {error}"))
+}
+
+fn close_agent_stdin(stdin: &Arc<Mutex<Option<std::process::ChildStdin>>>) {
+    if let Ok(mut stdin) = stdin.lock() {
+        stdin.take();
+    }
+}
+
+fn claude_stream_json_terminal_stop_reason(line: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    if value.get("type").and_then(|value| value.as_str()) == Some("assistant") {
+        return value
+            .get("message")
+            .and_then(|message| message.get("stop_reason"))
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+    }
+    if value.get("type").and_then(|value| value.as_str()) == Some("result") {
+        return value
+            .get("stop_reason")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+    }
+    None
+}
+
 struct AgentCommandSpec {
     args: Vec<String>,
     prompt_stdin: bool,
-    input_mode: AgentInputMode,
-}
-
-// Claude headless 启动产物:包含 spawn 出的 child + 选定的 stdin writer (text mode 时 None)
-// + stdout pipe + stderr_tail collector 句柄,以及实际生效的 input_mode。
-// 实际生效的 input_mode 可能与请求的不同(stream-json 不支持时 fallback 到 text)。
-struct SpawnedClaudeAgent {
-    child: Arc<Mutex<Child>>,
-    stdin_writer: Option<Arc<Mutex<ChildStdin>>>,
-    stdout: ChildStdout,
-    stderr_tail: Arc<Mutex<String>>,
-    pid: u32,
-    input_mode: AgentInputMode,
-}
-
-// 旧版 Claude CLI / openclaude 等兼容实现可能不识别 `--input-format stream-json`。
-// 检测 stderr 是否命中 "unknown option" / "invalid input format" 等关键词,
-// 命中说明请求的 stream-json 不被支持,需回退到 text mode。
-fn should_fallback_to_text(stderr: &str) -> bool {
-    if stderr.trim().is_empty() {
-        return false;
-    }
-    let lower = stderr.to_ascii_lowercase();
-    [
-        "unknown option",
-        "unrecognized option",
-        "unrecognized argument",
-        "invalid input format",
-        "invalid argument",
-        "no such option",
-        "stream-json",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle))
-}
-
-fn write_claude_initial_prompt<W: std::io::Write>(
-    stdin: &mut W,
-    prompt: &str,
-    input_mode: AgentInputMode,
-) -> Result<(), String> {
-    match input_mode {
-        AgentInputMode::StreamJson => {
-            let frame = serde_json::json!({
-                "type": "user",
-                "message": {
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt}],
-                }
-            });
-            let mut bytes = serde_json::to_string(&frame)
-                .map_err(|error| format!("failed to encode stream-json prompt: {error}"))?
-                .into_bytes();
-            bytes.push(b'\n');
-            stdin
-                .write_all(&bytes)
-                .and_then(|_| stdin.flush())
-                .map_err(|error| format!("failed to write Claude stream-json prompt: {error}"))
-        }
-        AgentInputMode::Text => stdin
-            .write_all(prompt.as_bytes())
-            .and_then(|_| stdin.flush())
-            .map_err(|error| format!("failed to write Claude text prompt: {error}")),
-    }
-}
-
-// 启动 Claude 一次:固定 input_mode,写初始 prompt。StreamJson 保留 stdin,
-// Text 写完 drop stdin(传统行为)。失败立即返回,不重试。
-fn spawn_claude_attempt(
-    agent_path: &str,
-    session_uuid: &str,
-    resumed: bool,
-    model: Option<&str>,
-    cwd: Option<&Path>,
-    plugin_dirs: &[String],
-    extra_allowed_dirs: &[String],
-    input_mode: AgentInputMode,
-    prompt: &str,
-) -> Result<SpawnedClaudeAgent, String> {
-    let args = build_claude_headless_args(
-        session_uuid,
-        resumed,
-        model,
-        plugin_dirs,
-        extra_allowed_dirs,
-        input_mode,
-    );
-    let mut command = create_agent_command(agent_path, &args);
-    command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(cwd) = cwd {
-        std::fs::create_dir_all(cwd)
-            .map_err(|error| format!("failed to create Claude cwd: {error}"))?;
-        command.current_dir(cwd);
-    }
-
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("failed to start Claude headless run: {error}"))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "failed to open Claude stdin".to_string())?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "failed to open Claude stdout".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "failed to open Claude stderr".to_string())?;
-
-    let stderr_tail = Arc::new(Mutex::new(String::new()));
-    spawn_agent_stderr_collector(stderr, Arc::clone(&stderr_tail));
-
-    write_claude_initial_prompt(&mut stdin, prompt, input_mode)?;
-
-    let stdin_writer = match input_mode {
-        AgentInputMode::StreamJson => Some(Arc::new(Mutex::new(stdin))),
-        AgentInputMode::Text => {
-            drop(stdin);
-            None
-        }
-    };
-
-    let pid = child.id();
-    Ok(SpawnedClaudeAgent {
-        child: Arc::new(Mutex::new(child)),
-        stdin_writer,
-        stdout,
-        stderr_tail,
-        pid,
-        input_mode,
-    })
-}
-
-// Claude 启动总入口:先 stream-json,probe 期内进程非零退出且 stderr 命中 stream-json
-// 不支持特征时,fail-fast 回退到 text 模式重启,返回实际生效的 input_mode。
-// 600ms probe timeout:既要等齐 spawn → 写 prompt → 进程校验 args 的时间,
-// 又要在用户感知内完成 fallback,避免空 input 卡 UI。
-fn spawn_claude_with_fallback(
-    agent_path: &str,
-    session_uuid: &str,
-    resumed: bool,
-    model: Option<&str>,
-    cwd: Option<&Path>,
-    plugin_dirs: &[String],
-    extra_allowed_dirs: &[String],
-    prompt: &str,
-) -> Result<SpawnedClaudeAgent, String> {
-    let mut spawned = spawn_claude_attempt(
-        agent_path,
-        session_uuid,
-        resumed,
-        model,
-        cwd,
-        plugin_dirs,
-        extra_allowed_dirs,
-        AgentInputMode::StreamJson,
-        prompt,
-    )?;
-
-    let probe_deadline = std::time::Instant::now() + Duration::from_millis(600);
-    let mut fallback_required = false;
-    while std::time::Instant::now() < probe_deadline {
-        let probe_result = {
-            let mut guard = spawned
-                .child
-                .lock()
-                .map_err(|_| "Claude child mutex poisoned".to_string())?;
-            guard.try_wait()
-        };
-        match probe_result {
-            Ok(Some(status)) if !status.success() => {
-                let tail = spawned
-                    .stderr_tail
-                    .lock()
-                    .map(|value| value.clone())
-                    .unwrap_or_default();
-                if should_fallback_to_text(&tail) {
-                    fallback_required = true;
-                }
-                break;
-            }
-            Ok(Some(_)) => break, // 干净退出 → 不算 fallback
-            Ok(None) => thread::sleep(Duration::from_millis(20)),
-            Err(_) => break,
-        }
-    }
-
-    if !fallback_required {
-        return Ok(spawned);
-    }
-
-    // fallback:reap 旧 child,关 stdin,restart with text。
-    {
-        let mut guard = spawned
-            .child
-            .lock()
-            .map_err(|_| "Claude child mutex poisoned".to_string())?;
-        let _ = guard.wait();
-    }
-    drop(spawned.stdin_writer.take());
-
-    spawn_claude_attempt(
-        agent_path,
-        session_uuid,
-        resumed,
-        model,
-        cwd,
-        plugin_dirs,
-        extra_allowed_dirs,
-        AgentInputMode::Text,
-        prompt,
-    )
+    stream_json_stdin: bool,
 }
 
 fn normalize_agent_path(provider: AgentProvider, path: Option<&str>) -> String {
@@ -2047,102 +1842,74 @@ fn start_agent_headless_run(
         request.command_name.as_deref(),
         &request.prompt,
     );
-
-    // Claude 走 stream-json → text 运行时 fallback;OpenCode / Codex 走原路径(无 fallback)。
-    // 不论哪条路径,产物都是 child + stdin_writer + stdout + stderr_tail + pid + actual_input_mode。
-    let (child, stdin_writer, stdout, stderr_tail, pid, actual_input_mode) = if provider == AgentProvider::Claude {
-        let cwd_path = request
-            .cwd
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from);
-        let spawned = spawn_claude_with_fallback(
-            &agent_path,
-            &session_uuid,
-            resumed,
-            request.model.as_deref(),
-            cwd_path.as_deref(),
-            request.plugin_dirs.as_deref().unwrap_or(&[]),
-            request.extra_allowed_dirs.as_deref().unwrap_or(&[]),
-            &request.prompt,
-        )?;
-        (
-            spawned.child,
-            spawned.stdin_writer,
-            spawned.stdout,
-            spawned.stderr_tail,
-            spawned.pid,
-            spawned.input_mode,
-        )
-    } else {
-        let mut command = create_agent_command(&agent_path, &command_spec.args);
-        command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        if let Some(cwd) = request
-            .cwd
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            let cwd_path = PathBuf::from(cwd);
-            std::fs::create_dir_all(&cwd_path).map_err(|error| {
-                format!("failed to create {} cwd: {error}", provider.display_name())
-            })?;
-            command.current_dir(cwd_path);
-        }
-
-        let mut child = command.spawn().map_err(|error| {
-            format!(
-                "failed to start {} headless run: {error}",
-                provider.display_name()
-            )
+    let mut command = create_agent_command(&agent_path, &command_spec.args);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(cwd) = request
+        .cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let cwd_path = PathBuf::from(cwd);
+        std::fs::create_dir_all(&cwd_path).map_err(|error| {
+            format!("failed to create {} cwd: {error}", provider.display_name())
         })?;
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| format!("failed to open {} stdin", provider.display_name()))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| format!("failed to open {} stdout", provider.display_name()))?;
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or_else(|| format!("failed to open {} stderr", provider.display_name()))?;
+        command.current_dir(cwd_path);
+    }
 
-        if command_spec.prompt_stdin {
-            write_claude_initial_prompt(&mut stdin, &request.prompt, command_spec.input_mode).map_err(|error| {
-                format!(
-                    "failed to write {} prompt: {error}",
-                    provider.display_name()
-                )
-            })?;
-        }
-
-        let stdin_writer = if command_spec.input_mode == AgentInputMode::StreamJson {
-            Some(Arc::new(Mutex::new(stdin)))
-        } else {
-            drop(stdin);
-            None
-        };
-
-        let stderr_tail = Arc::new(Mutex::new(String::new()));
-        spawn_agent_stderr_collector(stderr, Arc::clone(&stderr_tail));
-
-        let pid = child.id();
-        (
-            Arc::new(Mutex::new(child)),
-            stdin_writer,
-            stdout,
-            stderr_tail,
-            pid,
-            command_spec.input_mode,
+    let mut child = command.spawn().map_err(|error| {
+        format!(
+            "failed to start {} headless run: {error}",
+            provider.display_name()
         )
-    };
+    })?;
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| format!("failed to open {} stdin", provider.display_name()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| format!("failed to open {} stdout", provider.display_name()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| format!("failed to open {} stderr", provider.display_name()))?;
 
+    let stdin = Arc::new(Mutex::new(Some(stdin)));
+    if command_spec.prompt_stdin {
+        let payload = if command_spec.stream_json_stdin {
+            format!("{}\n", claude_stream_json_user_message(&request.prompt)?)
+        } else {
+            request.prompt.clone()
+        };
+        {
+            let mut stdin_guard = stdin
+                .lock()
+                .map_err(|_| "agent stdin poisoned".to_string())?;
+            let stdin_writer = stdin_guard
+                .as_mut()
+                .ok_or_else(|| format!("{} stdin is closed", provider.display_name()))?;
+            stdin_writer
+                .write_all(payload.as_bytes())
+                .and_then(|_| stdin_writer.flush())
+                .map_err(|error| {
+                    format!(
+                        "failed to write {} prompt: {error}",
+                        provider.display_name()
+                    )
+                })?;
+        }
+    }
+    if !command_spec.stream_json_stdin {
+        close_agent_stdin(&stdin);
+    }
+
+    let pid = child.id();
+    let child = Arc::new(Mutex::new(child));
     let cancel_requested = Arc::new(AtomicBool::new(false));
     {
         let mut registry = state
@@ -2153,19 +1920,25 @@ fn start_agent_headless_run(
             run_id.clone(),
             AgentRunHandle {
                 child: Arc::clone(&child),
-                stdin: stdin_writer,
                 pid,
                 cancel_requested: Arc::clone(&cancel_requested),
             },
         );
     }
 
+    let stderr_tail = Arc::new(Mutex::new(String::new()));
+    spawn_agent_stderr_collector(stderr, Arc::clone(&stderr_tail));
     spawn_agent_stdout_forwarder(
         app.clone(),
         run_id.clone(),
         conversation_id.to_string(),
         session_uuid.clone(),
         stdout,
+        if command_spec.stream_json_stdin {
+            Some(Arc::clone(&stdin))
+        } else {
+            None
+        },
     );
     spawn_agent_waiter(
         app,
@@ -2185,7 +1958,6 @@ fn start_agent_headless_run(
         resumed,
         agent_path,
         provider,
-        input_mode: actual_input_mode,
     })
 }
 
@@ -2220,21 +1992,18 @@ fn build_claude_headless_args(
     model: Option<&str>,
     plugin_dirs: &[String],
     extra_allowed_dirs: &[String],
-    input_mode: AgentInputMode,
 ) -> Vec<String> {
-    let input_format = match input_mode {
-        AgentInputMode::Text => "text",
-        AgentInputMode::StreamJson => "stream-json",
-    };
     let mut args = vec![
         "-p".to_string(),
         "--input-format".to_string(),
-        input_format.to_string(),
+        "stream-json".to_string(),
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--permission-mode".to_string(),
         "bypassPermissions".to_string(),
+        "--disallowedTools".to_string(),
+        "AskUserQuestion".to_string(),
     ];
     if resumed {
         args.push("--resume".to_string());
@@ -2330,10 +2099,9 @@ fn build_agent_headless_command(
                 model,
                 plugin_dirs,
                 extra_allowed_dirs,
-                AgentInputMode::StreamJson,
             ),
             prompt_stdin: true,
-            input_mode: AgentInputMode::StreamJson,
+            stream_json_stdin: true,
         },
         AgentProvider::Opencode => AgentCommandSpec {
             args: build_opencode_headless_args(
@@ -2346,12 +2114,12 @@ fn build_agent_headless_command(
                 prompt,
             ),
             prompt_stdin: false,
-            input_mode: AgentInputMode::Text,
+            stream_json_stdin: false,
         },
         AgentProvider::Codex => AgentCommandSpec {
             args: Vec::new(),
             prompt_stdin: true,
-            input_mode: AgentInputMode::Text,
+            stream_json_stdin: false,
         },
     }
 }
@@ -2362,11 +2130,15 @@ fn spawn_agent_stdout_forwarder(
     conversation_id: String,
     session_uuid: String,
     stdout: impl Read + Send + 'static,
+    stdin: Option<Arc<Mutex<Option<std::process::ChildStdin>>>>,
 ) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             let Ok(line) = line else { break };
+            let stop_reason = stdin
+                .as_ref()
+                .and_then(|_| claude_stream_json_terminal_stop_reason(&line));
             let _ = app.emit(
                 "agent-stdout",
                 AgentStdoutPayload {
@@ -2376,6 +2148,11 @@ fn spawn_agent_stdout_forwarder(
                     line,
                 },
             );
+            if let (Some(stdin), Some(stop_reason)) = (stdin.as_ref(), stop_reason) {
+                if stop_reason != "tool_use" {
+                    close_agent_stdin(stdin);
+                }
+            }
         }
     });
 }
@@ -3561,7 +3338,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_headless_args_use_stream_json_input_by_default() {
+    fn claude_headless_args_use_stream_json_stdin_and_output() {
         let plugin_dirs = vec![
             "D:\\plugins\\one".to_string(),
             "D:\\plugins\\two".to_string(),
@@ -3573,7 +3350,6 @@ mod tests {
             Some("sonnet"),
             &plugin_dirs,
             &extra_allowed_dirs,
-            AgentInputMode::StreamJson,
         );
 
         assert!(args
@@ -3582,6 +3358,9 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|pair| pair == ["--output-format", "stream-json"]));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--disallowedTools", "AskUserQuestion"]));
         assert!(args
             .windows(2)
             .any(|pair| pair == ["--session-id", "session-123"]));
@@ -3600,38 +3379,12 @@ mod tests {
 
     #[test]
     fn claude_headless_resume_args_reuse_session_uuid() {
-        let args = build_claude_headless_args(
-            "session-123",
-            true,
-            None,
-            &[],
-            &[],
-            AgentInputMode::StreamJson,
-        );
+        let args = build_claude_headless_args("session-123", true, None, &[], &[]);
 
         assert!(args
             .windows(2)
             .any(|pair| pair == ["--resume", "session-123"]));
         assert!(!args.contains(&"--session-id".to_string()));
-    }
-
-    #[test]
-    fn claude_headless_args_preserve_text_fallback_for_legacy_clients() {
-        let args = build_claude_headless_args(
-            "session-123",
-            false,
-            None,
-            &[],
-            &[],
-            AgentInputMode::Text,
-        );
-
-        assert!(args
-            .windows(2)
-            .any(|pair| pair == ["--input-format", "text"]));
-        assert!(args
-            .windows(2)
-            .any(|pair| pair == ["--output-format", "stream-json"]));
     }
 
     #[test]
@@ -3750,8 +3503,10 @@ mod tests {
         );
 
         assert!(claude.prompt_stdin);
+        assert!(claude.stream_json_stdin);
         assert!(!claude.args.contains(&"hello".to_string()));
         assert!(!opencode.prompt_stdin);
+        assert!(!opencode.stream_json_stdin);
         assert_eq!(opencode.args.last().map(String::as_str), Some("hello"));
     }
 
@@ -3931,13 +3686,26 @@ mod tests {
         std::fs::write(&manifest, r#"{"id":"a","title":"Draft","kind":"markdown","status":"done","primaryFile":"draft.md","createdAt":"2026-06-27T00:00:00.000Z","source":{"type":"unknown"}}"#).unwrap();
 
         let result = scan_artifacts(ScanArtifactsRequest {
-            output_root: workspace.join(".typola-output").to_string_lossy().to_string(),
-        }).unwrap();
+            output_root: workspace
+                .join(".typola-output")
+                .to_string_lossy()
+                .to_string(),
+        })
+        .unwrap();
 
         assert_eq!(result.len(), 1);
-        assert!(PathBuf::from(&result[0].path).ends_with(Path::new(".typola-output").join("conv").join("draft.md")));
-        assert!(PathBuf::from(&result[0].manifest_path).ends_with(Path::new(".typola-output").join("conv").join("artifact.json")));
-        assert!(result[0].manifest_json.as_deref().unwrap_or("").contains("\"Draft\""));
+        assert!(PathBuf::from(&result[0].path)
+            .ends_with(Path::new(".typola-output").join("conv").join("draft.md")));
+        assert!(PathBuf::from(&result[0].manifest_path).ends_with(
+            Path::new(".typola-output")
+                .join("conv")
+                .join("artifact.json")
+        ));
+        assert!(result[0]
+            .manifest_json
+            .as_deref()
+            .unwrap_or("")
+            .contains("\"Draft\""));
         let _ = std::fs::remove_dir_all(&workspace);
     }
 
@@ -4086,104 +3854,5 @@ mod tests {
             "other content"
         );
         let _ = std::fs::remove_dir_all(&workspace);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // #126 fix: stream-json → text 运行时 fallback 选择逻辑
-    // ─────────────────────────────────────────────────────────────────────
-
-    #[test]
-    fn fallback_detector_recognizes_all_known_stream_json_unsupported_patterns() {
-        assert!(should_fallback_to_text("error: unknown option '--input-format'"));
-        assert!(should_fallback_to_text("Error: unrecognized option '--foo'"));
-        assert!(should_fallback_to_text("unrecognized argument: --input-format"));
-        assert!(should_fallback_to_text("Error: invalid input format 'foo'"));
-        assert!(should_fallback_to_text("invalid argument '--input-format'"));
-        assert!(should_fallback_to_text("claude: no such option '--input-format'"));
-        assert!(should_fallback_to_text("stream-json is not supported on this build"));
-    }
-
-    #[test]
-    fn fallback_detector_rejects_unrelated_errors() {
-        assert!(!should_fallback_to_text("rate limit exceeded, retry after 30s"));
-        assert!(!should_fallback_to_text("network timeout while contacting API"));
-        assert!(!should_fallback_to_text("permission denied: 401 Unauthorized"));
-        assert!(!should_fallback_to_text("internal server error"));
-    }
-
-    #[test]
-    fn fallback_detector_handles_empty_stderr() {
-        assert!(!should_fallback_to_text(""));
-        assert!(!should_fallback_to_text("   \n  "));
-    }
-
-    #[test]
-    fn fallback_detector_is_case_insensitive() {
-        assert!(should_fallback_to_text("ERROR: UNKNOWN OPTION '--INPUT-FORMAT'"));
-        assert!(should_fallback_to_text("Stream-JSON not recognized"));
-    }
-
-    #[test]
-    fn fallback_starts_in_text_mode_when_requested_explicitly() {
-        // 显式请求 Text mode 时 should_fallback_to_text 不应误判 → 决策权在 spawn_claude_with_fallback,
-        // 它只对首次 StreamJson 尝试的 stderr 做判断。这里确认纯函数行为,无副作用。
-        let args = build_claude_headless_args(
-            "session-text",
-            false,
-            None,
-            &[],
-            &[],
-            AgentInputMode::Text,
-        );
-        assert!(args
-            .windows(2)
-            .any(|pair| pair == ["--input-format", "text"]));
-    }
-
-    #[test]
-    fn write_claude_initial_prompt_emits_stream_json_user_frame() {
-        let mut sink = Vec::<u8>::new();
-        write_claude_initial_prompt(&mut sink, "hello", AgentInputMode::StreamJson)
-            .expect("write stream-json frame");
-
-        let output = std::str::from_utf8(&sink).expect("utf-8");
-        assert!(
-            output.ends_with('\n'),
-            "stream-json frame must end with newline (frame delimiter)"
-        );
-        let parsed: serde_json::Value =
-            serde_json::from_str(output.trim()).expect("frame is valid JSON");
-        assert_eq!(parsed["type"], "user");
-        assert_eq!(parsed["message"]["role"], "user");
-        assert_eq!(
-            parsed["message"]["content"][0]["text"],
-            "hello",
-            "stream-json frame wraps prompt under message.content[0].text"
-        );
-    }
-
-    #[test]
-    fn write_claude_initial_prompt_writes_plain_text_for_text_mode() {
-        let mut sink = Vec::<u8>::new();
-        write_claude_initial_prompt(&mut sink, "hello", AgentInputMode::Text)
-            .expect("write text prompt");
-
-        let output = std::str::from_utf8(&sink).expect("utf-8");
-        assert_eq!(
-            output, "hello",
-            "text mode writes prompt verbatim, no JSON wrapping"
-        );
-    }
-
-    #[test]
-    fn write_claude_initial_prompt_stream_json_escapes_special_chars() {
-        // 中文 + 引号 + 换行 — 走 serde_json 自动转义,不能直接出现在原始字节里。
-        let mut sink = Vec::<u8>::new();
-        write_claude_initial_prompt(&mut sink, "你好 \"world\"\n", AgentInputMode::StreamJson)
-            .expect("write stream-json frame");
-
-        let output = std::str::from_utf8(&sink).expect("utf-8");
-        let parsed: serde_json::Value = serde_json::from_str(output.trim()).unwrap();
-        assert_eq!(parsed["message"]["content"][0]["text"], "你好 \"world\"\n");
     }
 }
