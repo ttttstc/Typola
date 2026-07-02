@@ -273,8 +273,8 @@ describe('QuestionForm', () => {
     });
 
     expect(host.querySelector('.conversation-tool-group')).toBeTruthy();
-    expect(host.textContent).toContain('资料检索与读取');
-    expect(host.textContent).toContain('4 个工具调用');
+    expect(host.textContent).toContain('工具调用');
+    expect(host.textContent).toContain('5 个工具调用');
     expect(host.textContent).toContain('Command×1');
     expect(host.textContent).toContain('写入');
   });

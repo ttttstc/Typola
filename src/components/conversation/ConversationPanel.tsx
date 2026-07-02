@@ -44,6 +44,7 @@ type ConversationPanelProps = {
   onRenameConversation: (id: string, title: string) => void;
   onSwitchProvider: (provider: AgentProvider) => void;
   onSend: (prompt: string, context?: { currentFileContextPath?: string; referencePaths?: string[]; toolAnswer?: boolean }) => void;
+  onSubmitToolResult: (toolUseId: string, content: string) => void;
   onCancel: () => void;
   onReset: () => void;
   onClose: () => void;
@@ -95,6 +96,7 @@ export function ConversationPanel({
   onRenameConversation,
   onSwitchProvider,
   onSend,
+  onSubmitToolResult,
   onCancel,
   onReset,
   onClose,
@@ -111,6 +113,7 @@ export function ConversationPanel({
   const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
   const waitingForUser = runState === 'waitingForUser';
+  const busy = running || waitingForUser;
   const hasHistory = messages.length > 0;
   const providerConfig = getAgentProviderConfig(activeProvider);
   const configuredModel = activeProvider === 'opencode' ? settings.aiOpenCodeModel : settings.aiClaudeModel;
@@ -208,6 +211,10 @@ export function ConversationPanel({
 
   const handleSubmitQuestionForm = (messageId: string, formId: string, text: string) => {
     setSubmittedQuestionForms((current) => ({ ...current, [`${messageId}:${formId}`]: text }));
+    if (formId.startsWith('tool:')) {
+      onSubmitToolResult(formId.slice('tool:'.length), text);
+      return;
+    }
     onSend(text, { toolAnswer: true });
   };
 
@@ -241,7 +248,7 @@ export function ConversationPanel({
   };
 
   const confirmWorkspaceChange = async (): Promise<boolean> => {
-    if (!hasHistory && !running) return true;
+    if (!hasHistory && !busy) return true;
     return confirmDialog('切换 AI 工作区会开始新对话，确定继续？', {
       title: '切换 AI 工作区',
       okLabel: '切换并新建对话',
@@ -258,14 +265,14 @@ export function ConversationPanel({
       cancelLabel: '取消',
     });
     if (!confirmed) return;
-    if (running) await onCancel();
+    if (busy) await onCancel();
     updateSettings({ aiActiveProvider: provider });
     onSwitchProvider(provider);
   };
 
   const handleWorkspaceChange = async (path: string) => {
     if (!(await confirmWorkspaceChange())) return;
-    if (running) await onCancel();
+    if (busy) await onCancel();
     onReset();
     rememberWorkspace(path);
   };
@@ -279,7 +286,7 @@ export function ConversationPanel({
 
   const handleClearWorkspace = async () => {
     if (!(await confirmWorkspaceChange())) return;
-    if (running) await onCancel();
+    if (busy) await onCancel();
     onReset();
     updateSettings({ aiWorkspaceRoot: '' });
   };
@@ -351,7 +358,7 @@ export function ConversationPanel({
       )}
       <Composer
         ref={composerRef}
-        running={running}
+        running={busy}
         disabled={waitingForUser}
         cwd={cwd}
         workspaceSuggestion={workspaceSuggestion}

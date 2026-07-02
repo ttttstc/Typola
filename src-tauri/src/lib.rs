@@ -50,6 +50,7 @@ struct AgentHeadlessRegistry {
 struct AgentRunHandle {
     #[allow(dead_code)]
     child: Arc<Mutex<Child>>,
+    stdin: Arc<Mutex<Option<std::process::ChildStdin>>>,
     pid: u32,
     cancel_requested: Arc<AtomicBool>,
 }
@@ -167,6 +168,15 @@ struct OverwriteArtifactRequest {
 #[serde(rename_all = "camelCase")]
 struct AgentSessionCancelRequest {
     run_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSessionToolResultRequest {
+    run_id: String,
+    tool_use_id: String,
+    content: String,
+    is_error: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -651,13 +661,28 @@ fn is_artifact_candidate(path: &Path) -> bool {
     if name.eq_ignore_ascii_case("artifact.json") {
         return false;
     }
-    let Some(extension) = path.extension().and_then(OsStr::to_str).map(|value| value.to_ascii_lowercase()) else {
+    let Some(extension) = path
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(|value| value.to_ascii_lowercase())
+    else {
         return false;
     };
     matches!(
         extension.as_str(),
-        "md" | "markdown" | "html" | "htm" | "txt" | "json" | "csv" | "tsv" | "png" | "jpg"
-            | "jpeg" | "gif" | "webp" | "svg"
+        "md" | "markdown"
+            | "html"
+            | "htm"
+            | "txt"
+            | "json"
+            | "csv"
+            | "tsv"
+            | "png"
+            | "jpg"
+            | "jpeg"
+            | "gif"
+            | "webp"
+            | "svg"
     )
 }
 
@@ -668,7 +693,11 @@ fn system_time_millis(value: SystemTime) -> Option<u128> {
         .map(|duration| duration.as_millis())
 }
 
-fn scan_artifact_files(root: &Path, depth: usize, output: &mut Vec<ScannedArtifactFile>) -> Result<(), String> {
+fn scan_artifact_files(
+    root: &Path,
+    depth: usize,
+    output: &mut Vec<ScannedArtifactFile>,
+) -> Result<(), String> {
     if depth > 5 {
         return Ok(());
     }
@@ -771,7 +800,8 @@ fn update_manifest_overwrite(
     if !manifest.is_object() {
         manifest = serde_json::json!({});
     }
-    manifest["primaryFile"] = serde_json::Value::String(artifact_path.to_string_lossy().to_string());
+    manifest["primaryFile"] =
+        serde_json::Value::String(artifact_path.to_string_lossy().to_string());
     manifest["updatedAt"] = serde_json::Value::String(now.clone());
     if let Some(backup_path) = backup_path {
         manifest["overwrite"] = serde_json::json!({
@@ -779,13 +809,19 @@ fn update_manifest_overwrite(
             "backupPath": backup_path.to_string_lossy().to_string(),
             "appliedAt": now,
         });
-        if !manifest.get("actions").is_some_and(|value| value.is_object()) {
+        if !manifest
+            .get("actions")
+            .is_some_and(|value| value.is_object())
+        {
             manifest["actions"] = serde_json::json!({});
         }
         manifest["actions"]["undoOverwrite"] = serde_json::Value::Bool(true);
     } else if let Some(object) = manifest.as_object_mut() {
         object.remove("overwrite");
-        if let Some(actions) = object.get_mut("actions").and_then(|value| value.as_object_mut()) {
+        if let Some(actions) = object
+            .get_mut("actions")
+            .and_then(|value| value.as_object_mut())
+        {
             actions.remove("undoOverwrite");
         }
     }
@@ -813,7 +849,10 @@ fn overwrite_artifact_to_document(request: OverwriteArtifactRequest) -> Result<S
     let backup_dir = artifact_parent.join("backups");
     std::fs::create_dir_all(&backup_dir)
         .map_err(|error| format!("failed to create backup directory: {error}"))?;
-    let target_name = target_path.file_name().and_then(OsStr::to_str).unwrap_or("document");
+    let target_name = target_path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .unwrap_or("document");
     let backup_path = unique_file_path(&backup_dir, &format!("{target_name}.bak"));
     std::fs::copy(&target_path, &backup_path)
         .map_err(|error| format!("failed to backup target document: {error}"))?;
@@ -924,6 +963,43 @@ fn agent_session_cancel(
 
     run.cancel_requested.store(true, Ordering::Relaxed);
     kill_agent_process_tree(&run)
+}
+
+#[tauri::command]
+fn agent_session_submit_tool_result(
+    state: tauri::State<'_, AgentHeadlessStore>,
+    request: AgentSessionToolResultRequest,
+) -> Result<(), String> {
+    let run = {
+        let registry = state
+            .0
+            .lock()
+            .map_err(|_| "agent headless store poisoned".to_string())?;
+        registry
+            .runs
+            .get(&request.run_id)
+            .cloned()
+            .ok_or_else(|| "agent run not found".to_string())?
+    };
+    let line = format!(
+        "{}\n",
+        claude_stream_json_tool_result(
+            request.tool_use_id.trim(),
+            &request.content,
+            request.is_error.unwrap_or(false),
+        )?
+    );
+    let mut stdin_guard = run
+        .stdin
+        .lock()
+        .map_err(|_| "agent stdin poisoned".to_string())?;
+    let stdin = stdin_guard
+        .as_mut()
+        .ok_or_else(|| "agent stdin is closed".to_string())?;
+    stdin
+        .write_all(line.as_bytes())
+        .and_then(|_| stdin.flush())
+        .map_err(|error| format!("failed to submit agent tool result: {error}"))
 }
 
 #[tauri::command]
@@ -1433,6 +1509,7 @@ pub fn run() {
             agent_session_start,
             agent_session_resume,
             agent_session_cancel,
+            agent_session_submit_tool_result,
             read_mcp_config,
             write_mcp_config,
             list_directory_entries,
@@ -1697,9 +1774,65 @@ fn unique_file_path(dir: &Path, file_name: &str) -> PathBuf {
     candidate
 }
 
+fn claude_stream_json_user_message(content: &str) -> Result<String, String> {
+    serde_json::to_string(&serde_json::json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [{ "type": "text", "text": content }],
+        },
+    }))
+    .map_err(|error| format!("failed to encode Claude stream-json user message: {error}"))
+}
+
+fn claude_stream_json_tool_result(
+    tool_use_id: &str,
+    content: &str,
+    is_error: bool,
+) -> Result<String, String> {
+    serde_json::to_string(&serde_json::json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [{
+                "type": "tool_result",
+                "tool_use_id": tool_use_id,
+                "content": content,
+                "is_error": is_error,
+            }],
+        },
+    }))
+    .map_err(|error| format!("failed to encode Claude stream-json tool result: {error}"))
+}
+
+fn close_agent_stdin(stdin: &Arc<Mutex<Option<std::process::ChildStdin>>>) {
+    if let Ok(mut stdin) = stdin.lock() {
+        stdin.take();
+    }
+}
+
+fn claude_stream_json_terminal_stop_reason(line: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    if value.get("type").and_then(|value| value.as_str()) == Some("assistant") {
+        return value
+            .get("message")
+            .and_then(|message| message.get("stop_reason"))
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+    }
+    if value.get("type").and_then(|value| value.as_str()) == Some("result") {
+        return value
+            .get("stop_reason")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+    }
+    None
+}
+
 struct AgentCommandSpec {
     args: Vec<String>,
     prompt_stdin: bool,
+    stream_json_stdin: bool,
 }
 
 fn normalize_agent_path(provider: AgentProvider, path: Option<&str>) -> String {
@@ -1801,7 +1934,7 @@ fn start_agent_headless_run(
             provider.display_name()
         )
     })?;
-    let mut stdin = child
+    let stdin = child
         .stdin
         .take()
         .ok_or_else(|| format!("failed to open {} stdin", provider.display_name()))?;
@@ -1814,18 +1947,34 @@ fn start_agent_headless_run(
         .take()
         .ok_or_else(|| format!("failed to open {} stderr", provider.display_name()))?;
 
+    let stdin = Arc::new(Mutex::new(Some(stdin)));
     if command_spec.prompt_stdin {
-        stdin
-            .write_all(request.prompt.as_bytes())
-            .and_then(|_| stdin.flush())
-            .map_err(|error| {
-                format!(
-                    "failed to write {} prompt: {error}",
-                    provider.display_name()
-                )
-            })?;
+        let payload = if command_spec.stream_json_stdin {
+            format!("{}\n", claude_stream_json_user_message(&request.prompt)?)
+        } else {
+            request.prompt.clone()
+        };
+        {
+            let mut stdin_guard = stdin
+                .lock()
+                .map_err(|_| "agent stdin poisoned".to_string())?;
+            let stdin_writer = stdin_guard
+                .as_mut()
+                .ok_or_else(|| format!("{} stdin is closed", provider.display_name()))?;
+            stdin_writer
+                .write_all(payload.as_bytes())
+                .and_then(|_| stdin_writer.flush())
+                .map_err(|error| {
+                    format!(
+                        "failed to write {} prompt: {error}",
+                        provider.display_name()
+                    )
+                })?;
+        }
     }
-    drop(stdin);
+    if !command_spec.stream_json_stdin {
+        close_agent_stdin(&stdin);
+    }
 
     let pid = child.id();
     let child = Arc::new(Mutex::new(child));
@@ -1839,6 +1988,7 @@ fn start_agent_headless_run(
             run_id.clone(),
             AgentRunHandle {
                 child: Arc::clone(&child),
+                stdin: Arc::clone(&stdin),
                 pid,
                 cancel_requested: Arc::clone(&cancel_requested),
             },
@@ -1853,6 +2003,11 @@ fn start_agent_headless_run(
         conversation_id.to_string(),
         session_uuid.clone(),
         stdout,
+        if command_spec.stream_json_stdin {
+            Some(Arc::clone(&stdin))
+        } else {
+            None
+        },
     );
     spawn_agent_waiter(
         app,
@@ -1910,7 +2065,7 @@ fn build_claude_headless_args(
     let mut args = vec![
         "-p".to_string(),
         "--input-format".to_string(),
-        "text".to_string(),
+        "stream-json".to_string(),
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
@@ -2013,6 +2168,7 @@ fn build_agent_headless_command(
                 extra_allowed_dirs,
             ),
             prompt_stdin: true,
+            stream_json_stdin: true,
         },
         AgentProvider::Opencode => AgentCommandSpec {
             args: build_opencode_headless_args(
@@ -2025,10 +2181,12 @@ fn build_agent_headless_command(
                 prompt,
             ),
             prompt_stdin: false,
+            stream_json_stdin: false,
         },
         AgentProvider::Codex => AgentCommandSpec {
             args: Vec::new(),
             prompt_stdin: true,
+            stream_json_stdin: false,
         },
     }
 }
@@ -2039,11 +2197,15 @@ fn spawn_agent_stdout_forwarder(
     conversation_id: String,
     session_uuid: String,
     stdout: impl Read + Send + 'static,
+    stdin: Option<Arc<Mutex<Option<std::process::ChildStdin>>>>,
 ) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             let Ok(line) = line else { break };
+            let stop_reason = stdin
+                .as_ref()
+                .and_then(|_| claude_stream_json_terminal_stop_reason(&line));
             let _ = app.emit(
                 "agent-stdout",
                 AgentStdoutPayload {
@@ -2053,6 +2215,11 @@ fn spawn_agent_stdout_forwarder(
                     line,
                 },
             );
+            if let (Some(stdin), Some(stop_reason)) = (stdin.as_ref(), stop_reason) {
+                if stop_reason != "tool_use" {
+                    close_agent_stdin(stdin);
+                }
+            }
         }
     });
 }
@@ -3238,7 +3405,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_headless_args_use_text_stdin_and_stream_json_output() {
+    fn claude_headless_args_use_stream_json_stdin_and_output() {
         let plugin_dirs = vec![
             "D:\\plugins\\one".to_string(),
             "D:\\plugins\\two".to_string(),
@@ -3254,7 +3421,7 @@ mod tests {
 
         assert!(args
             .windows(2)
-            .any(|pair| pair == ["--input-format", "text"]));
+            .any(|pair| pair == ["--input-format", "stream-json"]));
         assert!(args
             .windows(2)
             .any(|pair| pair == ["--output-format", "stream-json"]));
@@ -3400,8 +3567,10 @@ mod tests {
         );
 
         assert!(claude.prompt_stdin);
+        assert!(claude.stream_json_stdin);
         assert!(!claude.args.contains(&"hello".to_string()));
         assert!(!opencode.prompt_stdin);
+        assert!(!opencode.stream_json_stdin);
         assert_eq!(opencode.args.last().map(String::as_str), Some("hello"));
     }
 
@@ -3581,13 +3750,26 @@ mod tests {
         std::fs::write(&manifest, r#"{"id":"a","title":"Draft","kind":"markdown","status":"done","primaryFile":"draft.md","createdAt":"2026-06-27T00:00:00.000Z","source":{"type":"unknown"}}"#).unwrap();
 
         let result = scan_artifacts(ScanArtifactsRequest {
-            output_root: workspace.join(".typola-output").to_string_lossy().to_string(),
-        }).unwrap();
+            output_root: workspace
+                .join(".typola-output")
+                .to_string_lossy()
+                .to_string(),
+        })
+        .unwrap();
 
         assert_eq!(result.len(), 1);
-        assert!(PathBuf::from(&result[0].path).ends_with(Path::new(".typola-output").join("conv").join("draft.md")));
-        assert!(PathBuf::from(&result[0].manifest_path).ends_with(Path::new(".typola-output").join("conv").join("artifact.json")));
-        assert!(result[0].manifest_json.as_deref().unwrap_or("").contains("\"Draft\""));
+        assert!(PathBuf::from(&result[0].path)
+            .ends_with(Path::new(".typola-output").join("conv").join("draft.md")));
+        assert!(PathBuf::from(&result[0].manifest_path).ends_with(
+            Path::new(".typola-output")
+                .join("conv")
+                .join("artifact.json")
+        ));
+        assert!(result[0]
+            .manifest_json
+            .as_deref()
+            .unwrap_or("")
+            .contains("\"Draft\""));
         let _ = std::fs::remove_dir_all(&workspace);
     }
 

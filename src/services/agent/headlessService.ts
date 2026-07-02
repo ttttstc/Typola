@@ -37,6 +37,15 @@ export function cancelAgentSession(runId: string): Promise<void> {
   return invoke('agent_session_cancel', { request: { runId } });
 }
 
+export function submitAgentToolResult(request: {
+  runId: string;
+  toolUseId: string;
+  content: string;
+  isError?: boolean;
+}): Promise<void> {
+  return invoke('agent_session_submit_tool_result', { request });
+}
+
 export function onAgentStdout(handler: (payload: AgentStdoutPayload) => void): Promise<UnlistenFn> {
   return listen<AgentStdoutPayload>('agent-stdout', (event) => handler(event.payload));
 }

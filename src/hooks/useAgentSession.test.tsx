@@ -12,6 +12,7 @@ const headlessMock = vi.hoisted(() => ({
   startAgentSession: vi.fn(),
   resumeAgentSession: vi.fn(),
   cancelAgentSession: vi.fn(),
+  submitAgentToolResult: vi.fn(),
   onAgentStdout: vi.fn(),
   onAgentExit: vi.fn(),
 }));
@@ -20,6 +21,7 @@ vi.mock('../services/agent/headlessService', () => ({
   startAgentSession: headlessMock.startAgentSession,
   resumeAgentSession: headlessMock.resumeAgentSession,
   cancelAgentSession: headlessMock.cancelAgentSession,
+  submitAgentToolResult: headlessMock.submitAgentToolResult,
   onAgentStdout: headlessMock.onAgentStdout,
   onAgentExit: headlessMock.onAgentExit,
 }));
@@ -66,6 +68,7 @@ describe('useConversationManager', () => {
     }));
     headlessMock.resumeAgentSession.mockReset();
     headlessMock.cancelAgentSession.mockReset().mockResolvedValue(undefined);
+    headlessMock.submitAgentToolResult.mockReset().mockResolvedValue(undefined);
     headlessMock.onAgentStdout.mockReset().mockImplementation(async (handler) => {
       stdoutHandler = handler;
       return () => undefined;
@@ -291,12 +294,14 @@ describe('useConversationManager', () => {
     expect(headlessMock.resumeAgentSession).not.toHaveBeenCalled();
 
     await act(async () => {
-      await api?.send('主要用途是什么？\n技术分享', { toolAnswer: true });
+      await api?.submitToolResult('toolu_question', '主要用途是什么？\n技术分享');
     });
-    expect(headlessMock.resumeAgentSession).toHaveBeenCalledTimes(1);
-    expect(headlessMock.resumeAgentSession.mock.calls[0][0]).toMatchObject({
-      conversationId: convId,
-      prompt: expect.stringContaining('技术分享'),
+    expect(headlessMock.resumeAgentSession).not.toHaveBeenCalled();
+    expect(headlessMock.submitAgentToolResult).toHaveBeenCalledTimes(1);
+    expect(headlessMock.submitAgentToolResult.mock.calls[0][0]).toMatchObject({
+      runId: 'run-1',
+      toolUseId: 'toolu_question',
+      content: expect.stringContaining('技术分享'),
     });
   });
 

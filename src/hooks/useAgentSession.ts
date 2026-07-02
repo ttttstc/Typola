@@ -13,6 +13,7 @@ import {
   onAgentStdout,
   resumeAgentSession,
   startAgentSession,
+  submitAgentToolResult,
 } from '../services/agent/headlessService';
 import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
 import type { AgentDiagnostic } from '../services/agent/runtime/types';
@@ -108,6 +109,17 @@ function hasUnansweredAskUserQuestion(messages: AgentMessage[]): boolean {
   return Boolean(lastAssistant?.tools.some((tool) => (
     isAskUserQuestionToolName(tool.name) && !tool.result && !tool.isError
   )));
+}
+
+function findAskUserQuestionTool(messages: AgentMessage[], toolUseId?: string): AgentToolCall | null {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== 'assistant') continue;
+    for (const tool of message.tools) {
+      if (!isAskUserQuestionToolName(tool.name) || tool.result || tool.isError) continue;
+      if (!toolUseId || tool.id === toolUseId) return tool;
+    }
+  }
+  return null;
 }
 
 function hasToolUseTurnEnd(events: AgentEvent[]): boolean {
@@ -496,10 +508,47 @@ export function useConversationManager({
     }
   }, [appendAssistantEvent, claudeModel, claudePath, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv, workspaceRoot]);
 
+  const submitToolResult = useCallback(async (toolUseId: string, content: string) => {
+    const convId = activeConvIdRef.current;
+    const conv = conversationsRef.current.get(convId);
+    const tool = conv ? findAskUserQuestionTool(conv.messages, toolUseId) : null;
+    if (!conv || !tool || !conv.runId || conv.runState !== 'waitingForUser') return;
+    updateConv(convId, {
+      runState: 'running',
+      lastError: '',
+      messages: appendEventToMessages(conv.messages, {
+        type: 'tool_result',
+        toolUseId: tool.id,
+        content,
+        isError: false,
+      }),
+    });
+    try {
+      await submitAgentToolResult({
+        runId: conv.runId,
+        toolUseId: tool.id,
+        content,
+        isError: false,
+      });
+    } catch (error) {
+      const message = String(error);
+      updateConv(convId, {
+        runState: 'waitingForUser',
+        lastError: message,
+        messages: appendEventToMessages(conversationsRef.current.get(convId)?.messages ?? conv.messages, {
+          type: 'tool_result',
+          toolUseId: tool.id,
+          content: message,
+          isError: true,
+        }),
+      });
+    }
+  }, [updateConv]);
+
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;
     const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState !== 'running') return;
+    if (!conv || (conv.runState !== 'running' && conv.runState !== 'waitingForUser')) return;
     updateConv(convId, { cancelRequested: true });
     const handler = handlersRef.current.get(convId);
     handler?.flush();
@@ -605,7 +654,7 @@ export function useConversationManager({
     handlersRef.current.delete(id);
     // Cancel run if active
     const conv = conversationsRef.current.get(id);
-    if (conv && conv.runState === 'running' && conv.runId) {
+    if (conv && (conv.runState === 'running' || conv.runState === 'waitingForUser') && conv.runId) {
       void cancelAgentSession(conv.runId);
     }
     setConversations((prev) => {
@@ -636,6 +685,7 @@ export function useConversationManager({
     lastError: activeConv?.lastError ?? '',
     // Actions
     send,
+    submitToolResult,
     cancel,
     reset,
     createConversation,

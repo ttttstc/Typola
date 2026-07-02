@@ -163,6 +163,7 @@ export function AssistantMessage({
   const questionTools = message.tools.filter(isAskUserQuestionTool);
   const researchTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && isResearchTool(tool));
   const otherTools = message.tools.filter((tool) => !isAskUserQuestionTool(tool) && !isResearchTool(tool));
+  const foldedTools = [...researchTools, ...otherTools];
   const renderTool = (tool: AgentToolCall) => (
     <ToolCard
       key={tool.id}
@@ -238,15 +239,14 @@ export function AssistantMessage({
         !message.error && message.tools.length === 0 && <p className="conversation-muted">AI Provider 正在思考...</p>
       )}
       {questionTools.map(renderTool)}
-      <ResearchToolGroup tools={researchTools} renderTool={renderTool} />
-      {otherTools.map(renderTool)}
+      <ToolCallGroup tools={foldedTools} renderTool={renderTool} />
       <ErrorRetryCard message={message.error ?? ''} />
       <DoneBar usage={message.usage} />
     </article>
   );
 }
 
-function ResearchToolGroup({
+function ToolCallGroup({
   tools,
   renderTool,
 }: {
@@ -254,12 +254,11 @@ function ResearchToolGroup({
   renderTool: (tool: AgentToolCall) => ReactNode;
 }) {
   if (tools.length === 0) return null;
-  if (tools.length <= 2) return <>{tools.map(renderTool)}</>;
   const summary = summarizeToolNames(tools);
   return (
     <details className="conversation-tool-group">
       <summary>
-        <span>资料检索与读取</span>
+        <span>工具调用</span>
         <small>{tools.length} 个工具调用 · {summary}</small>
       </summary>
       <div className="conversation-tool-group-scroll">
