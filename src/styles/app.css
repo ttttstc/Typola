@@ -9171,6 +9171,40 @@ html[data-theme='dark'] .terminal-session {
   user-select: none;
 }
 
+/* assistant 消息顶部 meta 行：左侧时间戳，右侧复制 icon */
+.conversation-message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.conversation-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.conversation-copy-button:hover {
+  color: var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 36%, var(--border-subtle));
+}
+
+.conversation-copy-button.copied {
+  color: var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border-subtle));
+}
+
 /* 代码块另存为按钮 */
 .conversation-code-save {
   padding: 2px 8px;
