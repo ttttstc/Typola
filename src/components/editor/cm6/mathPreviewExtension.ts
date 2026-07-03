@@ -13,7 +13,16 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import katex from 'katex';
+import { loadKatex } from '../../../services/lazyKatex';
+
+let katexModule: any = null;
+let katexLoading = false;
+
+function ensureKatexLoaded(): void {
+  if (katexModule || katexLoading) return;
+  katexLoading = true;
+  loadKatex().then((mod) => { katexModule = mod; });
+}
 
 class MathWidget extends WidgetType {
   private readonly source: string;
@@ -33,14 +42,20 @@ class MathWidget extends WidgetType {
     const element = document.createElement(this.block ? 'div' : 'span');
     element.className = this.block ? 'typola-cm6-math-block' : 'typola-cm6-math-inline';
 
-    try {
-      element.innerHTML = katex.renderToString(this.source, {
-        displayMode: this.block,
-        throwOnError: false,
-      });
-    } catch {
+    if (katexModule) {
+      try {
+        element.innerHTML = katexModule.renderToString(this.source, {
+          displayMode: this.block,
+          throwOnError: false,
+        });
+      } catch {
+        element.textContent = this.source;
+        element.classList.add('typola-cm6-math-error');
+      }
+    } else {
       element.textContent = this.source;
-      element.classList.add('typola-cm6-math-error');
+      element.classList.add('typola-cm6-math-loading');
+      ensureKatexLoaded();
     }
     return element;
   }
@@ -153,5 +168,6 @@ const blockMathField = StateField.define<DecorationSet>({
 });
 
 export function mathPreviewExtension(): Extension[] {
+  ensureKatexLoaded();
   return [inlineMathPlugin, blockMathField];
 }
