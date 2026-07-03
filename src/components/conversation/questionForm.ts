@@ -99,7 +99,7 @@ export function parseQuestionForms(markdown: string): ParsedQuestionForms {
       const questions = normalizeQuestions(parsed);
       if (questions.length > 0) forms.push({ id, title, description, questions, raw, submitLabel, skipLabel, autoSkipSeconds });
     } catch {
-      return '\n\n> Question Form 解析失败，请让 AI 重新输出有效的 JSON 表单。\n\n';
+      // 解析失败的 form 静默丢弃:不向用户暴露错误,也不向 markdown 塞 fallback 文字。
     }
     return '';
   });
@@ -138,10 +138,4 @@ export function stripTrailingOpenQuestionForm(content: string): {
   const closeIndex = content.indexOf('</question-form>', openIndex);
   if (closeIndex !== -1) return { visibleContent: content, hasOpenForm: false };
   return { visibleContent: content.slice(0, openIndex), hasOpenForm: true };
-}
-
-// ── Streaming: detect if there's any unclosed <question-form> mid-stream ──
-// P0-7: streaming 兜底用,即使 JSON 还没写完也能识别已开口的 form,展示"加载中"占位。
-export function hasOpenQuestionForm(content: string): boolean {
-  return stripTrailingOpenQuestionForm(content).hasOpenForm;
 }
