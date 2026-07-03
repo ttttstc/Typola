@@ -742,6 +742,19 @@ function migrateLegacySettings(stored: Partial<AppSettings>): Partial<AppSetting
   const next = { ...stored };
   let changed = false;
   try {
+    const legacyTheme = (next as Partial<AppSettings> & { theme?: unknown }).theme;
+    if (!next.themeId && legacyTheme === 'dark') {
+      next.themeId = 'night-current';
+      changed = true;
+    } else if (!next.themeId && legacyTheme === 'light') {
+      next.themeId = DEFAULT_THEME_ID;
+      changed = true;
+    }
+    if (legacyTheme !== undefined) {
+      delete (next as Partial<AppSettings> & { theme?: unknown }).theme;
+      changed = true;
+    }
+
     const legacyRaw = localStorage.getItem(LEGACY_KEY);
     if (legacyRaw) {
       const legacy = JSON.parse(legacyRaw);

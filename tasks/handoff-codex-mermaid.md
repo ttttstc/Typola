@@ -78,7 +78,7 @@ npm run tauri:build:local
 ## 红线(不做)
 
 - PNG 复制 / 导出(本期只做 SVG;PNG 要 canvas 序列化,留下期)
-- mermaid 主题动态切换 UI(代码里读 `settings.theme` 留接口即可;切换 UI 跟全局主题一起做)
+- mermaid 主题动态切换 UI(代码里读 `settings.themeId` 留接口即可;切换 UI 跟全局主题一起做)
 - fork Vditor IR 渲染管线实现"完美 Typora 双态过渡动画"(MVP 接受 Vditor 默认行为)
 - AI 流式生成中**逐字渲染** mermaid(围栏不闭合就跳过)
 

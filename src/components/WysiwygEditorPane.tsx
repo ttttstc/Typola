@@ -26,7 +26,7 @@ import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
 import { buildSearchRegExp, getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
 import type { SearchOptions } from '../services/documentSearchService';
-import { getThemeScheme } from '../services/themeRegistry';
+import { getMermaidTheme, getVditorHighlightStyle, getVditorPreviewTheme } from '../services/themeRegistry';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -219,7 +219,9 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   ref,
 ) {
   const settings = useSettings();
-  const mermaidTheme = getThemeScheme(settings.themeId) === 'dark' ? 'dark' : 'default';
+  const mermaidTheme = getMermaidTheme(settings.themeId);
+  const vditorTheme = getVditorPreviewTheme(settings.themeId);
+  const vditorHighlightStyle = getVditorHighlightStyle(settings.themeId);
   const t = useCallback(
     (key: Parameters<typeof translate>[1]) => translate(settings.locale, key),
     [settings.locale],
@@ -615,12 +617,12 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
             codeBlockPreview: false,
           },
           theme: {
-            current: 'light',
+            current: vditorTheme,
             path: '',
           },
           hljs: {
             enable: true,
-            style: 'github',
+            style: vditorHighlightStyle,
             lineNumber: false,
           },
         },
@@ -701,7 +703,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       editorRef.current?.destroy();
       editorRef.current = null;
     };
-  }, [filePath, onChange, t]);
+  }, [filePath, mermaidTheme, onChange, t, vditorHighlightStyle, vditorTheme]);
 
   useEffect(() => {
     const editor = editorRef.current;

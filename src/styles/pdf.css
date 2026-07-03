@@ -17,11 +17,6 @@
   line-height: var(--typola-pdf-line-height, 1.7);
 }
 
-.typola-pdf-document[data-theme='dark'] {
-  background: #1f2329;
-  color: #f3f4f6;
-}
-
 .typola-pdf-print-article {
   width: 100%;
   max-width: none;

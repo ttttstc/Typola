@@ -9,7 +9,7 @@ import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { createHtmlReadingPreviewHtml } from '../services/htmlReadingPreviewService';
 import { resolveLocalImages } from '../services/localImageResolver';
 import { renderMermaidIn } from '../services/mermaidRenderer';
-import { getThemeScheme } from '../services/themeRegistry';
+import { getMermaidTheme, getVditorHighlightStyle, getVditorPreviewTheme } from '../services/themeRegistry';
 
 type PreviewPaneProps = {
   source: string;
@@ -29,7 +29,9 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
   const deferredSource = useDeferredValue(source);
   const deferredTocIds = useDeferredValue(tocIds);
   const settings = useSettings();
-  const mermaidTheme = getThemeScheme(settings.themeId) === 'dark' ? 'dark' : 'default';
+  const mermaidTheme = getMermaidTheme(settings.themeId);
+  const vditorTheme = getVditorPreviewTheme(settings.themeId);
+  const vditorHighlightStyle = getVditorHighlightStyle(settings.themeId);
   const renderFeatures = useMemo(
     () => detectMarkdownRenderFeatures(deferredSource),
     [deferredSource],
@@ -63,17 +65,17 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     ]).then(([, { default: Vditor }]) => {
       if (cancelled) return;
       Vditor.preview(el, deferredSource, {
-        mode: 'light',
+        mode: vditorTheme,
         anchor: 0,
         cdn: '/vditor',
         i18n: VDITOR_PREVIEW_I18N,
         icon: undefined,
         theme: {
-          current: 'light',
+          current: vditorTheme,
           path: '',
         },
         hljs: {
-          style: 'github',
+          style: vditorHighlightStyle,
           enable: renderFeatures.hasHighlightableCode,
           lineNumber: false,
         },
@@ -94,7 +96,16 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, deferredTocIds, filePath, renderFeatures.hasHighlightableCode, mermaidTheme, renderMode]);
+  }, [
+    deferredSource,
+    deferredTocIds,
+    filePath,
+    renderFeatures.hasHighlightableCode,
+    mermaidTheme,
+    renderMode,
+    vditorHighlightStyle,
+    vditorTheme,
+  ]);
 
   useImperativeHandle(ref, () => {
     const findScroller = (): HTMLElement | null => {

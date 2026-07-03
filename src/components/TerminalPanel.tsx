@@ -17,7 +17,7 @@ import {
   type TerminalCreateResult,
 } from '../services/terminalService';
 import { waitForPtyReady } from '../services/ptyReady';
-import { deriveTokens, getThemeDefinition } from '../services/themeRegistry';
+import { resolveTerminalTheme } from '../services/themeRegistry';
 
 export type TerminalPanelHandle = {
   startAgentTerminal: (opts: { command: string; cwd?: string }) => Promise<void>;
@@ -125,10 +125,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     const localId = createLocalId();
     const tabNumber = tabs.length + 1;
     const fitAddon = new FitAddon();
-    const theme = deriveTokens(
-      getThemeDefinition(settings.themeId).core,
-      getThemeDefinition(settings.themeId).overrides,
-    ).terminal;
+    const theme = resolveTerminalTheme(settings.themeId);
     const terminal = new XTerm({
       convertEol: true,
       cursorBlink: settings.terminalCursorBlink,
@@ -215,6 +212,14 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     tabs.length,
     workspaceRoot,
   ]);
+
+  useEffect(() => {
+    const theme = resolveTerminalTheme(settings.themeId);
+    for (const runtime of runtimesRef.current.values()) {
+      runtime.terminal.options.theme = theme;
+      runtime.terminal.refresh(0, Math.max(0, runtime.terminal.rows - 1));
+    }
+  }, [settings.themeId]);
 
   const closeTab = useCallback((localId: string) => {
     const runtime = runtimesRef.current.get(localId);

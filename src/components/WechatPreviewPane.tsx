@@ -17,7 +17,7 @@ import {
 import { getHtmlExportPresetDefinition } from '../services/htmlExportPresets';
 import type { HtmlExportPresetId } from '../services/htmlExportPresets';
 import { markdownToExportHtml } from '../services/markdownExportRenderer';
-import { getThemeScheme } from '../services/themeRegistry';
+import { getMermaidTheme } from '../services/themeRegistry';
 
 type WechatPreviewPaneProps = {
   source: string;
@@ -38,7 +38,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
   ref,
 ) {
   const settings = useSettings();
-  const mermaidTheme = getThemeScheme(settings.themeId) === 'dark' ? 'dark' : 'default';
+  const mermaidTheme = getMermaidTheme(settings.themeId);
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const deferredSource = useDeferredValue(source);
   const renderRef = useRef<HTMLDivElement>(null);

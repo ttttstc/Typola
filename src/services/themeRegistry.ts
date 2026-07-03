@@ -1,6 +1,33 @@
 export type ThemeId = 'plain-paper' | 'night-current' | 'ink-basin';
 
 export type ThemeScheme = 'light' | 'dark';
+export type MermaidTheme = 'default' | 'dark';
+export type VditorPreviewTheme = 'light' | 'dark';
+export type VditorHighlightStyle = 'github' | 'github-dark';
+export type TerminalAnsiColor =
+  | 'black'
+  | 'red'
+  | 'green'
+  | 'yellow'
+  | 'blue'
+  | 'magenta'
+  | 'cyan'
+  | 'white'
+  | 'brightBlack'
+  | 'brightRed'
+  | 'brightGreen'
+  | 'brightYellow'
+  | 'brightBlue'
+  | 'brightMagenta'
+  | 'brightCyan'
+  | 'brightWhite';
+
+export type TerminalThemeTokens = {
+  background: string;
+  foreground: string;
+  cursor: string;
+  selection: string;
+} & Partial<Record<TerminalAnsiColor, string>>;
 
 export type CoreTokens = {
   canvas: string;
@@ -70,14 +97,14 @@ export type DerivedTokens = {
     foreground: string;
     cursor: string;
     selection: string;
-    ansi?: Record<string, string>;
-  };
+  } & Partial<Record<TerminalAnsiColor, string>>;
 };
 
 export type ThemeDefinition = {
   id: ThemeId;
   name: string;
   description: string;
+  meta: string;
   scheme: ThemeScheme;
   preview: { canvas: string; paper: string; accent: string };
   core: CoreTokens;
@@ -163,6 +190,7 @@ const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
     id: 'plain-paper',
     name: '素笺',
     description: '安静的纸感浅色，适合长文写作。',
+    meta: '浅色 · 默认',
     scheme: 'light',
     preview: {
       canvas: '#f4f0e8',
@@ -191,6 +219,7 @@ const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
     id: 'night-current',
     name: '深海',
     description: '低亮度深蓝黑，适合夜写、终端和 AI 长任务。',
+    meta: '深色',
     scheme: 'dark',
     preview: {
       canvas: '#101821',
@@ -220,24 +249,22 @@ const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
         foreground: '#d8e1e9',
         cursor: '#66b8d6',
         selection: '#2c5368',
-        ansi: {
-          black: '#0d141c',
-          red: '#e06c86',
-          green: '#6fc59d',
-          yellow: '#dfb66e',
-          blue: '#70a7df',
-          magenta: '#b99cf0',
-          cyan: '#68c7d5',
-          white: '#d8e1e9',
-          brightBlack: '#647486',
-          brightRed: '#f08da0',
-          brightGreen: '#8bd7b5',
-          brightYellow: '#edcc8b',
-          brightBlue: '#91bef0',
-          brightMagenta: '#ccb5ff',
-          brightCyan: '#8ddce7',
-          brightWhite: '#f2f6f8',
-        },
+        black: '#0d141c',
+        red: '#e06c86',
+        green: '#6fc59d',
+        yellow: '#dfb66e',
+        blue: '#70a7df',
+        magenta: '#b99cf0',
+        cyan: '#68c7d5',
+        white: '#d8e1e9',
+        brightBlack: '#647486',
+        brightRed: '#f08da0',
+        brightGreen: '#8bd7b5',
+        brightYellow: '#edcc8b',
+        brightBlue: '#91bef0',
+        brightMagenta: '#ccb5ff',
+        brightCyan: '#8ddce7',
+        brightWhite: '#f2f6f8',
       },
     },
   },
@@ -245,6 +272,7 @@ const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
     id: 'ink-basin',
     name: '墨池',
     description: '黑白水墨与现代文档工作台，克制而有品牌识别度。',
+    meta: '浅色 · 品牌',
     scheme: 'light',
     preview: {
       canvas: '#f0f1ed',
@@ -290,4 +318,21 @@ export function getThemeDefinition(value: unknown): ThemeDefinition {
 
 export function getThemeScheme(value: unknown): ThemeScheme {
   return getThemeDefinition(value).scheme;
+}
+
+export function getMermaidTheme(value: unknown): MermaidTheme {
+  return getThemeScheme(value) === 'dark' ? 'dark' : 'default';
+}
+
+export function getVditorPreviewTheme(value: unknown): VditorPreviewTheme {
+  return getThemeScheme(value) === 'dark' ? 'dark' : 'light';
+}
+
+export function getVditorHighlightStyle(value: unknown): VditorHighlightStyle {
+  return getThemeScheme(value) === 'dark' ? 'github-dark' : 'github';
+}
+
+export function resolveTerminalTheme(value: unknown): TerminalThemeTokens {
+  const theme = getThemeDefinition(value);
+  return deriveTokens(theme.core, theme.overrides).terminal;
 }

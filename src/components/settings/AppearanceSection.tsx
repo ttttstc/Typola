@@ -1,15 +1,9 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { getSettings, updateSettings, type AppSettings } from '../../services/settingsService';
 import { listThemeDefinitions, type ThemeDefinition, type ThemeId } from '../../services/themeRegistry';
 
 const ZOOM_LEVELS = [80, 90, 100, 110, 120];
 const THEMES = listThemeDefinitions();
-
-function themeMeta(theme: ThemeDefinition): string {
-  if (theme.id === 'plain-paper') return '浅色 · 默认';
-  if (theme.id === 'ink-basin') return '浅色 · 品牌';
-  return '深色';
-}
 
 function themePreviewStyle(theme: ThemeDefinition): CSSProperties {
   return {
@@ -22,6 +16,7 @@ function themePreviewStyle(theme: ThemeDefinition): CSSProperties {
 export function AppearanceSection() {
   const [settings, setSettings] = useState(() => getSettings());
   const [themeToast, setThemeToast] = useState<{ current: ThemeId; previous: ThemeId } | null>(null);
+  const activeThemeIndex = Math.max(0, THEMES.findIndex((theme) => theme.id === settings.themeId));
 
   const handleChange = (patch: Partial<AppSettings>) => {
     updateSettings(patch);
@@ -43,20 +38,45 @@ export function AppearanceSection() {
     setThemeToast(null);
   };
 
+  const focusThemeCard = (themeId: ThemeId) => {
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>(`[data-theme-card="${themeId}"]`)?.focus();
+    });
+  };
+
+  const handleThemeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const keyActions: Record<string, number> = {
+      ArrowRight: activeThemeIndex + 1,
+      ArrowDown: activeThemeIndex + 1,
+      ArrowLeft: activeThemeIndex - 1,
+      ArrowUp: activeThemeIndex - 1,
+      Home: 0,
+      End: THEMES.length - 1,
+    };
+    if (!(event.key in keyActions)) return;
+    event.preventDefault();
+    const nextIndex = (keyActions[event.key] + THEMES.length) % THEMES.length;
+    const nextTheme = THEMES[nextIndex];
+    handleThemePick(nextTheme.id);
+    focusThemeCard(nextTheme.id);
+  };
+
   return (
     <div className="settings-section">
       <h3 className="settings-section-title">外观</h3>
 
       <div className="settings-block">
         <div className="settings-label">主题</div>
-        <div className="theme-gallery" role="radiogroup" aria-label="主题">
+        <div className="theme-gallery" role="radiogroup" aria-label="主题" onKeyDown={handleThemeKeyDown}>
           {THEMES.map((theme) => (
             <button
               key={theme.id}
               type="button"
               className={`theme-card ${settings.themeId === theme.id ? 'active' : ''}`}
               data-theme-card={theme.id}
-              aria-pressed={settings.themeId === theme.id}
+              role="radio"
+              aria-checked={settings.themeId === theme.id}
+              tabIndex={settings.themeId === theme.id ? 0 : -1}
               onClick={() => handleThemePick(theme.id)}
               style={themePreviewStyle(theme)}
             >
@@ -74,7 +94,7 @@ export function AppearanceSection() {
               </span>
               <span className="theme-card-copy">
                 <strong>{theme.name}</strong>
-                <span>{themeMeta(theme)}</span>
+                <span>{theme.meta}</span>
               </span>
             </button>
           ))}

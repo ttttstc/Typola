@@ -131,6 +131,16 @@ describe('settingsService', () => {
     });
   });
 
+  it('migrates the legacy dark appearance switch to the Night Current theme', () => {
+    localStorage.setItem('typola-settings', JSON.stringify({ theme: 'dark' }));
+
+    expect(getSettings().themeId).toBe('night-current');
+    expect(JSON.parse(localStorage.getItem('typola-settings') || '{}')).toMatchObject({
+      themeId: 'night-current',
+    });
+    expect(JSON.parse(localStorage.getItem('typola-settings') || '{}').theme).toBeUndefined();
+  });
+
   it('migrates legacy export settings without recursive reads', () => {
     localStorage.setItem('typola-export-settings', JSON.stringify({ defaultPresetId: 'academic' }));
 

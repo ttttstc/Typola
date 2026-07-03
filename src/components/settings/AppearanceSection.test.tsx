@@ -40,7 +40,23 @@ describe('AppearanceSection', () => {
     });
 
     expect(getSettings().themeId).toBe('ink-basin');
-    expect(cards[2].getAttribute('aria-pressed')).toBe('true');
+    expect(cards[2].getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('supports arrow-key theme selection inside the radio group', async () => {
+    await act(async () => {
+      root.render(React.createElement(AppearanceSection));
+    });
+
+    const gallery = host.querySelector<HTMLDivElement>('.theme-gallery');
+    expect(gallery).not.toBeNull();
+
+    await act(async () => {
+      gallery!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+
+    expect(getSettings().themeId).toBe('night-current');
+    expect(host.querySelector<HTMLButtonElement>('[data-theme-card="night-current"]')?.tabIndex).toBe(0);
   });
 
   it('persists the review mark enhancement option', async () => {

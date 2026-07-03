@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨池”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
+- 修复 PR #146 主题系统检视意见：补齐旧 `theme: "dark"` 到 `night-current` 的迁移、`npm run build:themes` 生成主题 CSS、主题卡片键盘导航、Vditor / Mermaid / xterm 主题同步，以及 PDF 导出不跟随应用主题的残留清理。
 - 新增 Calm Workspace 动效基础设施：引入 `motion`、`@floating-ui/react` 与 `@formkit/auto-animate`，并提供统一的 MotionProvider / motion token，供后续面板、tooltip 与列表动效复用。
 - AI 工作台补齐 #112 Phase 3：Codex CLI 进入 AI 执行设置的检测卡片与 runtime registry，但保持检测-only，不进入 Composer 可发送 Provider；新增裁剪版 `mocks/` 目录用于后续 parser/golden 回归。
 - AI 工作台补齐 #112 Phase 2 输出链路：OpenCode 写文件工具现在会进入 `artifact_file` 产物回流，CLI 相对路径会归一到当前会话 `.typola-output/<conversationId>/`，非白名单扩展名（如 `.yaml`/源码文件）也能进入产物 toast/manifest 链路。
