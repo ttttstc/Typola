@@ -1,0 +1,103 @@
+name: perf-budget
+
+# Sprint 0 baseline gate. Runs `npm run perf:bundle` on every PR that
+# touches the JS/TS bundle (src/**, vite.config.*, package.json). The
+# assert script compares the build output to perf-budget.json at the
+# repo root and exits non-zero if any chunk grows beyond its ledgered
+# value — there is no headroom, because the ledger was captured at
+# the same commit that introduced it. This makes the next sprint's
+# optimizations easy to verify: a delta against `main`'s build is
+# the only thing that can move the numbers.
+#
+# The comment is posted on both success and failure so reviewers can
+# see "no regression" on green PRs and the exact delta on red ones.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'vite.config.*'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/perf/**'
+      - 'perf-budget.json'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'vite.config.*'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/perf/**'
+      - 'perf-budget.json'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: perf-budget-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run bundle budget gate
+        id: gate
+        # Capture stdout to a file regardless of exit code. The script
+        # prints the comparison table on success and a delta+regression
+        # list on failure; we want both to land in the PR comment, so
+        # we always write the file and surface the status separately.
+        continue-on-error: true
+        run: |
+          set +e
+          npm run perf:bundle > perf-budget-output.txt 2>&1
+          STATUS=$?
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          exit $STATUS
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const status = '${{ steps.gate.outputs.status }}';
+            const output = fs.readFileSync('perf-budget-output.txt', 'utf8');
+            const verdict = status === '0'
+              ? '✅ bundle budget OK'
+              : '❌ bundle budget REGRESSION';
+            const body =
+              '### `perf-budget` — ' + verdict + '\n\n' +
+              '<details><summary>show `npm run perf:bundle` output</summary>\n\n' +
+              '```\n' + output + '\n```\n\n' +
+              '</details>\n\n' +
+              '_Ledger: `perf-budget.json` at the PR head. See `docs/changes/` for the Sprint 0 plan._';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      - name: Surface failure
+        if: steps.gate.outputs.status != '0'
+        run: |
+          echo "perf-budget gate failed (exit ${{ steps.gate.outputs.status }})"
+          exit 1
