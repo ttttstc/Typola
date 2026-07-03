@@ -74,15 +74,15 @@ Most importantly, AI output does not stay buried in chat history. It becomes loc
 Download one of the following from GitHub Releases:
 
 - `Typola_*_x64-setup.exe`
-- `Typola_*_x64_en-US.msi`
 
-Use the installer if you want file associations and auto-update support.
+Use the installer if you want file associations and auto-update support. Windows ships both `setup.exe` and `.msi` installers, and each package includes the WebView2 bootstrapper in the single installer file so machines without WebView2 can be repaired automatically.
 
 ### Windows portable
 
-Download `Typola_*_windows-x64_portable.zip`, extract it, and run `Typola.exe`. This does not install into `Program Files` and is useful for quick testing or portable use.
+Download `Typola_*_windows-x64_portable.zip`, fully extract it, and run `Typola.exe` directly. It checks Microsoft Edge WebView2 Runtime before creating the app window. This does not install into `Program Files` and is useful for quick testing or portable use.
 
-> Typola requires Microsoft Edge WebView2 Runtime on Windows. Modern Windows installations usually include it.
+> The portable build does not write into Program Files, but the first launch runs the bundled WebView2 bootstrapper when the runtime is missing. If the computer is offline or installation fails, Typola shows a visible error and opens the official installation page. `Start-Typola.cmd` is kept only as a diagnostic fallback.
+> Do not distribute the inner `Typola.exe` as a standalone artifact. Windows releases are distributed as installers and portable zip packages.
 
 ### macOS
 
@@ -131,7 +131,7 @@ Prerequisites:
 - Node.js + npm
 - Rust stable
 - Tauri v2 platform prerequisites
-- Optional on Windows: WebView2 Runtime, WiX / NSIS packaging tools
+- Optional on Windows: WebView2 Runtime, NSIS packaging tools
 
 ```bash
 npm install
@@ -145,7 +145,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ## Packaging
 
 ```bash
-npm run tauri:build:local      # local installers: msi + nsis
+npm run tauri:build:local      # local installers: NSIS setup.exe + MSI
 npm run tauri:build:portable   # local portable zip
 npm run tauri:build:update     # release build with updater artifacts
 ```
@@ -153,7 +153,8 @@ npm run tauri:build:update     # release build with updater artifacts
 Outputs:
 
 - Windows executable: `src-tauri/target/release/typola.exe`
-- Windows installers: `src-tauri/target/release/bundle/{msi,nsis}/`
+- Windows NSIS installer: `src-tauri/target/release/bundle/nsis/`
+- Windows MSI installer: `src-tauri/target/release/bundle/msi/`
 - Windows portable: `src-tauri/target/release/bundle/portable/`
 - macOS: `.dmg` and portable zip from CI
 

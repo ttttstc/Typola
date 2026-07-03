@@ -21,7 +21,8 @@ type Props = {
 };
 
 export function ResultBadge({ result, runStreaming, runSucceeded }: Props) {
-  const t = (key: Parameters<typeof translate>[1]) => translate(useSettings().locale, key);
+  const { locale } = useSettings();
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
   if (!result && runStreaming) {
     return (

@@ -1,6 +1,7 @@
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
+import { recordCm6InputToPaint } from '../../../perf/index';
 
 type CreateMarkdownExtensionsOptions = {
   fontFamily: string;
@@ -46,6 +47,12 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
       '.cm-gutters': {
         fontFamily: options.fontFamily,
       },
+    }),
+  );
+
+  extensions.push(
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) recordCm6InputToPaint();
     }),
   );
 

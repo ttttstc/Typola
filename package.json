@@ -16,11 +16,15 @@
     "portable:package": "node scripts/build-portable.mjs",
     "tauri:build:portable": "npm run tauri:build:local && npm run portable:package",
     "tauri:build:update": "tauri build --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":true}}\"",
-    "updater:manifest": "node scripts/create-updater-manifest.mjs"
+    "updater:manifest": "node scripts/create-updater-manifest.mjs",
+    "perf:bundle": "node scripts/perf/capture-bundle-size.mjs",
+    "perf:bundle:check": "node scripts/perf/assert-bundle-budget.mjs",
+    "perf:bundle:report": "node scripts/perf/collect-bundle-size.mjs"
   },
   "dependencies": {
     "@atomic-editor/editor": "0.4.3",
     "@codemirror/lang-markdown": "6.5.0",
+    "@codemirror/language": "6.12.3",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.43.0",
     "@floating-ui/react": "^0.27.19",
@@ -46,6 +50,11 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "vditor": "3.11.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@codemirror/state": "6.6.0"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
