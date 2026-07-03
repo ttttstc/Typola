@@ -14,6 +14,8 @@ import {
   resumeAgentSession,
   startAgentSession,
 } from '../services/agent/headlessService';
+import type { AppLocale } from '../services/settingsService';
+import { getSettings } from '../services/settingsService';
 import type { AgentEvent, AgentMessage, AgentToolCall, SelectionAnchor } from '../services/agent/types';
 import type { AgentDiagnostic } from '../services/agent/runtime/types';
 
@@ -190,7 +192,7 @@ function composeUserRequestForAgent(userText: string): string {
   ].join('\n');
 }
 
-function withArtifactWriteGuard(prompt: string, cwd?: string): string {
+function withArtifactWriteGuard(prompt: string, cwd: string | undefined, locale: AppLocale): string {
   let wrapped = composeUserRequestForAgent(prompt);
   wrapped += [
     '',
@@ -202,6 +204,13 @@ function withArtifactWriteGuard(prompt: string, cwd?: string): string {
     '<question-form> 内部必须直接输出合法 JSON，不要包裹 ```json 代码围栏，不要添加尾逗号或注释。',
     '输出完 <question-form> 后立即停止当前 turn；不要在同一 turn 里继续生成文档、调用工具或写文件。',
     '收到 [form answers — ...] 后必须使用答案继续任务，不要重复提出同一组问题。',
+    '',
+    `[Typola 系统语言: ${locale}]`,
+    `所有面向用户可见的文案必须用 ${locale} 输出,包括:`,
+    '- <question-form> 的 title / description / questions[].label / placeholder / submitLabel / skipLabel',
+    '- questions[].options 里的每一项',
+    '- 用户提交后你在同一 turn 里用 [form answers — ...] 之外的文字回应用户时的语气与措辞',
+    '不要混用其他语言,除非用户在用户消息里明确要求保留某种语言。',
   ].join('\n');
   if (cwd) {
     wrapped += `\n\n[Typola 产物写入规则]\n如果本轮需要新建、导出或写入任何产物文件，必须只写入当前进程工作目录，使用相对路径文件名或相对路径子目录；不要写入工作区根目录、原文档目录或其它绝对路径。\n当前进程工作目录是: ${cwd}`;
@@ -492,10 +501,11 @@ export function useConversationManager({
     const runCwd = outputCwdForConversation(workspaceRoot, convId);
     const handler = createProviderStreamHandler(provider, (event) => queueAssistantEvent(convId, event));
     handlersRef.current.set(convId, handler);
+    const appLocale: AppLocale = getSettings().locale;
     const request = {
       provider,
       conversationId: convId,
-      prompt: withArtifactWriteGuard(trimmed, runCwd),
+      prompt: withArtifactWriteGuard(trimmed, runCwd, appLocale),
       cwd: runCwd,
       agentPath: runtime.agentPath,
       model: runtime.model,
