@@ -19,7 +19,6 @@ export function ToolCard({ tool, message }: Props) {
       : undefined;
   return (
     <ToolCardDispatcher
-      id={tool.id}
       name={tool.name}
       input={tool.input ?? tool.inputDelta}
       result={result}
