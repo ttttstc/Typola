@@ -37,3 +37,9 @@ wait-timeout = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 webview2-com = "0.38"
+
+# Sprint 0 perf baseline. Enables `perf::PerfGuard` Drop logging and
+# `perf:first_paint` first-paint emission. Off by default — never let
+# a measurement tool affect the numbers it is measuring in production.
+[features]
+perf-log = []

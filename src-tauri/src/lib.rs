@@ -22,6 +22,20 @@ use tauri::Manager;
 use wait_timeout::ChildExt;
 
 mod export;
+mod perf;
+use perf::PerfGuard;
+
+/// Process-start anchor for the first-paint measurement. Initialized lazily
+/// on first access so the timer starts at the earliest point of the run()
+/// closure (before the Tauri runtime spins up windows). `OnceLock` keeps
+/// this zero-cost in the hot path: a single atomic load per call.
+static PROCESS_START: std::sync::OnceLock<std::time::Instant> =
+    std::sync::OnceLock::new();
+
+#[inline]
+fn process_start() -> std::time::Instant {
+    *PROCESS_START.get_or_init(std::time::Instant::now)
+}
 
 struct OpenedPaths(Mutex<Vec<String>>);
 #[derive(Default)]
@@ -407,6 +421,7 @@ fn allow_asset_directory(app: tauri::AppHandle, dir: String) -> Result<(), Strin
 
 #[tauri::command]
 fn read_opened_document(path: String) -> Result<Vec<u8>, String> {
+    let _perf = PerfGuard::new("read_opened_document");
     let path = PathBuf::from(path);
     if !is_openable_document_path(&path) {
         return Err("unsupported document type".into());
@@ -417,6 +432,7 @@ fn read_opened_document(path: String) -> Result<Vec<u8>, String> {
 
 #[tauri::command]
 fn write_opened_document(path: String, content: String) -> Result<(), String> {
+    let _perf = PerfGuard::new("write_opened_document");
     let path = PathBuf::from(path);
     if !is_writable_document_path(&path) {
         return Err("unsupported document type".into());
@@ -460,6 +476,7 @@ fn rename_opened_document(request: RenameDocumentRequest) -> Result<RenameDocume
 
 #[tauri::command]
 fn write_attachment_file(request: AttachmentWriteRequest) -> Result<String, String> {
+    let _perf = PerfGuard::new("write_attachment_file");
     let document_path = PathBuf::from(request.document_path);
     if !is_writable_document_path(&document_path) {
         return Err("unsupported document type".into());
@@ -528,6 +545,7 @@ fn process_inserted_image(
 
 #[tauri::command]
 fn upload_image_via_command(request: UploadImageRequest) -> Result<UploadImageResult, String> {
+    let _perf = PerfGuard::new("upload_image_via_command");
     if request.image_paths.is_empty() {
         return Err("no images to upload".into());
     }
@@ -592,6 +610,7 @@ fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<Stri
 
 #[tauri::command]
 fn scan_artifacts(request: ScanArtifactsRequest) -> Result<Vec<ScannedArtifactFile>, String> {
+    let _perf = PerfGuard::new("scan_artifacts");
     let output_root = PathBuf::from(request.output_root);
     if !output_root.exists() {
         return Ok(Vec::new());
@@ -820,6 +839,7 @@ fn update_manifest_overwrite(
 
 #[tauri::command]
 fn overwrite_artifact_to_document(request: OverwriteArtifactRequest) -> Result<String, String> {
+    let _perf = PerfGuard::new("overwrite_artifact_to_document");
     let artifact_path = PathBuf::from(&request.artifact_path);
     let target_path = PathBuf::from(&request.target_path);
     if !artifact_path.is_file() {
@@ -907,6 +927,7 @@ struct DeleteArtifactRequest {
 
 #[tauri::command]
 fn delete_artifact_file(request: DeleteArtifactRequest) -> Result<(), String> {
+    let _perf = PerfGuard::new("delete_artifact_file");
     let artifact_path = PathBuf::from(&request.path);
     if !artifact_path.is_file() {
         return Err("artifact file not found".into());
@@ -922,6 +943,7 @@ fn agent_session_start(
     state: tauri::State<'_, AgentHeadlessStore>,
     request: AgentSessionStartRequest,
 ) -> Result<AgentSessionStartResult, String> {
+    let _perf = PerfGuard::new("agent_session_start");
     start_agent_headless_run(app, state, request, false)
 }
 
@@ -957,6 +979,7 @@ fn agent_session_cancel(
 
 #[tauri::command]
 fn read_mcp_config(request: McpConfigReadRequest) -> Result<Option<String>, String> {
+    let _perf = PerfGuard::new("read_mcp_config");
     let cwd = PathBuf::from(request.cwd.trim());
     if !cwd.is_dir() {
         return Err("workspace path is not a directory".into());
@@ -972,6 +995,7 @@ fn read_mcp_config(request: McpConfigReadRequest) -> Result<Option<String>, Stri
 
 #[tauri::command]
 fn write_mcp_config(request: McpConfigWriteRequest) -> Result<(), String> {
+    let _perf = PerfGuard::new("write_mcp_config");
     let cwd = PathBuf::from(request.cwd.trim());
     if !cwd.is_dir() {
         return Err("workspace path is not a directory".into());
@@ -989,6 +1013,7 @@ fn write_mcp_config(request: McpConfigWriteRequest) -> Result<(), String> {
 fn list_directory_entries(
     request: DirectoryListRequest,
 ) -> Result<Vec<DirectoryEntryPayload>, String> {
+    let _perf = PerfGuard::new("list_directory_entries");
     let root = PathBuf::from(request.path);
     if !root.is_dir() {
         return Err("directory not found".into());
@@ -1033,6 +1058,7 @@ fn watch_opened_document(
     state: tauri::State<'_, DocumentWatcherStore>,
     path: String,
 ) -> Result<(), String> {
+    let _perf = PerfGuard::new("watch_opened_document");
     let path = PathBuf::from(path);
     if !is_openable_document_path(&path) {
         return Err("unsupported document type".into());
@@ -1128,6 +1154,7 @@ fn watch_workspace(
     state: tauri::State<'_, WorkspaceWatcherStore>,
     path: String,
 ) -> Result<(), String> {
+    let _perf = PerfGuard::new("watch_workspace");
     let root = PathBuf::from(&path);
     if !root.is_dir() {
         return Err(format!("workspace path is not a directory: {path}"));
@@ -1208,6 +1235,7 @@ fn terminal_create(
     state: tauri::State<'_, TerminalStore>,
     request: TerminalCreateRequest,
 ) -> Result<TerminalCreateResult, String> {
+    let _perf = PerfGuard::new("terminal_create");
     let cols = request.cols.unwrap_or(100).max(20);
     let rows = request.rows.unwrap_or(28).max(4);
     let cwd = resolve_terminal_cwd(request.cwd.as_deref());
@@ -1305,6 +1333,7 @@ fn terminal_write(
     state: tauri::State<'_, TerminalStore>,
     request: TerminalWriteRequest,
 ) -> Result<(), String> {
+    let _perf = PerfGuard::new("terminal_write");
     let writer = {
         let registry = state
             .0
@@ -1491,6 +1520,41 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {
+            // First-paint timing. Tauri 2.x does not expose a `Painted` window
+            // event on the public `WindowEvent` enum (the underlying tao
+            // event is filtered out), so we approximate first-paint with
+            // the first `Focused(true)` on the main window: that is the
+            // earliest signal the runtime gives us that the user can see
+            // and interact with the window. The wall-clock delta is from
+            // `PROCESS_START`, captured at the first access of the
+            // `process_start()` helper above.
+            //
+            // The `typola://first-paint` event fires once per process,
+            // guarded by `Once`. Frontend and e2e can listen for it; the
+            // `perf:first_paint` stderr line is only emitted with
+            // `--features perf-log` so the measurement tool never taints
+            // the production profile.
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::Focused(true),
+                ..
+            } = &_event
+            {
+                if label == "main" {
+                    use std::sync::Once;
+                    static FIRST_PAINT: Once = Once::new();
+                    FIRST_PAINT.call_once(|| {
+                        let cost_ms = process_start()
+                            .elapsed()
+                            .as_secs_f64()
+                            * 1000.0;
+                        let _ = _app.emit("typola://first-paint", cost_ms);
+                        #[cfg(feature = "perf-log")]
+                        eprintln!("perf:first_paint cost_ms={:.2}", cost_ms);
+                    });
+                }
+            }
+
             #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
             if let tauri::RunEvent::Opened { urls } = _event {
                 let paths = opened_paths_from_urls(urls);
