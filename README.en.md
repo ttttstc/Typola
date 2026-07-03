@@ -75,13 +75,14 @@ Download one of the following from GitHub Releases:
 
 - `Typola_*_x64-setup.exe`
 
-Use the installer if you want file associations and auto-update support. The Windows installer bundles the WebView2 bootstrapper and attempts to repair machines without WebView2 during installation.
+Use the installer if you want file associations and auto-update support. Windows ships both `setup.exe` and `.msi` installers, and each package includes the WebView2 bootstrapper in the single installer file so machines without WebView2 can be repaired automatically.
 
 ### Windows portable
 
 Download `Typola_*_windows-x64_portable.zip`, extract it, and prefer `Start-Typola.cmd`. It checks Microsoft Edge WebView2 Runtime before launching `Typola.exe`. This does not install into `Program Files` and is useful for quick testing or portable use.
 
 > The portable build does not write into Program Files, but `Start-Typola.cmd` runs the bundled WebView2 bootstrapper first when the runtime is missing. If installation still fails, it opens the official installation page.
+> Do not distribute the inner `Typola.exe` as a standalone artifact. Windows releases are distributed as installers and portable zip packages.
 
 ### macOS
 
@@ -144,7 +145,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ## Packaging
 
 ```bash
-npm run tauri:build:local      # local installer: nsis setup exe
+npm run tauri:build:local      # local installers: NSIS setup.exe + MSI
 npm run tauri:build:portable   # local portable zip
 npm run tauri:build:update     # release build with updater artifacts
 ```
@@ -152,7 +153,8 @@ npm run tauri:build:update     # release build with updater artifacts
 Outputs:
 
 - Windows executable: `src-tauri/target/release/typola.exe`
-- Windows installer: `src-tauri/target/release/bundle/nsis/`
+- Windows NSIS installer: `src-tauri/target/release/bundle/nsis/`
+- Windows MSI installer: `src-tauri/target/release/bundle/msi/`
 - Windows portable: `src-tauri/target/release/bundle/portable/`
 - macOS: `.dmg` and portable zip from CI
 

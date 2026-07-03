@@ -113,7 +113,7 @@ function buildWindowsPortable(releaseDir, assetLabel) {
       `Version: ${version}`,
       '',
       '- Prefer Start-Typola.cmd. It checks whether Microsoft Edge WebView2 Runtime is installed before launching.',
-      '- You can also double-click Typola.exe directly if WebView2 Runtime is already installed.',
+      '- Do not copy Typola.exe out as a standalone artifact; keep the extracted portable folder intact.',
       '- This portable build does not write into Program Files.',
       '- If WebView2 Runtime is missing, Start-Typola.cmd runs the bundled MicrosoftEdgeWebview2Setup.exe first.',
       '- If installation still fails, install WebView2 Runtime manually from:',
