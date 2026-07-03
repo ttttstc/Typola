@@ -51,6 +51,11 @@
     "react-dom": "^19.2.6",
     "vditor": "3.11.2"
   },
+  "pnpm": {
+    "overrides": {
+      "@codemirror/state": "6.6.0"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "1.60.0",
