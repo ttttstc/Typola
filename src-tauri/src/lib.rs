@@ -41,6 +41,7 @@ mod windows_runtime {
         }
 
         if let Some(setup) = find_webview2_setup() {
+            show_webview2_installing_message();
             let _ = Command::new(&setup)
                 .args(["/silent", "/install"])
                 .creation_flags(CREATE_NO_WINDOW)
@@ -112,11 +113,26 @@ mod windows_runtime {
     fn show_webview2_missing_message() {
         let message = concat!(
             "Typola needs Microsoft Edge WebView2 Runtime to start.\n\n",
-            "Typola tried to install the bundled runtime but it is still unavailable.\n",
-            "Please install or repair WebView2 Runtime, then launch Typola again.\n\n",
-            "The download page will be opened now."
+            "Typola tried to install the bundled WebView2 bootstrapper, but the runtime is still unavailable.\n",
+            "This usually means the computer is offline, the installer was blocked, or the installation failed.\n\n",
+            "Please connect to the internet and install or repair Microsoft Edge WebView2 Runtime first, then launch Typola again.\n",
+            "The official download page will be opened now."
         );
         let title = "Typola startup dependency missing";
+        show_message_box(title, message, "Error");
+    }
+
+    fn show_webview2_installing_message() {
+        let message = concat!(
+            "Typola needs Microsoft Edge WebView2 Runtime to start.\n\n",
+            "It is missing on this computer, so Typola will run the bundled Microsoft installer now.\n",
+            "If the installer cannot download the runtime, Typola will show the official installation page."
+        );
+        let title = "Typola is preparing WebView2";
+        show_message_box(title, message, "Information");
+    }
+
+    fn show_message_box(title: &str, message: &str, icon: &str) {
         let _ = Command::new("powershell")
             .args([
                 "-NoProfile",
@@ -124,9 +140,10 @@ mod windows_runtime {
                 "Bypass",
                 "-Command",
                 &format!(
-                    "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show({}, {}, 'OK', 'Warning') | Out-Null",
+                    "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show({}, {}, 'OK', {}) | Out-Null",
                     powershell_quote(message),
-                    powershell_quote(title)
+                    powershell_quote(title),
+                    powershell_quote(icon)
                 ),
             ])
             .creation_flags(CREATE_NO_WINDOW)

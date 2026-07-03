@@ -79,9 +79,9 @@ Use the installer if you want file associations and auto-update support. Windows
 
 ### Windows portable
 
-Download `Typola_*_windows-x64_portable.zip`, extract it, and prefer `Start-Typola.cmd`. It checks Microsoft Edge WebView2 Runtime before launching `Typola.exe`. This does not install into `Program Files` and is useful for quick testing or portable use.
+Download `Typola_*_windows-x64_portable.zip`, fully extract it, and run `Typola.exe` directly. It checks Microsoft Edge WebView2 Runtime before creating the app window. This does not install into `Program Files` and is useful for quick testing or portable use.
 
-> The portable build does not write into Program Files, but `Start-Typola.cmd` runs the bundled WebView2 bootstrapper first when the runtime is missing. If installation still fails, it opens the official installation page.
+> The portable build does not write into Program Files, but the first launch runs the bundled WebView2 bootstrapper when the runtime is missing. If the computer is offline or installation fails, Typola shows a visible error and opens the official installation page. `Start-Typola.cmd` is kept only as a diagnostic fallback.
 > Do not distribute the inner `Typola.exe` as a standalone artifact. Windows releases are distributed as installers and portable zip packages.
 
 ### macOS

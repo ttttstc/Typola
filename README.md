@@ -79,9 +79,9 @@
 
 ### Windows 免安装版
 
-下载 `Typola_*_windows-x64_portable.zip`，解压后优先运行 `Start-Typola.cmd`。它会先检测 WebView2 Runtime，再启动 `Typola.exe`。适合临时测试或便携使用。
+下载 `Typola_*_windows-x64_portable.zip`，完整解压后直接运行 `Typola.exe`。它会先检测 WebView2 Runtime，再创建应用窗口。适合临时测试或便携使用。
 
-> 免安装版不会写入 Program Files，但 `Start-Typola.cmd` 会在 WebView2 Runtime 缺失时先运行随包携带的 WebView2 bootstrapper；如果仍安装失败，会给出官方安装入口。
+> 免安装版不会写入 Program Files，但首次启动时会在 WebView2 Runtime 缺失时先运行随包携带的 WebView2 bootstrapper；如果无网或安装失败，会显性提示用户先安装 WebView2，并给出官方安装入口。`Start-Typola.cmd` 仅作为诊断兜底保留。
 > 不建议、也不承诺单独分发包内的 `Typola.exe`。Windows 发布物以安装包和 portable zip 为准。
 
 ### macOS

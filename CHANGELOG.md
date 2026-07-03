@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 
 - 明确 Windows 分发边界：对外发布物是安装包和 portable zip，包内 `Typola.exe` 不作为单独裸 exe 分发产物。
 - Windows 安装版同时产出 NSIS `setup.exe` 与 `.msi`：WebView2 bootstrapper 会作为资源打进单个安装文件；NSIS 在安装后执行检测，MSI 由应用启动前预检执行检测，不需要用户额外下载第二个安装文件。
+- Windows portable 首选入口改为直接运行 `Typola.exe`：应用会在创建窗口前执行 WebView2 预检，缺失时运行随包 bootstrapper；无网或安装失败时会显性提示用户先安装 WebView2，不再静默退出。
 - Windows exe 启动前新增 WebView2 Runtime 预检：缺失时会尝试运行同目录 / resources 中随包携带的 WebView2 bootstrapper，仍失败时弹出明确提示并打开官方安装页；release 包默认启用文件日志，便于定位现场崩溃。
 - Windows 免安装包新增 `Start-Typola.cmd` 启动检查脚本并随包携带 WebView2 bootstrapper：启动前检测 WebView2 Runtime，缺失时先尝试静默安装，再给出官方安装入口，避免直接双击 exe 无提示闪退。
 - 重写中英文 README：按当前主干能力重新梳理产品定位、AI 工作台、SkillHub、产物中心、CM6 编辑器、导出交付、安装使用、开发打包与文档入口。
