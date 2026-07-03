@@ -2,137 +2,198 @@
 
 > 中文 · [English](./README.en.md)
 
-**Typola 是为 AI 时代写作者准备的本地 Markdown 文档工作台。**
+**Typola 是一个把 Markdown 写作、AI 改稿和文档交付放进同一个窗口的桌面工作台。**
 
-不是「AI 帮你写文档」,而是把文档作为产物,从你自己的 AI 流水线里产出来。选中文字就有 AI、产物直接落回编辑器、AI 改动可一键撤销;整个文档围绕「阅读 / 心流 / 检视」三种形态展开,左右栏跟随场景平滑切换。所有 AI 调用走你本机已装的 `claude` CLI,不要 API Key,不上传,跨平台离线优先。
+写文档最烦的往往不是“写”，而是在编辑器、AI 网页、终端、预览工具和导出工具之间来回搬运。Typola 想把这些碎片收回来：你可以在这里写 Markdown，选中一段让 AI 润色，把一堆材料变成报告 / PPT / HTML，给草稿加审阅意见，最后导出 PDF、Word、HTML 或 review.md。
 
-## 跟其他工具的差异
+更重要的是，AI 生成的内容不会困在聊天记录里。它会变成你本地工作目录里的文件：能打开、对比、归档、覆盖原文，也能撤销覆盖。
 
-| 你想做的事 | 用别的工具 | 用 Typola |
-|---|---|---|
-| 让 AI 改一段文字 | 切到 ChatGPT/Claude Desktop → 粘贴段落 → 输入指令 → 复制结果 → 回编辑器 → 粘贴覆盖 | 选中 → 浮条点「润色」→ 「采纳替换」,不离开编辑器 |
-| 让 AI 写整篇 | 在网页 AI 长聊 → 复制粘贴成 md | 心流模式 → 选场景模板(日报 / PPT / HTML / 公众号) → AI 直接产出文件落到工作区 |
-| 文档审稿 | Word 批注 → 给同事 → 等 review → 自己合并 | 检视模式 → 选段加意见 → 「导出 review 版」给协作者,或「发 AI 改」让 AI 按所有意见改 |
-| 给 AI 一段你的写作风格 | 每次粘贴 system prompt | 用你 `~/.claude/skills/` 下的 skill,场景卡直接调,Claude Code 用户零成本嫁接 |
+> 可以把 Typola 理解成：**Markdown 编辑器 + AI 文档助手 + 本地产物中心**。
 
-## AI 协作能力
+## 你可以用它做什么
 
-### 文档三态:阅读 / 心流 / 检视
+- **写得更顺**：用接近成品的排版写 Markdown，图片、表格、代码块、公式、Mermaid 图表都能直接看见效果。
+- **改得更快**：选中一段文字，就能润色、改写、缩写、扩写、校对或解释术语；结果先给你看差异，再决定要不要替换。
+- **审得更清楚**：给具体段落加检视意见，集中查看所有问题，也可以导出 review.md 或让 AI 按意见生成修订稿。
+- **生成得更落地**：让 AI 基于当前文稿或工作目录材料生成报告、PPT 草稿、HTML 页面等产物，生成后直接进入本地文件列表。
+- **交付得更省心**：同一份文档可以导出 PDF、Word、HTML，也能复制适合富文本编辑器 / 公众号后台粘贴的 HTML。
+- **少搬运上下文**：AI 工作台会带着当前文档和附件工作，需要你补充信息时会弹出表单，而不是让你在聊天记录里猜它缺什么。
+- **沿用本机能力**：支持接入你已经安装好的 Claude Code / OpenCode，账号、权限、模型和额度仍然由本机 CLI 管理。
 
-工具栏右上的凹槽分段切换器一键切换,左右栏跟随平滑收放:
+## 能力概览
 
-- **阅读模式**:默认形态。专注阅读和写作,文件树、Word/微信预览按需开关。
-- **心流模式**:左栏 AI 工作台对话,右栏技能场景模板(日报、总结报告、PPT、HTML、公众号、数据分析),窗口自动最大化。AI 产物(HTML / Markdown / 演示稿)自动落到 `<工作区>/.typola-output/<会话>/`,以 chip 形态在右栏出现,可一键在主编辑器打开、归档到工作区或删除。
-- **检视模式**:文档当作待审稿,右栏挂「检视意见」面板。选段 → 加意见 → 汇总跳转;一键导出 review.md(每段后注入 `> **检视意见，请处理**：...`)给协作者;或「发 AI 改」把全文 + 全部意见拼 prompt 让 AI 产出修订稿。
+### 写作与阅读
 
-### 选区浮条:选中即用,原地闭环
+- Markdown live preview：边写边看接近最终阅读效果。
+- 支持源码模式、文件内查找替换、快速打开、编辑辅助、文档统计、同步滚动和大纲跳转。
+- 支持任务列表、表格、代码块、图片、KaTeX 数学公式和 Mermaid 图表。
+- 图片支持本地相对路径、剪贴板粘贴保存、远程图片预览与导出。
+- 多文件 tab、文件树、拖拽打开、未保存关闭确认，适合日常长文档工作。
 
-选中正文时浮条自动出现在选区上方:
+### AI 改稿与审阅
 
-- **润色 / 缩写 / 扩写 / 校对 / 解释术语**:静默调用 Claude,结果以「原文 vs 新版本」对比卡贴在选区旁,点「采纳替换」直接落回文档,**不离开编辑器**。润色支持调用前先输入要求(如「更口语」「更精简」),其他动作走默认模板。
-- **自定义**:把选区作为引用拼到 AI 工作台对话框,自由提需求。
-- **加检视意见**:开浮卡输入意见后写入右栏检视面板。
+- 选中文本后出现浮条，可执行润色、改写、缩写、扩写、校对、解释术语、自定义请求和添加检视意见。
+- 改稿结果以差异卡展示，确认后再替换正文，避免 AI 直接改坏原文。
+- AI 修改会保存快照，`Ctrl/Cmd+Z` 可以一步步撤销。
+- 检视意见可以集中管理，也可以导出 review.md，方便给协作者或继续交给 AI 处理。
 
-浮条可在「设置 → 编辑器 → 选区浮条」关掉,右键菜单与 `Ctrl+K` 仍可触达同一组动作。
+### AI 工作台
 
-### AI 修改可撤销
+- 支持 Claude Code 与 OpenCode，在底部轻量切换。
+- 支持多轮对话、多会话切换、会话重命名、停止生成和继续提问。
+- AI 的思考、正文、工具调用和问题表单会以应用内卡片展示；低关注度的工具调用默认折叠，不刷屏。
+- 支持当前文档、附件和工作目录上下文，让 AI 更容易围绕正在写的材料工作。
+- 如果 AI 需要你补充信息，会显示可填写表单，提交后继续当前任务。
 
-任何 AI 替换执行前自动快照编辑器内容。`Ctrl+Z` 智能区分:
+### SkillHub 与产物中心
 
-- 文档没动过 → 直接回退 AI 改动
-- AI 改后又手改了几处 → 先撤销手改,等手改撤完再撤销 AI
+- 内置报告生成、PPT 制作、HTML 制作等场景入口。
+- 系统推荐的 skill 会显示安装状态；未安装时提供安装引导，已安装后可直接使用。
+- 用户也可以把本机已有 skill 添加到场景模板中。
+- AI 生成的文件会统一进入当前工作目录的 `.typola-output`，不再散落在聊天记录里。
+- 右侧产物中心可查看当前会话或全部产物，支持打开、对比、归档、删除、覆盖原文和撤销覆盖。
 
-栈式逐步回退,跨文件自动清空,最多保留 50 条 AI 快照,不会污染普通编辑撤销。
+### 导出与交付
 
-### Claude CLI + Skill 生态
+- PDF 后台导出，成功或失败用右上角通知提示，不打断写作。
+- Word 导出支持纸张预览与 `.docx` 输出。
+- HTML 支持完整导出、富文本复制和公众号样式预览。
+- `.docx` 文件可作为只读预览打开。
 
-AI 工作台直接驱动本机已装的 `claude` CLI(headless 模式),技能场景接入 `~/.claude/skills/` 下的 skill。**Typola 里不需要配 API Key**,所有调用走你自己的 CLI 环境、模型、权限和余额——已有 Claude Code 工作流的人零成本嫁接。
+### 桌面体验
 
-## Markdown 编辑与交付
+- 支持 Windows 和 macOS。
+- 支持文件关联、单实例打开、自动更新。
+- 底部集成终端，可在当前工作目录或当前文件目录启动。
+- 自动保存作为设置项保留，但默认关闭，避免意外覆盖。
 
-- 所见即所得 Markdown 编辑(Vditor IR 模式)+ 源码模式(CodeMirror 6),按需切换
-- 文件支持:`.md` / `.markdown` / `.html` / `.htm`,只读预览 `.docx`
-- 多文件 tab 自动管理,左侧文件树,浮动大纲(悬浮 / 固定为侧栏 / 点击跳转)
-- Word 纸张预览(A4)+ 后台 `.docx` 导出
-- HTML 预览 + 富文本复制 + 完整 HTML 导出
-- 编辑器与预览按比例同步滚动(rAF 节流,零额外渲染)
-- 查找替换(`Cmd/Ctrl+F` / `Cmd/Ctrl+H`,大小写 / 全词 / 正则)+ 快速打开(`Cmd/Ctrl+Shift+P`)
-- PDF 后台导出(`Cmd/Ctrl+P`，Windows WebView2)
-- 编辑辅助:一键插入链接 / 图片 / Markdown 表格;粘贴图片自动保存到 `assets/` 并插入相对路径
-- 文档统计(词数 / 字符数 / 段落数 / 预计阅读时间,debounce 不阻塞输入)
-- 集成终端(底部多 tab,跟随当前文件目录启动)
-- 本地图片解析(相对路径在编辑、预览、导出全链路一致)
-- 数据安全(未保存关闭三按钮确认,外部文件变更状态栏提示)
-- 桌面原生(系统文件关联、拖拽打开、单实例转发、自动更新)
-
-## 安装方式
+## 安装
 
 ### Windows 安装版
 
-从 GitHub Release 下载 `Typola_*_x64-setup.exe` 或 `Typola_*_x64_*.msi`,双击安装。适合长期使用、文件关联和自动更新。
+从 GitHub Releases 下载：
+
+- `Typola_*_x64-setup.exe`
+- `Typola_*_x64_en-US.msi`
+
+适合长期使用、文件关联和自动更新。
 
 ### Windows 免安装版
 
-下载 `Typola_*_windows-x64_portable.zip`,解压后运行里面的 `Typola.exe`。不写入 `Program Files`,适合临时测试、便携使用。
+下载 `Typola_*_windows-x64_portable.zip`，解压后运行 `Typola.exe`。适合临时测试或便携使用。
 
-Windows 仍需要系统中可用的 Microsoft Edge WebView2 Runtime,现代 Windows 通常已经内置。
+> Windows 需要 Microsoft Edge WebView2 Runtime。现代 Windows 通常已经内置。
 
+### macOS
 
-## 基本使用
+下载对应架构的 `.dmg`，打开后拖拽 `Typola.app` 到 Applications。首次启动如遇安全提示，在系统设置的“隐私与安全性”中允许打开。
 
-- 打开文件:工具栏打开按钮,或拖拽 Markdown / HTML / Word 文件到窗口
-- 切换文档形态:右上凹槽切换器(阅读 / 心流 / 检视)
-- 选区 AI:选中正文 → 浮条点动作 → 采纳替换 / 进对话框 / 加意见
-- 心流模式:切心流 → 左栏对话或右栏选场景模板 → AI 产物落到工作区
-- 检视模式:切检视 → 选段加意见 → 右栏汇总 → 导出 review.md 或发 AI 改
-- 撤销 AI:`Ctrl+Z`(智能区分手改 / AI 改)
-- 设置偏好:主题 / 字体 / 编码 / 自动保存 / 选区浮条开关 / 导出预设
+## AI CLI 准备
 
-常用快捷键:
+Typola 不内置模型账号。请先按对应项目的官方方式安装你要使用的 CLI，并确认命令可用：
 
-- `Cmd/Ctrl + O`:打开文件
-- `Cmd/Ctrl + S`:保存
-- `Cmd/Ctrl + Shift + S`:另存为
-- `Cmd/Ctrl + F` / `H`:查找 / 替换
-- `Cmd/Ctrl + P`:导出 PDF
-- `Cmd/Ctrl + Shift + P`:快速打开
-- `Cmd/Ctrl + Shift + I`:编辑辅助
-- `Cmd/Ctrl + Alt + S` / `P` / `M`:切换源码 / Word 预览 / HTML 预览
-- `Cmd/Ctrl + K`:对选区唤起 AI 动作菜单
-- `Cmd/Ctrl + Z`:撤销(含 AI 修改撤销)
-- `Shift + A`:切换心流模式
-- `Cmd/Ctrl + ,`:打开设置
+```bash
+claude --version
+opencode --version
+```
 
-## 开发与构建
+然后在 **设置 → AI 执行** 中检测 CLI。模型、权限、MCP、插件目录等行为以你本机 CLI 环境为准。
 
-依赖:Node.js + npm、Rust stable、Tauri 平台依赖(Windows / macOS)
+## 快速开始
+
+1. 打开 Markdown / HTML / Word 文件，或把文件拖进窗口。
+2. 在阅读模式中写作；需要原始 Markdown 时切到源码模式。
+3. 选中文本，使用浮条执行 AI 改稿或添加检视意见。
+4. 切换到心流模式，选择 SkillHub 场景或直接在 AI 工作台提问。
+5. 在右侧产物中心打开、对比、归档或覆盖 AI 产物。
+6. 导出 PDF / Word / HTML / review.md 完成交付。
+
+常用快捷键：
+
+| 快捷键 | 功能 |
+| --- | --- |
+| `Ctrl/Cmd + O` | 打开文件 |
+| `Ctrl/Cmd + S` | 保存 |
+| `Ctrl/Cmd + Shift + S` | 另存为 |
+| `Ctrl/Cmd + F` / `H` | 查找 / 替换 |
+| `Ctrl/Cmd + Shift + P` | 快速打开 |
+| `Ctrl/Cmd + P` | 导出 PDF |
+| `Ctrl/Cmd + Shift + I` | 编辑辅助 |
+| `Ctrl/Cmd + K` | 对选区打开 AI 动作菜单 |
+| `Ctrl/Cmd + Z` | 撤销，包含 AI 修改快照 |
+| `Shift + A` | 切换心流模式 |
+| `Ctrl/Cmd + ,` | 打开设置 |
+
+## 开发
+
+依赖：
+
+- Node.js + npm
+- Rust stable
+- Tauri v2 平台依赖
+- Windows 可选：WebView2 Runtime、WiX / NSIS 打包环境
 
 ```bash
 npm install
 npm run tauri dev        # 桌面开发模式
 npm run dev              # 前端开发模式
-npm test                 # 单测
 npm run typecheck        # TypeScript 检查
+npm test                 # Vitest 单测
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
 ## 打包
 
 ```bash
-npm run tauri:build:local      # 本地安装版(msi + nsis)
-npm run tauri:build:portable   # 本地免安装版(portable zip)
-npm run tauri:build:update     # 带自动更新签名的发布版本
+npm run tauri:build:local      # 本地安装版：msi + nsis
+npm run tauri:build:portable   # 本地免安装版：portable zip
+npm run tauri:build:update     # 带更新签名的发布构建
 ```
 
-产物:
+产物位置：
 
-- Windows 安装版:`src-tauri/target/release/bundle/{msi,nsis}/*`
-- Windows 免安装:`src-tauri/target/release/bundle/portable/*_windows-x64_portable.zip`
-- macOS:CI 产出 `.dmg` 和 `*_macos-{arm64,x64}_portable.zip`
+- Windows EXE：`src-tauri/target/release/typola.exe`
+- Windows 安装包：`src-tauri/target/release/bundle/{msi,nsis}/`
+- Windows 免安装包：`src-tauri/target/release/bundle/portable/`
+- macOS：CI 产出 `.dmg` 与 portable zip
+
+## 项目结构
+
+```text
+src/                 React 前端、编辑器、AI 工作台、导出 UI
+src-tauri/           Tauri / Rust 后端、文件系统、终端、CLI spawn、导出命令
+docs/                架构、AI 工作台、编辑器、导出与功能设计文档
+config/              Vite / TypeScript / Playwright / ESLint 配置
+public/vditor/dist/  本地化 Vditor 资源
+scripts/             打包、portable、updater manifest 辅助脚本
+```
 
 ## 技术栈
 
-Tauri v2 · React 19 · TypeScript · Vite 8 · Vditor · CodeMirror 6 · xterm.js · portable-pty · Claude CLI(headless)
+- Desktop：Tauri v2、Rust、portable-pty
+- Frontend：React 19、TypeScript、Vite 8
+- Editor：CodeMirror 6、Atomic Editor、Vditor
+- Markdown：KaTeX、Mermaid、DOMPurify
+- Terminal：xterm.js
+- AI CLI：Claude Code、OpenCode
+
+## 设计原则
+
+- **文档是成品，AI 对话是草稿纸。**
+- **产物必须回到本地文件和主编辑器，而不是困在聊天记录里。**
+- **尽量复用用户本机 CLI 与 skill 生态，不把模型账号锁进应用。**
+- **导出、预览和编辑使用同一份 Markdown source，减少不可解释差异。**
+- **危险操作显式确认，未保存内容不静默丢失。**
+
+## 文档
+
+- [架构说明](./docs/ARCHITECTURE.md)
+- [AI 工作台 Skill OS](./docs/AI_WORKBENCH_SKILL_OS.md)
+- [OpenCode Provider PRD](./docs/AI_WORKBENCH_OPENCODE_PRD.md)
+- [AI Diff Preview](./docs/AI_DIFF_PREVIEW_SPEC.md)
+- [AI 编辑与检视](./docs/AI_EDIT_AND_REVIEW_SPEC.md)
+- [PDF 导出](./docs/PDF_EXPORT_SPEC.md)
+- [Mermaid 支持](./docs/MERMAID_SPEC.md)
 
 ## 许可证
 
