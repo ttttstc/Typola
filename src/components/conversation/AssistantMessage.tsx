@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { PreviewPane } from '../PreviewPane';
 import type { AgentMessage, AgentToolCall } from '../../services/agent/types';
 import { ThoughtCard } from './ThoughtCard';
@@ -97,6 +98,21 @@ export function AssistantMessage({
   // 从 parsed.markdown 而非原始 content 提取代码块,避免 question-form 内 ```json``` 围栏被误判为可保存代码。
   const codeBlocks = useMemo(() => extractCodeBlocks(parsed.markdown), [parsed.markdown]);
   const [openFormId, setOpenFormId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+  }, []);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 剪贴板不可用(非 Tauri / 权限拒绝)时静默忽略,不弹错误打断对话流。
+    }
+  };
   // P1-9: 仅在用户还没主动展开某个 form 时自动展开第一个。
   // 用 current ?? firstPending 守卫:openFormId=null 才自动打开,避免 effect 覆盖用户当前选择。
   useEffect(() => {
@@ -127,9 +143,22 @@ export function AssistantMessage({
 
   return (
     <article className="conversation-message assistant">
-      <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>
-        {formatRelativeTime(message.createdAt)}
-      </span>
+      <div className="conversation-message-meta">
+        <span className="conversation-time" title={formatAbsoluteTime(message.createdAt)}>
+          {formatRelativeTime(message.createdAt)}
+        </span>
+        {message.content.trim() && (
+          <button
+            type="button"
+            className={`conversation-copy-button${copied ? ' copied' : ''}`}
+            onClick={() => void handleCopy()}
+            aria-label={copied ? '已复制' : '复制整条消息'}
+            title={copied ? '已复制' : '复制整条消息'}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+          </button>
+        )}
+      </div>
       <ThoughtCard text={message.thinking} done={message.done ?? false} />
       {message.content ? (
         <>

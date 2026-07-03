@@ -15,6 +15,17 @@ vi.mock('../PreviewPane', () => ({
   PreviewPane: ({ source }: { source: string }) => <div data-testid="preview">{source}</div>,
 }));
 
+// jsdom 默认没有 navigator.clipboard;为 AssistantMessage 的复制按钮提供最小 stub。
+const clipboardWriteText = vi.fn(async (_text: string) => undefined);
+if (!('clipboard' in navigator)) {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: clipboardWriteText },
+  });
+} else {
+  vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(clipboardWriteText);
+}
+
 function assistant(content: string, tools: Extract<AgentMessage, { role: 'assistant' }>['tools'] = []): Extract<AgentMessage, { role: 'assistant' }> {
   return {
     id: 'a1',
@@ -290,5 +301,50 @@ body { color: red; }
     expect(host.textContent).toContain('5 个工具调用');
     expect(host.textContent).toContain('Command×1');
     expect(host.textContent).toContain('写入');
+  });
+
+  it('shows a copy button in the message header when content is non-empty', () => {
+    act(() => {
+      root.render(<AssistantMessage message={assistant('一份方案')} />);
+    });
+
+    const copy = host.querySelector<HTMLButtonElement>('.conversation-copy-button');
+    expect(copy).toBeTruthy();
+    expect(copy?.getAttribute('aria-label')).toBe('复制整条消息');
+    expect(copy?.classList.contains('copied')).toBe(false);
+  });
+
+  it('hides the copy button when message content is empty or whitespace-only', () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={{ ...assistant(''), content: '   \n  ' }}
+        />,
+      );
+    });
+    expect(host.querySelector('.conversation-copy-button')).toBeNull();
+  });
+
+  it('writes the raw message content to the clipboard and flips to the copied state on click', async () => {
+    clipboardWriteText.mockClear();
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant('方案正文：\n```js\n1+1\n```\n谢谢')}
+        />,
+      );
+    });
+
+    const copy = host.querySelector<HTMLButtonElement>('.conversation-copy-button');
+    expect(copy).toBeTruthy();
+
+    await act(async () => {
+      copy?.click();
+    });
+
+    expect(clipboardWriteText).toHaveBeenCalledTimes(1);
+    expect(clipboardWriteText).toHaveBeenCalledWith('方案正文：\n```js\n1+1\n```\n谢谢');
+    expect(copy?.classList.contains('copied')).toBe(true);
+    expect(copy?.getAttribute('aria-label')).toBe('已复制');
   });
 });
