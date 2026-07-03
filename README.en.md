@@ -2,141 +2,207 @@
 
 > [中文](./README.md) · English
 
-**Typola is a local Markdown workbench built for writers in the AI era.**
+**Typola is a local Markdown document workbench for the AI era.**
 
-Not "AI writes for you" — your document is the artifact, produced by your own AI pipeline. Select text to invoke AI inline; artifacts land directly back in the editor; AI edits can be undone with one keystroke. The same document runs in three modes — Reading / Flow / Review — with side panels gliding to match the task. Every AI call goes through your locally installed `claude` CLI: no API key inside Typola, no uploads, cross-platform, offline-first.
+It is not a Markdown editor with a chat box bolted on. Typola keeps the document at the center and turns AI into a drafting, reviewing, and artifact-producing workflow around it. Conversations are scratch space; generated work returns to local files and the main editor.
 
-## How Typola is different
+Typola is local-first by default. The desktop app is powered by Tauri, and AI features reuse CLI tools you already run locally, such as Claude Code and OpenCode. Typola does not ask you to paste API keys into the app, and it does not take over your model account, permissions, or quota.
 
-| What you want to do | With other tools | With Typola |
-|---|---|---|
-| Have AI rewrite a paragraph | Switch to ChatGPT / Claude Desktop → paste paragraph → type prompt → copy result → switch back → paste over | Select → click "Polish" on the floating bar → click "Accept replacement". You never leave the editor. |
-| Have AI draft a whole document | Long chat in a web AI → copy-paste into your editor | Flow mode → pick a scenario template (daily report / slide deck / HTML / WeChat article) → AI writes the file straight into your workspace |
-| Review a document | Word comments → send to colleague → wait → merge changes yourself | Review mode → select a paragraph, add a comment → "Export review version" for the reviewer, or "Send to AI" to apply every comment in one revision |
-| Undo an AI change | `Ctrl+Z` N times — and accidentally undo your own edits too | `Ctrl+Z` is smart: it pops your manual edits first, then the AI snapshot — they never collide |
-| Give AI your writing voice | Paste a system prompt every time | Skills under `~/.claude/skills/` plug straight into Typola's scenario cards — Claude Code users adapt at zero cost |
+## Why Typola
 
-## AI co-authoring
+| Task | Typical workflow | Typola workflow |
+| --- | --- | --- |
+| Rewrite a paragraph | Copy into a web AI, wait, copy back, replace manually | Select text, choose a floating-bar action, review the diff, accept replacement |
+| Draft a new document | Chat for a long time, then manually save the answer as a file | Enter Flow mode, pick a report / slide / HTML scenario, and let the artifact land in `.typola-output` |
+| Review a document | Use Word comments or free-form notes, then merge manually | Add review comments by selection, manage them in one panel, export review.md or ask AI to revise |
+| Manage AI output | Scroll through chat history to find the final answer | Use the Artifact Center to open, diff, archive, delete, overwrite, or undo generated files |
+| Use local agents | Open a terminal outside your writing context | Switch Claude Code / OpenCode inside the AI Workbench and keep the document visible |
 
-### Document modes: Reading / Flow / Review
+## Core Features
 
-A recessed segmented control sits at the top-right of the toolbar. One click switches modes; the left and right panels glide in and out:
+### Three document modes
 
-- **Reading mode** — the default. Focused reading and writing; toggle the file tree and Word/WeChat previews as needed.
-- **Flow mode** — left panel opens the AI Workbench chat; right panel surfaces skill scenarios (daily/weekly report, summary, slide deck, HTML, WeChat article, data analysis); the window auto-maximizes. AI artifacts (HTML / Markdown / decks) land in `<workspace>/.typola-output/<conversation>/` and appear as chips in the right panel — open in the main editor, archive to the workspace, or delete with one click.
-- **Review mode** — treats the document as a draft for review. The right panel shows a Review pane. Select a paragraph, add a comment via the floating bar, jump back from the summary list; "Export review version" writes an in-paragraph-suffix Markdown copy (each commented segment followed by `> **Review comment, please address**: …`) for collaborators, or "Send to AI" packages the full document plus all comments into a single prompt for a revised draft.
+- **Reading mode** — the default writing and reading environment. File tree, outline, Word preview, HTML preview, and WeChat-style preview stay out of the way until needed.
+- **Flow mode** — AI Workbench on the left, SkillHub and artifacts on the right. It is designed for summarizing, rewriting, generating reports, creating HTML pages, and producing slide-related artifacts from your current document or workspace.
+- **Review mode** — a document review workflow. Select text, add comments, manage them in the right panel, export a review.md snapshot, or ask AI to produce a revised draft from all comments.
 
-### Selection floating bar: act on selection, close the loop in place
+### AI Workbench
 
-When you select text, a floating bar appears above the selection:
+- Supports **Claude Code** and **OpenCode** providers, switchable from the composer footer.
+- Settings provide lightweight CLI detection: path, version, timestamp, and diagnostics, without running model requests.
+- Claude uses a headless stream-json pipeline; OpenCode uses `opencode run`. Both feed the same message renderer for text, thinking, tool calls, and artifact return.
+- Runtime conversations use a pill menu for switch / create / close / rename, separate from editor file tabs.
+- Supports `<question-form>` cards: when AI needs missing information, Typola renders a native form card; the submitted answers continue as a normal next-turn message.
+- Supports current-document and attachment context chips; visible context files are passed to the CLI when sending.
+- Tool calls are folded by default, so file reads, searches, and shell commands do not flood the conversation.
 
-- **Polish / Shorten / Expand / Proofread / Explain** — a silent Claude call returns a diff card ("original vs new") pinned next to the selection; click "Accept replacement" to apply, **without leaving the editor**. Polish also accepts pre-call instructions (e.g. "more casual", "tighter"); other actions use the default template.
-- **Custom** — drops the selection as a quote into the AI Workbench composer for free-form requests.
-- **Add review comment** — opens an inline editor and saves the comment into the Review pane.
+### SkillHub and Artifact Center
 
-The floating bar can be disabled at Settings → Editor → Selection floating bar. The right-click menu and `Ctrl+K` still reach the same actions.
+- SkillHub ships with curated scenario templates, such as report generation, PPT creation, and HTML creation.
+- Claude scenarios read skills from `~/.claude/skills/`; OpenCode scenarios read global or project command definitions.
+- Missing recommended skills are shown disabled with installation guidance. Users can also add installed local skills to a scenario.
+- AI-generated files are written under the active AI workspace: `.typola-output/<conversation>/`.
+- The Artifact Center scans the current session or the whole output directory, and supports open, diff, archive, delete, overwrite original, and undo overwrite.
+- AI revision outputs are also normalized into the artifact list instead of being trapped in the chat log.
 
-### AI edits are undoable
+### Selection AI and undoable edits
 
-Every AI replacement snapshots the editor content first. `Ctrl+Z` is smart:
+- Select text to open a floating action bar: polish, rewrite, shorten, expand, proofread, explain terms, custom request, and add review comment.
+- AI results appear as diff cards and can be accepted or ignored.
+- Typola snapshots the editor before AI replacements. `Ctrl/Cmd+Z` can distinguish manual edits from AI edits and roll them back step by step.
+- Anchor validation ensures replacement still targets the original selection; if the source text changed, Typola asks you to relocate manually.
 
-- Document untouched after the AI edit → revert the AI change directly
-- Hand-edited after the AI edit → native undo cleans up your hand edits first; the next `Ctrl+Z` pops the AI snapshot
+### Markdown editing and reading
 
-Stepwise rollback, cleared automatically on file switch, capped at 50 AI snapshots, never pollutes ordinary editing history.
+- Default editor: **CodeMirror 6 live preview**, with task lists, tables, images, KaTeX math, and Mermaid diagrams.
+- Vditor WYSIWYG remains available as a transitional fallback via local `typola.editorEngine=vditor`.
+- Source mode, find/replace, quick open, editing helpers, document statistics, scroll sync, and outline navigation are built in.
+- Images support local relative paths, pasted clipboard images saved into `assets/`, remote image preview, and export consistency.
+- Mermaid and KaTeX render consistently across reading, preview, and export paths.
 
-### Claude CLI + skills ecosystem
+### Export and delivery
 
-The AI Workbench drives your locally installed `claude` CLI (headless mode), and skill scenarios reference skills under `~/.claude/skills/`. **No API key configuration inside Typola** — every call inherits your own CLI environment, model, permissions, and quota. If you already run Claude Code, Typola plugs in at zero cost.
+- **PDF export** runs in the background and reports success or failure through toast notifications.
+- **Word export** includes A4 paper preview and `.docx` output.
+- **HTML / WeChat preview** supports rich HTML copy, full HTML export, and WeChat-style article preview.
+- **Review export** writes review comments into a Markdown snapshot for collaborators or AI follow-up.
+- `.docx` files can be opened as read-only previews.
 
-## Markdown editing and delivery
+### Desktop experience
 
-- WYSIWYG Markdown editing (Vditor IR mode) + source mode (CodeMirror 6), switchable
-- Files: `.md` / `.markdown` / `.html` / `.htm`, plus read-only `.docx` preview
-- Multi-file tabs, left workspace file tree, floating outline (hover / pin as sidebar / click to jump)
-- Word paper preview (A4) + background `.docx` export
-- HTML preview + rich-text copy + full HTML export
-- Editor-to-preview scroll sync by ratio (rAF-throttled, no extra render)
-- Find/replace (`Cmd/Ctrl+F` / `Cmd/Ctrl+H`, case / whole-word / regex) + quick open (`Cmd/Ctrl+Shift+P`)
-- Background PDF export (`Cmd/Ctrl+P`, Windows WebView2)
-- Editing utilities: insert links / images / Markdown tables in one click; pasted clipboard images save to a sibling `assets/` and insert as a relative path
-- Document statistics (word count / chars / paragraphs / reading time, debounced, never blocks typing)
-- Integrated terminal (multi-tab at the bottom, starts in the current file directory)
-- Local image resolution (relative paths work consistently in editor, preview, and export)
-- Data safety (unsaved close prompts a single Save/Discard/Cancel dialog; external file changes surface in the status bar)
-- Native desktop (file associations, drag-and-drop open, single-instance forwarding, auto-update)
+- Native Tauri desktop app for Windows and macOS packaging.
+- File associations, drag-and-drop open, single-instance forwarding, and auto-update support.
+- Workspace file tree, multi-file tabs, and a Save / Discard / Cancel prompt for unsaved changes.
+- Integrated bottom terminal with multiple tabs; new terminals start from the selected workspace or current file directory.
+- Auto-save exists as a setting, but is off by default.
 
 ## Installation
 
 ### Windows installer
 
-Download `Typola_*_x64-setup.exe` or `Typola_*_x64_*.msi` from GitHub Releases and run it. Best for regular use, file associations, and auto-updates.
+Download one of the following from GitHub Releases:
+
+- `Typola_*_x64-setup.exe`
+- `Typola_*_x64_en-US.msi`
+
+Use the installer if you want file associations and auto-update support.
 
 ### Windows portable
 
-Download `Typola_*_windows-x64_portable.zip`, extract, and run `Typola.exe`. Does not install into `Program Files`; useful for temporary testing or portable use.
+Download `Typola_*_windows-x64_portable.zip`, extract it, and run `Typola.exe`. This does not install into `Program Files` and is useful for quick testing or portable use.
 
-Windows still needs the Microsoft Edge WebView2 Runtime. Modern Windows installations typically include it.
+> Typola requires Microsoft Edge WebView2 Runtime on Windows. Modern Windows installations usually include it.
 
 ### macOS
 
-Download the `.dmg` for your chip architecture, open it, and drag `Typola.app` into Applications. Portable zip works extracted. If macOS shows a security prompt on first launch, allow it under Privacy & Security.
+Download the `.dmg` matching your architecture, open it, and drag `Typola.app` into Applications. If macOS blocks first launch, allow it under Privacy & Security.
 
-## Basic usage
+## AI CLI Setup
 
-- Open files via the toolbar button or by dragging Markdown / HTML / Word files into the window
-- Switch document mode via the segmented control at the top-right (Reading / Flow / Review)
-- Selection AI: select text → click an action on the floating bar → accept replacement / drop into composer / add a comment
-- Flow mode: switch to Flow → chat in the left panel or pick a scenario in the right panel → AI artifacts land in your workspace
-- Review mode: switch to Review → add comments per paragraph → export `review.md` or send to AI
-- Undo AI: `Ctrl+Z` (smart about manual vs AI edits)
-- Preferences: themes, fonts, encoding, auto-save, selection-bar toggle, export presets
+Typola does not bundle a model account. Install the CLI tools you want to use through their official channels, then verify the commands are available:
+
+```bash
+claude --version
+opencode --version
+```
+
+Then open **Settings → AI Runtime** and run detection. Model choice, permissions, MCP, plugins, and quotas remain controlled by your local CLI environment.
+
+## Quick Start
+
+1. Open a Markdown / HTML / Word file, or drag it into the window.
+2. Write in Reading mode; switch to source mode when you need raw Markdown.
+3. Select text and use the floating bar for AI edits or review comments.
+4. Enter Flow mode, pick a SkillHub scenario, or ask directly in the AI Workbench.
+5. Use the Artifact Center to open, diff, archive, or overwrite generated files.
+6. Export PDF / Word / HTML / review.md when ready to deliver.
 
 Common shortcuts:
 
-- `Cmd/Ctrl + O` — Open file
-- `Cmd/Ctrl + S` — Save
-- `Cmd/Ctrl + Shift + S` — Save as
-- `Cmd/Ctrl + F` / `H` — Find / Replace
-- `Cmd/Ctrl + P` — Export PDF
-- `Cmd/Ctrl + Shift + P` — Quick open
-- `Cmd/Ctrl + Shift + I` — Editing utilities
-- `Cmd/Ctrl + Alt + S` / `P` / `M` — Toggle source / Word preview / HTML preview
-- `Cmd/Ctrl + K` — Open the AI action menu for the current selection
-- `Cmd/Ctrl + Z` — Undo (covers AI replacements too)
-- `Shift + A` — Toggle Flow mode
-- `Cmd/Ctrl + ,` — Open Settings
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl/Cmd + O` | Open file |
+| `Ctrl/Cmd + S` | Save |
+| `Ctrl/Cmd + Shift + S` | Save as |
+| `Ctrl/Cmd + F` / `H` | Find / Replace |
+| `Ctrl/Cmd + Shift + P` | Quick open |
+| `Ctrl/Cmd + P` | Export PDF |
+| `Ctrl/Cmd + Shift + I` | Editing helpers |
+| `Ctrl/Cmd + K` | Open AI actions for selection |
+| `Ctrl/Cmd + Z` | Undo, including AI edit snapshots |
+| `Shift + A` | Toggle Flow mode |
+| `Ctrl/Cmd + ,` | Open Settings |
 
 ## Development
 
-Prereqs: Node.js + npm, Rust stable, Tauri prerequisites (Windows / macOS).
+Prerequisites:
+
+- Node.js + npm
+- Rust stable
+- Tauri v2 platform prerequisites
+- Optional on Windows: WebView2 Runtime, WiX / NSIS packaging tools
 
 ```bash
 npm install
 npm run tauri dev        # desktop dev mode
 npm run dev              # frontend-only dev mode
-npm test                 # unit tests
 npm run typecheck        # TypeScript check
+npm test                 # Vitest unit tests
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
 ## Packaging
 
 ```bash
-npm run tauri:build:local      # local installer (msi + nsis)
+npm run tauri:build:local      # local installers: msi + nsis
 npm run tauri:build:portable   # local portable zip
-npm run tauri:build:update     # release build with updater signatures
+npm run tauri:build:update     # release build with updater artifacts
 ```
 
 Outputs:
 
-- Windows installer: `src-tauri/target/release/bundle/{msi,nsis}/*`
-- Windows portable: `src-tauri/target/release/bundle/portable/*_windows-x64_portable.zip`
-- macOS (via CI): `.dmg` and `*_macos-{arm64,x64}_portable.zip`
+- Windows executable: `src-tauri/target/release/typola.exe`
+- Windows installers: `src-tauri/target/release/bundle/{msi,nsis}/`
+- Windows portable: `src-tauri/target/release/bundle/portable/`
+- macOS: `.dmg` and portable zip from CI
+
+## Project Layout
+
+```text
+src/                 React frontend, editor, AI Workbench, export UI
+src-tauri/           Tauri / Rust backend, filesystem, terminal, CLI spawn, export commands
+docs/                Architecture, AI Workbench, editor, export, and feature specs
+config/              Vite / TypeScript / Playwright / ESLint configuration
+public/vditor/dist/  Local Vditor assets
+scripts/             Packaging, portable, and updater-manifest helpers
+```
 
 ## Stack
 
-Tauri v2 · React 19 · TypeScript · Vite 8 · Vditor · CodeMirror 6 · xterm.js · portable-pty · Claude CLI (headless)
+- Desktop: Tauri v2, Rust, portable-pty
+- Frontend: React 19, TypeScript, Vite 8
+- Editor: CodeMirror 6, Atomic Editor, Vditor
+- Markdown: KaTeX, Mermaid, DOMPurify
+- Terminal: xterm.js
+- AI CLI: Claude Code, OpenCode
+
+## Design Principles
+
+- **The document is the finished artifact; AI chat is scratch space.**
+- **Generated artifacts must return to local files and the main editor, not stay buried in chat.**
+- **Reuse the user's local CLI and skill ecosystem instead of locking model accounts into the app.**
+- **Preview, export, and editing should derive from the same Markdown source whenever possible.**
+- **Risky operations require explicit confirmation; unsaved work is never silently lost.**
+
+## Documentation
+
+- [Architecture](./docs/ARCHITECTURE.md)
+- [AI Workbench Skill OS](./docs/AI_WORKBENCH_SKILL_OS.md)
+- [OpenCode Provider PRD](./docs/AI_WORKBENCH_OPENCODE_PRD.md)
+- [AI Diff Preview](./docs/AI_DIFF_PREVIEW_SPEC.md)
+- [AI Editing and Review](./docs/AI_EDIT_AND_REVIEW_SPEC.md)
+- [PDF Export](./docs/PDF_EXPORT_SPEC.md)
+- [Mermaid Support](./docs/MERMAID_SPEC.md)
 
 ## License
 
