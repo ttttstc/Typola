@@ -89,7 +89,7 @@ export function previewSyncExtension(options: PreviewSyncOptions = {}): Extensio
     const isScroll = update.viewportChanged;
     if (!isDocChange && !isScroll) return;
 
-    let rafId: number | undefined = (previewSyncExtension as unknown as { _rafId?: number })._rafId;
+    const rafId: number | undefined = (previewSyncExtension as unknown as { _rafId?: number })._rafId;
     if (rafId !== undefined) return;
     (previewSyncExtension as unknown as { _rafId?: number })._rafId = window.requestAnimationFrame(() => {
       (previewSyncExtension as unknown as { _rafId?: number })._rafId = undefined;
