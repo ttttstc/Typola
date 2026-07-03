@@ -154,9 +154,3 @@ export function stripTrailingOpenQuestionForm(content: string): {
   if (closeIndex !== -1) return { visibleContent: content, hasOpenForm: false };
   return { visibleContent: content.slice(0, openIndex), hasOpenForm: true };
 }
-
-// ── Streaming: detect if there's any unclosed <question-form> mid-stream ──
-// P0-7: streaming 兜底用,即使 JSON 还没写完也能识别已开口的 form,展示"加载中"占位。
-export function hasOpenQuestionForm(content: string): boolean {
-  return stripTrailingOpenQuestionForm(content).hasOpenForm;
-}
