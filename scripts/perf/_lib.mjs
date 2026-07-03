@@ -16,8 +16,21 @@ function gzipSize(filePath) {
 
 function logicalName(filename) {
   const base = filename.replace(/\.js$/, '');
-  const m = base.match(/^(.+?)-[A-Za-z0-9_]{8}(?:-[A-Za-z0-9_]{8})?$/);
-  return m ? m[1] : base;
+  // Strip every trailing hash-like segment. A hash segment is 8-16
+  // alphanumeric/underscore chars preceded by `-`. Rolldown's default
+  // content hash is 8 chars; double-hash chunks (8+8) are handled by
+  // repeated stripping. The 8-char lower bound is chosen so that
+  // legitimate 6-char name segments like `vendor` in `docx-vendor`
+  // are NOT misclassified as a hash and stripped.
+  const hashSegment = /-(?:[A-Za-z0-9_]{8,16})$/;
+  let result = base;
+  let m;
+  while ((m = result.match(hashSegment))) {
+    const candidate = result.slice(0, -m[0].length);
+    if (candidate.length === 0) break;
+    result = candidate;
+  }
+  return result;
 }
 
 function groupByKey(dir = DIST) {
@@ -25,16 +38,13 @@ function groupByKey(dir = DIST) {
   for (const f of readAllJs(dir)) {
     const buf = fs.readFileSync(path.join(dir, f));
     const gz = zlib.gzipSync(buf).length;
-    const base = f.replace(/\.js$/, '');
-    const m = base.match(/^(.+?)-[A-Za-z0-9_]{8}(?:-[A-Za-z0-9_]{8})?$/);
-    const name = m ? m[1] : base;
-    const prev = groups.get(name) || { size: 0, matched: !!m };
-    groups.set(name, { size: prev.size + gz, matched: prev.matched && !!m });
+    const name = logicalName(f);
+    const prev = groups.get(name) || { size: 0 };
+    groups.set(name, { size: prev.size + gz });
   }
   const out = {};
   for (const [k, v] of groups.entries()) {
-    const key = v.matched ? `${k}-*.js` : `${k}.js`;
-    out[key] = { size: Math.round((v.size / 1024) * 100) / 100, matched: v.matched };
+    out[`${k}-*.js`] = { size: Math.round((v.size / 1024) * 100) / 100 };
   }
   return out;
 }

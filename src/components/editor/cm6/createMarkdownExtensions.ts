@@ -1,6 +1,7 @@
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
+import { recordCm6InputToPaint } from '../../../perf';
 
 type CreateMarkdownExtensionsOptions = {
   fontFamily: string;
@@ -33,6 +34,18 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
       run: options.onModK,
     }]));
   }
+
+  // Record input-to-paint latency per doc change. The probe is shared
+  // (singleton) so tests and Playwright can read P50/P99 from one place.
+  // Sprint 0 baseline: this is enabled by default. Sprint 1+ may gate
+  // behind a setting if the per-keystroke cost becomes visible.
+  extensions.push(
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        recordCm6InputToPaint();
+      }
+    }),
+  );
 
   extensions.push(
     EditorView.theme({
