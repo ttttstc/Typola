@@ -9,6 +9,7 @@ import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { createHtmlReadingPreviewHtml } from '../services/htmlReadingPreviewService';
 import { resolveLocalImages } from '../services/localImageResolver';
 import { renderMermaidIn } from '../services/mermaidRenderer';
+import { getThemeScheme } from '../services/themeRegistry';
 
 type PreviewPaneProps = {
   source: string;
@@ -28,6 +29,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
   const deferredSource = useDeferredValue(source);
   const deferredTocIds = useDeferredValue(tocIds);
   const settings = useSettings();
+  const mermaidTheme = getThemeScheme(settings.themeId) === 'dark' ? 'dark' : 'default';
   const renderFeatures = useMemo(
     () => detectMarkdownRenderFeatures(deferredSource),
     [deferredSource],
@@ -49,7 +51,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     if (renderMode === 'html') {
       el.innerHTML = createHtmlReadingPreviewHtml(deferredSource);
       void resolveLocalImages(el, filePath);
-      void renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+      void renderMermaidIn(el, { theme: mermaidTheme });
       applyTocIds(el, deferredTocIds);
       return;
     }
@@ -81,7 +83,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
         after() {
           if (cancelled) return;
           void (async () => {
-            await renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+            await renderMermaidIn(el, { theme: mermaidTheme });
             await resolveLocalImages(el, filePath);
             if (deferredTocIds.length > 0) applyTocIds(el, deferredTocIds);
           })();
@@ -92,7 +94,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, deferredTocIds, filePath, renderFeatures.hasHighlightableCode, renderMode, settings.theme]);
+  }, [deferredSource, deferredTocIds, filePath, renderFeatures.hasHighlightableCode, mermaidTheme, renderMode]);
 
   useImperativeHandle(ref, () => {
     const findScroller = (): HTMLElement | null => {

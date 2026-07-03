@@ -17,6 +17,7 @@ import {
 import { getHtmlExportPresetDefinition } from '../services/htmlExportPresets';
 import type { HtmlExportPresetId } from '../services/htmlExportPresets';
 import { markdownToExportHtml } from '../services/markdownExportRenderer';
+import { getThemeScheme } from '../services/themeRegistry';
 
 type WechatPreviewPaneProps = {
   source: string;
@@ -37,6 +38,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
   ref,
 ) {
   const settings = useSettings();
+  const mermaidTheme = getThemeScheme(settings.themeId) === 'dark' ? 'dark' : 'default';
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const deferredSource = useDeferredValue(source);
   const renderRef = useRef<HTMLDivElement>(null);
@@ -155,7 +157,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
       target: el,
       filePath,
       theme: 'light',
-      mermaidTheme: settings.theme === 'dark' ? 'dark' : 'default',
+      mermaidTheme,
     }).then((renderedHtml) => {
       if (cancelled || renderIdRef.current !== renderId) return;
       setPreviewResult(createHtmlExportResult(deferredSource, renderedHtml, {
@@ -174,7 +176,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, fileName, filePath, htmlExportPreset, settings.theme, sourceIsEmpty]);
+  }, [deferredSource, fileName, filePath, htmlExportPreset, mermaidTheme, sourceIsEmpty]);
 
   const effectiveStatus = sourceIsEmpty ? 'empty' : status;
   const effectiveActionStatus = sourceIsEmpty ? null : actionStatus;

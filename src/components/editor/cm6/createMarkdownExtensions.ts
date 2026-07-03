@@ -38,13 +38,34 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
     EditorView.theme({
       '&': {
         fontFamily: options.fontFamily,
+        backgroundColor: 'var(--theme-paper)',
+        color: 'var(--theme-text-primary)',
       },
       '.cm-content': {
         fontSize: `${options.fontSize}px`,
         fontFamily: options.fontFamily,
+        caretColor: 'var(--theme-accent)',
+      },
+      '.cm-scroller': {
+        backgroundColor: 'var(--theme-paper)',
       },
       '.cm-gutters': {
         fontFamily: options.fontFamily,
+        backgroundColor: 'var(--theme-editor-gutter-bg)',
+        color: 'var(--theme-editor-gutter-text)',
+        borderRight: '1px solid var(--theme-border-soft)',
+      },
+      '.cm-activeLine': {
+        backgroundColor: 'var(--theme-editor-active-line)',
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'var(--theme-editor-active-line)',
+      },
+      '.cm-selectionBackground': {
+        backgroundColor: 'var(--theme-selection) !important',
+      },
+      '.cm-searchMatch': {
+        backgroundColor: 'var(--theme-editor-search-match)',
       },
     }),
   );

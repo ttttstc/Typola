@@ -26,6 +26,7 @@ import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
 import { buildSearchRegExp, getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
 import type { SearchOptions } from '../services/documentSearchService';
+import { getThemeScheme } from '../services/themeRegistry';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -218,6 +219,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   ref,
 ) {
   const settings = useSettings();
+  const mermaidTheme = getThemeScheme(settings.themeId) === 'dark' ? 'dark' : 'default';
   const t = useCallback(
     (key: Parameters<typeof translate>[1]) => translate(settings.locale, key),
     [settings.locale],
@@ -509,7 +511,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
         const host = hostRef.current;
         if (!host) return;
         void renderMermaidIn(host, {
-          theme: settings.theme === 'dark' ? 'dark' : 'default',
+          theme: mermaidTheme,
           editable: true,
         });
         void renderKatexIn(host);
@@ -626,7 +628,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
           const host = hostRef.current;
           if (host) {
             void resolveLocalImages(host, filePath);
-            void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+            void renderMermaidIn(host, { theme: mermaidTheme, editable: true });
             void renderKatexIn(host);
             applyHeadingFolds(host, editor.getValue(), foldedHeadingsRef.current);
           }
@@ -648,7 +650,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
             const host = hostRef.current;
             if (host) {
               void resolveLocalImages(host, filePath);
-              void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+              void renderMermaidIn(host, { theme: mermaidTheme, editable: true });
               void renderKatexIn(host);
               applyHeadingFolds(host, editor.getValue(), foldedHeadingsRef.current);
             }

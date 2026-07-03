@@ -100,6 +100,37 @@ describe('settingsService', () => {
     expect(getSettings().tocAlwaysPinned).toBe(false);
   });
 
+  it('persists the selected Typola theme and falls back to Plain Paper for unknown theme ids', () => {
+    expect(getSettings()).toMatchObject({
+      themeId: 'plain-paper',
+      themeOptions: {
+        reviewEnhanceMarks: true,
+      },
+    });
+
+    updateSettings({
+      themeId: 'ink-basin',
+      themeOptions: { reviewEnhanceMarks: false },
+    });
+    expect(getSettings()).toMatchObject({
+      themeId: 'ink-basin',
+      themeOptions: {
+        reviewEnhanceMarks: false,
+      },
+    });
+
+    localStorage.setItem('typola-settings', JSON.stringify({
+      themeId: 'dark',
+      themeOptions: { reviewEnhanceMarks: 'yes' },
+    }));
+    expect(getSettings()).toMatchObject({
+      themeId: 'plain-paper',
+      themeOptions: {
+        reviewEnhanceMarks: true,
+      },
+    });
+  });
+
   it('migrates legacy export settings without recursive reads', () => {
     localStorage.setItem('typola-export-settings', JSON.stringify({ defaultPresetId: 'academic' }));
 
