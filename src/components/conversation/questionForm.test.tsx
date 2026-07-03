@@ -78,7 +78,7 @@ describe('QuestionForm', () => {
     expect(parsed.forms[0]?.questions[0]?.options).toEqual(['技术分享']);
   });
 
-  it('reports invalid question-form json via errors array, not markdown', () => {
+  it('silently discards invalid question-form json without showing any error', () => {
     const parsed = parseQuestionForms(`前文
 <question-form id="broken">
 { "questions": [
@@ -86,9 +86,7 @@ describe('QuestionForm', () => {
 后文`);
 
     expect(parsed.forms).toHaveLength(0);
-    expect(parsed.errors).toHaveLength(1);
-    expect(parsed.errors[0]?.body).toContain('"questions"');
-    // markdown 不再含 fallback 引用块,前后文保留,form 标签被剥离
+    // 不再维护 errors 字段、不再塞 fallback 引用块,form 标签直接剥离
     expect(parsed.markdown).not.toContain('Question Form 解析失败');
     expect(parsed.markdown).not.toContain('<question-form');
     expect(parsed.markdown).toContain('前文');
@@ -187,7 +185,7 @@ describe('QuestionForm', () => {
     ].join('\n'));
   });
 
-  it('renders inline error banner instead of markdown fallback for invalid form', async () => {
+  it('does not show any error indicator for invalid question-form json', async () => {
     act(() => {
       root.render(
         <AssistantMessage
@@ -201,11 +199,10 @@ describe('QuestionForm', () => {
       );
     });
 
-    const banner = host.querySelector('.question-form-error-banner');
-    expect(banner).toBeTruthy();
-    expect(banner?.textContent).toContain('Question Form 解析失败');
-    // markdown fallback 文字不再出现在 preview 里
-    expect(host.querySelector('[data-testid="preview"]')?.textContent ?? '').not.toContain('Question Form 解析失败');
+    // 不显示任何 "解析失败" / "重新输出" 类提示,form 静默丢弃
+    expect(host.querySelector('.question-form-error-banner')).toBeNull();
+    expect(host.textContent).not.toContain('Question Form 解析失败');
+    expect(host.textContent).not.toContain('重新输出');
     // 前后文正常显示
     expect(host.textContent).toContain('前文');
     expect(host.textContent).toContain('后文');

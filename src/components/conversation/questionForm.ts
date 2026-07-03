@@ -24,14 +24,6 @@ export type QuestionFormBlock = {
 export type ParsedQuestionForms = {
   markdown: string;
   forms: QuestionFormBlock[];
-  errors: QuestionFormParseError[];
-};
-
-export type QuestionFormParseError = {
-  raw: string;
-  attrs: string;
-  body: string;
-  reason: string;
 };
 
 const QUESTION_FORM_RE = /<question-form\b([^>]*)>([\s\S]*?)<\/question-form>/gi;
@@ -94,12 +86,10 @@ function normalizeQuestions(payload: unknown): QuestionFormField[] {
 
 export function parseQuestionForms(markdown: string): ParsedQuestionForms {
   const forms: QuestionFormBlock[] = [];
-  const errors: QuestionFormParseError[] = [];
   const stripped = markdown.replace(QUESTION_FORM_RE, (raw, attrs: string, body: string) => {
-    let parsedRecord: Record<string, unknown> = {};
     try {
       const parsed = parseQuestionFormPayload(body);
-      parsedRecord = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+      const parsedRecord = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
       const id = attr(attrs, 'id') || (typeof parsedRecord.id === 'string' ? parsedRecord.id : '') || `form-${forms.length + 1}`;
       const title = attr(attrs, 'title') || (typeof parsedRecord.title === 'string' ? parsedRecord.title : '') || '需要你确认';
       const description = typeof parsedRecord.description === 'string' ? parsedRecord.description : undefined;
@@ -107,18 +97,13 @@ export function parseQuestionForms(markdown: string): ParsedQuestionForms {
       const skipLabel = typeof parsedRecord.skipLabel === 'string' ? parsedRecord.skipLabel : undefined;
       const autoSkipSeconds = typeof parsedRecord.autoSkipSeconds === 'number' ? parsedRecord.autoSkipSeconds : undefined;
       const questions = normalizeQuestions(parsed);
-      if (questions.length === 0) {
-        errors.push({ raw, attrs, body, reason: 'empty-questions' });
-        return '';
-      }
-      forms.push({ id, title, description, questions, raw, submitLabel, skipLabel, autoSkipSeconds });
-      return '';
-    } catch (error) {
-      errors.push({ raw, attrs, body, reason: error instanceof Error ? error.message : String(error) });
-      return '';
+      if (questions.length > 0) forms.push({ id, title, description, questions, raw, submitLabel, skipLabel, autoSkipSeconds });
+    } catch {
+      // 解析失败的 form 静默丢弃:不向用户暴露错误,也不向 markdown 塞 fallback 文字。
     }
+    return '';
   });
-  return { markdown: stripped.trim(), forms, errors };
+  return { markdown: stripped.trim(), forms };
 }
 
 export function formatQuestionFormAnswers(form: QuestionFormBlock, answers: Record<string, string | string[]>): string {
