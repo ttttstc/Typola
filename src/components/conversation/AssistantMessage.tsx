@@ -188,6 +188,13 @@ export function AssistantMessage({
               />
             </div>
           )}
+          {/* 已闭合但 JSON 损坏 / questions 为空 → 渲染错误 banner 而不是往 markdown 里塞 fallback 文字 */}
+          {parsed.errors.map((err, index) => (
+            <div key={`qform-error-${index}`} className="question-form-error-banner">
+              <strong>Question Form 解析失败，请让 AI 重新输出有效的 JSON 表单。</strong>
+              <pre className="question-form-error-body">{err.body || '(empty)'}</pre>
+            </div>
+          ))}
           {message.done && (
             <div className="conversation-code-actions">
               {codeBlocks.map((block, index) => (
