@@ -1,40 +1,25 @@
 /**
- * Bounded ring buffer of latency samples with P50/P99 queries.
+ * Latency samples for the editor input → paint probe.
  *
- * Designed for editor input latency: a CM6 input event records a
- * sample (time from `mark` to the next `requestAnimationFrame`),
- * tests/Playwright read percentiles on demand.
+ * Sprint 0 only needs to capture a small number of samples per
+ * measurement session (a fixture run, a Playwright scenario) and
+ * read a percentile. We keep this intentionally tiny: no ring
+ * buffer, no reset, no public `size()`. The number of samples is
+ * bounded by the session length, which is small.
  *
- * Memory: capped at `maxSamples` (default 1000). Older samples are
- * discarded FIFO, matching the "last N keystrokes" semantics that
- * matter for measuring recent regressions rather than historical drift.
+ * `percentile(p)` uses numpy "type 7" linear interpolation so the
+ * numbers are comparable to what R / Pandas / numpy default to.
  */
 export class EditorLatencyProbe {
   private samples: number[] = [];
-  private readonly maxSamples: number;
-
-  constructor(maxSamples = 1000) {
-    if (maxSamples < 1) {
-      throw new Error('maxSamples must be >= 1');
-    }
-    this.maxSamples = maxSamples;
-  }
 
   record(ms: number): void {
     if (!Number.isFinite(ms) || ms < 0) return;
     this.samples.push(ms);
-    if (this.samples.length > this.maxSamples) {
-      this.samples.shift();
-    }
-  }
-
-  size(): number {
-    return this.samples.length;
   }
 
   /**
-   * Percentile in [0, 100], numpy "type 7" (linear interpolation,
-   * matches R/Pandas default). Returns 0 for empty.
+   * Percentile in [0, 100]. Returns 0 for an empty probe.
    */
   percentile(p: number): number {
     if (this.samples.length === 0) return 0;
@@ -47,17 +32,5 @@ export class EditorLatencyProbe {
     if (lower === upper) return sorted[lower]!;
     const frac = rank - lower;
     return sorted[lower]! * (1 - frac) + sorted[upper]! * frac;
-  }
-
-  p50(): number {
-    return this.percentile(50);
-  }
-
-  p99(): number {
-    return this.percentile(99);
-  }
-
-  reset(): void {
-    this.samples = [];
   }
 }

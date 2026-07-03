@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { perfStub } from './vite-plugin-perf-stub'
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const nodeModule = String.raw`node_modules[\\/]`
@@ -9,7 +10,7 @@ const nodeModule = String.raw`node_modules[\\/]`
 export default defineConfig({
   root: projectRoot,
   base: './',
-  plugins: [react()],
+  plugins: [react(), perfStub()],
   server: {
     watch: {
       ignored: ['**/src-tauri/target/**'],

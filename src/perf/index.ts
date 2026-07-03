@@ -12,7 +12,7 @@ import { mark, measure } from './marks';
 export { EditorLatencyProbe } from './editorLatencyProbe';
 export { mark, measure, type MarkName } from './marks';
 
-export const editorLatencyProbe = new EditorLatencyProbe(1000);
+export const editorLatencyProbe = new EditorLatencyProbe();
 
 export function recordCm6InputToPaint(): void {
   mark('cm6-input');
