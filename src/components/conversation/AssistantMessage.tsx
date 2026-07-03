@@ -93,8 +93,9 @@ export function AssistantMessage({
     () => stripTrailingOpenQuestionForm(message.content).visibleContent,
     [message.content],
   );
-  const codeBlocks = extractCodeBlocks(visibleQuestionFormContent);
   const parsed = useMemo(() => parseQuestionForms(visibleQuestionFormContent), [visibleQuestionFormContent]);
+  // 从 parsed.markdown 而非原始 content 提取代码块,避免 question-form 内 ```json``` 围栏被误判为可保存代码。
+  const codeBlocks = useMemo(() => extractCodeBlocks(parsed.markdown), [parsed.markdown]);
   const [openFormId, setOpenFormId] = useState<string | null>(null);
   // P1-9: 仅在用户还没主动展开某个 form 时自动展开第一个。
   // 用 current ?? firstPending 守卫:openFormId=null 才自动打开,避免 effect 覆盖用户当前选择。
@@ -172,20 +173,18 @@ export function AssistantMessage({
               </div>
             );
           })}
-          {message.done && (
+          {message.done && codeBlocks.length > 0 && (
             <div className="conversation-code-actions">
               {codeBlocks.map((block, index) => (
                 <div key={`${block.lang}-${index}`} className="conversation-code-action-row">
                   <span>{block.lang || 'code'} #{index + 1}</span>
-                  {message.done && (
-                    <button
-                      type="button"
-                      className="conversation-code-save"
-                      onClick={() => void handleSaveAs(block.lang, block.code)}
-                    >
-                      另存为
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="conversation-code-save"
+                    onClick={() => void handleSaveAs(block.lang, block.code)}
+                  >
+                    另存为
+                  </button>
                 </div>
               ))}
             </div>

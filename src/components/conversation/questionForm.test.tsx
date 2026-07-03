@@ -208,6 +208,68 @@ describe('QuestionForm', () => {
     expect(host.textContent).toContain('后文');
   });
 
+  it('does not render the conversation-code-actions block when the only fenced code is inside a question-form', async () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant(`请先选择：
+<question-form id="f1" title="选择类型">
+\`\`\`json
+{"questions":[{"id":"k","label":"类型","type":"radio","options":["日报","PPT"]}]}
+\`\`\`
+</question-form>`)}
+          onSubmitQuestionForm={() => undefined}
+        />,
+      );
+    });
+
+    // question-form 内的 ```json``` 围栏不应该被当成可保存代码块
+    expect(host.querySelector('.conversation-code-actions')).toBeNull();
+    expect(host.querySelector('.conversation-code-save')).toBeNull();
+    // form banner 正常显示
+    expect(host.querySelector('.questions-banner')).toBeTruthy();
+  });
+
+  it('renders one 另存为 button per real fenced code block when the assistant turn is done', async () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant(`下面是模板：
+
+\`\`\`html
+<h1>Hi</h1>
+\`\`\`
+
+也可以保存：
+
+\`\`\`css
+body { color: red; }
+\`\`\``)}
+          onSubmitQuestionForm={() => undefined}
+        />,
+      );
+    });
+
+    const actions = host.querySelectorAll('.conversation-code-action-row');
+    expect(actions).toHaveLength(2);
+    const saves = host.querySelectorAll('.conversation-code-save');
+    expect(saves).toHaveLength(2);
+    expect(saves[0]?.textContent).toBe('另存为');
+  });
+
+  it('omits the conversation-code-actions block entirely when the turn has no real fenced code', async () => {
+    act(() => {
+      root.render(
+        <AssistantMessage
+          message={assistant('纯文本回答,没有代码块。')}
+          onSubmitQuestionForm={() => undefined}
+        />,
+      );
+    });
+
+    expect(host.querySelector('.conversation-code-actions')).toBeNull();
+  });
+
   it('groups low-attention research tools into a scrollable disclosure', () => {
     act(() => {
       root.render(
