@@ -1,0 +1,602 @@
+[
+  {
+    "id": "msg-001",
+    "role": "user",
+    "content": "Message 1 in the 100-message AI conversation fixture. This is a user query asking about topic 1 with some context.",
+    "timestamp": "2026-01-01T00:01:00.000Z"
+  },
+  {
+    "id": "msg-002",
+    "role": "assistant",
+    "content": "Message 2 in the 100-message AI conversation fixture. This is an assistant response explaining topic 2 in moderate detail.",
+    "timestamp": "2026-01-01T00:02:00.000Z"
+  },
+  {
+    "id": "msg-003",
+    "role": "user",
+    "content": "Message 3 in the 100-message AI conversation fixture. This is a user query asking about topic 3 with some context.",
+    "timestamp": "2026-01-01T00:03:00.000Z"
+  },
+  {
+    "id": "msg-004",
+    "role": "assistant",
+    "content": "Message 4 in the 100-message AI conversation fixture. This is an assistant response explaining topic 4 in moderate detail.",
+    "timestamp": "2026-01-01T00:04:00.000Z"
+  },
+  {
+    "id": "msg-005",
+    "role": "user",
+    "content": "Message 5 in the 100-message AI conversation fixture. This is a user query asking about topic 5 with some context.",
+    "timestamp": "2026-01-01T00:05:00.000Z"
+  },
+  {
+    "id": "msg-006",
+    "role": "assistant",
+    "content": "Message 6 in the 100-message AI conversation fixture. This is an assistant response explaining topic 6 in moderate detail.",
+    "timestamp": "2026-01-01T00:06:00.000Z"
+  },
+  {
+    "id": "msg-007",
+    "role": "user",
+    "content": "Message 7 in the 100-message AI conversation fixture. This is a user query asking about topic 7 with some context.",
+    "timestamp": "2026-01-01T00:07:00.000Z"
+  },
+  {
+    "id": "msg-008",
+    "role": "assistant",
+    "content": "Message 8 in the 100-message AI conversation fixture. This is an assistant response explaining topic 8 in moderate detail.",
+    "timestamp": "2026-01-01T00:08:00.000Z"
+  },
+  {
+    "id": "msg-009",
+    "role": "user",
+    "content": "Message 9 in the 100-message AI conversation fixture. This is a user query asking about topic 9 with some context.",
+    "timestamp": "2026-01-01T00:09:00.000Z"
+  },
+  {
+    "id": "msg-010",
+    "role": "assistant",
+    "content": "Message 10 in the 100-message AI conversation fixture. This is an assistant response explaining topic 10 in moderate detail.",
+    "timestamp": "2026-01-01T00:10:00.000Z"
+  },
+  {
+    "id": "msg-011",
+    "role": "user",
+    "content": "Message 11 in the 100-message AI conversation fixture. This is a user query asking about topic 11 with some context.",
+    "timestamp": "2026-01-01T00:11:00.000Z"
+  },
+  {
+    "id": "msg-012",
+    "role": "assistant",
+    "content": "Message 12 in the 100-message AI conversation fixture. This is an assistant response explaining topic 12 in moderate detail.",
+    "timestamp": "2026-01-01T00:12:00.000Z"
+  },
+  {
+    "id": "msg-013",
+    "role": "user",
+    "content": "Message 13 in the 100-message AI conversation fixture. This is a user query asking about topic 13 with some context.",
+    "timestamp": "2026-01-01T00:13:00.000Z"
+  },
+  {
+    "id": "msg-014",
+    "role": "assistant",
+    "content": "Message 14 in the 100-message AI conversation fixture. This is an assistant response explaining topic 14 in moderate detail.",
+    "timestamp": "2026-01-01T00:14:00.000Z"
+  },
+  {
+    "id": "msg-015",
+    "role": "user",
+    "content": "Message 15 in the 100-message AI conversation fixture. This is a user query asking about topic 15 with some context.",
+    "timestamp": "2026-01-01T00:15:00.000Z"
+  },
+  {
+    "id": "msg-016",
+    "role": "assistant",
+    "content": "Message 16 in the 100-message AI conversation fixture. This is an assistant response explaining topic 16 in moderate detail.",
+    "timestamp": "2026-01-01T00:16:00.000Z"
+  },
+  {
+    "id": "msg-017",
+    "role": "user",
+    "content": "Message 17 in the 100-message AI conversation fixture. This is a user query asking about topic 17 with some context.",
+    "timestamp": "2026-01-01T00:17:00.000Z"
+  },
+  {
+    "id": "msg-018",
+    "role": "assistant",
+    "content": "Message 18 in the 100-message AI conversation fixture. This is an assistant response explaining topic 18 in moderate detail.",
+    "timestamp": "2026-01-01T00:18:00.000Z"
+  },
+  {
+    "id": "msg-019",
+    "role": "user",
+    "content": "Message 19 in the 100-message AI conversation fixture. This is a user query asking about topic 19 with some context.",
+    "timestamp": "2026-01-01T00:19:00.000Z"
+  },
+  {
+    "id": "msg-020",
+    "role": "assistant",
+    "content": "Message 20 in the 100-message AI conversation fixture. This is an assistant response explaining topic 20 in moderate detail.",
+    "timestamp": "2026-01-01T00:20:00.000Z"
+  },
+  {
+    "id": "msg-021",
+    "role": "user",
+    "content": "Message 21 in the 100-message AI conversation fixture. This is a user query asking about topic 21 with some context.",
+    "timestamp": "2026-01-01T00:21:00.000Z"
+  },
+  {
+    "id": "msg-022",
+    "role": "assistant",
+    "content": "Message 22 in the 100-message AI conversation fixture. This is an assistant response explaining topic 22 in moderate detail.",
+    "timestamp": "2026-01-01T00:22:00.000Z"
+  },
+  {
+    "id": "msg-023",
+    "role": "user",
+    "content": "Message 23 in the 100-message AI conversation fixture. This is a user query asking about topic 23 with some context.",
+    "timestamp": "2026-01-01T00:23:00.000Z"
+  },
+  {
+    "id": "msg-024",
+    "role": "assistant",
+    "content": "Message 24 in the 100-message AI conversation fixture. This is an assistant response explaining topic 24 in moderate detail.",
+    "timestamp": "2026-01-01T00:24:00.000Z"
+  },
+  {
+    "id": "msg-025",
+    "role": "user",
+    "content": "Message 25 in the 100-message AI conversation fixture. This is a user query asking about topic 25 with some context.",
+    "timestamp": "2026-01-01T00:25:00.000Z"
+  },
+  {
+    "id": "msg-026",
+    "role": "assistant",
+    "content": "Message 26 in the 100-message AI conversation fixture. This is an assistant response explaining topic 26 in moderate detail.",
+    "timestamp": "2026-01-01T00:26:00.000Z"
+  },
+  {
+    "id": "msg-027",
+    "role": "user",
+    "content": "Message 27 in the 100-message AI conversation fixture. This is a user query asking about topic 27 with some context.",
+    "timestamp": "2026-01-01T00:27:00.000Z"
+  },
+  {
+    "id": "msg-028",
+    "role": "assistant",
+    "content": "Message 28 in the 100-message AI conversation fixture. This is an assistant response explaining topic 28 in moderate detail.",
+    "timestamp": "2026-01-01T00:28:00.000Z"
+  },
+  {
+    "id": "msg-029",
+    "role": "user",
+    "content": "Message 29 in the 100-message AI conversation fixture. This is a user query asking about topic 29 with some context.",
+    "timestamp": "2026-01-01T00:29:00.000Z"
+  },
+  {
+    "id": "msg-030",
+    "role": "assistant",
+    "content": "Message 30 in the 100-message AI conversation fixture. This is an assistant response explaining topic 30 in moderate detail.",
+    "timestamp": "2026-01-01T00:30:00.000Z"
+  },
+  {
+    "id": "msg-031",
+    "role": "user",
+    "content": "Message 31 in the 100-message AI conversation fixture. This is a user query asking about topic 31 with some context.",
+    "timestamp": "2026-01-01T00:31:00.000Z"
+  },
+  {
+    "id": "msg-032",
+    "role": "assistant",
+    "content": "Message 32 in the 100-message AI conversation fixture. This is an assistant response explaining topic 32 in moderate detail.",
+    "timestamp": "2026-01-01T00:32:00.000Z"
+  },
+  {
+    "id": "msg-033",
+    "role": "user",
+    "content": "Message 33 in the 100-message AI conversation fixture. This is a user query asking about topic 33 with some context.",
+    "timestamp": "2026-01-01T00:33:00.000Z"
+  },
+  {
+    "id": "msg-034",
+    "role": "assistant",
+    "content": "Message 34 in the 100-message AI conversation fixture. This is an assistant response explaining topic 34 in moderate detail.",
+    "timestamp": "2026-01-01T00:34:00.000Z"
+  },
+  {
+    "id": "msg-035",
+    "role": "user",
+    "content": "Message 35 in the 100-message AI conversation fixture. This is a user query asking about topic 35 with some context.",
+    "timestamp": "2026-01-01T00:35:00.000Z"
+  },
+  {
+    "id": "msg-036",
+    "role": "assistant",
+    "content": "Message 36 in the 100-message AI conversation fixture. This is an assistant response explaining topic 36 in moderate detail.",
+    "timestamp": "2026-01-01T00:36:00.000Z"
+  },
+  {
+    "id": "msg-037",
+    "role": "user",
+    "content": "Message 37 in the 100-message AI conversation fixture. This is a user query asking about topic 37 with some context.",
+    "timestamp": "2026-01-01T00:37:00.000Z"
+  },
+  {
+    "id": "msg-038",
+    "role": "assistant",
+    "content": "Message 38 in the 100-message AI conversation fixture. This is an assistant response explaining topic 38 in moderate detail.",
+    "timestamp": "2026-01-01T00:38:00.000Z"
+  },
+  {
+    "id": "msg-039",
+    "role": "user",
+    "content": "Message 39 in the 100-message AI conversation fixture. This is a user query asking about topic 39 with some context.",
+    "timestamp": "2026-01-01T00:39:00.000Z"
+  },
+  {
+    "id": "msg-040",
+    "role": "assistant",
+    "content": "Message 40 in the 100-message AI conversation fixture. This is an assistant response explaining topic 40 in moderate detail.",
+    "timestamp": "2026-01-01T00:40:00.000Z"
+  },
+  {
+    "id": "msg-041",
+    "role": "user",
+    "content": "Message 41 in the 100-message AI conversation fixture. This is a user query asking about topic 41 with some context.",
+    "timestamp": "2026-01-01T00:41:00.000Z"
+  },
+  {
+    "id": "msg-042",
+    "role": "assistant",
+    "content": "Message 42 in the 100-message AI conversation fixture. This is an assistant response explaining topic 42 in moderate detail.",
+    "timestamp": "2026-01-01T00:42:00.000Z"
+  },
+  {
+    "id": "msg-043",
+    "role": "user",
+    "content": "Message 43 in the 100-message AI conversation fixture. This is a user query asking about topic 43 with some context.",
+    "timestamp": "2026-01-01T00:43:00.000Z"
+  },
+  {
+    "id": "msg-044",
+    "role": "assistant",
+    "content": "Message 44 in the 100-message AI conversation fixture. This is an assistant response explaining topic 44 in moderate detail.",
+    "timestamp": "2026-01-01T00:44:00.000Z"
+  },
+  {
+    "id": "msg-045",
+    "role": "user",
+    "content": "Message 45 in the 100-message AI conversation fixture. This is a user query asking about topic 45 with some context.",
+    "timestamp": "2026-01-01T00:45:00.000Z"
+  },
+  {
+    "id": "msg-046",
+    "role": "assistant",
+    "content": "Message 46 in the 100-message AI conversation fixture. This is an assistant response explaining topic 46 in moderate detail.",
+    "timestamp": "2026-01-01T00:46:00.000Z"
+  },
+  {
+    "id": "msg-047",
+    "role": "user",
+    "content": "Message 47 in the 100-message AI conversation fixture. This is a user query asking about topic 47 with some context.",
+    "timestamp": "2026-01-01T00:47:00.000Z"
+  },
+  {
+    "id": "msg-048",
+    "role": "assistant",
+    "content": "Message 48 in the 100-message AI conversation fixture. This is an assistant response explaining topic 48 in moderate detail.",
+    "timestamp": "2026-01-01T00:48:00.000Z"
+  },
+  {
+    "id": "msg-049",
+    "role": "user",
+    "content": "Message 49 in the 100-message AI conversation fixture. This is a user query asking about topic 49 with some context.",
+    "timestamp": "2026-01-01T00:49:00.000Z"
+  },
+  {
+    "id": "msg-050",
+    "role": "assistant",
+    "content": "Message 50 in the 100-message AI conversation fixture. This is an assistant response explaining topic 50 in moderate detail.",
+    "timestamp": "2026-01-01T00:50:00.000Z"
+  },
+  {
+    "id": "msg-051",
+    "role": "user",
+    "content": "Message 51 in the 100-message AI conversation fixture. This is a user query asking about topic 51 with some context.",
+    "timestamp": "2026-01-01T00:51:00.000Z"
+  },
+  {
+    "id": "msg-052",
+    "role": "assistant",
+    "content": "Message 52 in the 100-message AI conversation fixture. This is an assistant response explaining topic 52 in moderate detail.",
+    "timestamp": "2026-01-01T00:52:00.000Z"
+  },
+  {
+    "id": "msg-053",
+    "role": "user",
+    "content": "Message 53 in the 100-message AI conversation fixture. This is a user query asking about topic 53 with some context.",
+    "timestamp": "2026-01-01T00:53:00.000Z"
+  },
+  {
+    "id": "msg-054",
+    "role": "assistant",
+    "content": "Message 54 in the 100-message AI conversation fixture. This is an assistant response explaining topic 54 in moderate detail.",
+    "timestamp": "2026-01-01T00:54:00.000Z"
+  },
+  {
+    "id": "msg-055",
+    "role": "user",
+    "content": "Message 55 in the 100-message AI conversation fixture. This is a user query asking about topic 55 with some context.",
+    "timestamp": "2026-01-01T00:55:00.000Z"
+  },
+  {
+    "id": "msg-056",
+    "role": "assistant",
+    "content": "Message 56 in the 100-message AI conversation fixture. This is an assistant response explaining topic 56 in moderate detail.",
+    "timestamp": "2026-01-01T00:56:00.000Z"
+  },
+  {
+    "id": "msg-057",
+    "role": "user",
+    "content": "Message 57 in the 100-message AI conversation fixture. This is a user query asking about topic 57 with some context.",
+    "timestamp": "2026-01-01T00:57:00.000Z"
+  },
+  {
+    "id": "msg-058",
+    "role": "assistant",
+    "content": "Message 58 in the 100-message AI conversation fixture. This is an assistant response explaining topic 58 in moderate detail.",
+    "timestamp": "2026-01-01T00:58:00.000Z"
+  },
+  {
+    "id": "msg-059",
+    "role": "user",
+    "content": "Message 59 in the 100-message AI conversation fixture. This is a user query asking about topic 59 with some context.",
+    "timestamp": "2026-01-01T00:59:00.000Z"
+  },
+  {
+    "id": "msg-060",
+    "role": "assistant",
+    "content": "Message 60 in the 100-message AI conversation fixture. This is an assistant response explaining topic 60 in moderate detail.",
+    "timestamp": "2026-01-01T01:00:00.000Z"
+  },
+  {
+    "id": "msg-061",
+    "role": "user",
+    "content": "Message 61 in the 100-message AI conversation fixture. This is a user query asking about topic 61 with some context.",
+    "timestamp": "2026-01-01T01:01:00.000Z"
+  },
+  {
+    "id": "msg-062",
+    "role": "assistant",
+    "content": "Message 62 in the 100-message AI conversation fixture. This is an assistant response explaining topic 62 in moderate detail.",
+    "timestamp": "2026-01-01T01:02:00.000Z"
+  },
+  {
+    "id": "msg-063",
+    "role": "user",
+    "content": "Message 63 in the 100-message AI conversation fixture. This is a user query asking about topic 63 with some context.",
+    "timestamp": "2026-01-01T01:03:00.000Z"
+  },
+  {
+    "id": "msg-064",
+    "role": "assistant",
+    "content": "Message 64 in the 100-message AI conversation fixture. This is an assistant response explaining topic 64 in moderate detail.",
+    "timestamp": "2026-01-01T01:04:00.000Z"
+  },
+  {
+    "id": "msg-065",
+    "role": "user",
+    "content": "Message 65 in the 100-message AI conversation fixture. This is a user query asking about topic 65 with some context.",
+    "timestamp": "2026-01-01T01:05:00.000Z"
+  },
+  {
+    "id": "msg-066",
+    "role": "assistant",
+    "content": "Message 66 in the 100-message AI conversation fixture. This is an assistant response explaining topic 66 in moderate detail.",
+    "timestamp": "2026-01-01T01:06:00.000Z"
+  },
+  {
+    "id": "msg-067",
+    "role": "user",
+    "content": "Message 67 in the 100-message AI conversation fixture. This is a user query asking about topic 67 with some context.",
+    "timestamp": "2026-01-01T01:07:00.000Z"
+  },
+  {
+    "id": "msg-068",
+    "role": "assistant",
+    "content": "Message 68 in the 100-message AI conversation fixture. This is an assistant response explaining topic 68 in moderate detail.",
+    "timestamp": "2026-01-01T01:08:00.000Z"
+  },
+  {
+    "id": "msg-069",
+    "role": "user",
+    "content": "Message 69 in the 100-message AI conversation fixture. This is a user query asking about topic 69 with some context.",
+    "timestamp": "2026-01-01T01:09:00.000Z"
+  },
+  {
+    "id": "msg-070",
+    "role": "assistant",
+    "content": "Message 70 in the 100-message AI conversation fixture. This is an assistant response explaining topic 70 in moderate detail.",
+    "timestamp": "2026-01-01T01:10:00.000Z"
+  },
+  {
+    "id": "msg-071",
+    "role": "user",
+    "content": "Message 71 in the 100-message AI conversation fixture. This is a user query asking about topic 71 with some context.",
+    "timestamp": "2026-01-01T01:11:00.000Z"
+  },
+  {
+    "id": "msg-072",
+    "role": "assistant",
+    "content": "Message 72 in the 100-message AI conversation fixture. This is an assistant response explaining topic 72 in moderate detail.",
+    "timestamp": "2026-01-01T01:12:00.000Z"
+  },
+  {
+    "id": "msg-073",
+    "role": "user",
+    "content": "Message 73 in the 100-message AI conversation fixture. This is a user query asking about topic 73 with some context.",
+    "timestamp": "2026-01-01T01:13:00.000Z"
+  },
+  {
+    "id": "msg-074",
+    "role": "assistant",
+    "content": "Message 74 in the 100-message AI conversation fixture. This is an assistant response explaining topic 74 in moderate detail.",
+    "timestamp": "2026-01-01T01:14:00.000Z"
+  },
+  {
+    "id": "msg-075",
+    "role": "user",
+    "content": "Message 75 in the 100-message AI conversation fixture. This is a user query asking about topic 75 with some context.",
+    "timestamp": "2026-01-01T01:15:00.000Z"
+  },
+  {
+    "id": "msg-076",
+    "role": "assistant",
+    "content": "Message 76 in the 100-message AI conversation fixture. This is an assistant response explaining topic 76 in moderate detail.",
+    "timestamp": "2026-01-01T01:16:00.000Z"
+  },
+  {
+    "id": "msg-077",
+    "role": "user",
+    "content": "Message 77 in the 100-message AI conversation fixture. This is a user query asking about topic 77 with some context.",
+    "timestamp": "2026-01-01T01:17:00.000Z"
+  },
+  {
+    "id": "msg-078",
+    "role": "assistant",
+    "content": "Message 78 in the 100-message AI conversation fixture. This is an assistant response explaining topic 78 in moderate detail.",
+    "timestamp": "2026-01-01T01:18:00.000Z"
+  },
+  {
+    "id": "msg-079",
+    "role": "user",
+    "content": "Message 79 in the 100-message AI conversation fixture. This is a user query asking about topic 79 with some context.",
+    "timestamp": "2026-01-01T01:19:00.000Z"
+  },
+  {
+    "id": "msg-080",
+    "role": "assistant",
+    "content": "Message 80 in the 100-message AI conversation fixture. This is an assistant response explaining topic 80 in moderate detail.",
+    "timestamp": "2026-01-01T01:20:00.000Z"
+  },
+  {
+    "id": "msg-081",
+    "role": "user",
+    "content": "Message 81 in the 100-message AI conversation fixture. This is a user query asking about topic 81 with some context.",
+    "timestamp": "2026-01-01T01:21:00.000Z"
+  },
+  {
+    "id": "msg-082",
+    "role": "assistant",
+    "content": "Message 82 in the 100-message AI conversation fixture. This is an assistant response explaining topic 82 in moderate detail.",
+    "timestamp": "2026-01-01T01:22:00.000Z"
+  },
+  {
+    "id": "msg-083",
+    "role": "user",
+    "content": "Message 83 in the 100-message AI conversation fixture. This is a user query asking about topic 83 with some context.",
+    "timestamp": "2026-01-01T01:23:00.000Z"
+  },
+  {
+    "id": "msg-084",
+    "role": "assistant",
+    "content": "Message 84 in the 100-message AI conversation fixture. This is an assistant response explaining topic 84 in moderate detail.",
+    "timestamp": "2026-01-01T01:24:00.000Z"
+  },
+  {
+    "id": "msg-085",
+    "role": "user",
+    "content": "Message 85 in the 100-message AI conversation fixture. This is a user query asking about topic 85 with some context.",
+    "timestamp": "2026-01-01T01:25:00.000Z"
+  },
+  {
+    "id": "msg-086",
+    "role": "assistant",
+    "content": "Message 86 in the 100-message AI conversation fixture. This is an assistant response explaining topic 86 in moderate detail.",
+    "timestamp": "2026-01-01T01:26:00.000Z"
+  },
+  {
+    "id": "msg-087",
+    "role": "user",
+    "content": "Message 87 in the 100-message AI conversation fixture. This is a user query asking about topic 87 with some context.",
+    "timestamp": "2026-01-01T01:27:00.000Z"
+  },
+  {
+    "id": "msg-088",
+    "role": "assistant",
+    "content": "Message 88 in the 100-message AI conversation fixture. This is an assistant response explaining topic 88 in moderate detail.",
+    "timestamp": "2026-01-01T01:28:00.000Z"
+  },
+  {
+    "id": "msg-089",
+    "role": "user",
+    "content": "Message 89 in the 100-message AI conversation fixture. This is a user query asking about topic 89 with some context.",
+    "timestamp": "2026-01-01T01:29:00.000Z"
+  },
+  {
+    "id": "msg-090",
+    "role": "assistant",
+    "content": "Message 90 in the 100-message AI conversation fixture. This is an assistant response explaining topic 90 in moderate detail.",
+    "timestamp": "2026-01-01T01:30:00.000Z"
+  },
+  {
+    "id": "msg-091",
+    "role": "user",
+    "content": "Message 91 in the 100-message AI conversation fixture. This is a user query asking about topic 91 with some context.",
+    "timestamp": "2026-01-01T01:31:00.000Z"
+  },
+  {
+    "id": "msg-092",
+    "role": "assistant",
+    "content": "Message 92 in the 100-message AI conversation fixture. This is an assistant response explaining topic 92 in moderate detail.",
+    "timestamp": "2026-01-01T01:32:00.000Z"
+  },
+  {
+    "id": "msg-093",
+    "role": "user",
+    "content": "Message 93 in the 100-message AI conversation fixture. This is a user query asking about topic 93 with some context.",
+    "timestamp": "2026-01-01T01:33:00.000Z"
+  },
+  {
+    "id": "msg-094",
+    "role": "assistant",
+    "content": "Message 94 in the 100-message AI conversation fixture. This is an assistant response explaining topic 94 in moderate detail.",
+    "timestamp": "2026-01-01T01:34:00.000Z"
+  },
+  {
+    "id": "msg-095",
+    "role": "user",
+    "content": "Message 95 in the 100-message AI conversation fixture. This is a user query asking about topic 95 with some context.",
+    "timestamp": "2026-01-01T01:35:00.000Z"
+  },
+  {
+    "id": "msg-096",
+    "role": "assistant",
+    "content": "Message 96 in the 100-message AI conversation fixture. This is an assistant response explaining topic 96 in moderate detail.",
+    "timestamp": "2026-01-01T01:36:00.000Z"
+  },
+  {
+    "id": "msg-097",
+    "role": "user",
+    "content": "Message 97 in the 100-message AI conversation fixture. This is a user query asking about topic 97 with some context.",
+    "timestamp": "2026-01-01T01:37:00.000Z"
+  },
+  {
+    "id": "msg-098",
+    "role": "assistant",
+    "content": "Message 98 in the 100-message AI conversation fixture. This is an assistant response explaining topic 98 in moderate detail.",
+    "timestamp": "2026-01-01T01:38:00.000Z"
+  },
+  {
+    "id": "msg-099",
+    "role": "user",
+    "content": "Message 99 in the 100-message AI conversation fixture. This is a user query asking about topic 99 with some context.",
+    "timestamp": "2026-01-01T01:39:00.000Z"
+  },
+  {
+    "id": "msg-100",
+    "role": "assistant",
+    "content": "Message 100 in the 100-message AI conversation fixture. This is an assistant response explaining topic 100 in moderate detail.",
+    "timestamp": "2026-01-01T01:40:00.000Z"
+  }
+]
