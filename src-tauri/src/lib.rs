@@ -1406,6 +1406,11 @@ pub fn run() {
         .manage(DocumentWatcherStore::default())
         .manage(WorkspaceWatcherStore::default())
         .manage(AgentHeadlessStore::default())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let paths = opened_paths_from_args(args, &cwd);
 
@@ -1478,16 +1483,6 @@ pub fn run() {
             read_skill_hub,
             write_skill_hub
         ])
-        .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-            Ok(())
-        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {

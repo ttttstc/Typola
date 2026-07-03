@@ -66,6 +66,45 @@ function buildWindowsPortable(releaseDir, assetLabel) {
   mkdirSync(stagingDir, { recursive: true });
 
   copyFileSync(exePath, join(stagingDir, `${productName}.exe`));
+  const webview2Setup = join(projectRoot, 'src-tauri', 'resources', 'MicrosoftEdgeWebview2Setup.exe');
+  if (existsSync(webview2Setup)) {
+    copyFileSync(webview2Setup, join(stagingDir, 'MicrosoftEdgeWebview2Setup.exe'));
+  }
+  writeFileSync(
+    join(stagingDir, `Start-${productName}.cmd`),
+    [
+      '@echo off',
+      'setlocal',
+      'set "WEBVIEW2_KEY=HKCU\\Software\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"',
+      'reg query "%WEBVIEW2_KEY%" /v pv >nul 2>nul',
+      'if %ERRORLEVEL%==0 goto run',
+      'set "WEBVIEW2_KEY=HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"',
+      'reg query "%WEBVIEW2_KEY%" /v pv >nul 2>nul',
+      'if %ERRORLEVEL%==0 goto run',
+      'if exist "%~dp0MicrosoftEdgeWebview2Setup.exe" goto install',
+      'goto missing',
+      ':install',
+      'echo Installing Microsoft Edge WebView2 Runtime...',
+      'start /wait "" "%~dp0MicrosoftEdgeWebview2Setup.exe" /silent /install',
+      'reg query "HKCU\\Software\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" /v pv >nul 2>nul',
+      'if %ERRORLEVEL%==0 goto run',
+      'reg query "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" /v pv >nul 2>nul',
+      'if %ERRORLEVEL%==0 goto run',
+      ':missing',
+      'echo.',
+      'echo Typola requires Microsoft Edge WebView2 Runtime on this machine.',
+      'echo Please install WebView2 Runtime, then run Typola again:',
+      'echo https://developer.microsoft.com/microsoft-edge/webview2/',
+      'echo.',
+      'start "" "https://developer.microsoft.com/microsoft-edge/webview2/"',
+      'pause',
+      'exit /b 1',
+      ':run',
+      'start "" "%~dp0Typola.exe"',
+      'exit /b 0',
+    ].join('\r\n'),
+    'utf8',
+  );
   writeFileSync(
     join(stagingDir, 'README-portable.txt'),
     [
@@ -73,9 +112,12 @@ function buildWindowsPortable(releaseDir, assetLabel) {
       '',
       `Version: ${version}`,
       '',
-      '- Double-click Typola.exe to run.',
+      '- Prefer Start-Typola.cmd. It checks whether Microsoft Edge WebView2 Runtime is installed before launching.',
+      '- You can also double-click Typola.exe directly if WebView2 Runtime is already installed.',
       '- This portable build does not write into Program Files.',
-      '- Windows WebView2 Runtime is still required on the machine.',
+      '- If WebView2 Runtime is missing, Start-Typola.cmd runs the bundled MicrosoftEdgeWebview2Setup.exe first.',
+      '- If installation still fails, install WebView2 Runtime manually from:',
+      '  https://developer.microsoft.com/microsoft-edge/webview2/',
     ].join('\r\n'),
     'utf8',
   );

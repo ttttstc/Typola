@@ -85,7 +85,9 @@ The terminal is implemented with Tauri commands plus event streaming:
 ## Packaging
 
 - `npm run tauri dev` 运行时，Vite 会忽略 `src-tauri/target/**`，避免前端 dev server 监听 Rust 构建产物并在 Windows 上撞到 `app_lib.dll` 文件锁。
-- Installer builds continue to use `tauri build` and produce Windows `MSI` plus `NSIS` setup packages from `src-tauri/target/release/bundle/`.
+- Installer builds continue to use `tauri build` and produce Windows `NSIS` setup packages from `src-tauri/target/release/bundle/nsis/`.
+- Windows installer builds set `bundle.windows.webviewInstallMode=skip` because Typola bundles `resources/MicrosoftEdgeWebview2Setup.exe` itself and installs it through `src-tauri/windows/hooks.nsh`. This avoids Tauri bundler network timeouts while still repairing machines that do not already have WebView2 available.
+- Release builds initialize `tauri-plugin-log` for both debug and release, so startup/runtime failures can be diagnosed from the app log directory instead of disappearing behind the Windows GUI subsystem.
 - Portable builds are produced by `scripts/build-portable.mjs`.
-- On Windows, the portable packager copies `typola.exe` plus a small runtime note into a staging folder and emits `bundle/portable/*_windows-x64_portable.zip`.
+- On Windows, the portable packager copies `typola.exe`, `MicrosoftEdgeWebview2Setup.exe`, a runtime note, and `Start-Typola.cmd` into a staging folder and emits `bundle/portable/*_windows-x64_portable.zip`. The helper script checks the WebView2 Runtime registry key before launching, runs the bundled bootstrapper when the runtime is missing, and opens the official WebView2 download page if installation still fails.
 - On macOS, the portable packager zips the generated `.app` bundle into `bundle/portable/*_macos-*_portable.zip`.
