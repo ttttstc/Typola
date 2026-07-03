@@ -157,10 +157,10 @@ function buildPlainToSourceMap(source: string): (plainIdx: number) => number {
 // 用在 needle 匹配前(source 和 needle 都过),避免肉眼一致但 indexOf 失败。
 function normalizeForMatch(text: string): string {
   return text
-    .replace(/ /g, ' ')           // NBSP → space
-    .replace(/[ -​]/g, ' ')  // en/em/figure space + ZWSP → space
-    .replace(/　/g, ' ')           // 全角空格 → space (谨慎:中文可能要保留;这里只为 needle 匹配,不影响实际替换)
-    .replace(/[‌-‏﻿]/g, ''); // 零宽 + RLM/LRM/BOM 去掉
+    .replace(/\u00A0/g, " ")           // NBSP → space
+    .replace(/[\u2002-\u200B]/g, " ")  // en/em/figure space + ZWSP → space
+    .replace(/\u3000/g, " ")           // fullwidth space → space
+    .replace(/[\u200C-\u200F\uFEFF]/g, ""); // ZWNJ/ZWJ/LRM/RLM + BOM
 }
 
 // 在 source 中唯一定位 originalText。prefixHint 仅在 originalText 单独歧义时作消歧用。

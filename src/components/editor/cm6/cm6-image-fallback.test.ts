@@ -11,7 +11,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EditorState, Transaction } from '@codemirror/state';
+import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { createMarkdownExtensions } from './createMarkdownExtensions';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';
@@ -94,10 +94,10 @@ describe('cm6 PR3 — 图片插入位置 + 加载失败回退', () => {
       view = createView('hello');
 
       // jsdom 不做 layout,posAtCoords 可能返回 null;关键是不抛。
-      let result: number | null | undefined = undefined;
+      let result: number | null | undefined;
       try {
         result = view!.posAtCoords({ x: 0, y: 0 });
-      } catch (e) {
+      } catch {
         // wrapped to null by EditorPane.posAtCoords in production code path
         result = null;
       }
