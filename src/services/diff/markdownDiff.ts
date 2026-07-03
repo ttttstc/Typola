@@ -102,10 +102,10 @@ export function splitParagraphs(text: string): string[] {
     }
 
     // 3. 缩进代码块(4 空格 / tab 起始,buffer 为空时才识别 — 否则可能是列表的延续行)
-    if (/^(    |\t)/u.test(line) && buffer.length === 0) {
+    if (/^( {4}|\t)/u.test(line) && buffer.length === 0) {
       const block: string[] = [line];
       let k = i + 1;
-      while (k < lines.length && (/^(    |\t)/u.test(lines[k]) || lines[k].trim() === '')) {
+      while (k < lines.length && (/^( {4}|\t)/u.test(lines[k]) || lines[k].trim() === '')) {
         block.push(lines[k]);
         k += 1;
       }

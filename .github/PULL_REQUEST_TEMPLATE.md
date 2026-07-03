@@ -31,6 +31,25 @@ $ npm run test:e2e -- e2e/layout-behavior.spec.ts
 - `npm run test:e2e`:
 - 涉及 UI 时附 `npm run tauri dev` 本地手测结论:
 
+## Performance Before/After
+
+<!--
+bundle size: 必填，除非 perf-budget.yml 的 path filter 没命中。
+CM6 p50: 当修改了编辑器或 perf 模块时必须填写；否则写 N/A + 原因。
+-->
+
+### Bundle size (gzip kB)
+
+| chunk | before | after | delta |
+| --- | ---: | ---: | ---: |
+| $(npm run perf:bundle:report) | | | |
+
+### CM6 input to paint p50 (ms)
+
+- N/A (此 PR 不涉及编辑器或性能代码改动)
+
+- [ ] perf-budget.json 已更新（如果 bundle 有预期变化）
+
 ## Risk & Rollback
 
 <!-- 可能的副作用、回滚方法、是否触及 CONTRIBUTING.md §5.3 的近期决策。 -->

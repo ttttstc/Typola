@@ -15,7 +15,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EditorState, Transaction } from '@codemirror/state';
+import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { createMarkdownExtensions } from './createMarkdownExtensions';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';

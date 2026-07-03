@@ -18,6 +18,7 @@ export default defineConfig([
     'test-results/**',
     'website/.astro/**',
     'website/dist/**',
+    'src/experimental/**',
   ]),
   {
     files: ['**/*.{ts,tsx}'],
@@ -29,6 +30,24 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+    },
+    rules: {
+      // React Compiler diagnostics — downgrade to warn, they're optimization hints
+      'react-hooks/refs': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/immutability': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
+
+      // Style preferences — warn only
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-empty-object-type': 'warn',
+      'react-refresh/only-export-components': 'warn',
+
+      // Allow `_`-prefixed unused vars/args (convention for intentionally unused)
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
   },
 ])

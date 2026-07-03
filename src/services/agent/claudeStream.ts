@@ -124,7 +124,6 @@ export function createClaudeStreamHandler(
   function emitCanonicalTaskSnapshot(toolUseId: unknown, name: unknown, input: unknown): boolean {
     if (typeof toolUseId !== 'string' || typeof name !== 'string' || !isRecord(input)) return false;
     if (canonicalTaskToolUseIds.has(toolUseId)) return true;
-    let changed = false;
     if (name === 'TaskCreate') {
       const content = typeof input.subject === 'string'
         ? input.subject
@@ -140,7 +139,6 @@ export function createClaudeStreamHandler(
         status: normalizeTaskStatus(input.status),
         ...(activeForm ? { activeForm } : {}),
       });
-      changed = true;
     } else if (name === 'TaskUpdate') {
       if (typeof input.taskId !== 'string') return false;
       const existing = runtimeTasks.get(input.taskId);
@@ -157,12 +155,11 @@ export function createClaudeStreamHandler(
         status: normalizeTaskStatus(input.status),
         ...(activeForm ? { activeForm } : {}),
       });
-      changed = true;
     } else {
       return false;
     }
     canonicalTaskToolUseIds.add(toolUseId);
-    if (!changed || runtimeTasks.size === 0) return false;
+    if (runtimeTasks.size === 0) return false;
     onEvent({
       type: 'tool_use',
       id: `${toolUseId}:todo-task`,

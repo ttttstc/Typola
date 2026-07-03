@@ -132,6 +132,7 @@ function RawJsonDisclosure({ data }: { data: unknown }) {
 export function TodoCard({ input, runStreaming, runSucceeded }: CardProps) {
   const t = useT();
   const todos = parseTodoWriteInput(input);
+  const [overrideExpanded, setOverrideExpanded] = useState<boolean | null>(null);
   if (todos.length === 0) {
     return (
       <div className="op-card op-todo op-generic">
@@ -148,7 +149,6 @@ export function TodoCard({ input, runStreaming, runSucceeded }: CardProps) {
   const hasInProgress = todos.some((todo) => todo.status === 'in_progress');
   const hasPending = todos.some((todo) => todo.status === 'pending' || todo.status === 'in_progress');
   const defaultExpanded = todos.length > 0 && (hasInProgress || hasPending || runStreaming);
-  const [overrideExpanded, setOverrideExpanded] = useState<boolean | null>(null);
   const expanded = overrideExpanded ?? defaultExpanded;
   const inProgressTodo = todos.find((todo) => todo.status === 'in_progress');
   const done = todos.filter((todo) => todo.status === 'completed' || todo.status === 'in_progress').length;
