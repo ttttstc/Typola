@@ -1,7 +1,7 @@
 {
-  "capturedAt": "2026-07-03T12:17:32.460Z",
-  "gitSha": "9590700d2e722f5a587bac0300a7f25a3b8a15d4",
-  "source": "vite build (config/vite.config.ts)",
+  "capturedAt": "2026-07-03T12:19:48.063Z",
+  "gitSha": "865689eec68ffac87a9cdae23eb925668ab1c196",
+  "source": "npm run build (runs typecheck then vite build --config config/vite.config.ts)",
   "schema": "chunks keyed by glob pattern matching dist/assets/<key>; * matches the rolldown content hash and changes per build; entries without a hash segment use the literal filename (rolldown embedded the hash in the chunk name itself)",
   "total": 1735.33,
   "chunks": {
