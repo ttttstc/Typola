@@ -31,6 +31,32 @@ $ npm run test:e2e -- e2e/layout-behavior.spec.ts
 - `npm run test:e2e`:
 - 涉及 UI 时附 `npm run tauri dev` 本地手测结论:
 
+## Performance Before/After
+
+<!-- Sprint 0 perf baseline (ISS-133). 路径过滤器触发了 perf-budget
+     workflow 时本节必填；未触发时填 N/A 并说明。基线数据由
+     `perf-budget.json` 锁定，命令:
+       $ npm run perf:bundle:report    # 抓当前 build 的 chunk 表
+       $ npm run perf:bundle            # 跟 ledger 对比，CI 同款 -->
+     端到端 P50（cm6-input → 下一帧 paint）只在修改 `src/components/editor/cm6/**`
+     或 `src/perf/**` 时需要填。 -->
+
+### Bundle size (gzip kB)
+
+| chunk | before | after | delta |
+| --- | ---: | ---: | ---: |
+| (top 5 changed) | | | |
+
+### CM6 input → paint p50 (ms)
+
+| fixture | before | after | delta |
+| --- | ---: | ---: | ---: |
+| `cm6-markdown-5k.md` | | | |
+| `cm6-markdown-10k-100-headings.md` | | | |
+
+- [ ] 已对照 `perf-budget.json`（无未跟踪 chunk）
+- [ ] 未触发表格内行时填了 N/A 并说明原因
+
 ## Risk & Rollback
 
 <!-- 可能的副作用、回滚方法、是否触及 CONTRIBUTING.md §5.3 的近期决策。 -->
