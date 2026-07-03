@@ -30,7 +30,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Windows NSIS 安装包改为随包携带 WebView2 bootstrapper，并在安装后检测/安装 WebView2 Runtime，降低目标机器缺少 WebView2 时启动闪退的概率；release 包默认启用文件日志，便于定位现场崩溃。
+- Windows exe 启动前新增 WebView2 Runtime 预检与自修复：缺失时会尝试运行同目录 / resources 中随包携带的 WebView2 bootstrapper，仍失败时弹出明确提示并打开官方安装页；NSIS 安装包也会在安装后检测/安装 WebView2 Runtime，降低目标机器缺少 WebView2 时启动闪退的概率；release 包默认启用文件日志，便于定位现场崩溃。
 - Windows 免安装包新增 `Start-Typola.cmd` 启动检查脚本并随包携带 WebView2 bootstrapper：启动前检测 WebView2 Runtime，缺失时先尝试静默安装，再给出官方安装入口，避免直接双击 exe 无提示闪退。
 - 重写中英文 README：按当前主干能力重新梳理产品定位、AI 工作台、SkillHub、产物中心、CM6 编辑器、导出交付、安装使用、开发打包与文档入口。
 - 左右侧栏与预览面板展开/收起改为低噪声滑入/淡出动效，文件 tab 加宽并优化文字垂直居中与可读长度。

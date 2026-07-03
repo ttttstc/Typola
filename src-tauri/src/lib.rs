@@ -23,6 +23,121 @@ use wait_timeout::ChildExt;
 
 mod export;
 
+#[cfg(target_os = "windows")]
+mod windows_runtime {
+    use std::{
+        env,
+        os::windows::process::CommandExt,
+        path::{Path, PathBuf},
+        process::Command,
+    };
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    const WEBVIEW2_INSTALL_URL: &str = "https://developer.microsoft.com/microsoft-edge/webview2/";
+
+    pub fn ensure_webview2_runtime() {
+        if has_webview2_runtime() {
+            return;
+        }
+
+        if let Some(setup) = find_webview2_setup() {
+            let _ = Command::new(&setup)
+                .args(["/silent", "/install"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+
+            if has_webview2_runtime() {
+                return;
+            }
+        }
+
+        show_webview2_missing_message();
+        let _ = Command::new("cmd")
+            .args(["/C", "start", "", WEBVIEW2_INSTALL_URL])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+        std::process::exit(1);
+    }
+
+    fn has_webview2_runtime() -> bool {
+        [
+            (
+                "HKCU\\Software\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                "pv",
+            ),
+            (
+                "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                "pv",
+            ),
+            (
+                "HKLM\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                "pv",
+            ),
+        ]
+        .iter()
+        .any(|(key, value)| registry_value_exists(key, value))
+    }
+
+    fn registry_value_exists(key: &str, value: &str) -> bool {
+        Command::new("reg")
+            .args(["query", key, "/v", value])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map(|output| {
+                output.status.success()
+                    && String::from_utf8_lossy(&output.stdout)
+                        .lines()
+                        .any(|line| line.contains(value) && !line.contains("0.0.0.0"))
+            })
+            .unwrap_or(false)
+    }
+
+    fn find_webview2_setup() -> Option<PathBuf> {
+        let exe_dir = env::current_exe()
+            .ok()
+            .and_then(|path| path.parent().map(Path::to_path_buf));
+
+        let mut candidates = Vec::new();
+        if let Some(dir) = exe_dir {
+            candidates.push(dir.join("MicrosoftEdgeWebview2Setup.exe"));
+            candidates.push(dir.join("resources").join("MicrosoftEdgeWebview2Setup.exe"));
+        }
+        if let Ok(resource_dir) = env::var("TAURI_RESOURCE_DIR") {
+            candidates.push(PathBuf::from(resource_dir).join("MicrosoftEdgeWebview2Setup.exe"));
+        }
+
+        candidates.into_iter().find(|path| path.is_file())
+    }
+
+    fn show_webview2_missing_message() {
+        let message = concat!(
+            "Typola needs Microsoft Edge WebView2 Runtime to start.\n\n",
+            "Typola tried to install the bundled runtime but it is still unavailable.\n",
+            "Please install or repair WebView2 Runtime, then launch Typola again.\n\n",
+            "The download page will be opened now."
+        );
+        let title = "Typola startup dependency missing";
+        let _ = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &format!(
+                    "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show({}, {}, 'OK', 'Warning') | Out-Null",
+                    powershell_quote(message),
+                    powershell_quote(title)
+                ),
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
+    }
+
+    fn powershell_quote(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+}
+
 struct OpenedPaths(Mutex<Vec<String>>);
 #[derive(Default)]
 struct TerminalStore(Mutex<TerminalRegistry>);
@@ -1400,6 +1515,9 @@ fn terminal_clear(state: tauri::State<'_, TerminalStore>, term_id: u32) -> Resul
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    windows_runtime::ensure_webview2_runtime();
+
     tauri::Builder::default()
         .manage(OpenedPaths(Mutex::new(collect_initial_open_paths())))
         .manage(TerminalStore::default())
