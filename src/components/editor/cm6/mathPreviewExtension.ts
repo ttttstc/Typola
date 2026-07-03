@@ -101,7 +101,7 @@ function buildBlockMathDecorations(state: EditorState): DecorationSet {
 
   const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
   tree.iterate({
-    enter(node) {
+    enter(node: any) {
       if (node.name !== 'FencedCode') return;
       const codeInfo = node.node.getChild('CodeInfo');
       if (!codeInfo) return;
