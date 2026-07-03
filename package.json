@@ -16,7 +16,9 @@
     "portable:package": "node scripts/build-portable.mjs",
     "tauri:build:portable": "npm run tauri:build:local && npm run portable:package",
     "tauri:build:update": "tauri build --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":true}}\"",
-    "updater:manifest": "node scripts/create-updater-manifest.mjs"
+    "updater:manifest": "node scripts/create-updater-manifest.mjs",
+    "perf:bundle": "node scripts/perf/assert-bundle-budget.mjs",
+    "perf:bundle:report": "node scripts/perf/collect-bundle-size.mjs"
   },
   "dependencies": {
     "@atomic-editor/editor": "0.4.3",
