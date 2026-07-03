@@ -53,10 +53,13 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMxNEI4NzA3NjM0NUZFREQKUldUZC9rVmpCNGRMTWFQQ0xaUTNTV2U5RFhGcWxpeUZTVG9LajJ4ZDdZOHhqUHBxUDB5b095cG4K"
     }
   },
-  "bundle": {
+    "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi"],
     "createUpdaterArtifacts": true,
+    "resources": [
+      "resources/MicrosoftEdgeWebview2Setup.exe"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -91,7 +94,11 @@
       }
     ],
     "windows": {
+      "webviewInstallMode": {
+        "type": "skip"
+      },
       "nsis": {
+        "installerHooks": "./windows/hooks.nsh",
         "installerIcon": "icons/icon.ico",
         "uninstallerIcon": "icons/icon.ico"
       }

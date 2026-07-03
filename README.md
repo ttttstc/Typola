@@ -74,15 +74,15 @@
 从 GitHub Releases 下载：
 
 - `Typola_*_x64-setup.exe`
-- `Typola_*_x64_en-US.msi`
 
-适合长期使用、文件关联和自动更新。
+适合长期使用、文件关联和自动更新。Windows 安装包提供 `setup.exe` 与 `.msi` 两种形式，都会把 WebView2 bootstrapper 打进单个安装文件；目标机器缺少 WebView2 Runtime 时会自动补齐。
 
 ### Windows 免安装版
 
-下载 `Typola_*_windows-x64_portable.zip`，解压后运行 `Typola.exe`。适合临时测试或便携使用。
+下载 `Typola_*_windows-x64_portable.zip`，完整解压后直接运行 `Typola.exe`。它会先检测 WebView2 Runtime，再创建应用窗口。适合临时测试或便携使用。
 
-> Windows 需要 Microsoft Edge WebView2 Runtime。现代 Windows 通常已经内置。
+> 免安装版不会写入 Program Files，但首次启动时会在 WebView2 Runtime 缺失时先运行随包携带的 WebView2 bootstrapper；如果无网或安装失败，会显性提示用户先安装 WebView2，并给出官方安装入口。`Start-Typola.cmd` 仅作为诊断兜底保留。
+> 不建议、也不承诺单独分发包内的 `Typola.exe`。Windows 发布物以安装包和 portable zip 为准。
 
 ### macOS
 
@@ -131,7 +131,7 @@ opencode --version
 - Node.js + npm
 - Rust stable
 - Tauri v2 平台依赖
-- Windows 可选：WebView2 Runtime、WiX / NSIS 打包环境
+- Windows 可选：WebView2 Runtime、NSIS 打包环境
 
 ```bash
 npm install
@@ -145,7 +145,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ## 打包
 
 ```bash
-npm run tauri:build:local      # 本地安装版：msi + nsis
+npm run tauri:build:local      # 本地安装版：NSIS setup.exe + MSI
 npm run tauri:build:portable   # 本地免安装版：portable zip
 npm run tauri:build:update     # 带更新签名的发布构建
 ```
@@ -153,7 +153,8 @@ npm run tauri:build:update     # 带更新签名的发布构建
 产物位置：
 
 - Windows EXE：`src-tauri/target/release/typola.exe`
-- Windows 安装包：`src-tauri/target/release/bundle/{msi,nsis}/`
+- Windows NSIS 安装包：`src-tauri/target/release/bundle/nsis/`
+- Windows MSI 安装包：`src-tauri/target/release/bundle/msi/`
 - Windows 免安装包：`src-tauri/target/release/bundle/portable/`
 - macOS：CI 产出 `.dmg` 与 portable zip
 
