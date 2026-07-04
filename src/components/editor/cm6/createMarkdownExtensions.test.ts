@@ -13,6 +13,15 @@ vi.mock('mermaid', () => ({
   },
 }));
 
+vi.mock('katex', () => ({
+  default: {
+    renderToString: vi.fn((tex: string, options?: { displayMode?: boolean }) => {
+      const className = options?.displayMode ? 'katex-display' : 'katex';
+      return `<span class="${className}">${tex}</span>`;
+    }),
+  },
+}));
+
 function createView(doc: string, livePreview: boolean): EditorView {
   const parent = document.createElement('div');
   document.body.appendChild(parent);
@@ -83,12 +92,13 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelector<HTMLImageElement>('.cm-atomic-image img')?.src).toBe('https://example.com/a.png');
   });
 
-  it('renders bare inline math with KaTeX outside the cursor range', () => {
+  it('renders bare inline math with KaTeX outside the cursor range', async () => {
     view = createView('Energy $E=mc^2$ here', true);
     moveCursorToEnd(view);
 
     const inlineMath = view.contentDOM.querySelector<HTMLElement>('.typola-cm6-math-inline');
     expect(inlineMath).not.toBeNull();
+    await waitForElement('.katex');
     expect(inlineMath?.querySelector('.katex')).not.toBeNull();
   });
 
