@@ -339,7 +339,7 @@ export function AppLayout() {
     if (!isTauriRuntime) return;
     let cancelled = false;
     void import('@tauri-apps/api/path')
-      .then(({ homeDir }) => homeDir())
+      .then(({ appLocalDataDir }) => appLocalDataDir())
       .then((path) => {
         if (!cancelled) setDefaultAiWorkspaceRoot(path);
       })
