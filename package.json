@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config config/vite.config.ts",
-    "build": "npm run typecheck && vite build --config config/vite.config.ts",
+    "build": "npm run build:themes && npm run typecheck && vite build --config config/vite.config.ts",
+    "build:themes": "node scripts/build-themes.mjs",
     "lint": "eslint . --config config/eslint.config.js",
     "typecheck": "tsc -b config/tsconfig.json",
     "test": "vitest run --config config/vite.config.ts",

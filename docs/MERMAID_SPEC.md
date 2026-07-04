@@ -56,7 +56,7 @@
 
 - 跟随编辑器主题:浅色文档用 mermaid `default` 主题,深色文档用 `dark` 主题
 - 通过 `mermaid.initialize({ theme: ... })` 或 `useMaxWidth`/`themeVariables` 设置
-- Typola 当前是浅色优先,**默认走 `default`**;深色主题切换是后续任务,这里**预留接口**(读 `settings.theme` 或类似),实施层不引入主题切换 UI
+- Typola 当前是浅色优先,**默认走 `default`**;深色主题切换是后续任务,这里**预留接口**(读 `settings.themeId` 或类似),实施层不引入主题切换 UI
 
 ### 5. 复制/导出
 
@@ -233,7 +233,7 @@ Vditor `markdown.sanitize: true` 会过滤 SVG。两种解法:
 ## 六、范围红线(不做)
 
 - **PNG 复制 / 导出**(本期只做 SVG;PNG 要 canvas 序列化,工作量翻倍)
-- **mermaid 主题动态切换 UI**(只在代码里读 `settings.theme`,留接口;切换 UI 跟全局主题一起做)
+- **mermaid 主题动态切换 UI**(只在代码里读 `settings.themeId`,留接口;切换 UI 跟全局主题一起做)
 - **mermaid editor 高级体验**(语法高亮、自动补全、错误高亮在源代码行号)
 - **fork Vditor IR 渲染管线**实现完美的 Typora 双态切换(MVP 用 Vditor 默认行为)
 - **流式更新**(AI 流式生成 mermaid 时**逐字渲染**)—— mermaid 部分语法在生成中会反复报错,得在生成结束才渲染。实施层加判断:若代码块尾部 ` ``` ` 围栏不完整,不触发 mermaid 渲染

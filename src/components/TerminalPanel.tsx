@@ -17,6 +17,7 @@ import {
   type TerminalCreateResult,
 } from '../services/terminalService';
 import { waitForPtyReady } from '../services/ptyReady';
+import { resolveTerminalTheme } from '../services/themeRegistry';
 
 export type TerminalPanelHandle = {
   startAgentTerminal: (opts: { command: string; cwd?: string }) => Promise<void>;
@@ -124,6 +125,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     const localId = createLocalId();
     const tabNumber = tabs.length + 1;
     const fitAddon = new FitAddon();
+    const theme = resolveTerminalTheme(settings.themeId);
     const terminal = new XTerm({
       convertEol: true,
       cursorBlink: settings.terminalCursorBlink,
@@ -131,9 +133,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       fontFamily: settings.terminalFontFamily,
       fontSize: settings.terminalFontSize,
       scrollback: 5000,
-      theme: settings.theme === 'dark'
-        ? { background: '#1f1d1a', foreground: '#f2ece3', cursor: '#f0b06d' }
-        : { background: '#fffdfa', foreground: '#2c2924', cursor: '#9f5137' },
+      theme,
     });
 
     terminal.loadAddon(fitAddon);
@@ -208,10 +208,18 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     settings.terminalFontFamily,
     settings.terminalFontSize,
     settings.terminalShellPath,
-    settings.theme,
+    settings.themeId,
     tabs.length,
     workspaceRoot,
   ]);
+
+  useEffect(() => {
+    const theme = resolveTerminalTheme(settings.themeId);
+    for (const runtime of runtimesRef.current.values()) {
+      runtime.terminal.options.theme = theme;
+      runtime.terminal.refresh(0, Math.max(0, runtime.terminal.rows - 1));
+    }
+  }, [settings.themeId]);
 
   const closeTab = useCallback((localId: string) => {
     const runtime = runtimesRef.current.get(localId);

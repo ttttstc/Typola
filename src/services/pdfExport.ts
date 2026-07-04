@@ -5,16 +5,13 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { buildPdfHtmlDocument, exportFileName } from './pdfExportStyles';
-import type { AppSettings } from './settingsService';
 import { resolveDefaultExportPath, createExportFileName } from './exportPathService';
 import { markdownToExportHtml } from './markdownExportRenderer';
 
-export type PdfExportTheme = AppSettings['theme'];
 export type PdfExportOptions = {
   content: string;
   fileName: string;
   filePath?: string;
-  theme: PdfExportTheme;
   resolvedPreviewFontFamily: string;
   resolvedPreviewHeadingFontFamily: string;
   previewFontSize: number;
@@ -37,7 +34,6 @@ export function createPdfExportFileName(input: string): string {
 async function renderExportHtml(options: PdfExportOptions): Promise<string> {
   const bodyHtml = await markdownToExportHtml(options.content, {
     filePath: options.filePath,
-    theme: options.theme,
   });
   return buildPdfHtmlDocument(bodyHtml, options.fileName);
 }

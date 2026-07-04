@@ -12,9 +12,10 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/components/FindReplacePanel.tsx`, `QuickOpenPanel.tsx`, and `EditAssistPanel.tsx` provide on-demand editing utilities. Their matching, recent-file, statistics, and snippet logic lives in small service modules so the main editor path stays light.
 - `src/components/WordPaperPreviewPane.tsx`, `src/services/word/*`, and `src/services/wordExportService.ts` provide Word-style preview and background `.docx` export. Export paths are derived automatically from the current document path, with unsaved documents falling back to the user downloads directory.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
-- `src/services/pdfExport.ts` renders the current Markdown into a PDF-specific HTML fragment, applies theme/font settings, derives an output path without opening a save dialog, and sends it to Rust. The Rust `export_pdf` command creates a hidden offscreen WebView2 window, injects that HTML into `public/pdf-print-shell.html`, waits briefly for fonts/images on a fail-open path, and then calls `Page.printToPDF` on Windows. Export progress and results are reported through a non-blocking top-right toast.
+- `src/services/pdfExport.ts` renders the current Markdown into a PDF-specific HTML fragment, applies export font/layout settings, derives an output path without opening a save dialog, and sends it to Rust. The Rust `export_pdf` command creates a hidden offscreen WebView2 window, injects that HTML into `public/pdf-print-shell.html`, waits briefly for fonts/images on a fail-open path, and then calls `Page.printToPDF` on Windows. Export progress and results are reported through a non-blocking top-right toast.
 - `src/services/markdownExportRenderer.ts` is the shared Phase 4 Markdown-to-export-HTML bridge. HTML preview, Word paper preview, and PDF export call it with Markdown source, then run their format-specific wrapping/export steps. This keeps export paths independent from the active editor DOM while Vditor and CM6 coexist.
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
+- `src/services/themeRegistry.ts` defines the Typola theme registry. The app ships three complete appearance themes: `plain-paper`, `night-current`, and `ink-basin`. Settings persist `themeId` plus `themeOptions`; unknown ids fall back to `plain-paper`, while legacy `theme: "dark"` settings migrate to `night-current`.
 - `src/components/conversation/ConversationPanel.tsx` provides the left AI Workbench conversation surface for Skill OS M1.
 - `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge AI Provider headless stdout into typed message state and UI-friendly diagnostics. Claude Code is the current provider; OpenCode is planned as a second provider using the same CLI-shaped integration path.
 - `src/services/documentWatchService.ts` bridges file watcher commands/events for the active document.
@@ -54,6 +55,15 @@ The terminal is implemented with Tauri commands plus event streaming:
 - Windows shell resolution prefers `pwsh.exe`, then `powershell.exe`, then `cmd.exe`.
 - macOS/Linux shell resolution prefers `$SHELL`, then `/bin/zsh`, `/bin/bash`, and `/bin/sh`.
 - The front end derives terminal cwd from the selected workspace tree first, then the opened file path; otherwise Rust falls back to the user home directory.
+
+## Theme System
+
+- Typola uses a theme-as-appearance model, not a light/dark switch. `AppLayout` applies `html[data-theme-id]`, `html[data-color-scheme]`, and `color-scheme` through `applyThemeToDocument`.
+- `npm run build:themes` generates `src/styles/themes.css` from the TypeScript registry. The generated file defines the `--theme-*` variable namespace for shell surfaces, paper, text, borders, accents, AI colors, review marks, editor colors, and terminal colors; `src/styles/app.css` imports it instead of carrying hand-written theme token blocks.
+- CodeMirror uses CSS variables in `createMarkdownExtensions`, so theme changes do not require rebuilding the editor. Vditor preview mode, Mermaid, AI floating surfaces, review marks, and xterm derive their host-specific theme values from the same theme registry. Existing xterm tabs refresh their options when `themeId` changes.
+- `applyThemeToDocument` mounts `html[data-theme-transition='true']` during real theme switches and removes it after 260ms, letting app surfaces crossfade without changing the persisted theme contract.
+- `themeOptions.reviewEnhanceMarks` controls stronger review markings when `html[data-doc-mode='review']` is active.
+- Word / HTML / PDF export output does not follow the application theme. Export appearance remains controlled by export presets and export-specific renderers.
 
 ## AI Workbench
 
