@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ArrowLeft, BarChart3, CalendarDays, Check, ClipboardList, Globe, PenLine,
-  Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, TriangleAlert, type LucideProps,
+  Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, type LucideProps,
 } from 'lucide-react';
 import type { AgentProvider } from '../services/agent/provider';
 import { listLocalSkills, type Skill } from '../services/agent/skillScanner';
@@ -474,7 +474,7 @@ export function SkillHubPanel({
                             ) : skill.builtin ? (
                               <span
                                 className="skill-hub-badge builtin"
-                                title="内置 prompt-only skill,不依赖本机 Claude"
+                                title="内置 prompt-only skill,执行靠自然语言,不依赖本机 CLI 安装"
                               >
                                 内置
                               </span>
@@ -502,7 +502,7 @@ export function SkillHubPanel({
               {systemCards.length > 0 && customCards.length === 0 && (
                 <div className="skill-hub-empty-hint" role="status">
                   <span>
-                    还没有自定义 {capabilityLabel}。把本机已安装的 {capabilityLabel} 加进来,场景里就能直接看到。
+                    还没有自定义条目。把本机已安装的 Claude skill 或 OpenCode command 加进来,场景里就能直接看到。
                   </span>
                   <button
                     type="button"

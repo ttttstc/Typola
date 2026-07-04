@@ -297,8 +297,9 @@ describe('SkillHubPanel', () => {
 
     const categoryTitles = Array.from(host.querySelectorAll<HTMLElement>('.skill-hub-category-title'));
     const titles = categoryTitles.map((node) => node.textContent ?? '');
-    expect(titles).toContain('推荐 skill');
-    expect(titles).toContain('自定义 skill');
+    // PR 4:section title 加了「· N 个」计数,改成 substring 匹配
+    expect(titles.some((t) => t.includes('推荐 skill'))).toBe(true);
+    expect(titles.some((t) => t.includes('自定义 skill'))).toBe(true);
     // 推荐/custom 的 li 各自归属:frontend-slides 在系统段,my-team-skill 在自定义段
     const sections = Array.from(host.querySelectorAll<HTMLElement>('.skill-hub-category'));
     const systemSection = sections.find((node) => node.textContent?.includes('推荐 skill'));
@@ -355,7 +356,10 @@ describe('SkillHubPanel', () => {
       .map((node) => node.textContent ?? '').join('|');
     expect(nbMeta).toContain('产物 markdown');
     // 没自定义 skill 时显示 teach-state empty hint + 「去添加」按钮
-    expect(host.textContent).toContain('还没有自定义 Claude skill');
+    // 文案不再锁死单个 CLI:同时点名 Claude skill 和 OpenCode command
+    expect(host.textContent).toContain('还没有自定义条目');
+    expect(host.textContent).toContain('Claude skill');
+    expect(host.textContent).toContain('OpenCode command');
     const emptyHint = host.querySelector<HTMLElement>('.skill-hub-empty-hint');
     expect(emptyHint?.textContent).toContain('去添加');
     expect(emptyHint?.querySelector('button')).toBeTruthy();
