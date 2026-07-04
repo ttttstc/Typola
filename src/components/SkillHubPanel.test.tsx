@@ -297,8 +297,9 @@ describe('SkillHubPanel', () => {
 
     const categoryTitles = Array.from(host.querySelectorAll<HTMLElement>('.skill-hub-category-title'));
     const titles = categoryTitles.map((node) => node.textContent ?? '');
-    expect(titles).toContain('推荐 skill');
-    expect(titles).toContain('自定义 skill');
+    // PR 4:section title 加了「· N 个」计数,改成 substring 匹配
+    expect(titles.some((t) => t.includes('推荐 skill'))).toBe(true);
+    expect(titles.some((t) => t.includes('自定义 skill'))).toBe(true);
     // 推荐/custom 的 li 各自归属:frontend-slides 在系统段,my-team-skill 在自定义段
     const sections = Array.from(host.querySelectorAll<HTMLElement>('.skill-hub-category'));
     const systemSection = sections.find((node) => node.textContent?.includes('推荐 skill'));
@@ -347,13 +348,23 @@ describe('SkillHubPanel', () => {
     expect(builtinItem).toBeDefined();
     const builtinBadge = builtinItem?.querySelector<HTMLElement>('.skill-hub-badge.builtin');
     expect(builtinBadge?.textContent).toContain('内置');
-    // output chip:builtinItem 上的 chip 应包含 "html"
-    const outputChip = builtinItem?.querySelector<HTMLElement>('.skill-hub-output');
-    expect(outputChip?.textContent).toContain('html');
-    const nbOutputChip = nbItem?.querySelector<HTMLElement>('.skill-hub-output');
-    expect(nbOutputChip?.textContent).toContain('markdown');
-    // 没自定义 skill 时显示「还没有自定义」提示
-    expect(host.textContent).toContain('还没有自定义 Claude skill');
+    // output 已从 topline chip 降级到 meta 行,文案 "产物 html" / "产物 markdown"
+    const builtinMeta = builtinItem?.querySelectorAll<HTMLElement>('.skill-hub-item-meta-item');
+    expect(Array.from(builtinMeta ?? []).map((node) => node.textContent ?? '').join('|'))
+      .toContain('产物 html');
+    const nbMeta = Array.from(nbItem?.querySelectorAll<HTMLElement>('.skill-hub-item-meta-item') ?? [])
+      .map((node) => node.textContent ?? '').join('|');
+    expect(nbMeta).toContain('产物 markdown');
+    // 没自定义 skill 时显示 teach-state empty hint + 「去添加」按钮
+    // 文案不再点名具体 CLI,用中性的「skill/工具」
+    expect(host.textContent).toContain('还没有自定义条目');
+    expect(host.textContent).toContain('把本机已安装的skill/工具加入进来');
+    const emptyHint = host.querySelector<HTMLElement>('.skill-hub-empty-hint');
+    expect(emptyHint?.textContent).toContain('去添加');
+    expect(emptyHint?.querySelector('button')).toBeTruthy();
+    // builtin skill 不应该点亮「缺少来源」warning(按口径 builtin 不补 installSource)
+    expect(builtinItem?.querySelector('.skill-hub-item-meta-item')?.textContent)
+      .not.toContain('缺少来源');
   });
 
   it('hides the empty-custom hint when scene has no system skills (knowledge scene)', async () => {
