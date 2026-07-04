@@ -105,7 +105,16 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
       {
         name: 'humanizer',
         label: '去 AI 味',
-        summary: '将文本改得更自然，减少 AI 味、模板腔和过度总结感。',
+        summary: '基于 blader/humanizer,将英文 / 通用文本改得更自然,减少 AI 味、模板腔和过度总结感。',
+        installSource: 'https://github.com/blader/humanizer',
+        output: 'markdown',
+        system: true,
+      },
+      {
+        name: 'humanizer-zh',
+        label: '中文去 AI 味',
+        summary: '基于 op7418/Humanizer-zh,针对中文写作去 AI 味、模板腔、翻译腔和不自然表达。',
+        installSource: 'https://github.com/op7418/Humanizer-zh',
         output: 'markdown',
         system: true,
       },
@@ -158,17 +167,24 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         builtin: true,
         output: 'html',
         system: true,
-        prefill: `请基于当前文档、表格、事项列表或项目材料生成一份数据报表 HTML。
+        prefill: `请基于当前文档、表格、事项列表或项目材料,生成一份可独立浏览的数据报表 HTML。
 
-要求:
-- 自动识别其中的事项、状态、负责人、时间、风险、进展和关键指标
-- 将内容整理成适合浏览的数据报表页面
-- 页面应包含摘要区、关键指标区、事项明细区、风险区和下一步计划
-- 如果材料中包含表格，请尽量保留表格结构并转成 HTML 展示
-- 对缺失或不确定的信息标记"待确认"
-- 不编造输入材料中没有的信息
-- 输出为单文件 HTML，适合在浏览器中打开
-- 生成后将 HTML 文件保存到当前会话产物目录`,
+适用场景:周报 / 月报 / 项目进展 / 数据指标汇报,需要在一页 HTML 里读全。
+
+执行步骤:
+1. 梳理输入:从材料中识别可用数据项(事项、状态、负责人、时间、风险、进展、关键指标、表格)。
+2. 分类归桶:把每条信息放进对应分区——摘要、关键指标、事项明细、风险、下一步。
+3. 表格转写:材料中的表格保留列结构,转成 HTML <table>;松散字段按上下文合并或拆分。
+4. 不确定性处理:缺失或无法确认的字段统一标记为「待确认」,不编造数据、时间、负责人。
+
+格式要求:
+- 单文件 HTML,CSS 内联或 <style> 块,不依赖外部资源
+- 配色克制、信息密度高、可读优先于装饰
+- 标题层级清晰(H1 总览 → H2 分区 → H3 子项)
+
+输出:
+- 保存为单文件 HTML 到当前会话产物目录
+- 文件名带场景与日期标签(如 report-2025-01-15.html)`,
       },
     ],
   },
@@ -187,21 +203,33 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         builtin: true,
         output: 'markdown',
         system: true,
-        prefill: `请基于当前文档、附件或工作区材料生成一份结构化总结报告。
+        prefill: `请基于当前文档、附件或工作区材料,生成一份可直接交付的结构化总结报告。
 
 输入:
-- 当前文档
-- 当前选中文本，如有
-- 当前工作区相关材料，如需要
+- 当前文档(必读)
+- 当前选中文本(若有,优先围绕它展开)
+- 当前工作区相关材料(按需引用)
 
-要求:
-- 先提炼核心结论，再展开背景、关键进展、问题风险和建议
-- 保留材料中的项目名、时间、负责人、数据、结论和关键事实
-- 不编造输入材料中没有的信息
-- 对不确定的信息标记"待确认"
-- 删除空话、套话和重复表达
-- 输出为可直接编辑的 Markdown 文档
-- 生成后将报告保存到当前会话产物目录`,
+执行步骤:
+1. 通读材料,列出所有可用的事实条目(项目名、时间、负责人、数据、结论、关键事件)。
+2. 先提炼 3-5 条核心结论,再展开。
+3. 按以下结构组织:
+   - 核心结论:开门见山,给决策者直接读的判断
+   - 背景与上下文:必要的环境信息,不要铺垫过多
+   - 关键进展:已完成 / 进行中 / 卡住 三段式
+   - 问题与风险:明确分级(已识别 / 待观察),不混入决策建议
+   - 建议与下一步:可执行项 + 责任人 + 时间(材料里能拿到才写)
+
+写作规范:
+- 保留原文关键术语和数据,不改写为同义表达
+- 删除空话、套话、重复句
+- 对不确定的信息统一标记「待确认」
+- 不编造材料中没有的事实、人名、时间、数据
+
+输出:
+- Markdown 文档,可以直接编辑
+- 保存到当前会话产物目录
+- 文件名带场景与日期标签`,
       },
       {
         name: 'project-retro-report',
@@ -210,15 +238,29 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         builtin: true,
         output: 'markdown',
         system: true,
-        prefill: `请基于当前项目材料生成一份项目复盘报告。
+        prefill: `请基于当前项目材料,生成一份适合项目管理和团队复盘的结构化复盘报告。
 
-要求:
-- 结构包括:背景目标、关键时间线、完成情况、问题与风险、原因分析、经验教训、改进建议、下一步计划
-- 尽量从材料中提取事实，不凭空补充
-- 对缺失的信息用"待确认"标记
-- 语言正式、克制，适合项目管理和团队复盘
-- 输出 Markdown
-- 生成后将复盘报告保存到当前会话产物目录`,
+执行步骤:
+1. 通读材料,按时间轴提取关键节点(启动 / 里程碑 / 决策点 / 卡点 / 收尾)。
+2. 把所有可获取的数据、决策、问题归类到以下结构:
+   - 背景与目标:项目缘起、设定目标、衡量指标
+   - 关键时间线:按日期或阶段列出关键事件
+   - 完成情况:对照原目标评估(达成 / 部分达成 / 未达成)
+   - 问题与风险:发生的问题 + 触发条件 + 影响范围
+   - 原因分析:区分表象原因和根因,至少做一层根因追问
+   - 经验教训:可复用的判断 / 决策模式,不写成口号
+   - 改进建议:可执行的下一阶段动作,每条带责任归属建议
+   - 下一步计划:3-6 个月内可推进的事项
+
+写作规范:
+- 尽量从材料提取事实,对无法确认的事项标「待确认」
+- 不编造人名、时间、数据、责任归属
+- 语言克制、具体、可证伪
+- 避免「反思不足」「沟通不到位」类空泛表达,换成具体场景描述
+
+输出:
+- Markdown
+- 保存到当前会话产物目录`,
       },
       {
         name: 'executive-summary',
@@ -227,22 +269,32 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         builtin: true,
         output: 'markdown',
         system: true,
-        prefill: `请将当前材料压缩成一页式高管摘要。
+        prefill: `请将当前材料压缩成一页式高管摘要(500-800 字以内),让读者 60 秒内能拿到决策所需信息。
 
-要求:
-- 开头先给 3 条最重要结论
-- 聚焦决策点、风险、收益、影响范围和下一步
-- 不展开过多过程细节
-- 不编造输入材料中没有的信息
-- 语言简洁、正式、有信息密度
-- 输出 Markdown
+执行步骤:
+1. 通读材料,识别:
+   - 3 条核心结论(按重要性排序,开门见山)
+   - 关键决策点(需要管理层立即拍板的事项)
+   - 主要风险(影响范围 + 严重性)
+   - 收益 / 成本要点
+   - 后续可执行的下一步
+2. 按以下结构组织(每段控制在 3-5 行):
+   - 核心结论:3 条,按重要性降序
+   - 当前进展:1-2 段,状态快照
+   - 关键风险:分级(高 / 中 / 低)+ 影响范围
+   - 需要决策:列出 2-4 个待决事项,每条标注建议倾向
+   - 下一步建议:3-5 条具体行动
 
-建议结构:
-- 核心结论
-- 当前进展
-- 关键风险
-- 需要决策
-- 下一步建议`,
+写作规范:
+- 不展开过程细节,不铺垫
+- 保留关键数据、人名、时间、金额等具体事实
+- 不编造材料中没有的信息,对不确定项标「待确认」
+- 一段一意,不用连接词堆砌
+
+输出:
+- Markdown
+- 一页可读(不超过 800 字)
+- 保存到当前会话产物目录`,
       },
       {
         name: 'editorial-card-screenshot',
@@ -687,6 +739,46 @@ export function removeCustomSkillFromScene(hub: SkillHub, sceneId: string, skill
 }
 
 export function buildSkillInstallPrompt(skill: SkillTemplateRef, provider: AgentProvider = 'claude'): string {
+  // builtin prompt-only skill:依赖 prefill 文本作为该 skill 的执行说明,
+  // 必须把 prefill 原文喂给 Claude,并明确要求 Claude 在本机创建 SKILL.md,
+  // 否则安装流程只能拿到一个名字 + 用途,无法产出可用的本地 skill。
+  if (skill.builtin && skill.prefill) {
+    if (provider === 'opencode') {
+      return [
+        `请帮我把内置 Typola skill「${skill.name}」安装为本地 OpenCode command。`,
+        `用途:${skill.summary}`,
+        ``,
+        `该 skill 的执行说明(请完整写入 command 文件作为核心指令):`,
+        ``,
+        skill.prefill,
+        ``,
+        `步骤:`,
+        `1. 在合适的目录创建 .opencode/commands/${skill.name}.md(项目级),或全局 ~/.config/opencode/commands/${skill.name}.md(Windows: %USERPROFILE%\\.config\\opencode\\commands\\${skill.name}.md)`,
+        `2. 把上面「执行说明」完整写入该文件`,
+        `3. 文件顶部加 YAML frontmatter:`,
+        `   name: ${skill.name}`,
+        `   description: ${skill.summary}`,
+        `4. 安装后确认可以通过 opencode run --command ${skill.name} 调用`,
+      ].join('\n');
+    }
+    return [
+      `请帮我把内置 Typola skill「${skill.name}」安装为本地 Claude skill。`,
+      `用途:${skill.summary}`,
+      ``,
+      `该 skill 的执行说明(请完整写入 SKILL.md 作为核心指令):`,
+      ``,
+      skill.prefill,
+      ``,
+      `步骤:`,
+      `1. 在本机 Claude skills 目录创建 ${skill.name}/SKILL.md(默认 ~/.claude/skills/${skill.name}/SKILL.md)`,
+      `2. 把上面「执行说明」完整写入该文件`,
+      `3. 文件顶部加 YAML frontmatter:`,
+      `   name: ${skill.name}`,
+      `   description: ${skill.summary}`,
+      `4. 安装后确认可以通过 /${skill.name} 调用`,
+    ].join('\n');
+  }
+
   if (provider === 'opencode') {
     const source = skill.installSource ?? '未提供来源，请根据用途创建 command 内容';
     return [

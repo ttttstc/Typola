@@ -75,6 +75,7 @@ describe('skill hub helpers', () => {
       'markitdown',
       'baoyu-url-to-markdown',
       'humanizer',
+      'humanizer-zh',
       'huashu-proofreading',
       'baoyu-translate',
       'huashu-md-to-pdf',
@@ -186,6 +187,48 @@ describe('skill hub helpers', () => {
     expect(prompt).not.toContain('Claude');
     expect(prompt).not.toContain('.claude');
     expect(prompt).toContain('%USERPROFILE%\\.config\\opencode\\commands\\frontend-slides.md');
+  });
+
+  it('builds Claude install prompt for builtin prefill skill with full instructions', () => {
+    // M2.5 builtin prompt-only skill 的安装 prompt 必须包含 prefill 原文 +
+    // 要求 Claude 在本机创建 SKILL.md,否则点击「让 Claude 安装」无法产出可用 skill。
+    const dataReportHtml = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'daily')!
+      .skills.find((skill) => skill.name === 'data-report-html')!;
+    const prompt = buildSkillInstallPrompt(dataReportHtml, 'claude');
+
+    expect(prompt).toContain('请帮我把内置 Typola skill「data-report-html」安装为本地 Claude skill');
+    expect(prompt).toContain('~/.claude/skills/data-report-html/SKILL.md');
+    expect(prompt).toContain('/data-report-html');
+    // prefill 原文必须出现 — 这是 review 修复的核心:不能只让 Claude 看到名字和用途。
+    expect(prompt).toContain('执行说明');
+    expect(prompt).toContain(dataReportHtml.prefill!);
+    // 不能退化成弱来源:旧分支会写成 `来源:data-report-html`,修复后不该再出现这个字符串。
+    expect(prompt).not.toContain('来源:data-report-html');
+  });
+
+  it('builds OpenCode install prompt for builtin prefill skill', () => {
+    const reportSummary = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'report')!
+      .skills.find((skill) => skill.name === 'report-summary')!;
+    const prompt = buildSkillInstallPrompt(reportSummary, 'opencode');
+
+    expect(prompt).toContain('请帮我把内置 Typola skill「report-summary」安装为本地 OpenCode command');
+    expect(prompt).toContain('.opencode/commands/report-summary.md');
+    expect(prompt).toContain('opencode run --command report-summary');
+    expect(prompt).toContain(reportSummary.prefill!);
+  });
+
+  it('every non-builtin system skill with installSource has a non-empty URL', () => {
+    // 之前漏 humanizer;现在每个有 installSource 的 skill 都该是真实 URL,不能是空字符串。
+    const offenders: string[] = [];
+    for (const scene of SYSTEM_SKILL_SCENES) {
+      for (const skill of scene.skills) {
+        if (skill.builtin) continue;
+        if (skill.installSource !== undefined && skill.installSource.trim().length === 0) {
+          offenders.push(`${scene.id}/${skill.name}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('builds provider-specific skill prefill text', () => {

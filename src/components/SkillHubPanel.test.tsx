@@ -3,7 +3,10 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SkillHubPanel } from './SkillHubPanel';
-import type { SkillHub } from '../services/agent/skillHub';
+import {
+  EMPTY_SKILL_HUB,
+  type SkillHub,
+} from '../services/agent/skillHub';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -253,5 +256,129 @@ describe('SkillHubPanel', () => {
     ));
     expect(staleInstalledCard?.textContent).toContain('未安装');
     expect(staleInstalledCard?.textContent).not.toContain('已安装');
+  });
+
+  it('splits system skills and custom skills into separate section headers', async () => {
+    // M2.5 起系统预置 scene 仅在 claude provider 下可见,换 provider 验证 sections 拆分
+    const claudeHub: SkillHub = {
+      version: 2,
+      sceneAdditions: {
+        html: [
+          { name: 'my-team-skill', description: 'team-made', supportedProviders: ['claude'] },
+        ],
+      },
+      hiddenSystemSkills: {},
+    };
+    skillScannerMock.listLocalSkills.mockReset().mockResolvedValue([
+      {
+        name: 'frontend-slides',
+        description: 'HTML slides',
+        source: 'claude',
+        path: String.raw`D:\notes\.claude\skills\frontend-slides.md`,
+      },
+    ]);
+
+    await act(async () => {
+      root.render(
+        <SkillHubPanel
+          activeProvider="claude"
+          activeWorkspaceRoot={String.raw`D:\notes`}
+          hub={claudeHub}
+          onPickSkill={vi.fn()}
+          onInstallSkill={vi.fn()}
+          onSaveHub={vi.fn()}
+          onReload={vi.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+
+    await act(async () => undefined);
+    act(() => findButtonByText(host, 'HTML 生成').click());
+
+    const categoryTitles = Array.from(host.querySelectorAll<HTMLElement>('.skill-hub-category-title'));
+    const titles = categoryTitles.map((node) => node.textContent ?? '');
+    expect(titles).toContain('推荐 skill');
+    expect(titles).toContain('自定义 skill');
+    // 推荐/custom 的 li 各自归属:frontend-slides 在系统段,my-team-skill 在自定义段
+    const sections = Array.from(host.querySelectorAll<HTMLElement>('.skill-hub-category'));
+    const systemSection = sections.find((node) => node.textContent?.includes('推荐 skill'));
+    const customSection = sections.find((node) => node.textContent?.includes('自定义 skill'));
+    expect(systemSection).toBeDefined();
+    expect(customSection).toBeDefined();
+    expect(systemSection!.textContent).toContain('frontend-slides');
+    expect(systemSection!.textContent).not.toContain('my-team-skill');
+    expect(customSection!.textContent).toContain('my-team-skill');
+    expect(customSection!.textContent).not.toContain('frontend-slides');
+  });
+
+  it('shows 内置 badge and output chip for builtin system skills (daily scene)', async () => {
+    // daily scene 含 builtin + output 的 data-report-html;正适合两个 UI 元素一起测
+    skillScannerMock.listLocalSkills.mockReset().mockResolvedValue([]);
+    await act(async () => {
+      root.render(
+        <SkillHubPanel
+          activeProvider="claude"
+          activeWorkspaceRoot={String.raw`D:\notes`}
+          hub={EMPTY_SKILL_HUB}
+          onPickSkill={vi.fn()}
+          onInstallSkill={vi.fn()}
+          onSaveHub={vi.fn()}
+          onReload={vi.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+
+    await act(async () => undefined);
+    act(() => findButtonByText(host, '日报周报').click());
+
+    const sections = Array.from(host.querySelectorAll<HTMLElement>('.skill-hub-category'));
+    const systemSection = sections.find((node) => node.textContent?.includes('推荐 skill'));
+    expect(systemSection).toBeDefined();
+    // nb 是 installSource 类,不显示 builtin
+    const nbItem = Array.from(systemSection!.querySelectorAll('li')).find((node) => (
+      node.textContent?.includes('nb')
+    ));
+    expect(nbItem).toBeDefined();
+    expect(nbItem?.querySelector('.skill-hub-badge.builtin')).toBeNull();
+    // data-report-html 是 builtin + output:html
+    const builtinItem = Array.from(systemSection!.querySelectorAll('li')).find((node) => (
+      node.textContent?.includes('data-report-html')
+    ));
+    expect(builtinItem).toBeDefined();
+    const builtinBadge = builtinItem?.querySelector<HTMLElement>('.skill-hub-badge.builtin');
+    expect(builtinBadge?.textContent).toContain('内置');
+    // output chip:builtinItem 上的 chip 应包含 "html"
+    const outputChip = builtinItem?.querySelector<HTMLElement>('.skill-hub-output');
+    expect(outputChip?.textContent).toContain('html');
+    const nbOutputChip = nbItem?.querySelector<HTMLElement>('.skill-hub-output');
+    expect(nbOutputChip?.textContent).toContain('markdown');
+    // 没自定义 skill 时显示「还没有自定义」提示
+    expect(host.textContent).toContain('还没有自定义 Claude skill');
+  });
+
+  it('hides the empty-custom hint when scene has no system skills (knowledge scene)', async () => {
+    // knowledge scene 在 SYSTEM_SKILL_SCENES 里 systemSkills 是空数组,所以两个 section 都该被裁掉
+    skillScannerMock.listLocalSkills.mockReset().mockResolvedValue([]);
+    await act(async () => {
+      root.render(
+        <SkillHubPanel
+          activeProvider="claude"
+          activeWorkspaceRoot={String.raw`D:\notes`}
+          hub={EMPTY_SKILL_HUB}
+          onPickSkill={vi.fn()}
+          onInstallSkill={vi.fn()}
+          onSaveHub={vi.fn()}
+          onReload={vi.fn().mockResolvedValue(undefined)}
+        />,
+      );
+    });
+
+    await act(async () => undefined);
+    const knowledgeButton = findButtonByText(host, '知识沉淀');
+    act(() => knowledgeButton.click());
+
+    // knowledge 没有 system skill,可见的 section 为空 → 不该出现 category-title
+    expect(host.querySelectorAll('.skill-hub-category-title')).toHaveLength(0);
+    expect(host.textContent).not.toContain('还没有自定义');
   });
 });
