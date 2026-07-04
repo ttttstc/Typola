@@ -98,7 +98,12 @@ describe('SkillHubPanel', () => {
 
     act(() => findButtonByText(host, 'frontend-slides').click());
 
-    expect(onPickSkill).toHaveBeenCalledWith('frontend-slides');
+    expect(onPickSkill).toHaveBeenCalledWith(expect.objectContaining({
+      scene: expect.objectContaining({ id: 'html' }),
+      skill: expect.objectContaining({
+        name: 'frontend-slides',
+      }),
+    }));
     expect(skillScannerMock.listLocalSkills).toHaveBeenCalledWith('opencode', String.raw`D:\notes`);
   });
 

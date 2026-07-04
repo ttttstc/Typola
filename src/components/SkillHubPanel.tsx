@@ -14,6 +14,7 @@ import {
   removeCustomSkillFromScene,
   skillCapabilityLabel,
   type SkillHub,
+  type SkillPickPayload,
   type SkillRef,
   type SkillSceneTemplate,
   type SkillTemplateRef,
@@ -24,7 +25,7 @@ export type SkillHubPanelProps = {
   activeWorkspaceRoot?: string;
   hub: SkillHub;
   loadError?: string;
-  onPickSkill: (skillName: string) => void;
+  onPickSkill: (payload: SkillPickPayload) => void;
   onInstallSkill: (prompt: string) => void;
   onSaveHub: (hub: SkillHub) => Promise<void>;
   onReload: () => Promise<void>;
@@ -385,8 +386,11 @@ export function SkillHubPanel({
                       type="button"
                       className="skill-hub-item-main"
                       onClick={() => {
-                        if (skill.installed) onPickSkill(skill.name);
-                        else if (skill.template) onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider));
+                        if (skill.installed && selectedScene) {
+                          onPickSkill({ scene: selectedScene, skill: { name: skill.name, label: skill.label, template: skill.template } });
+                        } else if (skill.template) {
+                          onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider));
+                        }
                       }}
                       title={skill.path ? `${skill.name} — ${skill.path}` : skill.name}
                     >

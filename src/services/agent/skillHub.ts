@@ -18,13 +18,15 @@ export type SkillSceneId =
   | 'research';
 
 /**
- * 系统预置 skill 模板。`label/summary` 是 UI 展示用的中文名和简介，
- * `installSource` 是该 skill 在 GitHub 的来源 URL（用于"让 Claude 安装"
- * 提示里给来源、UI 里展示 GitHub 跳转）。
- * `expectedPath` 是本机已安装 skill 的绝对路径（如有），用于扫描时匹配。
+ * 系统预置 skill 模板。
  *
- * builtin / prefill / output 字段属于 UI 与交互层（PR 2、PR 3），
- * PR 1 数据底座不引入，避免引入无消费者的字段。
+ * - `label/summary` UI 展示用的中文名和简介
+ * - `installSource` GitHub 来源 URL（"让 Claude 安装" 提示、UI GitHub 跳转）
+ * - `expectedPath` 本机已安装 skill 的绝对路径（扫描时匹配）
+ * - `prefill` builtin skill 的场景化增强 prompt,点击后注入 Composer
+ * - `output` 产物类型,仅用于 UI 标识产物类型,不参与执行
+ * - `builtin` true 表示 Typola 内置 prompt-only skill,不依赖本机 Claude,
+ *   执行完全靠自然语言 prompt;UI 显示「内置」badge 且不走「让 Claude 安装」
  */
 export type SkillTemplateRef = SkillRef & {
   label: string;
@@ -32,6 +34,9 @@ export type SkillTemplateRef = SkillRef & {
   expectedPath?: string;
   installSource?: string;
   system: true;
+  prefill?: string;
+  output?: 'markdown' | 'html' | 'pdf' | 'ppt' | 'png' | 'org' | 'mixed';
+  builtin?: boolean;
 };
 
 export type SkillSceneTemplate = {
@@ -58,6 +63,19 @@ export type LoadSkillHubResult = {
   error?: string;
 };
 
+/**
+ * SkillHubPanel → AppLayout 的点击契约。
+ * scene 用于 prefill fallback goal,skill.template 用于 builtin/prefill 派生。
+ */
+export type SkillPickPayload = {
+  scene: SkillSceneTemplate;
+  skill: {
+    name: string;
+    label?: string;
+    template?: SkillTemplateRef;
+  };
+};
+
 const DEFAULT_SYSTEM_SKILL_PROVIDERS: AgentProvider[] = ['claude'];
 
 export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
@@ -73,6 +91,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '导入 Markdown',
         summary: '将 PDF、Word、PPT、Excel、网页等材料转换为可编辑 Markdown。',
         installSource: 'https://github.com/microsoft/markitdown',
+        output: 'markdown',
         system: true,
       },
       {
@@ -80,12 +99,14 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'URL 导入',
         summary: '将网页 URL 转换为 Markdown，适合资料摘录和知识入库。',
         installSource: 'https://github.com/JimLiu/baoyu-skills/tree/main/skills/baoyu-url-to-markdown',
+        output: 'markdown',
         system: true,
       },
       {
         name: 'humanizer',
         label: '去 AI 味',
         summary: '将文本改得更自然，减少 AI 味、模板腔和过度总结感。',
+        output: 'markdown',
         system: true,
       },
       {
@@ -93,6 +114,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '文稿校对',
         summary: '对文稿进行校对、润色和表达优化，适合消除机器感和低质表达。',
         installSource: 'https://github.com/alchaincyf/huashu-skills/tree/master/huashu-proofreading',
+        output: 'markdown',
         system: true,
       },
       {
@@ -100,6 +122,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '翻译',
         summary: '进行中英或多语言翻译，保留原文结构并输出自然译文。',
         installSource: 'https://github.com/JimLiu/baoyu-skills/blob/main/skills/baoyu-translate',
+        output: 'markdown',
         system: true,
       },
       {
@@ -107,6 +130,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'Markdown 转 PDF',
         summary: '将 Markdown 文档转换为 PDF，适合报告、长文和交付件导出。',
         installSource: 'https://github.com/alchaincyf/huashu-skills/tree/master/huashu-md-to-pdf',
+        output: 'pdf',
         system: true,
       },
     ],
@@ -124,7 +148,27 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '本地笔记周报',
         summary: '基于本地 nb 笔记和工作记录整理日报、周报、月报素材。',
         installSource: 'https://github.com/xwmx/nb',
+        output: 'markdown',
         system: true,
+      },
+      {
+        name: 'data-report-html',
+        label: '数据报表 HTML',
+        summary: '基于事项、表格、周报或项目材料生成可浏览的数据报表 HTML 页面。',
+        builtin: true,
+        output: 'html',
+        system: true,
+        prefill: `请基于当前文档、表格、事项列表或项目材料生成一份数据报表 HTML。
+
+要求:
+- 自动识别其中的事项、状态、负责人、时间、风险、进展和关键指标
+- 将内容整理成适合浏览的数据报表页面
+- 页面应包含摘要区、关键指标区、事项明细区、风险区和下一步计划
+- 如果材料中包含表格，请尽量保留表格结构并转成 HTML 展示
+- 对缺失或不确定的信息标记"待确认"
+- 不编造输入材料中没有的信息
+- 输出为单文件 HTML，适合在浏览器中打开
+- 生成后将 HTML 文件保存到当前会话产物目录`,
       },
     ],
   },
@@ -137,18 +181,102 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
     accent: 'oklch(0.62 0.15 25)',
     skills: [
       {
+        name: 'report-summary',
+        label: '综合报告生成',
+        summary: '基于当前文档、附件或工作区材料生成结构化总结报告。',
+        builtin: true,
+        output: 'markdown',
+        system: true,
+        prefill: `请基于当前文档、附件或工作区材料生成一份结构化总结报告。
+
+输入:
+- 当前文档
+- 当前选中文本，如有
+- 当前工作区相关材料，如需要
+
+要求:
+- 先提炼核心结论，再展开背景、关键进展、问题风险和建议
+- 保留材料中的项目名、时间、负责人、数据、结论和关键事实
+- 不编造输入材料中没有的信息
+- 对不确定的信息标记"待确认"
+- 删除空话、套话和重复表达
+- 输出为可直接编辑的 Markdown 文档
+- 生成后将报告保存到当前会话产物目录`,
+      },
+      {
+        name: 'project-retro-report',
+        label: '项目复盘报告',
+        summary: '从项目材料中提炼背景、目标、进展、问题、复盘结论和改进建议。',
+        builtin: true,
+        output: 'markdown',
+        system: true,
+        prefill: `请基于当前项目材料生成一份项目复盘报告。
+
+要求:
+- 结构包括:背景目标、关键时间线、完成情况、问题与风险、原因分析、经验教训、改进建议、下一步计划
+- 尽量从材料中提取事实，不凭空补充
+- 对缺失的信息用"待确认"标记
+- 语言正式、克制，适合项目管理和团队复盘
+- 输出 Markdown
+- 生成后将复盘报告保存到当前会话产物目录`,
+      },
+      {
+        name: 'executive-summary',
+        label: '高管摘要',
+        summary: '将长材料压缩成一页式摘要，突出结论、风险、决策点和下一步。',
+        builtin: true,
+        output: 'markdown',
+        system: true,
+        prefill: `请将当前材料压缩成一页式高管摘要。
+
+要求:
+- 开头先给 3 条最重要结论
+- 聚焦决策点、风险、收益、影响范围和下一步
+- 不展开过多过程细节
+- 不编造输入材料中没有的信息
+- 语言简洁、正式、有信息密度
+- 输出 Markdown
+
+建议结构:
+- 核心结论
+- 当前进展
+- 关键风险
+- 需要决策
+- 下一步建议`,
+      },
+      {
         name: 'editorial-card-screenshot',
         label: '编辑风信息卡',
         summary: '将文章、笔记或材料生成 editorial-style 信息卡，支持 HTML 和 PNG 输出。',
         installSource: 'https://github.com/shaom/infocard-skills/tree/main/skills/editorial-card-screenshot',
+        output: 'mixed',
         system: true,
+        prefill: `请基于当前文档或选中文本生成一张信息卡。
+
+要求:
+- 提炼核心观点和关键信息
+- 信息密度高，但不要堆砌
+- 适合分享和快速阅读
+- 不编造材料中没有的信息
+- 优先输出 HTML 信息卡，如支持截图则同时输出 PNG
+- 生成后将 HTML / PNG 保存到当前会话产物目录`,
       },
       {
         name: 'info-card-designer',
         label: '乔木信息卡',
         summary: '将文本或 URL 一键转成杂志质感信息卡，并自动截图输出 PNG。',
         installSource: 'https://github.com/joeseesun/qiaomu-info-card-designer',
+        output: 'png',
         system: true,
+        prefill: `请将当前文本、URL 或文档内容生成一张杂志质感信息卡。
+
+要求:
+- 标题有冲击力，但不能标题党
+- 默认使用适合移动端分享的宽度
+- 保留原文核心事实
+- 不编造材料中没有的信息
+- 如内容过长，自动拆分多张卡片
+- 输出 HTML 和 PNG，保存到当前会话产物目录`,
       },
     ],
   },
@@ -165,6 +293,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '华为风格 PPT',
         summary: '生成偏华为汇报风格的结构化 PPT，强调商务汇报、层级标题、稳重版式。',
         installSource: 'https://github.com/zuiho-kai/huawei-style-ppt-skill',
+        output: 'ppt',
         system: true,
       },
       {
@@ -172,6 +301,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '归藏 PPT',
         summary: '生成归藏风格或内容型 PPT，适合把长文档整理成叙事化演示稿。',
         installSource: 'https://github.com/op7418/guizang-ppt-skill',
+        output: 'ppt',
         system: true,
       },
       {
@@ -179,6 +309,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '花叔 Slides',
         summary: '生成话术、销售或表达训练类 slides，适合将材料转成讲稿驱动的演示页。',
         installSource: 'https://github.com/alchaincyf/huashu-skills/tree/master/huashu-slides',
+        output: 'ppt',
         system: true,
       },
       {
@@ -186,6 +317,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '宝玉 Slide Deck',
         summary: '生成面向传播和知识表达的 slide deck，适合文章、课程、观点型内容转演示。',
         installSource: 'https://github.com/JimLiu/baoyu-skills/tree/main/skills/baoyu-slide-deck',
+        output: 'ppt',
         system: true,
       },
       {
@@ -193,6 +325,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'PPT Master',
         summary: '通用 PPT 生成器，支持多种风格和布局，适合将文档快速转成演示稿。',
         installSource: 'https://github.com/hugohe3/ppt-master',
+        output: 'ppt',
         system: true,
       },
       {
@@ -200,6 +333,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '花叔 Design',
         summary: '生成更有设计感的演示页或视觉化表达稿，适合汇报、发布和内容包装。',
         installSource: 'https://github.com/alchaincyf/huashu-skills/tree/master/huashu-design',
+        output: 'mixed',
         system: true,
       },
     ],
@@ -217,6 +351,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'Frontend Slides',
         summary: '生成 HTML/CSS/前端形式的 slides 或演示页面，适合把文档转成可浏览的网页演示。',
         installSource: 'https://github.com/zarazhangrui/frontend-slides',
+        output: 'html',
         system: true,
       },
       {
@@ -224,6 +359,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '归藏 PPT(HTML 模板)',
         summary: '生成电子杂志风或瑞士国际主义风的单 HTML 翻页 PPT。',
         installSource: 'https://github.com/op7418/guizang-ppt-skill',
+        output: 'html',
         system: true,
       },
       {
@@ -231,6 +367,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '宝玉 Markdown → HTML',
         summary: '将 Markdown 转为样式化 HTML，适合文章、公众号或网页发布。',
         installSource: 'https://github.com/JimLiu/baoyu-skills/tree/main/skills/baoyu-markdown-to-html',
+        output: 'html',
         system: true,
       },
       {
@@ -238,6 +375,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'HTML PPT Studio',
         summary: '生成带主题、布局和动效的 HTML 演示稿。',
         installSource: 'https://github.com/lewislulu/html-ppt-skill',
+        output: 'html',
         system: true,
       },
       {
@@ -245,6 +383,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'md2html 文档网页',
         summary: '把长文档、设计、RFC、复盘转成带目录、图表和卡片的自包含 HTML 网页。',
         installSource: 'https://github.com/haidang1810/md2html',
+        output: 'html',
         system: true,
       },
       {
@@ -252,6 +391,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '花叔 Markdown HTML',
         summary: '将 Markdown 转成结构化 HTML 页面，适合文档发布、展示和交付。',
         installSource: 'https://github.com/alchaincyf/huashu-skills/tree/master/huashu-md-html',
+        output: 'html',
         system: true,
       },
       {
@@ -259,6 +399,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '花叔 Design',
         summary: '生成更有设计感的 HTML 页面或视觉化内容交付物。',
         installSource: 'https://github.com/alchaincyf/huashu-skills/tree/master/huashu-design',
+        output: 'html',
         system: true,
       },
     ],
@@ -276,6 +417,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'Khazix Writer',
         summary: '面向长文写作的 skill，适合根据主题、资料和大纲生成完整文章。',
         installSource: 'https://github.com/KKKKhazix/khazix-skills/tree/main/khazix-writer',
+        output: 'markdown',
         system: true,
       },
       {
@@ -283,6 +425,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: 'Ni Writer',
         summary: '面向公众号和长文内容生产，从选题、结构到成稿处理写作流程。',
         installSource: 'https://github.com/ttttstc/ni-skill/tree/main/skills/ni-writer',
+        output: 'markdown',
         system: true,
       },
       {
@@ -290,6 +433,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '深度观点文章',
         summary: '对准一个观点层层剖开，生成 1000–1500 字的批判性观点文章。',
         installSource: 'https://github.com/lijigang/ljg-skills/tree/master/skills/ljg-writes',
+        output: 'org',
         system: true,
       },
       {
@@ -297,6 +441,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '白话重写',
         summary: '将内容改写成更容易理解的白话表达，让聪明的 12 岁孩子也能复述。',
         installSource: 'https://github.com/lijigang/ljg-skills/tree/master/skills/ljg-plain',
+        output: 'org',
         system: true,
       },
     ],
@@ -323,6 +468,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '拆书分析',
         summary: '分析一本书在回答什么问题、使用什么框架、得出什么结论。',
         installSource: 'https://github.com/lijigang/ljg-skills/tree/master/skills/ljg-book',
+        output: 'org',
         system: true,
       },
       {
@@ -330,6 +476,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '论文解读',
         summary: '将论文讲成一个连续故事，输出速读卡、核心命题、论证和启发。',
         installSource: 'https://github.com/lijigang/ljg-skills/tree/master/skills/ljg-paper',
+        output: 'org',
         system: true,
       },
       {
@@ -337,6 +484,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '深度追问',
         summary: '对一个观点、现象或问题纵向下钻，追到不可再分的本质。',
         installSource: 'https://github.com/lijigang/ljg-skills/tree/master/skills/ljg-think',
+        output: 'org',
         system: true,
       },
       {
@@ -344,6 +492,7 @@ export const SYSTEM_SKILL_SCENES: SkillSceneTemplate[] = [
         label: '概念解剖',
         summary: '从历史、辩证、现象、语言、形式、存在、美感、元反思等维度解剖概念。',
         installSource: 'https://github.com/lijigang/ljg-skills/tree/master/skills/ljg-learn',
+        output: 'org',
         system: true,
       },
     ],
@@ -377,10 +526,46 @@ export function skillCapabilityLabel(provider: AgentProvider): string {
   return provider === 'opencode' ? 'OpenCode command' : 'Claude skill';
 }
 
-export function buildSkillPrefill(provider: AgentProvider, skillName: string): string {
-  const name = skillName.trim().replace(/^\/+/u, '');
+/**
+ * 点击 skill 时注入左侧 AI Composer 的增强 prefill。
+ *
+ * 三种情况:
+ * 1. builtin skill: 仅注入 prefill 文本,不生成 `/name` slash command,
+ *    因为 builtin 不依赖本机 Claude(执行完全靠自然语言)。
+ * 2. 有 prefill 模板的 skill: `/name` (claude) 或 `请使用 name:` (opencode) + 增强 prefill。
+ * 3. 无 prefill 模板的 skill: 用 scene 派生默认目标作为 fallback,避免空白。
+ *
+ * scene 可选;当 UI 拿不到 scene 时也能用,fallback 会降级到不带场景名的通用目标。
+ */
+export function buildSkillPrefill(
+  provider: AgentProvider,
+  skill: SkillTemplateRef | SkillRef,
+  scene?: SkillSceneTemplate,
+): string {
+  const name = skill.name.trim().replace(/^\/+/u, '');
   if (!name) return '';
-  return provider === 'opencode' ? `请使用 ${name}：` : `/${name} `;
+
+  const template = 'prefill' in skill ? skill.prefill?.trim() : undefined;
+  const builtin = 'builtin' in skill ? Boolean(skill.builtin) : false;
+
+  if (builtin) {
+    return template ?? '';
+  }
+
+  if (template) {
+    return provider === 'opencode'
+      ? `请使用 ${name}：\n\n${template}`
+      : `/${name}\n\n${template}`;
+  }
+
+  const label = 'label' in skill && skill.label ? skill.label : name;
+  const fallbackGoal = scene
+    ? `请基于当前文档执行「${scene.label}」场景下的「${label}」任务。`
+    : `请使用 ${name} 完成当前任务。`;
+
+  return provider === 'opencode'
+    ? `请使用 ${name}：\n\n${fallbackGoal}`
+    : `/${name}\n\n${fallbackGoal}`;
 }
 
 function normalizeSkill(raw: unknown): SkillRef | null {
