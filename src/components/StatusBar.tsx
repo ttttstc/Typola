@@ -135,7 +135,7 @@ export function StatusBar({ filePath, dirty, saveState, message, stats }: Status
           className="status-copy-feedback"
           data-copy-state={copyState}
           style={{
-            color: copyState === 'copied' ? 'var(--success)' : 'var(--danger)',
+            color: copyState === 'copied' ? 'var(--theme-success)' : 'var(--theme-danger)',
             fontWeight: 500,
           }}
         >

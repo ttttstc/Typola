@@ -198,7 +198,7 @@ html, body, #root {
 }
 
 .export-toast-success {
-  border-left-color: var(--success, #2f9e44);
+  border-left-color: var(--theme-success);
 }
 
 .export-toast-success .export-toast-spinner {
@@ -206,7 +206,7 @@ html, body, #root {
 }
 
 .export-toast-error {
-  border-left-color: var(--danger, #d9480f);
+  border-left-color: var(--theme-danger);
 }
 
 .export-toast-error .export-toast-spinner {
@@ -252,7 +252,7 @@ html, body, #root {
   bottom: var(--switcher-padding);
   left: var(--switcher-padding);
   width: calc((100% - var(--switcher-padding) * 2) / 3);
-  background: var(--theme-panel-bg);
+  background: var(--theme-paper);
   border: 1px solid color-mix(in oklch, var(--theme-text-primary) 14%, transparent);
   border-radius: 7px;
   box-shadow: 0 1px 3px color-mix(in oklch, var(--theme-text-primary) 12%, transparent);
@@ -262,7 +262,7 @@ html, body, #root {
 
 /* 璁╁嚬妲藉鍣ㄨ窡缂栬緫鍣ㄥ簳鑹叉湁鏄庣‘瀵规瘮 鈥斺€?鐢ㄦ洿娣变竴鐐圭殑 surface 鎵嶈兘鐪嬪嚭"鍑?鎰?*/
 .document-mode-switcher {
-  background: color-mix(in oklch, var(--theme-text-primary) 6%, var(--theme-surface));
+  background: var(--theme-paper);
 }
 
 /* 蹇呴』鐢ㄦ洿寮虹殑閫夋嫨鍣ㄨ鐩?.app-toolbar button{} 鍏ㄥ眬瑙勫垯
@@ -412,9 +412,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .app-toolbar button.active {
-  color: var(--theme-accent);
-  background: var(--theme-control-active-bg);
-  border-color: color-mix(in oklch, var(--theme-accent) 28%, transparent);
+  color: var(--theme-text-primary);
+  background: var(--theme-paper);
+  border-color: var(--theme-border-hover);
 }
 
 .app-toolbar button.toolbar-update-button {
@@ -422,17 +422,17 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   min-width: 0;
   gap: 5px;
   padding: 0 10px;
-  color: var(--theme-accent);
-  background: var(--theme-control-active-bg);
-  border-color: color-mix(in oklch, var(--theme-accent) 30%, transparent);
+  color: var(--theme-text-primary);
+  background: var(--theme-paper);
+  border-color: var(--theme-border-hover);
   font-size: 12px;
   font-weight: 500;
 }
 
 .app-toolbar button.toolbar-update-button:hover {
-  color: var(--theme-accent);
-  background: color-mix(in oklch, var(--theme-accent) 12%, var(--theme-control-hover-bg));
-  border-color: color-mix(in oklch, var(--theme-accent) 42%, transparent);
+  color: var(--theme-text-primary);
+  background: var(--theme-control-hover-bg);
+  border-color: var(--theme-border-hover);
 }
 
 .app-toolbar button.toolbar-update-button:disabled {
@@ -630,7 +630,7 @@ html[data-color-scheme='dark'] .export-menu {
   gap: 6px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--theme-border-soft);
-  background: color-mix(in oklch, var(--theme-surface) 82%, var(--theme-canvas));
+  background: var(--theme-paper);
   flex-shrink: 0;
 }
 
@@ -638,8 +638,8 @@ html[data-color-scheme='dark'] .export-menu {
   position: absolute;
   pointer-events: none;
   border-radius: 9px;
-  border: 1px solid color-mix(in oklch, var(--theme-accent) 32%, var(--theme-border-soft));
-  background: color-mix(in oklch, var(--theme-accent) 11%, var(--theme-surface));
+  border: 1px solid var(--theme-border-hover);
+  background: var(--theme-paper);
   box-shadow: 0 4px 14px color-mix(in oklch, var(--theme-paper-shadow) 24%, transparent);
   transition:
     transform 0.42s cubic-bezier(0.32, 0.72, 0, 1),
@@ -921,7 +921,7 @@ html[data-color-scheme='dark'] .export-menu {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--theme-border-soft);
-  background: color-mix(in oklch, var(--theme-surface) 80%, var(--theme-canvas));
+  background: var(--theme-paper);
   z-index: 7;
 }
 
@@ -959,7 +959,7 @@ html[data-color-scheme='dark'] .export-menu {
 .left-rail-tabs button.active {
   border-color: transparent;
   background: transparent;
-  color: var(--theme-accent);
+  color: var(--theme-text-primary);
 }
 
 .left-rail-tab-indicator {
@@ -974,7 +974,7 @@ html[data-color-scheme='dark'] .export-menu {
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
-  background: var(--theme-surface);
+  background: var(--theme-paper);
   overflow: hidden;
 }
 
@@ -1012,7 +1012,7 @@ html[data-color-scheme='dark'] .export-menu {
 .right-rail-tabs button.active {
   border-color: transparent;
   background: transparent;
-  color: var(--theme-accent);
+  color: var(--theme-text-primary);
 }
 
 .right-rail-tab-indicator {
@@ -2138,7 +2138,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .word-preview-preset-button:focus-visible {
-  outline: 2px solid oklch(58% 0.16 35 / 0.16);
+  outline: 2px solid color-mix(in oklch, var(--theme-accent) 22%, transparent);
   outline-offset: 1px;
   border-color: var(--theme-accent);
 }
@@ -2766,7 +2766,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  background: var(--theme-canvas);
+  background: var(--theme-paper);
   color: var(--theme-text-primary);
 }
 
@@ -2792,6 +2792,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   padding: 12px;
   font-size: 13px;
   color: var(--theme-text-primary);
+  background: var(--theme-paper);
 }
 
 .skill-hub-header {
@@ -2813,7 +2814,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .skill-hub-header strong svg {
-  color: var(--theme-accent);
+  color: var(--theme-text-secondary);
 }
 
 .skill-hub-reload {
@@ -2841,8 +2842,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   padding: 8px 10px;
   color: var(--theme-danger);
   font-size: 12px;
-  background: oklch(52% 0.16 30 / 0.12);
-  border: 1px solid oklch(52% 0.16 30 / 0.28);
+  background: color-mix(in oklch, var(--theme-danger) 12%, var(--theme-surface));
+  border: 1px solid color-mix(in oklch, var(--theme-danger) 28%, var(--theme-border));
   border-radius: 6px;
   word-break: break-word;
 }
@@ -2890,7 +2891,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .skill-hub-scene-card {
-  --scene-accent: var(--theme-accent);
+  --scene-accent: var(--theme-text-secondary);
   position: relative;
   display: flex;
   align-items: flex-start;
@@ -2899,7 +2900,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   padding: 13px 14px;
   text-align: left;
   color: var(--theme-text-primary);
-  background: var(--theme-control-bg);
+  background: var(--theme-paper);
   border: 1px solid var(--theme-border-soft);
   border-radius: 12px;
   cursor: pointer;
@@ -2915,15 +2916,15 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--scene-accent);
+  background: var(--theme-border-hover);
   opacity: 0;
   transition: opacity 0.16s;
 }
 
 .skill-hub-scene-card:hover {
-  border-color: color-mix(in oklch, var(--scene-accent) 50%, var(--theme-border-soft));
+  border-color: var(--theme-border-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px -8px color-mix(in oklch, var(--scene-accent) 60%, transparent);
+  box-shadow: 0 6px 18px -10px var(--theme-shadow-soft);
 }
 
 .skill-hub-scene-card:hover::before {
@@ -2939,15 +2940,16 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  color: var(--scene-accent);
-  background: color-mix(in oklch, var(--scene-accent) 14%, var(--theme-surface));
-  border: 1px solid color-mix(in oklch, var(--scene-accent) 26%, transparent);
+  color: var(--theme-text-secondary);
+  background: var(--theme-paper);
+  border: 1px solid var(--theme-border-soft);
   transition: background 0.16s, box-shadow 0.16s;
 }
 
 .skill-hub-scene-card:hover .skill-hub-scene-icon {
-  background: color-mix(in oklch, var(--scene-accent) 22%, var(--theme-surface));
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--scene-accent) 12%, transparent);
+  color: var(--theme-text-primary);
+  background: var(--theme-control-bg);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--theme-text-primary) 6%, transparent);
 }
 
 .skill-hub-scene-body {
@@ -2976,8 +2978,332 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   font-size: 10.5px;
   padding: 1.5px 8px;
   border-radius: 999px;
+  color: var(--theme-text-secondary);
+  background: var(--theme-paper);
+  border: 1px solid var(--theme-border-soft);
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card {
+  --scene-accent: var(--theme-accent);
+  background: var(--theme-paper);
+  border-color: var(--theme-border);
+}
+
+html[data-theme-id='abstract'] .right-rail-tabs button.active,
+html[data-theme-id='abstract'] .skill-hub-header strong svg {
+  color: var(--theme-accent);
+}
+
+html[data-theme-id='abstract'] .skill-hub-badge.installed,
+html[data-theme-id='abstract'] .skill-hub-badge.builtin {
+  color: var(--theme-text-primary);
+  background: var(--theme-paper);
+  border-color: var(--theme-border);
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='common'],
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='report'] {
+  --scene-accent: #d62d20;
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='daily'],
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='knowledge'] {
+  --scene-accent: #f2c318;
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='ppt'],
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='research'] {
+  --scene-accent: #1f5aa6;
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='html'],
+html[data-theme-id='abstract'] .skill-hub-scene-card[data-scene-id='longform'] {
+  --scene-accent: #111111;
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card::before {
+  background: var(--scene-accent);
+  opacity: 1;
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card:hover {
+  border-color: var(--theme-border);
+  box-shadow: 4px 4px 0 var(--scene-accent);
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-icon {
   color: var(--scene-accent);
-  background: color-mix(in oklch, var(--scene-accent) 12%, transparent);
+  background: var(--theme-paper);
+  border-color: var(--theme-border);
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-card:hover .skill-hub-scene-icon {
+  color: var(--scene-accent);
+  background: color-mix(in oklch, var(--scene-accent) 10%, var(--theme-paper));
+  box-shadow: none;
+}
+
+html[data-theme-id='abstract'] .skill-hub-scene-count {
+  color: var(--theme-text-primary);
+  background: var(--theme-paper);
+  border-color: var(--theme-border);
+}
+
+/* === Popover / Dropdown / Menu z-index 统一收束 ===
+
+   层级约定(从下到上):
+     0-50    静态正文 / 文件树 / 大纲 / tab / 工具栏
+     60-200 一些右栏 / 设置面板
+     800     弹出的菜单 / 下拉 / 上下文菜单(本块)
+     905-912 selection-floating-bar / selection-result-card / review-comment-editor
+     1000+   Modal / 全屏 overlay
+     9999    Tooltip(@floating-ui/react 用 inline style,留最高)
+
+   弹框必须高于所有静态正文(selection-floating-bar 也低于 1000 级别,
+   所以 800 在它之下,不影响;但要明显高于 tab / 工作区 / 大纲)。 */
+
+.agent-provider-popover,
+.composer-plus-popup,
+.conversation-pill-dropdown,
+.export-menu,
+.word-preview-preset-popover,
+.find-panel,
+.quick-open-panel,
+.context-menu,
+.menu-popup,
+[role='menu'],
+[role='listbox'] {
+  z-index: 800;
+}
+
+/* settings-overlay / export-toast 是高优先级 overlay,给到 1000 */
+.settings-overlay,
+.export-toast {
+  z-index: 1000;
+}
+
+/* ===== 粗野 (Brutalism × Vintage Tool Manual) ===== */
+/* 硬阴影 + 0 圆角 + 1px 纯黑边 + hover translate 位移 + 30px 坐标网格。 */
+
+html[data-theme-id='brutalist'] {
+  /* 字体: 标题用 Noto Serif SC 衬线（无 Outfit 时退化到 system-ui）。
+     不用 Google Fonts，纯系统字体栈。 */
+  --font-display: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', 'STSong', 'Iowan Old Style', 'Charter', serif;
+  --font-body: 'Outfit', -apple-system, 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', ui-monospace, 'Consolas', monospace;
+}
+
+/* 30px 坐标网格背景:整页底层(覆盖在 --theme-canvas 之上) */
+html[data-theme-id='brutalist'] body {
+  background-color: var(--theme-canvas);
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-attachment: fixed;
+}
+
+/* brutalist 下 app-layout 用透明背景,让 body 的网格线透出 */
+html[data-theme-id='brutalist'] .app-layout {
+  background: transparent;
+}
+
+/* 全局 0 圆角 — 暴力通配, 对齐 Neo-brutalism 设计哲学 */
+html[data-theme-id='brutalist'] *,
+html[data-theme-id='brutalist'] *::before,
+html[data-theme-id='brutalist'] *::after {
+  border-radius: 0 !important;
+}
+
+/* 硬阴影 + 1px 纯黑边: 只加在「可点击按钮」和「卡片」上。
+   - button 走 hover/active 双向反馈 + 鼠尾草绿背景
+   - 卡片只走 hover 抬起
+   - 链接 a 也走 hover(可点击语义)
+   - 排除大纲(.floating-toc*)、正文文件 tab(.editor-tab*)、skill 项(.skill-hub-item*)、
+     文件树(.file-tree-item / .file-tree-folder / .file-tree-action):这些都是「展示控件」,
+     不应带硬阴影。skill 场景卡(.skill-hub-scene-card)保留硬阴影 —— 8 个场景入口。 */
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action),
+html[data-theme-id='brutalist'] .skill-hub-scene-card,
+html[data-theme-id='brutalist'] .op-card,
+html[data-theme-id='brutalist'] .artifact-center-card,
+html[data-theme-id='brutalist'] .conversation-error-card,
+html[data-theme-id='brutalist'] .conversation-thought-card,
+html[data-theme-id='brutalist'] .selection-result-card,
+html[data-theme-id='brutalist'] .theme-card {
+  border: 1px solid #000 !important;
+  box-shadow: 4px 4px 0 0 #000 !important;
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background-color 0.08s ease-out, color 0.08s ease-out !important;
+}
+
+/* 按钮 hover:鼠尾草绿 #4ECDC4 背景 + 黑字 + 抬起; 卡片 hover:抬起 */
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):hover:not(:disabled),
+html[data-theme-id='brutalist'] a:hover {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 #000 !important;
+}
+
+html[data-theme-id='brutalist'] .skill-hub-scene-card:hover,
+html[data-theme-id='brutalist'] .op-card:hover,
+html[data-theme-id='brutalist'] .artifact-center-card:hover,
+html[data-theme-id='brutalist'] .conversation-error-card:hover,
+html[data-theme-id='brutalist'] .conversation-thought-card:hover,
+html[data-theme-id='brutalist'] .selection-result-card:hover,
+html[data-theme-id='brutalist'] .theme-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 #000 !important;
+}
+
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):active:not(:disabled),
+html[data-theme-id='brutalist'] a:active {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 #000 !important;
+}
+
+/* === 四类展示控件:整体不要硬阴影 / 黑边 / translate 反馈 === */
+
+/* 通用基态:展示控件子树都无 border / shadow / transform / transition */
+html[data-theme-id='brutalist'] .floating-toc,
+html[data-theme-id='brutalist'] .floating-toc-rail,
+html[data-theme-id='brutalist'] .floating-toc-panel,
+html[data-theme-id='brutalist'] .floating-toc-header,
+html[data-theme-id='brutalist'] .floating-toc-header-actions,
+html[data-theme-id='brutalist'] .floating-toc-action,
+html[data-theme-id='brutalist'] .floating-toc-pin-toggle,
+html[data-theme-id='brutalist'] .floating-toc-close,
+html[data-theme-id='brutalist'] .floating-toc-preference,
+html[data-theme-id='brutalist'] .floating-toc-switch,
+html[data-theme-id='brutalist'] .floating-toc-list,
+html[data-theme-id='brutalist'] .floating-toc-item,
+html[data-theme-id='brutalist'] .floating-toc-tick,
+html[data-theme-id='brutalist'] .editor-tabbar,
+html[data-theme-id='brutalist'] .editor-tab,
+html[data-theme-id='brutalist'] .editor-tab-close,
+html[data-theme-id='brutalist'] .editor-tab-indicator,
+html[data-theme-id='brutalist'] .file-tree-list,
+html[data-theme-id='brutalist'] .file-tree-node,
+html[data-theme-id='brutalist'] .file-tree-children,
+html[data-theme-id='brutalist'] .file-tree-item,
+html[data-theme-id='brutalist'] .file-tree-folder,
+html[data-theme-id='brutalist'] .file-tree-action,
+html[data-theme-id='brutalist'] .file-tree-folder-chevron,
+html[data-theme-id='brutalist'] .file-tree-icon,
+html[data-theme-id='brutalist'] .file-tree-name,
+html[data-theme-id='brutalist'] .skill-hub-item,
+html[data-theme-id='brutalist'] .skill-hub-item-main,
+html[data-theme-id='brutalist'] .skill-hub-item-actions,
+html[data-theme-id='brutalist'] .skill-hub-item-action {
+  border: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: background-color 0.08s ease-out, color 0.08s ease-out !important;
+}
+
+/* === Hover 整片控件染鼠尾草:任何「展示控件」被 hover, 自身 + 子元素都变
+   鼠尾草背景 + 黑字 + 黑边。不带 translate/shadow(展示控件不抬起)。 === */
+
+/* 1) 大纲:item / action / preference 整个 hover 变鼠尾草 */
+html[data-theme-id='brutalist'] .floating-toc-item:hover,
+html[data-theme-id='brutalist'] .floating-toc-item:hover *,
+html[data-theme-id='brutalist'] .floating-toc-action:hover,
+html[data-theme-id='brutalist'] .floating-toc-action:hover *,
+html[data-theme-id='brutalist'] .floating-toc-pin-toggle:hover,
+html[data-theme-id='brutalist'] .floating-toc-close:hover,
+html[data-theme-id='brutalist'] .floating-toc-preference:hover,
+html[data-theme-id='brutalist'] .floating-toc-preference:hover * {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+}
+/* 大纲 hover 自身的 pin-toggle/close 在 hover 时也染黑边 */
+html[data-theme-id='brutalist'] .floating-toc-pin-toggle:hover,
+html[data-theme-id='brutalist'] .floating-toc-close:hover {
+  border: 1px solid #000 !important;
+}
+
+/* 2) 正文文件 tab:整个 tab hover 范围内所有元素染鼠尾草 */
+html[data-theme-id='brutalist'] .editor-tab:hover,
+html[data-theme-id='brutalist'] .editor-tab:hover *,
+html[data-theme-id='brutalist'] .editor-tab-close:hover,
+html[data-theme-id='brutalist'] .editor-tab-close:hover * {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+}
+
+/* 3) 文件树:整个 file-tree-item / file-tree-folder hover 范围内所有元素染鼠尾草 */
+html[data-theme-id='brutalist'] .file-tree-item:hover,
+html[data-theme-id='brutalist'] .file-tree-item:hover *,
+html[data-theme-id='brutalist'] .file-tree-folder:hover,
+html[data-theme-id='brutalist'] .file-tree-folder:hover * {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+  fill: #000 !important;
+}
+/* active 态的行:鼠尾草背景(类似 hover, 持续) */
+html[data-theme-id='brutalist'] .file-tree-item.active,
+html[data-theme-id='brutalist'] .file-tree-item.active * {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+  fill: #000 !important;
+}
+
+/* 4) skill 项:整个 skill-hub-item hover 范围内所有元素染鼠尾草 */
+html[data-theme-id='brutalist'] .skill-hub-item:hover,
+html[data-theme-id='brutalist'] .skill-hub-item:hover *,
+html[data-theme-id='brutalist'] .skill-hub-item-main:hover,
+html[data-theme-id='brutalist'] .skill-hub-item-main:hover *,
+html[data-theme-id='brutalist'] .skill-hub-item-action:hover,
+html[data-theme-id='brutalist'] .skill-hub-item-action:hover * {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+}
+
+/* skill 名称(skill-hub-scene-card 内的 strong)基态与 hover 态一律黑色,不染鼠尾草 */
+html[data-theme-id='brutalist'] .skill-hub-scene-card strong {
+  color: #000 !important;
+}
+
+/* skill 描述 / 计数:brutalist 下纯黑,不被 accent 染色 */
+html[data-theme-id='brutalist'] .skill-hub-scene-card em,
+html[data-theme-id='brutalist'] .skill-hub-scene-card .skill-hub-scene-count,
+html[data-theme-id='brutalist'] .skill-hub-scene-card .skill-hub-scene-title {
+  color: #000 !important;
+  background: var(--theme-paper) !important;
+  border-color: var(--theme-border) !important;
+}
+
+/* 大纲文字:brutalist 下全部纯黑,不被 accent / secondary 染色 */
+html[data-theme-id='brutalist'] .floating-toc,
+html[data-theme-id='brutalist'] .floating-toc-item,
+html[data-theme-id='brutalist'] .floating-toc-action,
+html[data-theme-id='brutalist'] .floating-toc-preference,
+html[data-theme-id='brutalist'] .floating-toc-preference[aria-pressed='true'],
+html[data-theme-id='brutalist'] .floating-toc-header,
+html[data-theme-id='brutalist'] .floating-toc-pin-toggle[aria-pressed='true'] {
+  color: #000 !important;
+}
+/* 大纲 active item 整片鼠尾草 + 黑字 + 黑边(和 hover 同样) */
+html[data-theme-id='brutalist'] .floating-toc-item.active,
+html[data-theme-id='brutalist'] .floating-toc-item.active * {
+  background-color: #4ECDC4 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+}
+
+/* 文件树:brutalist 下图标和文字纯黑,active 行除外(active 走上面鼠尾草) */
+html[data-theme-id='brutalist'] .file-tree-item svg,
+html[data-theme-id='brutalist'] .file-tree-folder svg,
+html[data-theme-id='brutalist'] .file-tree-name,
+html[data-theme-id='brutalist'] .file-tree-folder-chevron {
+  color: #000 !important;
+  fill: #000 !important;
 }
 
 .skill-hub-scene-card span {
@@ -3174,9 +3500,9 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .skill-hub-badge.installed {
-  color: var(--status-positive-fg);
-  background: var(--status-positive-bg);
-  border-color: var(--status-positive-border);
+  color: var(--theme-text-secondary);
+  background: var(--theme-paper);
+  border-color: var(--theme-border-soft);
 }
 
 .skill-hub-badge.missing {
@@ -3186,9 +3512,9 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .skill-hub-badge.builtin {
-  color: var(--status-info-fg);
-  background: var(--status-info-bg);
-  border-color: var(--status-info-border);
+  color: var(--theme-text-secondary);
+  background: var(--theme-paper);
+  border-color: var(--theme-border-soft);
 }
 
 .skill-hub-item-meta {
@@ -3433,8 +3759,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   gap: 8px;
   flex-wrap: wrap;
   padding: 8px 14px;
-  background: oklch(58% 0.16 35 / 0.12);
-  border-bottom: 1px solid oklch(58% 0.16 35 / 0.3);
+  background: color-mix(in oklch, var(--theme-accent) 10%, var(--theme-canvas));
+  border-bottom: 1px solid color-mix(in oklch, var(--theme-accent) 32%, var(--theme-border-soft));
   color: var(--theme-text-primary);
   font-size: 13px;
 }
@@ -3826,14 +4152,14 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 /* ===== File tree agent-changed highlight ===== */
 
 .file-tree-item.agent-changed {
-  background: oklch(58% 0.16 35 / 0.08);
+  background: color-mix(in oklch, var(--theme-accent) 10%, transparent);
   border-left: 2px solid var(--theme-accent);
   animation: agent-changed-pulse 1.5s ease-out;
 }
 
 @keyframes agent-changed-pulse {
-  0% { background: oklch(58% 0.16 35 / 0.3); }
-  100% { background: oklch(58% 0.16 35 / 0.08); }
+  0% { background: color-mix(in oklch, var(--theme-accent) 26%, transparent); }
+  100% { background: color-mix(in oklch, var(--theme-accent) 10%, transparent); }
 }
 
 /* ===== Diff Preview Modal ===== */
@@ -3883,7 +4209,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 
 .diff-hunk-equal { color: var(--theme-text-primary); }
 .diff-hunk-insert { color: var(--theme-success); background: oklch(44% 0.09 145 / 0.1); }
-.diff-hunk-delete { color: var(--theme-danger); background: oklch(52% 0.16 30 / 0.1); }
+.diff-hunk-delete { color: var(--theme-danger); background: color-mix(in oklch, var(--theme-danger) 10%, transparent); }
 
 /* ===== Status Bar ===== */
 /* Transparent, 10px mono, border color 鈥?barely visible */
@@ -4281,7 +4607,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .file-tree-icon-doc svg {
-  color: color-mix(in oklch, oklch(58% 0.13 30) 70%, var(--theme-text-primary));
+  color: color-mix(in oklch, oklch(58% 0.13 110) 70%, var(--theme-text-primary));
 }
 
 .file-tree-icon-archive svg {
@@ -4322,7 +4648,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   min-width: 0;
   flex: 1;
   height: 100%;
-  background: rgba(255, 253, 250, 0.96);
+  background: var(--theme-paper);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4542,8 +4868,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .conversation-pill-item-close:hover {
-  background: var(--danger-soft, rgba(220, 38, 38, 0.1));
-  color: var(--danger, #dc2626);
+  background: color-mix(in oklch, var(--theme-danger) 14%, var(--theme-paper));
+  color: var(--theme-danger);
 }
 
 .conversation-pill-new {
@@ -4598,8 +4924,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 .conversation-message.user {
   align-self: flex-end;
   max-width: 88%;
-  background: #fff3e8;
-  border-color: #efc9ad;
+  background: var(--theme-surface);
+  border-color: var(--theme-border-soft);
 }
 
 .conversation-message.user p {
@@ -4726,8 +5052,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .conversation-done-bar {
-  border-color: #e6a39a;
-  background: #fff7f4;
+  border-color: color-mix(in oklch, var(--theme-danger) 28%, var(--theme-border-soft));
+  background: color-mix(in oklch, var(--theme-danger) 8%, var(--theme-paper));
 }
 
 .conversation-done-bar {
@@ -5504,7 +5830,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   padding: 10px;
   display: grid;
   gap: 8px;
-  background: rgba(255, 253, 250, 0.98);
+  background: var(--theme-paper);
 }
 
 .conversation-context-chips {
@@ -7013,7 +7339,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .settings-preset-select-button:focus-visible {
-  outline: 2px solid oklch(58% 0.16 35 / 0.2);
+  outline: 2px solid color-mix(in oklch, var(--theme-accent) 22%, transparent);
   outline-offset: 4px;
   border-radius: 4px;
 }
@@ -7572,7 +7898,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .settings-select:focus {
-  outline: 2px solid oklch(58% 0.16 35 / 0.18);
+  outline: 2px solid color-mix(in oklch, var(--theme-accent) 22%, transparent);
   outline-offset: 1px;
   border-color: var(--theme-accent);
 }
@@ -7609,7 +7935,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .settings-textarea:focus {
-  outline: 2px solid oklch(58% 0.16 35 / 0.18);
+  outline: 2px solid color-mix(in oklch, var(--theme-accent) 22%, transparent);
   outline-offset: 1px;
   border-color: var(--theme-accent);
 }
@@ -7627,7 +7953,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .settings-input:focus {
-  outline: 2px solid oklch(58% 0.16 35 / 0.18);
+  outline: 2px solid color-mix(in oklch, var(--theme-accent) 22%, transparent);
   outline-offset: 1px;
   border-color: var(--theme-accent);
 }
@@ -7861,7 +8187,7 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 }
 
 .primary-action-button:hover {
-  background: oklch(53% 0.16 35);
+  background: color-mix(in oklch, var(--theme-accent) 86%, var(--theme-text-primary));
 }
 
 .update-check-message.latest {
@@ -8465,10 +8791,10 @@ html[data-color-scheme='dark'] .word-paper-content td {
 .wysiwyg-editor-pane .typola-mermaid-error {
   margin: 0.5em 0;
   padding: 8px 12px;
-  border-left: 3px solid #c0392b;
+  border-left: 3px solid var(--theme-danger);
   border-radius: 4px;
-  background: #fdecea;
-  color: #a93226;
+  background: color-mix(in oklch, var(--theme-danger) 8%, var(--theme-paper));
+  color: color-mix(in oklch, var(--theme-danger) 72%, var(--theme-text-primary));
   font-family: var(--font-mono);
   font-size: 0.85em;
   line-height: 1.5;
@@ -8484,9 +8810,9 @@ html[data-color-scheme='dark'] .word-paper-content td {
 .wysiwyg-editor-pane .typola-katex-error {
   display: inline-block;
   padding: 2px 6px;
-  border-left: 3px solid #c0392b;
-  background: #fdecea;
-  color: #a93226;
+  border-left: 3px solid var(--theme-danger);
+  background: color-mix(in oklch, var(--theme-danger) 8%, var(--theme-paper));
+  color: color-mix(in oklch, var(--theme-danger) 72%, var(--theme-text-primary));
   font-family: var(--font-mono);
   font-size: 0.9em;
 }
@@ -8725,9 +9051,9 @@ html[data-color-scheme='dark'] .word-paper-content td {
 .selection-result-card-error {
   padding: 8px 10px;
   border-radius: 8px;
-  background: color-mix(in oklch, oklch(0.62 0.18 25) 12%, transparent);
-  border: 1px solid color-mix(in oklch, oklch(0.62 0.18 25) 28%, transparent);
-  color: oklch(0.55 0.18 25);
+  background: color-mix(in oklch, var(--theme-danger) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--theme-danger) 28%, transparent);
+  color: var(--theme-danger);
   font-size: 12px;
   line-height: 1.55;
   word-break: break-word;
@@ -8992,8 +9318,8 @@ html[data-color-scheme='dark'] .word-paper-content td {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: oklch(0.65 0.18 50);
-  box-shadow: 0 0 0 2px color-mix(in oklch, oklch(0.65 0.18 50) 18%, transparent);
+  background: var(--theme-accent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--theme-accent) 18%, transparent);
 }
 
 .review-sidebar-actions {
@@ -9306,7 +9632,7 @@ html[data-color-scheme='dark'] .word-paper-content td {
 }
 
 .review-sidebar-item-tool-danger:hover {
-  color: oklch(0.55 0.18 25);
+  color: var(--theme-danger);
 }
 
 .conversation-toast {

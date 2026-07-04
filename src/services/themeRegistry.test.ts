@@ -12,7 +12,7 @@ import {
 } from './themeRegistry';
 
 describe('themeRegistry', () => {
-  it('ships the three complete built-in themes with Plain Paper as the default', () => {
+  it('ships the five complete built-in themes with Plain Paper as the default', () => {
     const themes = listThemeDefinitions();
 
     expect(DEFAULT_THEME_ID).toBe('plain-paper');
@@ -20,8 +20,10 @@ describe('themeRegistry', () => {
       'plain-paper',
       'night-current',
       'ink-basin',
+      'abstract',
+      'brutalist',
     ]);
-    expect(themes.map((theme) => theme.scheme)).toEqual(['light', 'dark', 'light']);
+    expect(themes.map((theme) => theme.scheme)).toEqual(['light', 'dark', 'light', 'light', 'light']);
   });
 
   it('falls back to the default theme for unknown persisted values', () => {
@@ -51,5 +53,15 @@ describe('themeRegistry', () => {
       background: '#11161c',
       brightWhite: '#f3f6f8',
     });
+  });
+
+  it('keeps the abstract theme inside the red, blue, yellow, black, and white palette', () => {
+    const tokens = resolveTerminalTheme('abstract');
+
+    expect(getThemeDefinition('abstract').core.surface).toBe('#eeeeea');
+    expect(tokens.green).toBe('#1e5a8a');
+    expect(tokens.brightGreen).toBe('#2e7ab5');
+    expect(tokens.magenta).toBe('#c8311b');
+    expect(tokens.cyan).toBe('#1e5a8a');
   });
 });

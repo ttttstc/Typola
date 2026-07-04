@@ -173,15 +173,17 @@ export function AppLayout() {
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
     previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
   }, []);
-  const handlePreviewHeadingScroll = useCallback((change: { index: number; withinRatio: number }) => {
+  const handlePreviewHeadingScroll = useCallback((change: { index: number }) => {
     if (Date.now() < syncLockUntilRef.current) return;
     if (change.index < 0) return;
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
-    setSourceHeadingScrollRequest({
+    // 不传 withinRatio:preview 与 editor 的 heading 段高不同(渲染/字体/行距差异),
+    // 段内比例在两侧不可一一对应,只传 heading 索引对齐到 heading 起点,
+    // 段内精确滚动交给 preview 自身保留,避免反向跟随在段内漂移。
+    setSourceHeadingScrollRequest((current) => ({
       index: change.index,
-      withinRatio: change.withinRatio,
-      requestId: Date.now(),
-    });
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
   }, []);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [settingsVisible, setSettingsVisible] = useState(false);

@@ -33,34 +33,43 @@ describe('SelectionFloatingBar', () => {
 
   it('rect=null 时不显示', () => {
     act(() => {
-      root.render(<SelectionFloatingBar rect={null} hasSelection={false} onPick={() => {}} />);
+      root.render(<SelectionFloatingBar rect={null} hasSelection={false} stableTick={0} onPick={() => {}} />);
     });
     expect(host.querySelector('.selection-floating-bar')).toBeNull();
   });
 
-  it('回归:选中文字 + 过 debounce → 浮条必须出现(死锁版永不出现)', () => {
+  it('回归:选中文字 + stableTick 递增 + 过 debounce → 浮条必须出现(死锁版永不出现)', () => {
     act(() => {
-      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection onPick={() => {}} />);
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={0} onPick={() => {}} />);
     });
-    // debounce 期间不显示
+    // stableTick=0 时 mouseup 还没发生,即使有 rect 也不应启动 debounce
     expect(host.querySelector('.selection-floating-bar')).toBeNull();
     act(() => {
       vi.advanceTimersByTime(250);
     });
+    expect(host.querySelector('.selection-floating-bar')).toBeNull();
+    // 父组件触发 mouseup → stableTick +1 → 浮条才允许开始 debounce
+    act(() => {
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
+    });
+    expect(host.querySelector('.selection-floating-bar')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     // debounce 后必须出现 —— 这条正是抓"position 死锁导致永不渲染"的回归测试
     const bar = host.querySelector('.selection-floating-bar');
     expect(bar).not.toBeNull();
-    // 7 个动作按钮齐全(改写已砍)
-    expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(7);
+    // 3 个高频动作按钮(润色/名词解释/加检视意见),其余走右键菜单
+    expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
   });
 
   it('点动作按钮 → onPick(action, origin) 带视口坐标', () => {
     const onPick = vi.fn();
     act(() => {
-      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection onPick={onPick} />);
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={onPick} />);
     });
     act(() => {
-      vi.advanceTimersByTime(250);
+      vi.advanceTimersByTime(200);
     });
     const buttons = host.querySelectorAll('.selection-floating-bar-item');
     act(() => {
@@ -74,10 +83,10 @@ describe('SelectionFloatingBar', () => {
   it('最后一个按钮是「加检视意见」(review)', () => {
     const onPick = vi.fn();
     act(() => {
-      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection onPick={onPick} />);
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={onPick} />);
     });
     act(() => {
-      vi.advanceTimersByTime(250);
+      vi.advanceTimersByTime(200);
     });
     const buttons = host.querySelectorAll('.selection-floating-bar-item');
     act(() => {
@@ -88,24 +97,24 @@ describe('SelectionFloatingBar', () => {
 
   it('选区消失(rect 变 null)→ 浮条立即隐藏', () => {
     act(() => {
-      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection onPick={() => {}} />);
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
     });
     act(() => {
-      vi.advanceTimersByTime(250);
+      vi.advanceTimersByTime(200);
     });
     expect(host.querySelector('.selection-floating-bar')).not.toBeNull();
     act(() => {
-      root.render(<SelectionFloatingBar rect={null} hasSelection={false} onPick={() => {}} />);
+      root.render(<SelectionFloatingBar rect={null} hasSelection={false} stableTick={1} onPick={() => {}} />);
     });
     expect(host.querySelector('.selection-floating-bar')).toBeNull();
   });
 
   it('Esc 隐藏当前选区的浮条', () => {
     act(() => {
-      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection onPick={() => {}} />);
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
     });
     act(() => {
-      vi.advanceTimersByTime(250);
+      vi.advanceTimersByTime(200);
     });
     expect(host.querySelector('.selection-floating-bar')).not.toBeNull();
     act(() => {
