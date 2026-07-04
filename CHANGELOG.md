@@ -30,6 +30,10 @@ All notable changes to this project will be documented in this file.
 - 新增 PDF 导出：工具栏「导出 PDF」与 `Cmd/Ctrl+P` 会按阅读模式渲染当前文档，生成 A4 / 2cm 页边距的 PDF 文件。
 - 新增 CM6 编辑器内核 Phase 4 导出桥接：HTML 预览、Word 纸张预览与 PDF 导出统一通过 `markdownToExportHtml` 从 Markdown source 渲染导出 HTML，减少对编辑器 DOM 的依赖；PDF 导出改为后台写入默认导出路径并通过 toast 汇报结果。
 
+### Fixed
+
+- 修复浮动大纲误把 fenced code block 内的 `#` 行识别为标题、导致点击大纲跳转偏移的问题；工具栏 hover 提示改为顶层浮层显示，并按当前界面语言展示不含快捷键的文案。
+
 ### Changed
 
 - 明确 Windows 分发边界：对外发布物是安装包和 portable zip，包内 `Typola.exe` 不作为单独裸 exe 分发产物。

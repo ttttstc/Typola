@@ -1,6 +1,6 @@
-import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { collectMarkdownHeadings } from '../../../services/markdownHeadings';
 
 export type PreviewHeadingChange = {
   index: number;
@@ -12,25 +12,9 @@ type PreviewSyncOptions = {
   onChange?: (change: PreviewHeadingChange) => void;
 };
 
-const SYNTAX_TREE_BUDGET_MS = 50;
-
 /** 在 doc 中收集所有 ATXHeading(#, ##, ...)的 [from, level] 列表。 */
 function collectHeadings(state: EditorState): Array<{ from: number; level: number }> {
-  const headings: Array<{ from: number; level: number }> = [];
-  const tree = ensureSyntaxTree(state, state.doc.length, SYNTAX_TREE_BUDGET_MS);
-  if (!tree) return headings;
-  const cursor = tree.cursor();
-  do {
-    const name = cursor.type.name;
-    // lezer markdown 节点名:ATXHeading1..ATXHeading6
-    if (name.startsWith('ATXHeading')) {
-      const level = Number(name.slice('ATXHeading'.length));
-      if (level >= 1 && level <= 6) {
-        headings.push({ from: cursor.from, level });
-      }
-    }
-  } while (cursor.next());
-  return headings;
+  return collectMarkdownHeadings(state.doc.toString()).map(({ from, level }) => ({ from, level }));
 }
 
 /** 给定 scrollTop 像素位置,找当前可见 heading + 段内比例(0..1)。

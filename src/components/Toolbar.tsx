@@ -91,9 +91,24 @@ export function Toolbar({
   const hasOpenedFile = fileName !== '未命名';
   const iconSize = 18;
   const strokeWidth = 1.6;
+  const workspacePanelTooltip = workspacePanelVisible ? t('toolbarCollapseFileTree') : t('toolbarOpenFileTree');
+  const [toolbarTooltip, setToolbarTooltip] = useState<{ label: string; reference: HTMLElement } | null>(null);
+  const handleToolbarTooltipOver = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('button[data-tooltip]');
+    if (!button || !event.currentTarget.contains(button)) return;
+    const label = button.dataset.tooltip;
+    if (!label) return;
+    setToolbarTooltip({ label, reference: button });
+  }, []);
+  const handleToolbarTooltipFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('button[data-tooltip]');
+    const label = button?.dataset.tooltip;
+    if (!button || !label) return;
+    setToolbarTooltip({ label, reference: button });
+  }, []);
+  const clearToolbarTooltip = useCallback(() => setToolbarTooltip(null), []);
 
   // 导出下拉菜单(用 @floating-ui/react 挂到 body 规避 motion 引入后的 stacking trap)
-  const [exportTrigger, setExportTrigger] = useState<HTMLButtonElement | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exporting = pdfExporting || wordExporting;
   const exportFloating = useFloating({
@@ -111,7 +126,6 @@ export function Toolbar({
     exportRole,
   ]);
   const setExportButtonRef = useCallback((node: HTMLButtonElement | null) => {
-    setExportTrigger(node);
     exportFloating.refs.setReference(node);
   }, [exportFloating.refs.setReference]);
 
@@ -126,6 +140,10 @@ export function Toolbar({
       className="app-toolbar"
       data-window-drag-fallback="manual"
       onMouseDownCapture={handleMouseDown}
+      onPointerOverCapture={handleToolbarTooltipOver}
+      onPointerLeave={clearToolbarTooltip}
+      onFocusCapture={handleToolbarTooltipFocus}
+      onBlurCapture={clearToolbarTooltip}
     >
       <div className="toolbar-left">
         <div className="toolbar-group toolbar-nav-actions" aria-label="导航">
@@ -133,23 +151,23 @@ export function Toolbar({
             data-no-window-drag="true"
             className={workspacePanelVisible ? 'active' : ''}
             onClick={onToggleWorkspacePanel}
-            data-tooltip={workspacePanelVisible ? '收起文件树' : '打开文件树'}
-            aria-label={workspacePanelVisible ? '收起文件树' : '打开文件树'}
+            data-tooltip={workspacePanelTooltip}
+            aria-label={workspacePanelTooltip}
           >
             <PanelLeft size={iconSize} strokeWidth={strokeWidth} />
           </button>
         </div>
         <div className="toolbar-group toolbar-file-actions" aria-label={t('toolbarFileGroup')}>
-          <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewTitle')} aria-label={t('toolbarNewLabel')}>
+          <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewLabel')} aria-label={t('toolbarNewLabel')}>
             <FilePlus size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onOpen} data-tooltip={t('toolbarOpenTitle')} aria-label={t('toolbarOpenLabel')}>
+          <button data-no-window-drag="true" onClick={onOpen} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
             <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} data-tooltip={t('toolbarSaveTitle')} aria-label={t('toolbarSaveLabel')}>
+          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
             <Save size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} data-tooltip={t('toolbarSaveAsTitle')} aria-label={t('toolbarSaveAsLabel')}>
+          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
             <SaveAll size={iconSize} strokeWidth={strokeWidth} />
           </button>
           {onInsertImage && (
@@ -157,8 +175,8 @@ export function Toolbar({
               data-no-window-drag="true"
               onClick={onInsertImage}
               disabled={editingDisabled}
-              data-tooltip="插入图片"
-              aria-label="插入图片"
+              data-tooltip={t('toolbarInsertImageLabel')}
+              aria-label={t('toolbarInsertImageLabel')}
             >
               <ImagePlus size={iconSize} strokeWidth={strokeWidth} />
             </button>
@@ -169,7 +187,8 @@ export function Toolbar({
                 ref={setExportButtonRef}
                 data-no-window-drag="true"
                 disabled={editingDisabled || exporting}
-                aria-label="导出"
+                aria-label={t('toolbarExportLabel')}
+                data-tooltip={t('toolbarExportLabel')}
                 aria-expanded={exportMenuOpen}
                 aria-haspopup="true"
                 {...getExportReferenceProps()}
@@ -177,12 +196,6 @@ export function Toolbar({
                 <FileDown size={iconSize} strokeWidth={strokeWidth} />
                 <ChevronDown size={10} strokeWidth={strokeWidth} className="export-chevron" />
               </button>
-              <Tooltip
-                label="导出"
-                shortcut="⌘P / ⇧⌘E"
-                reference={exportTrigger}
-                placement="bottom"
-              />
               {exportMenuOpen && (
                 <FloatingPortal>
                   <div
@@ -190,7 +203,7 @@ export function Toolbar({
                     style={{ ...exportFloating.floatingStyles, zIndex: 9999 }}
                     className="export-menu"
                     role="menu"
-                    aria-label="导出格式"
+                    aria-label={t('toolbarExportMenuLabel')}
                     {...getExportFloatingProps()}
                   >
                     <button
@@ -200,7 +213,7 @@ export function Toolbar({
                       onClick={() => { setExportMenuOpen(false); onExportPdf(); }}
                       disabled={editingDisabled}
                     >
-                      导出 PDF
+                      {t('toolbarExportPdfLabel')}
                     </button>
                     {onExportWord && (
                       <button
@@ -210,7 +223,7 @@ export function Toolbar({
                         onClick={() => { setExportMenuOpen(false); onExportWord(); }}
                         disabled={editingDisabled}
                       >
-                        导出 Word
+                        {t('toolbarExportWordLabel')}
                       </button>
                     )}
                   </div>
@@ -247,7 +260,7 @@ export function Toolbar({
               data-no-window-drag="true"
               data-tooltip={
                 updateStatus.phase === 'installing'
-                  ? t('toolbarUpdateInstallingTitle')
+                  ? t('toolbarUpdateInstallingLabel')
                   : `${t('toolbarRestartUpdateTitle')} ${updateStatus.version}`
               }
               aria-label={
@@ -273,7 +286,7 @@ export function Toolbar({
             onClick={onToggleEditorMode}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            data-tooltip={t('toolbarSourceTitle')}
+            data-tooltip={t('toolbarSourceLabel')}
             aria-label={t('toolbarSourceLabel')}
           >
             <Code2 size={iconSize} strokeWidth={strokeWidth} />
@@ -283,7 +296,7 @@ export function Toolbar({
             onClick={onToggleWordPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            data-tooltip={t('toolbarWordPreviewTitle')}
+            data-tooltip={t('toolbarWordPreviewLabel')}
             aria-label={t('toolbarWordPreviewLabel')}
           >
             <FileText size={iconSize} strokeWidth={strokeWidth} />
@@ -293,7 +306,7 @@ export function Toolbar({
             onClick={onToggleWechatPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            data-tooltip={t('toolbarWechatPreviewTitle')}
+            data-tooltip={t('toolbarWechatPreviewLabel')}
             aria-label={t('toolbarWechatPreviewLabel')}
           >
             {/* lucide 无 wechat 品牌图标,沿用 Newspaper(评审已确认) */}
@@ -305,8 +318,8 @@ export function Toolbar({
               onClick={onToggleArtifacts}
               disabled={editingDisabled}
               data-no-window-drag="true"
-              data-tooltip="AI 产物"
-              aria-label="AI 产物"
+              data-tooltip={t('toolbarArtifactsLabel')}
+              aria-label={t('toolbarArtifactsLabel')}
             >
               <PackageOpen size={iconSize} strokeWidth={strokeWidth} />
             </button>
@@ -315,7 +328,7 @@ export function Toolbar({
             className={terminalVisible ? 'active' : ''}
             onClick={onToggleTerminal}
             data-no-window-drag="true"
-            data-tooltip={t('toolbarTerminalTitle')}
+            data-tooltip={t('toolbarTerminalLabel')}
             aria-label={t('toolbarTerminalLabel')}
           >
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
@@ -328,7 +341,7 @@ export function Toolbar({
             onPointerEnter={onPreloadSettings}
             onFocus={onPreloadSettings}
             onClick={onOpenSettings}
-            data-tooltip={t('toolbarSettingsTitle')}
+            data-tooltip={t('toolbarSettingsLabel')}
             aria-label={t('toolbarSettingsLabel')}
           >
             <SlidersHorizontal size={iconSize} strokeWidth={strokeWidth} />
@@ -342,6 +355,12 @@ export function Toolbar({
           />
         </div>
       </div>
+      <Tooltip
+        label={toolbarTooltip?.label ?? ''}
+        reference={toolbarTooltip?.reference ?? null}
+        placement="bottom"
+        open={toolbarTooltip !== null}
+      />
     </div>
   );
 }

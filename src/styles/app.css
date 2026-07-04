@@ -9546,6 +9546,11 @@ button[data-tooltip] {
   position: relative;
 }
 
+.app-toolbar button[data-tooltip]::after,
+.app-toolbar button[data-tooltip]::before {
+  display: none !important;
+}
+
 button[data-tooltip]::after,
 button[data-tooltip]::before {
   position: absolute;
