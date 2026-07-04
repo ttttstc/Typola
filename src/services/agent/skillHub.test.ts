@@ -97,13 +97,15 @@ describe('skill hub helpers', () => {
       'huashu-design',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'report')?.skills.map((skill) => skill.name)).toEqual([
-      'report-summary',
-      'project-retro-report',
-      'executive-summary',
+      // PR 1 仅暴露有 installSource(GitHub URL)可装的 skill。
+      // report-summary / project-retro-report / executive-summary 是 builtin prompt-only,
+      // 跟随 PR 2 + AppLayout.handlePickSkill 一起引入,避免出现"声明了 builtin 但 UI 不可用"的悬空字段。
       'editorial-card-screenshot',
       'info-card-designer',
     ]);
-    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'daily')?.skills.some((skill) => skill.builtin && skill.name === 'data-report-html')).toBe(true);
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'daily')?.skills.map((skill) => skill.name)).toEqual([
+      'nb',
+    ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'knowledge')?.skills).toEqual([]);
   });
 
