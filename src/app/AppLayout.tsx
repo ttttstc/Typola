@@ -51,7 +51,7 @@ import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
 import { useRightPanel, type RightPanelMode } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
-import { buildSkillPrefill } from '../services/agent/skillHub';
+import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skillHub';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
@@ -954,11 +954,18 @@ export function AppLayout() {
     setTerminalCreateRequest((request) => request + 1);
   }, []);
 
-  const handlePickSkill = useCallback((skillName: string) => {
+  const handlePickSkill = useCallback((payload: SkillPickPayload) => {
     const provider = convManager.activeProvider;
-    convManager.createConversation(skillName, skillName, provider);
+    const title = payload.skill.label ?? payload.skill.name;
+    convManager.createConversation(title, payload.skill.name, provider);
     setLeftRailMode('aiWorkbench');
-    setSkillPrefill({ tick: Date.now(), text: buildSkillPrefill(provider, skillName) });
+    // 用 scene + skill 派生 prefill,符合 plan §10.3 三种分支
+    // (builtin/prefill 模板/fallback goal)。
+    const template = payload.skill.template;
+    setSkillPrefill({
+      tick: Date.now(),
+      text: buildSkillPrefill(provider, template ?? { name: payload.skill.name, system: true }, payload.scene),
+    });
   }, [convManager]);
 
   const handleInstallSkill = useCallback((prompt: string) => {

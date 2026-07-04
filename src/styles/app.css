@@ -3176,6 +3176,31 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   background: var(--theme-control-active-bg);
 }
 
+.skill-hub-badge.builtin {
+  color: oklch(46% 0.12 240);
+  background: oklch(75% 0.13 240 / 0.14);
+  border-color: oklch(62% 0.12 240 / 0.28);
+}
+
+.skill-hub-output {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+  background: var(--control-active-bg);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: 0 0 auto;
+}
+
+.skill-hub-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .skill-hub-item-actions {
   display: flex;
   flex: 0 0 auto;
