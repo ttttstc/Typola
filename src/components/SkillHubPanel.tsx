@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ArrowLeft, BarChart3, CalendarDays, Check, ClipboardList, Globe, PenLine,
-  Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, TriangleAlert, type LucideProps,
+  Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, type LucideProps,
 } from 'lucide-react';
 import type { AgentProvider } from '../services/agent/provider';
 import { listLocalSkills, type Skill } from '../services/agent/skillScanner';
@@ -55,6 +55,12 @@ const SCENE_ICONS: Record<string, ComponentType<LucideProps>> = {
 
 function normalizeKey(name: string): string {
   return name.trim().replace(/^\/+/u, '').toLowerCase();
+}
+
+function skillItemClassName(skill: SkillCard): string {
+  const classes = ['skill-hub-item'];
+  if (!skill.installed) classes.push('is-disabled');
+  return classes.join(' ');
 }
 
 function skillTitle(skill: SkillRef | SkillTemplateRef, local?: Skill): string {
@@ -393,14 +399,16 @@ export function SkillHubPanel({
             <div className="skill-hub-categories">
               {visibleSections.map((section) => (
                 <section key={section.id} className="skill-hub-category">
-                  <h3 className="skill-hub-category-title">{section.title}</h3>
+                  <h3 className="skill-hub-category-title">
+                    {section.title} · {section.cards.length} 个
+                  </h3>
                   <ul className="skill-hub-items">
                     {section.cards.map((skill) => {
                       const sourceUrl = skill.template?.installSource;
                       const displayName = activeProvider === 'opencode' ? skill.name : `/${skill.name}`;
                       return (
                       <li key={`${skill.system ? 'system' : 'custom'}-${skill.name}`}>
-                        <div className={`skill-hub-item ${skill.installed ? '' : 'is-disabled'}`}>
+                        <div className={skillItemClassName(skill)}>
                           <button
                             type="button"
                             className="skill-hub-item-main"
@@ -414,58 +422,75 @@ export function SkillHubPanel({
                             title={skill.path ? `${skill.name} — ${skill.path}` : skill.name}
                           >
                             <span className="skill-hub-item-topline">
-                              <span className="skill-hub-item-name">
-                                {displayName}
+                              <span className="skill-hub-item-name">{displayName}</span>
+                            </span>
+                            <strong>{skill.label}</strong>
+                            {skill.summary && <span className="skill-hub-item-desc">{skill.summary}</span>}
+                            {(skill.builtin || skill.output || sourceUrl || (skill.system && !skill.builtin && !sourceUrl)) && (
+                              <small className="skill-hub-item-meta">
                                 {skill.builtin && (
-                                  <span className="skill-hub-badge builtin" title="内置 prompt-only skill，不依赖本机 Claude">内置</span>
+                                  <span className="skill-hub-item-meta-item">内置 prompt-only</span>
                                 )}
                                 {skill.output && (
-                                  <span className="skill-hub-output" title={`产物：${skill.output}`}>{skill.output}</span>
+                                  <span className="skill-hub-item-meta-item">产物 {skill.output}</span>
                                 )}
                                 {sourceUrl && (
                                   <button
                                     type="button"
-                                    className="skill-hub-item-source"
+                                    className="skill-hub-item-meta-source"
                                     title={`来源：${sourceUrl}`}
                                     onClick={(event) => {
                                       event.stopPropagation();
                                       openSourceUrl(sourceUrl);
                                     }}
                                   >
-                                    <GitHubIcon size={12} />
+                                    <GitHubIcon size={11} /> 来源 GitHub
                                   </button>
                                 )}
-                                {skill.system && !sourceUrl && (
-                                  <span className="skill-hub-item-no-source" title="缺少 GitHub 来源 URL">
-                                    <TriangleAlert size={10} />
+                                {skill.system && !skill.builtin && !sourceUrl && (
+                                  <span className="skill-hub-item-meta-item" title="缺少 GitHub 来源 URL">
+                                    缺少来源
                                   </span>
                                 )}
-                              </span>
-                            </span>
-                            <strong>{skill.label}</strong>
-                            {skill.summary && <span className="skill-hub-item-desc">{skill.summary}</span>}
+                              </small>
+                            )}
                           </button>
                           <div className="skill-hub-item-actions">
-                            {skill.system ? (
-                              !skill.installed && (
-                                <button type="button" onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}>
+                            {!skill.system ? (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => void removeCustomSkill(selectedScene.id, skill.name)}
+                                  title={`移除自定义 ${capabilityLabel}`}
+                                  aria-label={`移除自定义 ${capabilityLabel}`}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                                <span className={`skill-hub-badge ${skill.installed ? 'installed' : 'missing'}`}>
+                                  {skill.installed ? '已安装' : '未安装'}
+                                </span>
+                              </>
+                            ) : skill.builtin ? (
+                              <span
+                                className="skill-hub-badge builtin"
+                                title="内置 prompt-only skill,执行靠自然语言,不依赖本机 CLI 安装"
+                              >
+                                内置
+                              </span>
+                            ) : skill.installed ? (
+                              <span className="skill-hub-badge installed">已安装</span>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}
+                                >
                                   {installActionLabel}
                                 </button>
-                              )
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={saving}
-                                onClick={() => void removeCustomSkill(selectedScene.id, skill.name)}
-                                title={`移除自定义 ${capabilityLabel}`}
-                                aria-label={`移除自定义 ${capabilityLabel}`}
-                              >
-                                <Trash2 size={12} />
-                              </button>
+                                <span className="skill-hub-badge missing">未安装</span>
+                              </>
                             )}
-                            <span className={`skill-hub-badge ${skill.installed ? 'installed' : 'missing'}`}>
-                              {skill.installed ? '已安装' : '未安装'}
-                            </span>
                           </div>
                         </div>
                       </li>
@@ -475,9 +500,18 @@ export function SkillHubPanel({
                 </section>
               ))}
               {systemCards.length > 0 && customCards.length === 0 && (
-                <p className="skill-hub-category-empty">
-                  还没有自定义 {capabilityLabel}，点击右上角添加本机已有 {capabilityLabel}。
-                </p>
+                <div className="skill-hub-empty-hint" role="status">
+                  <span>
+                    还没有自定义条目。把本机已安装的skill/工具加入进来
+                  </span>
+                  <button
+                    type="button"
+                    className="skill-hub-empty-hint-btn"
+                    onClick={() => setAddDialogOpen(true)}
+                  >
+                    <Plus size={11} /> 去添加
+                  </button>
+                </div>
               )}
             </div>
           )}
