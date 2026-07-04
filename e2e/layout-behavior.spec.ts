@@ -1123,7 +1123,7 @@ test('floating toc stays bounded with many headings', async ({ page }) => {
   expect(tocMetrics.panelBottomGap).toBeGreaterThanOrEqual(0);
 });
 
-test('appearance settings switch the app into dark theme', async ({ page }) => {
+test('appearance settings switch the app into Night Current theme', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
   await page.keyboard.insertText('# 证据目录\n\n## 第一组 权利基础');
@@ -1131,23 +1131,23 @@ test('appearance settings switch the app into dark theme', async ({ page }) => {
 
   await page.getByRole('button', { name: '设置' }).click();
   await page.getByRole('button', { name: '外观' }).click();
-  await page.getByRole('combobox').first().selectOption('dark');
+  await page.locator('[data-theme-card="night-current"]').click();
 
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.locator('.app-layout')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.locator('.settings-select').first()).toHaveValue('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-id', 'night-current');
+  await expect(page.locator('html')).toHaveAttribute('data-color-scheme', 'dark');
+  await expect(page.locator('[data-theme-card="night-current"]')).toHaveAttribute('aria-checked', 'true');
 
   const darkColors = await page.evaluate(() => {
     const app = document.querySelector('.app-layout') as HTMLElement | null;
     const settingsModal = document.querySelector('.settings-modal') as HTMLElement | null;
     return {
-      appBg: app ? getComputedStyle(app).getPropertyValue('--bg').trim() : '',
+      appBg: app ? getComputedStyle(app).getPropertyValue('--theme-canvas').trim() : '',
       bodyBg: getComputedStyle(document.body).backgroundColor,
       settingsBg: settingsModal ? getComputedStyle(settingsModal).backgroundColor : '',
     };
   });
 
-  expect(darkColors.appBg).toContain('oklch');
+  expect(darkColors.appBg).toBe('#101821');
   expect(darkColors.bodyBg).not.toBe('rgb(255, 255, 255)');
   expect(darkColors.settingsBg).not.toBe('rgb(255, 255, 255)');
 

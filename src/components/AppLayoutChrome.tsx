@@ -12,7 +12,6 @@ import type { RightPanelMode } from '../hooks/useRightPanel';
 
 type AppLayoutChromeProps = {
   appStyle: CSSProperties;
-  theme: string;
   toolbarProps: ComponentProps<typeof Toolbar>;
   mainContentRef: MutableRefObject<HTMLDivElement | null>;
   mainContentClassName: string;
@@ -98,7 +97,6 @@ function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolea
  */
 export function AppLayoutChrome({
   appStyle,
-  theme,
   toolbarProps,
   mainContentRef,
   mainContentClassName,
@@ -145,7 +143,7 @@ export function AppLayoutChrome({
 
   return (
     <MotionProvider>
-      <div className="app-layout" data-theme={theme} style={appStyle}>
+      <div className="app-layout" style={appStyle}>
         <Toolbar {...toolbarProps} />
         <div
           ref={mainContentRef}

@@ -62,6 +62,7 @@ import { calculateDocumentStats } from '../services/documentStatsService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
+import { applyThemeToDocument } from '../services/themeDom';
 import {
   formatImageSrc,
   isImagePath,
@@ -387,6 +388,11 @@ export function AppLayout() {
     flowRightPanelWidth: FLOW_RIGHT_PANEL_WIDTH,
   });
 
+  useEffect(() => {
+    document.documentElement.dataset.docMode = docMode;
+    document.documentElement.dataset.reviewEnhanceMarks = settings.themeOptions.reviewEnhanceMarks ? 'true' : 'false';
+  }, [docMode, settings.themeOptions.reviewEnhanceMarks]);
+
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
   const reviewStateApi = useReviewState(file.path);
   const [reviewEditor, setReviewEditor] = useState<{
@@ -498,9 +504,8 @@ export function AppLayout() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.theme;
-    document.documentElement.style.colorScheme = settings.theme;
-  }, [settings.theme]);
+    applyThemeToDocument(document, settings.themeId);
+  }, [settings.themeId]);
 
   useEffect(() => {
     /* Kick off the settings chunk immediately on mount so the modal is fully
@@ -675,7 +680,6 @@ export function AppLayout() {
         content: file.content,
         fileName: file.name,
         filePath: file.path || undefined,
-        theme: settings.theme,
         resolvedPreviewFontFamily: resolvePreviewFontFamily(settings),
         resolvedPreviewHeadingFontFamily: resolvePreviewHeadingFontFamily(settings),
         previewFontSize: settings.previewFontSize,
@@ -1601,7 +1605,6 @@ export function AppLayout() {
     <>
       <AppLayoutChrome
         appStyle={appStyle}
-        theme={settings.theme}
         toolbarProps={{
           dirty: file.dirty,
           fileName: file.name,

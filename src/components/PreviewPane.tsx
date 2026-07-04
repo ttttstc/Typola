@@ -9,6 +9,7 @@ import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { createHtmlReadingPreviewHtml } from '../services/htmlReadingPreviewService';
 import { resolveLocalImages } from '../services/localImageResolver';
 import { renderMermaidIn } from '../services/mermaidRenderer';
+import { getMermaidTheme, getVditorHighlightStyle, getVditorPreviewTheme } from '../services/themeRegistry';
 
 type PreviewPaneProps = {
   source: string;
@@ -28,6 +29,9 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
   const deferredSource = useDeferredValue(source);
   const deferredTocIds = useDeferredValue(tocIds);
   const settings = useSettings();
+  const mermaidTheme = getMermaidTheme(settings.themeId);
+  const vditorTheme = getVditorPreviewTheme(settings.themeId);
+  const vditorHighlightStyle = getVditorHighlightStyle(settings.themeId);
   const renderFeatures = useMemo(
     () => detectMarkdownRenderFeatures(deferredSource),
     [deferredSource],
@@ -49,7 +53,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     if (renderMode === 'html') {
       el.innerHTML = createHtmlReadingPreviewHtml(deferredSource);
       void resolveLocalImages(el, filePath);
-      void renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+      void renderMermaidIn(el, { theme: mermaidTheme });
       applyTocIds(el, deferredTocIds);
       return;
     }
@@ -61,17 +65,17 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     ]).then(([, { default: Vditor }]) => {
       if (cancelled) return;
       Vditor.preview(el, deferredSource, {
-        mode: 'light',
+        mode: vditorTheme,
         anchor: 0,
         cdn: '/vditor',
         i18n: VDITOR_PREVIEW_I18N,
         icon: undefined,
         theme: {
-          current: 'light',
+          current: vditorTheme,
           path: '',
         },
         hljs: {
-          style: 'github',
+          style: vditorHighlightStyle,
           enable: renderFeatures.hasHighlightableCode,
           lineNumber: false,
         },
@@ -81,7 +85,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
         after() {
           if (cancelled) return;
           void (async () => {
-            await renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+            await renderMermaidIn(el, { theme: mermaidTheme });
             await resolveLocalImages(el, filePath);
             if (deferredTocIds.length > 0) applyTocIds(el, deferredTocIds);
           })();
@@ -92,7 +96,16 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, deferredTocIds, filePath, renderFeatures.hasHighlightableCode, renderMode, settings.theme]);
+  }, [
+    deferredSource,
+    deferredTocIds,
+    filePath,
+    renderFeatures.hasHighlightableCode,
+    mermaidTheme,
+    renderMode,
+    vditorHighlightStyle,
+    vditorTheme,
+  ]);
 
   useImperativeHandle(ref, () => {
     const findScroller = (): HTMLElement | null => {
