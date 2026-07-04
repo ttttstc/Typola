@@ -339,7 +339,10 @@ export function AppLayout() {
     if (!isTauriRuntime) return;
     let cancelled = false;
     void import('@tauri-apps/api/path')
-      .then(({ appLocalDataDir }) => appLocalDataDir())
+      .then(async ({ homeDir, join }) => {
+        const home = await homeDir();
+        return join(home, '.typola', 'userdata');
+      })
       .then((path) => {
         if (!cancelled) setDefaultAiWorkspaceRoot(path);
       })
