@@ -37,7 +37,7 @@ describe('themeRegistry', () => {
     expect(tokens.editor.caret).toBe(theme.core.accent);
     expect(tokens.markdown.link).toBe(theme.core.accent);
     expect(tokens.terminal.background).toBe(theme.overrides?.terminal?.background);
-    expect(tokens.terminal.brightBlue).toBe('#91bef0');
+    expect(tokens.terminal.brightBlue).toBe('#9dc8e4');
     expect(tokens.ai.deletedBg).toContain(theme.core.aiDeleted);
     expect(tokens.ai.reviewMarkBgStrong).toBeDefined();
   });
@@ -48,8 +48,8 @@ describe('themeRegistry', () => {
     expect(getVditorPreviewTheme('night-current')).toBe('dark');
     expect(getVditorHighlightStyle('night-current')).toBe('github-dark');
     expect(resolveTerminalTheme('night-current')).toMatchObject({
-      background: '#101821',
-      brightWhite: '#f2f6f8',
+      background: '#11161c',
+      brightWhite: '#f3f6f8',
     });
   });
 });

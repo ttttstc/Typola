@@ -3,16 +3,16 @@
 /* ===== CSS Variables (DESIGN.md Design System) ===== */
 
 :root {
-  /* Status palette — for skill badges & inline hints. */
-  --status-positive-fg: oklch(46% 0.12 150);
-  --status-positive-bg: oklch(75% 0.13 150 / 0.14);
-  --status-positive-border: oklch(62% 0.12 150 / 0.28);
-  --status-info-fg: oklch(46% 0.12 240);
-  --status-info-bg: oklch(75% 0.13 240 / 0.14);
-  --status-info-border: oklch(62% 0.12 240 / 0.28);
-  --status-neutral-fg: oklch(48% 0.015 60);
-  --status-neutral-bg: oklch(58% 0.16 35 / 0.06);
-  --status-neutral-border: oklch(89% 0.012 80 / 0.42);
+  /* Status palette follows the active theme so dense panels stay quiet. */
+  --status-positive-fg: var(--theme-success);
+  --status-positive-bg: color-mix(in oklch, var(--theme-success) 10%, var(--theme-surface));
+  --status-positive-border: color-mix(in oklch, var(--theme-success) 28%, var(--theme-border));
+  --status-info-fg: var(--theme-accent);
+  --status-info-bg: color-mix(in oklch, var(--theme-accent) 8%, var(--theme-surface));
+  --status-info-border: color-mix(in oklch, var(--theme-accent) 24%, var(--theme-border));
+  --status-neutral-fg: var(--theme-text-secondary);
+  --status-neutral-bg: var(--theme-control-bg);
+  --status-neutral-border: var(--theme-border-soft);
   --motion-duration-press: 60ms;
   --motion-duration-fast: 120ms;
   --motion-duration-base: 180ms;
