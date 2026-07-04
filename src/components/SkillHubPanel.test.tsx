@@ -356,10 +356,9 @@ describe('SkillHubPanel', () => {
       .map((node) => node.textContent ?? '').join('|');
     expect(nbMeta).toContain('产物 markdown');
     // 没自定义 skill 时显示 teach-state empty hint + 「去添加」按钮
-    // 文案不再锁死单个 CLI:同时点名 Claude skill 和 OpenCode command
+    // 文案不再点名具体 CLI,用中性的「skill/工具」
     expect(host.textContent).toContain('还没有自定义条目');
-    expect(host.textContent).toContain('Claude skill');
-    expect(host.textContent).toContain('OpenCode command');
+    expect(host.textContent).toContain('把本机已安装的skill/工具加入进来');
     const emptyHint = host.querySelector<HTMLElement>('.skill-hub-empty-hint');
     expect(emptyHint?.textContent).toContain('去添加');
     expect(emptyHint?.querySelector('button')).toBeTruthy();

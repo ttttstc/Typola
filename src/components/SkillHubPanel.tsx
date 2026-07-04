@@ -502,7 +502,7 @@ export function SkillHubPanel({
               {systemCards.length > 0 && customCards.length === 0 && (
                 <div className="skill-hub-empty-hint" role="status">
                   <span>
-                    还没有自定义条目。把本机已安装的 Claude skill 或 OpenCode command 加进来,场景里就能直接看到。
+                    还没有自定义条目。把本机已安装的skill/工具加入进来
                   </span>
                   <button
                     type="button"
