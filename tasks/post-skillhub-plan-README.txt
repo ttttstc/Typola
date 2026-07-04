@@ -1,0 +1,1 @@
+post the SkillHub implementation plan to issue #75 as a comment using gh CLI with --body-file to avoid INAMETOOLONG. The plan is in next message starting with "# Typola SkillHub 预置场景与增强 Prefill 实施方案".
