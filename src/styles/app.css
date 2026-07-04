@@ -35,6 +35,16 @@
   --success: oklch(44% 0.09 145);
   --ok: oklch(70% 0.15 145);
   --danger: oklch(52% 0.16 30);
+  /* Status palette — for skill badges & inline hints. */
+  --status-positive-fg: oklch(46% 0.12 150);
+  --status-positive-bg: oklch(75% 0.13 150 / 0.14);
+  --status-positive-border: oklch(62% 0.12 150 / 0.28);
+  --status-info-fg: oklch(46% 0.12 240);
+  --status-info-bg: oklch(75% 0.13 240 / 0.14);
+  --status-info-border: oklch(62% 0.12 240 / 0.28);
+  --status-neutral-fg: oklch(48% 0.015 60);
+  --status-neutral-bg: oklch(58% 0.16 35 / 0.06);
+  --status-neutral-border: oklch(89% 0.012 80 / 0.42);
   --select-chevron: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23766f65' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --motion-duration-press: 60ms;
   --motion-duration-fast: 120ms;
@@ -3083,11 +3093,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .skill-hub-category-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--fg-secondary);
 }
 
 .skill-hub-category-empty {
@@ -3215,33 +3223,90 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .skill-hub-badge.installed {
-  color: oklch(46% 0.12 150);
-  background: oklch(75% 0.13 150 / 0.14);
-  border-color: oklch(62% 0.12 150 / 0.28);
+  color: var(--status-positive-fg);
+  background: var(--status-positive-bg);
+  border-color: var(--status-positive-border);
 }
 
 .skill-hub-badge.missing {
-  color: var(--muted);
-  background: var(--control-active-bg);
+  color: var(--status-neutral-fg);
+  background: var(--status-neutral-bg);
+  border-color: var(--status-neutral-border);
 }
 
 .skill-hub-badge.builtin {
-  color: oklch(46% 0.12 240);
-  background: oklch(75% 0.13 240 / 0.14);
-  border-color: oklch(62% 0.12 240 / 0.28);
+  color: var(--status-info-fg);
+  background: var(--status-info-bg);
+  border-color: var(--status-info-border);
 }
 
-.skill-hub-output {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  border: 1px solid var(--border-soft);
+.skill-hub-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--muted);
-  background: var(--control-active-bg);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+
+.skill-hub-item-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.skill-hub-item-meta-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.skill-hub-item-meta-source:hover {
+  color: var(--fg);
+}
+
+.skill-hub-empty-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  color: var(--fg-secondary);
+  font-size: 12px;
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface));
+  border: 1px dashed color-mix(in oklch, var(--accent) 28%, var(--border-soft));
+  border-radius: 8px;
+  line-height: 1.45;
+}
+
+.skill-hub-empty-hint-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 9px;
+  color: var(--fg);
+  background: var(--control-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
   flex: 0 0 auto;
+}
+
+.skill-hub-empty-hint-btn:hover {
+  background: var(--control-hover-bg);
+  border-color: var(--border-hover);
 }
 
 .skill-hub-categories {
