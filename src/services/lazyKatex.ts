@@ -1,4 +1,5 @@
 import type katex from 'katex';
+import katexCssUrl from 'katex/dist/katex.min.css?url';
 
 let katexPromise: Promise<typeof katex> | null = null;
 let katexCssLoaded = false;
@@ -8,7 +9,7 @@ function loadKatexCss(): void {
   katexCssLoaded = true;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css';
+  link.href = katexCssUrl;
   link.media = 'print';
   link.onload = () => { link.media = 'all'; };
   document.head.appendChild(link);
