@@ -29,7 +29,6 @@ import {
 import { isTodoWriteToolName, type ResultShape } from './shared';
 
 type Props = {
-  id: string;
   name: string;
   input: unknown;
   result?: ResultShape;

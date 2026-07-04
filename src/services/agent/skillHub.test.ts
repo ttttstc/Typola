@@ -45,29 +45,6 @@ describe('parseSkillHubJson', () => {
     expect(hub.hiddenSystemSkills.ppt).toEqual(['x']);
   });
 
-  it('converts legacy v1 categories into user scene additions', () => {
-    const raw = JSON.stringify({
-      version: 1,
-      categories: [
-        {
-          id: 'ppt',
-          label: 'PPT',
-          skills: [
-            { name: '/baoyu-slide-deck' },
-            { name: 'reviewer', description: '审稿助手' },
-          ],
-        },
-      ],
-    });
-    const { hub, error } = parseSkillHubJson(raw);
-    expect(error).toBeUndefined();
-    expect(hub.version).toBe(2);
-    expect(hub.sceneAdditions.ppt).toEqual([
-      { name: 'baoyu-slide-deck' },
-      { name: 'reviewer', description: '审稿助手' },
-    ]);
-  });
-
   it('round-trips through serializeSkillHub', () => {
     const hub = {
       version: 2 as const,
@@ -90,9 +67,17 @@ describe('skill hub helpers', () => {
     expect(removeCustomSkillFromScene(added, 'ppt', 'custom-ppt').sceneAdditions.ppt).toEqual([]);
   });
 
-  it('defines the first system templates', () => {
+  it('defines the M2.5 system templates', () => {
     expect(SYSTEM_SKILL_SCENES.map((scene) => scene.id)).toEqual([
-      'daily', 'summary', 'ppt', 'html', 'wechat', 'data',
+      'common', 'daily', 'report', 'ppt', 'html', 'longform', 'knowledge', 'research',
+    ]);
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'common')?.skills.map((skill) => skill.name)).toEqual([
+      'markitdown',
+      'baoyu-url-to-markdown',
+      'humanizer',
+      'huashu-proofreading',
+      'baoyu-translate',
+      'huashu-md-to-pdf',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'ppt')?.skills.map((skill) => skill.name)).toEqual([
       'huawei-style-ppt-skill',
@@ -100,6 +85,7 @@ describe('skill hub helpers', () => {
       'huashu-slides',
       'baoyu-slide-deck',
       'ppt-master',
+      'huashu-design',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')?.skills.map((skill) => skill.name)).toEqual([
       'frontend-slides',
@@ -107,10 +93,20 @@ describe('skill hub helpers', () => {
       'baoyu-markdown-to-html',
       'html-ppt-skill',
       'md2html',
+      'huashu-md-html',
+      'huashu-design',
     ]);
-    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'wechat')?.skills.map((skill) => skill.name)).toEqual([
-      'ni-writer',
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'report')?.skills.map((skill) => skill.name)).toEqual([
+      // PR 1 仅暴露有 installSource(GitHub URL)可装的 skill。
+      // report-summary / project-retro-report / executive-summary 是 builtin prompt-only,
+      // 跟随 PR 2 + AppLayout.handlePickSkill 一起引入,避免出现"声明了 builtin 但 UI 不可用"的悬空字段。
+      'editorial-card-screenshot',
+      'info-card-designer',
     ]);
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'daily')?.skills.map((skill) => skill.name)).toEqual([
+      'nb',
+    ]);
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'knowledge')?.skills).toEqual([]);
   });
 
   it('每个系统场景都带 icon 和 accent(场景卡渲染依赖)', () => {
@@ -121,19 +117,18 @@ describe('skill hub helpers', () => {
   });
 
   it('filters system templates by supported CLI provider', () => {
+    // M2.5 起系统模板默认仅 claude,opencode provider 看不到任何系统模板。
+    // 若要让某个 skill 同时支持 opencode,在数据里显式加 supportedProviders。
     expect(getSystemSkillScenesForProvider('claude').find((scene) => scene.id === 'ppt')?.skills.map((skill) => skill.name)).toEqual([
       'huawei-style-ppt-skill',
       'guizang-ppt-skill',
       'huashu-slides',
       'baoyu-slide-deck',
       'ppt-master',
+      'huashu-design',
     ]);
-    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'html')?.skills.map((skill) => skill.name)).toEqual([
-      'frontend-slides',
-      'guizang-ppt-skill',
-      'baoyu-markdown-to-html',
-      'html-ppt-skill',
-    ]);
+    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'ppt')?.skills).toEqual([]);
+    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'html')?.skills).toEqual([]);
   });
 
   it('filters user-added Claude skills out for OpenCode provider', () => {
@@ -173,7 +168,8 @@ describe('skill hub helpers', () => {
   it('builds install prompt with source fallback', () => {
     const skill = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')!.skills[0];
     expect(buildSkillInstallPrompt(skill)).toContain('请帮我安装 Claude skill：frontend-slides');
-    expect(buildSkillInstallPrompt(skill)).toContain(skill.expectedPath);
+    // M2.5: 预置 skill 仅提供 installSource(GitHub URL),不再有 expectedPath(绝对路径)。
+    expect(buildSkillInstallPrompt(skill)).toContain(skill.installSource!);
   });
 
   it('builds OpenCode command install prompt without Claude copy', () => {

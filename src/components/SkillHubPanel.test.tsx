@@ -89,7 +89,7 @@ describe('SkillHubPanel', () => {
     });
 
     await act(async () => undefined);
-    act(() => findButtonByText(host, 'HTML 制作').click());
+    act(() => findButtonByText(host, 'HTML 生成').click());
 
     expect(host.textContent).toContain('frontend-slides');
     expect(host.textContent).not.toContain('/frontend-slides');
@@ -100,34 +100,6 @@ describe('SkillHubPanel', () => {
 
     expect(onPickSkill).toHaveBeenCalledWith('frontend-slides');
     expect(skillScannerMock.listLocalSkills).toHaveBeenCalledWith('opencode', String.raw`D:\notes`);
-  });
-
-  it('renders installed OpenCode commands from system scene templates without custom scene additions', async () => {
-    const onPickSkill = vi.fn();
-
-    await act(async () => {
-      root.render(
-        <SkillHubPanel
-          activeProvider="opencode"
-          activeWorkspaceRoot={String.raw`D:\notes`}
-          hub={{ version: 2, sceneAdditions: {}, hiddenSystemSkills: {} }}
-          onPickSkill={onPickSkill}
-          onInstallSkill={vi.fn()}
-          onSaveHub={vi.fn()}
-          onReload={vi.fn().mockResolvedValue(undefined)}
-        />,
-      );
-    });
-
-    await act(async () => undefined);
-    act(() => findButtonByText(host, 'HTML 制作').click());
-
-    const commandButton = findButtonByText(host, 'frontend-slides');
-    expect(commandButton.closest('li')?.textContent).toContain('已安装');
-
-    act(() => commandButton.click());
-
-    expect(onPickSkill).toHaveBeenCalledWith('frontend-slides');
   });
 
   it('allows adding an OpenCode command with the same name as a Claude custom skill', async () => {
@@ -163,7 +135,7 @@ describe('SkillHubPanel', () => {
     });
 
     await act(async () => undefined);
-    act(() => findButtonByText(host, 'HTML 制作').click());
+    act(() => findButtonByText(host, 'HTML 生成').click());
     act(() => findButtonByText(host, '添加 OpenCode command').click());
 
     const localButton = findButtonByText(host, 'write-report');
@@ -269,7 +241,7 @@ describe('SkillHubPanel', () => {
       ]);
       await opencodeScan.promise;
     });
-    act(() => findButtonByText(host, 'HTML 制作').click());
+    act(() => findButtonByText(host, 'HTML 生成').click());
 
     const staleInstalledCard = Array.from(host.querySelectorAll('li')).find((entry) => (
       entry.textContent?.includes('write-report')

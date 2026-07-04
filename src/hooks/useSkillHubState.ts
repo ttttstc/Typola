@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { EMPTY_SKILL_HUB, loadSkillHub, migrateFlowScenariosIfStale, saveSkillHub, type SkillHub } from '../services/agent/skillHub';
+import { EMPTY_SKILL_HUB, loadSkillHub, saveSkillHub, type SkillHub } from '../services/agent/skillHub';
 
 type UseSkillHubStateResult = {
   skillHub: SkillHub;
@@ -11,7 +11,7 @@ type UseSkillHubStateResult = {
 };
 
 /**
- * Loads SkillHub categories and keeps the one-time legacy migration in one place.
+ * Loads SkillHub categories. M2.5 起不再有 legacy 迁移,直接读 v2 配置即可。
  */
 export function useSkillHubState(): UseSkillHubStateResult {
   const [skillHub, setSkillHub] = useState<SkillHub>(EMPTY_SKILL_HUB);
@@ -28,12 +28,6 @@ export function useSkillHubState(): UseSkillHubStateResult {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        await migrateFlowScenariosIfStale();
-      } catch (error) {
-        console.warn('SkillHub 迁移失败:', error);
-      }
-      if (cancelled) return;
       const result = await loadSkillHub();
       if (cancelled) return;
       setSkillHub(result.hub);
