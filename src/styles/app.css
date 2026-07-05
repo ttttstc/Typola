@@ -1939,6 +1939,7 @@ html[data-color-scheme='dark'] .export-menu {
 
 .html-presentation-mode-toggle button.active {
   background: var(--theme-accent, rgba(0, 0, 0, 0.06));
+  color: var(--theme-paper, #ffffff);
   opacity: 1;
   font-weight: 600;
 }

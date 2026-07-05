@@ -9,10 +9,6 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   readFile: vi.fn(async () => new Uint8Array()),
 }));
 
-vi.mock('@tauri-apps/plugin-opener', () => ({
-  openPath: vi.fn(async () => undefined),
-}));
-
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async () => undefined),
 }));
@@ -112,10 +108,11 @@ describe('HtmlPreviewPane (Issue #156)', () => {
     expect(onBackToArtifacts).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the file with the system default app when the browser button is clicked', async () => {
+  it('opens the file with the system default app via open_path_external', async () => {
     const onBackToArtifacts = vi.fn();
     const onClose = vi.fn();
-    const opener = await import('@tauri-apps/plugin-opener');
+    const core = await import('@tauri-apps/api/core');
+    const invoke = core.invoke as ReturnType<typeof vi.fn>;
 
     await act(async () => {
       root.render(
@@ -133,11 +130,15 @@ describe('HtmlPreviewPane (Issue #156)', () => {
       await flushPromises();
     });
 
-    expect(opener.openPath).toHaveBeenCalledWith('/tmp/x.html');
+    // 命令挂到我们的 open_path_external(绕开 plugin-opener 的 opener:scope,
+    // 那个 scope 会把 Windows 路径 canonicalize 成 \\?\D:\... 形式,
+    // 跟 $HOME/$DESKTOP 等 glob 永远不匹配,报「Not allowed to open path \\?\D」)。
+    expect(invoke).toHaveBeenCalledWith('open_path_external', { path: '/tmp/x.html' });
   });
 
-  it('forwards Windows paths unchanged to opener.openPath', async () => {
-    const opener = await import('@tauri-apps/plugin-opener');
+  it('forwards raw Windows paths verbatim to open_path_external', async () => {
+    const core = await import('@tauri-apps/api/core');
+    const invoke = core.invoke as ReturnType<typeof vi.fn>;
 
     await act(async () => {
       root.render(
@@ -155,8 +156,11 @@ describe('HtmlPreviewPane (Issue #156)', () => {
       await flushPromises();
     });
 
-    // openPath 接受原始 Windows 路径(由 Tauri 自己做 normalize),不需要我们再 URL-encode。
-    expect(opener.openPath).toHaveBeenCalledWith(String.raw`C:\用户资料\demo deck\x.html`);
+    // 原始 Windows 路径(带空格 / 中文)直接传,不做 URL-encode;
+    // 我们不再用 plugin-opener 的 openUrl(toFileUrl(path)),所以也没有 URL 化路径。
+    expect(invoke).toHaveBeenCalledWith('open_path_external', {
+      path: String.raw`C:\用户资料\demo deck\x.html`,
+    });
   });
 
   it('clears the preview when the close button is clicked', async () => {

@@ -548,6 +548,18 @@ fn allow_html_preview_directory(app: tauri::AppHandle, dir: String) -> Result<()
         .map_err(|error| format!("failed to allow html preview directory: {error}"))
 }
 
+// 用系统默认应用打开本地文件。绕开 tauri-plugin-opener 的 opener:scope,
+// 因为它的 Scope::is_path_allowed 用 std::fs::canonicalize 把绝对路径变成
+// \\?\D:\... 这种 Windows device path 形式,跟 capabilities 里声明的
+// $HOME / $DESKTOP 等 glob 永远匹配不上。open crate 直接走 ShellExecuteW,
+// 路径写法对与错都不影响。我们只对用户主动「在浏览器/系统默认打开」的本地
+// 文件做这件事 — 这些路径都已经经过 plugin-fs 读取验证,不是用户输入。
+#[tauri::command]
+fn open_path_external(path: String) -> Result<(), String> {
+    tauri_plugin_opener::open_path(&path, None::<&str>)
+        .map_err(|error| format!("failed to open path externally: {error}"))
+}
+
 #[tauri::command]
 fn read_opened_document(path: String) -> Result<Vec<u8>, String> {
     let path = PathBuf::from(path);
@@ -1596,6 +1608,7 @@ pub fn run() {
             force_close_main_window,
             allow_asset_directory,
             allow_html_preview_directory,
+            open_path_external,
             read_opened_document,
             write_opened_document,
             rename_opened_document,

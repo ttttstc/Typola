@@ -88,10 +88,13 @@ export function HtmlPreviewPane({
 
   const handleOpenInBrowser = useCallback(async () => {
     try {
-      // 用 openPath 而非 openUrl(file://):后者受 allow-default-urls 限制(只允许
-      // mailto/tel/http/https),file:// 不在列,会抛「URL not allowed」。
-      const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(filePath);
+      // 走自定义 open_path_external 命令而不是 plugin-opener 的 openPath,
+      // 绕开 opener:scope — opener 的 Scope::is_path_allowed 用
+      // std::fs::canonicalize 把绝对路径变成 Windows device path(\\\\?\\D:\\...),
+      // 跟 capabilities 里 $HOME/$DESKTOP 等 glob 永远匹配不上,
+      // 报「Not allowed to open path \\\\?\\D」错误。
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_path_external', { path: filePath });
     } catch (error) {
       console.warn('Failed to open HTML in browser:', error);
     }

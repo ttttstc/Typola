@@ -1438,26 +1438,29 @@ export function AppLayout() {
     }
   }, [effectiveAiWorkspaceRoot, file.path, handleOpenPath]);
 
-  const handleOpenArtifactExternally = useCallback(async (path: string) => {
-    try {
-      const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(path);
-    } catch (error) {
-      console.warn('Failed to open artifact externally:', error);
-      await messageDialog(String(error), { title: '打开失败' });
-    }
-  }, []);
-
   const handleOpenHtmlInBrowser = useCallback(async (path: string) => {
     if (!path) return;
     try {
-      // 用 openPath 而不是 openUrl(file://):后者受 allow-default-urls 限制(只允许
-      // mailto/tel/http/https),file:// 没有被该 scope 列入,会抛「URL not allowed」。
-      const { openPath } = await import('@tauri-apps/plugin-opener');
-      await openPath(path);
+      // 自定义命令 open_path_external — 绕开 tauri-plugin-opener 的
+      // opener:scope 验证,后者用 canonicalize 后会把 Windows 路径变成
+      // \\?\D:\... 形式,跟 capabilities 里 $HOME/$DESKTOP 等 glob 永远
+      // 匹配不上,报「Not allowed to open path \\?\D」。
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_path_external', { path });
     } catch (error) {
       console.warn('Failed to open HTML in browser:', error);
       await messageDialog(String(error), { title: '浏览器打开失败' });
+    }
+  }, []);
+
+  const handleOpenArtifactExternally = useCallback(async (path: string) => {
+    try {
+      // 同上,绕开 opener scope。image / 任意本地文件都用 ShellExecuteW 派发。
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_path_external', { path });
+    } catch (error) {
+      console.warn('Failed to open artifact externally:', error);
+      await messageDialog(String(error), { title: '打开失败' });
     }
   }, []);
 

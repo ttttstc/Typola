@@ -37,6 +37,8 @@ All notable changes to this project will be documented in this file.
 
 - 修复本地 HTML 与产物打开体验：启动时会展开上次工作区文件树；HTML 文件默认进入预览而不是源码；右侧 HTML 预览会压缩常见宽内容并用浏览器打开 file URL；产物中心图片默认调用系统图片工具打开。
 - 调整 HTML 与文件操作体验：HTML 预览回到中间主栏并可与源码模式来回切换；HTML 翻页桥接会同时派发到 window/document/body；产物中心和文件树右键菜单新增“打开所在文件夹”等有效操作。
+- 修复 Windows 上点击「浏览器/系统默认应用打开」报「Not allowed to open path \\?\D」的问题：根因是 `tauri-plugin-opener` 的 `opener:scope` 用 `std::fs::canonicalize` 把绝对路径变成 Windows device path，跟 capabilities 里 `$HOME`/`$DESKTOP` 等 glob 永远匹配不上。新增自定义 Rust 命令 `open_path_external` 走 `tauri_plugin_opener::open_path` crate 级 helper(直接用 ShellExecuteW,不经 scope 校验),前后端都接入新命令。
+- HTML 演示模式源码/预览切换按钮的 active 状态改为 `theme-paper` 文字色,在亮、暗主题下与 `--theme-accent` 背景都满足对比度,不再有橙色背景配糊字。
 - 修复浮动大纲误把 fenced code block 内的 `#` 行识别为标题、导致点击大纲跳转偏移的问题；工具栏 hover 提示改为顶层浮层显示，并按当前界面语言展示不含快捷键的文案。
 - 修复选中文字后的 AI 浮条被主题按钮样式撑满整屏的问题；浮条现在按内容宽度贴近选区上方显示，并提升 CM6 / Vditor / 原生选区高亮对比度，方便辨认已选文本。
 - 素笺主题：把 `selection` 由 `#ead8ca`（带粉感的桃色）改为 `#e3dccf`，更接近 Claude 设计语言的低饱和暖灰选中态。
