@@ -1,4 +1,4 @@
-import { Archive, FileText, GitCompare, RefreshCw, RotateCcw, Search, Trash2, Undo2, X } from 'lucide-react';
+import { Archive, Eye, FileText, GitCompare, RefreshCw, RotateCcw, Search, Trash2, Undo2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ArtifactRecord, ArtifactViewMode } from '../../services/artifacts/types';
 import { artifactBasename } from '../../services/artifacts/manifest';
@@ -15,6 +15,8 @@ type ArtifactCenterPanelProps = {
   onUndoOverwrite: (record: ArtifactRecord) => void;
   onRefresh: () => void;
   onClose: () => void;
+  /** Issue #156 §12.2:HTML/HTM 产物入口预览右侧面板。 */
+  onPreviewHtml?: (path: string) => void;
 };
 
 function kindLabel(kind: string): string {
@@ -30,6 +32,10 @@ function kindLabel(kind: string): string {
     unknown: '文件',
   };
   return labels[kind] ?? kind;
+}
+
+function isHtmlKind(kind: string): boolean {
+  return kind === 'html';
 }
 
 function statusLabel(status: string): string {
@@ -61,6 +67,7 @@ export function ArtifactCenterPanel({
   onUndoOverwrite,
   onRefresh,
   onClose,
+  onPreviewHtml,
 }: ArtifactCenterPanelProps) {
   const [mode, setMode] = useState<ArtifactViewMode>('session');
   const [query, setQuery] = useState('');
@@ -149,6 +156,9 @@ export function ArtifactCenterPanel({
                   </div>
                 </div>
                 <div className="artifact-center-card-actions">
+                  {isHtmlKind(manifest.kind) && onPreviewHtml && (
+                    <button type="button" onClick={() => onPreviewHtml(primary)}><Eye size={13} />预览</button>
+                  )}
                   <button type="button" onClick={() => onOpen(primary)}>打开</button>
                   {manifest.actions?.compareWithCurrent && <button type="button" onClick={() => onCompare(primary)}><GitCompare size={13} />对比</button>}
                   {canOverwrite && !overwritten && <button type="button" onClick={() => onOverwrite(record)}><RotateCcw size={13} />覆盖原文</button>}

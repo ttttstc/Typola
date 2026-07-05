@@ -124,6 +124,10 @@ const HtmlPresentationPane = lazy(() =>
   import('../components/HtmlPresentationPane').then((module) => ({ default: module.HtmlPresentationPane })),
 );
 
+const HtmlPreviewPane = lazy(() =>
+  import('../components/HtmlPreviewPane').then((module) => ({ default: module.HtmlPreviewPane })),
+);
+
 const TerminalPanel = lazy(() =>
   import('../components/TerminalPanel').then((module) => ({ default: module.TerminalPanel })),
 );
@@ -203,6 +207,7 @@ export function AppLayout() {
     setFoldedHeadings((prev) => sameFoldSet(prev, next) ? prev : new Set(next));
   }, []);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
+  const [htmlPreviewTarget, setHtmlPreviewTarget] = useState<string | null>(null);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
@@ -255,10 +260,10 @@ export function AppLayout() {
   // 模式 ref 解决「getDefaultRightPanelWidth 在 rightPanelMode 声明前定义」的问题。
   const rightPanelModeRef = useRef<RightPanelMode>('none');
   const getDefaultRightPanelWidth = useCallback(() => {
-    // 模式分支:word/wechat 跟编辑器 1:1(可用空间均分);其他模式跟左栏一致 360。
+    // 模式分支:word/wechat/htmlPreview 跟编辑器 1:1(可用空间均分);其他模式跟左栏一致 360。
     const containerWidth = mainContentRef.current?.getBoundingClientRect().width ?? window.innerWidth;
     const mode = rightPanelModeRef.current;
-    if (mode === 'word' || mode === 'wechat') {
+    if (mode === 'word' || mode === 'wechat' || mode === 'htmlPreview') {
       const available = containerWidth - WORKSPACE_PANEL_DEFAULT_WIDTH - RIGHT_PANEL_RESIZER_GAP;
       const target = Math.round(available / 2);
       return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, target));
@@ -1448,6 +1453,7 @@ export function AppLayout() {
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
     rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
+    rightPanelMode === 'htmlPreview' && !isDocx ? 'html-preview-open' : '',
     leftRailMode !== 'none' ? 'left-panel-open' : '',
     leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
@@ -1590,7 +1596,23 @@ export function AppLayout() {
       onUndoOverwrite={(record) => { void handleUndoArtifactOverwrite(record); }}
       onRefresh={refreshArtifactLibrary}
       onClose={() => setRightPanelMode('none')}
+      onPreviewHtml={(path) => {
+        setHtmlPreviewTarget(path);
+        setRightPanelMode('htmlPreview');
+      }}
     />
+  ) : rightPanelMode === 'htmlPreview' && htmlPreviewTarget && !isDocx ? (
+    <Suspense fallback={<aside className="html-preview-pane" aria-label="HTML 预览" />}>
+      <HtmlPreviewPane
+        filePath={htmlPreviewTarget}
+        fileName={htmlPreviewTarget.split(/[\\/]/).pop()}
+        onBackToArtifacts={() => setRightPanelMode('artifacts')}
+        onClose={() => {
+          setHtmlPreviewTarget(null);
+          setRightPanelMode('none');
+        }}
+      />
+    </Suspense>
   ) : null;
 
   const docxPane = (
