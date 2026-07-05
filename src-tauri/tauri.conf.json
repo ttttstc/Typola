@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Typola",
-  "version": "0.3.21",
+  "version": "2.0.4",
   "identifier": "com.typola.reader",
   "build": {
     "frontendDist": "../dist",
@@ -50,7 +50,7 @@
       "endpoints": [
         "https://github.com/ttttstc/Typola/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMxNEI4NzA3NjM0NUZFREQKUldUZC9rVmpCNGRMTWFQQ0xaUTNTV2U5RFhGcWxpeUZTVG9LajJ4ZDdZOHhqUHBxUDB5b095cG4K"
+      "pubkey": ""
     }
   },
     "bundle": {

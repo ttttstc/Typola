@@ -2,9 +2,9 @@
 
 > 中文 · [English](./README.en.md)
 
-**Typola 是一个把 Markdown 写作、AI 改稿和文档交付放进同一个窗口的桌面工作台。**
+**Typola 是一个面向 Windows 的 Markdown 写作、AI 改稿和文档交付桌面工作台。**
 
-写文档最烦的往往不是“写”，而是在编辑器、AI 网页、终端、预览工具和导出工具之间来回搬运。Typola 想把这些碎片收回来：你可以在这里写 Markdown，选中一段让 AI 润色，把一堆材料变成报告 / PPT / HTML，给草稿加审阅意见，最后导出 PDF、Word、HTML 或 review.md。
+写文档最烦的往往不是“写”，而是在编辑器、AI 网页、终端、预览工具和导出工具之间来回搬运。Typola 想把这些碎片收回来：你可以在这里写 Markdown，选中一段让 AI 润色，把一堆材料变成报告 / PPT / HTML，给草稿加检视意见，最后导出 PDF、Word、HTML 或 review.md。
 
 更重要的是，AI 生成的内容不会困在聊天记录里。它会变成你本地工作目录里的文件：能打开、对比、归档、覆盖原文，也能撤销覆盖。
 
@@ -24,46 +24,50 @@
 
 ### 写作与阅读
 
-- Markdown live preview：边写边看接近最终阅读效果。
-- 支持源码模式、文件内查找替换、快速打开、编辑辅助、文档统计、同步滚动和大纲跳转。
-- 支持任务列表、表格、代码块、图片、KaTeX 数学公式和 Mermaid 图表。
+- 默认使用 CM6 live preview 编辑内核：边写边看接近最终阅读效果；Vditor WYSIWYG 仍可作为本地过渡回退。
+- 支持阅读 / 心流 / 检视三种文档模式、源码模式、文件内查找替换、快速打开、编辑辅助、文档统计、同步滚动和浮动大纲跳转。
+- 支持任务列表、表格、代码块、图片、KaTeX 数学公式和 Mermaid 图表；大纲会避开 fenced code block 内的 `#`。
 - 图片支持本地相对路径、剪贴板粘贴保存、远程图片预览与导出。
 - 多文件 tab、文件树、拖拽打开、未保存关闭确认，适合日常长文档工作。
+- 内置素笺、深海、墨韵、抽象、粗野五套主题，并覆盖编辑器、AI 浮层、检视标注与终端配色。
 
 ### AI 改稿与审阅
 
-- 选中文本后出现浮条，可执行润色、改写、缩写、扩写、校对、解释术语、自定义请求和添加检视意见。
+- 选中文本后出现贴近选区的浮条，可执行润色、解释术语和添加检视意见；完整改写、缩写、扩写、校对和自定义请求保留在右键 / `Ctrl+K` 菜单中。
+- 选区会以差异颜色标识，方便确认 AI 操作作用范围。
 - 改稿结果以差异卡展示，确认后再替换正文，避免 AI 直接改坏原文。
-- AI 修改会保存快照，`Ctrl/Cmd+Z` 可以一步步撤销。
+- AI 修改会保存快照，`Ctrl+Z` 可以一步步撤销。
 - 检视意见可以集中管理，也可以导出 review.md，方便给协作者或继续交给 AI 处理。
 
 ### AI 工作台
 
 - 支持 Claude Code 与 OpenCode，在底部轻量切换。
-- 支持多轮对话、多会话切换、会话重命名、停止生成和继续提问。
+- Claude Code 使用 headless stream-json 链路，OpenCode 使用 `opencode run` JSON 链路；Codex CLI 目前可检测但不作为可发送 Provider。
+- 支持多轮对话、Provider 切换确认、停止生成、继续提问和工作区切换。
 - AI 的思考、正文、工具调用和问题表单会以应用内卡片展示；低关注度的工具调用默认折叠，不刷屏。
-- 支持当前文档、附件和工作目录上下文，让 AI 更容易围绕正在写的材料工作。
+- 支持当前文档、附件、可见 context chips、`.mcp.json` 和 Plugin directory，让 AI 更容易围绕正在写的材料工作。
 - 如果 AI 需要你补充信息，会显示可填写表单，提交后继续当前任务。
 
 ### SkillHub 与产物中心
 
 - 内置报告生成、PPT 制作、HTML 制作等场景入口。
-- 系统推荐的 skill 会显示安装状态；未安装时提供安装引导，已安装后可直接使用。
-- 用户也可以把本机已有 skill 添加到场景模板中。
-- AI 生成的文件会统一进入当前工作目录的 `.typola-output`，不再散落在聊天记录里。
+- Claude Skill 与 OpenCode command 会按当前 Provider 分开扫描和展示；系统推荐项会显示安装状态，未安装时提供安装 / 配置引导。
+- 用户也可以把本机已有 skill / command 添加到场景模板中。
+- AI 生成的文件会统一进入当前 AI 工作区的 `.typola-output/<conversationId>/`，不再散落在聊天记录里。
 - 右侧产物中心可查看当前会话或全部产物，支持打开、对比、归档、删除、覆盖原文和撤销覆盖。
 
 ### 导出与交付
 
 - PDF 后台导出，成功或失败用右上角通知提示，不打断写作。
-- Word 导出支持纸张预览与 `.docx` 输出。
-- HTML 支持完整导出、富文本复制和公众号样式预览。
-- `.docx` 文件可作为只读预览打开。
+- Word 导出支持纸张预览、自定义导出预设与 `.docx` 输出。
+- HTML 支持完整导出、富文本复制、公众号样式预览和浏览器打开预览。
+- Markdown / HTML / Word / PDF 导出共用 Markdown source 渲染桥接，减少编辑器 DOM 差异。
+- `.docx` 文件可作为只读预览打开，HTML 文档可进入阅读 / 编辑链路。
 
 ### 桌面体验
 
-- 支持 Windows 和 macOS。
-- 支持文件关联、单实例打开、自动更新。
+- 当前发布面向 Windows。
+- 支持文件关联、单实例打开、启动期 WebView2 Runtime 预检和自动更新。
 - 底部集成终端，可在当前工作目录或当前文件目录启动。
 - 自动保存作为设置项保留，但默认关闭，避免意外覆盖。
 
@@ -83,10 +87,6 @@
 
 > 免安装版不会写入 Program Files，但首次启动时会在 WebView2 Runtime 缺失时先运行随包携带的 WebView2 bootstrapper；如果无网或安装失败，会显性提示用户先安装 WebView2，并给出官方安装入口。`Start-Typola.cmd` 仅作为诊断兜底保留。
 > 不建议、也不承诺单独分发包内的 `Typola.exe`。Windows 发布物以安装包和 portable zip 为准。
-
-### macOS
-
-下载对应架构的 `.dmg`，打开后拖拽 `Typola.app` 到 Applications。首次启动如遇安全提示，在系统设置的“隐私与安全性”中允许打开。
 
 ## AI CLI 准备
 
@@ -112,17 +112,17 @@ opencode --version
 
 | 快捷键 | 功能 |
 | --- | --- |
-| `Ctrl/Cmd + O` | 打开文件 |
-| `Ctrl/Cmd + S` | 保存 |
-| `Ctrl/Cmd + Shift + S` | 另存为 |
-| `Ctrl/Cmd + F` / `H` | 查找 / 替换 |
-| `Ctrl/Cmd + Shift + P` | 快速打开 |
-| `Ctrl/Cmd + P` | 导出 PDF |
-| `Ctrl/Cmd + Shift + I` | 编辑辅助 |
-| `Ctrl/Cmd + K` | 对选区打开 AI 动作菜单 |
-| `Ctrl/Cmd + Z` | 撤销，包含 AI 修改快照 |
+| `Ctrl + O` | 打开文件 |
+| `Ctrl + S` | 保存 |
+| `Ctrl + Shift + S` | 另存为 |
+| `Ctrl + F` / `H` | 查找 / 替换 |
+| `Ctrl + Shift + P` | 快速打开 |
+| `Ctrl + P` | 导出 PDF |
+| `Ctrl + Shift + I` | 编辑辅助 |
+| `Ctrl + K` | 对选区打开 AI 动作菜单 |
+| `Ctrl + Z` | 撤销，包含 AI 修改快照 |
 | `Shift + A` | 切换心流模式 |
-| `Ctrl/Cmd + ,` | 打开设置 |
+| `Ctrl + ,` | 打开设置 |
 
 ## 开发
 
@@ -156,7 +156,6 @@ npm run tauri:build:update     # 带更新签名的发布构建
 - Windows NSIS 安装包：`src-tauri/target/release/bundle/nsis/`
 - Windows MSI 安装包：`src-tauri/target/release/bundle/msi/`
 - Windows 免安装包：`src-tauri/target/release/bundle/portable/`
-- macOS：CI 产出 `.dmg` 与 portable zip
 
 ## 项目结构
 

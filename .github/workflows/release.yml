@@ -14,21 +14,7 @@ concurrency:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-            target: aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-            target: x86_64-apple-darwin
-          - platform: windows-latest
-            args: ''
-            target: ''
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -37,8 +23,6 @@ jobs:
           version: 10
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -49,21 +33,18 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Typola ${{ github.ref_name }}'
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
-          args: ${{ matrix.args }}
+          args: ''
 
       - name: Upload portable asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
-          TYPOLA_PORTABLE_TARGET: ${{ matrix.target }}
         run: node scripts/upload-portable-release.mjs
 
   publish:
@@ -95,7 +76,7 @@ jobs:
           TYPOLA_UPDATE_REPO="https://github.com/$REPO" \
           TYPOLA_MANIFEST_OUTPUT=latest.json \
           TYPOLA_GITEE_MANIFEST_OUTPUT=latest-gitee.json \
-          TYPOLA_REQUIRE_PLATFORMS="darwin-aarch64,darwin-x86_64,windows-x86_64" \
+          TYPOLA_REQUIRE_PLATFORMS="windows-x86_64" \
           npm run updater:manifest
 
       - name: Upload latest.json and publish release
@@ -195,7 +176,7 @@ jobs:
           TYPOLA_UPDATE_GITEE_REPO="https://gitee.com/${REPO}" \
           TYPOLA_MANIFEST_OUTPUT=/tmp/latest-github.json \
           TYPOLA_GITEE_MANIFEST_OUTPUT=latest-gitee.json \
-          TYPOLA_REQUIRE_PLATFORMS="darwin-aarch64,darwin-x86_64,windows-x86_64" \
+          TYPOLA_REQUIRE_PLATFORMS="windows-x86_64" \
           npm run updater:manifest
 
           # Upload Gitee latest.json (named latest.json on Gitee)
