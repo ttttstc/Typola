@@ -56,7 +56,7 @@
     "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "resources": [
       "resources/MicrosoftEdgeWebview2Setup.exe"
     ],
