@@ -145,7 +145,12 @@ export function SelectionFloatingBar({ rect, hasSelection, stableTick, onPick }:
       className="selection-floating-bar"
       role="toolbar"
       aria-label="选区 AI 动作"
-      style={{ left: initLeft, top: initTop }}
+      style={{
+        left: initLeft,
+        top: initTop,
+        width: 'max-content',
+        maxWidth: 'calc(100vw - 12px)',
+      }}
       // 阻止 mousedown 默认行为,免得点浮条按钮时把编辑器选区清掉
       onMouseDown={(event) => event.preventDefault()}
     >
@@ -157,6 +162,7 @@ export function SelectionFloatingBar({ rect, hasSelection, stableTick, onPick }:
             key={id}
             type="button"
             className="selection-floating-bar-item"
+            style={{ flex: '0 0 auto', width: 'auto' }}
             onClick={() => handlePick(id)}
             title={action.label}
             aria-label={action.label}

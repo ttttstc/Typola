@@ -224,7 +224,7 @@ const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
     preview: {
       canvas: '#11161c',
       paper: '#171d24',
-      accent: '#7fb4d6',
+      accent: '#5db8c4',
     },
     core: {
       canvas: '#11161c',
@@ -233,8 +233,8 @@ const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
       textPrimary: '#e8edf2',
       textSecondary: '#a0a9b2',
       border: '#303942',
-      accent: '#7fb4d6',
-      selection: '#293d4c',
+      accent: '#5db8c4',
+      selection: '#2c5466',
       success: '#7fb09a',
       danger: '#b17a5a',
       warning: '#c8985e',
