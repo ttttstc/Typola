@@ -362,8 +362,8 @@ export function SkillHubPanel({
               <button
                 type="button"
                 key={scene.id}
+                data-scene-id={scene.id}
                 className="skill-hub-scene-card"
-                style={{ '--scene-accent': scene.accent } as React.CSSProperties}
                 onClick={() => setSelectedSceneId(scene.id)}
               >
                 <span className="skill-hub-scene-icon" aria-hidden>

@@ -12,7 +12,7 @@ import {
 } from './themeRegistry';
 
 describe('themeRegistry', () => {
-  it('ships the three complete built-in themes with Plain Paper as the default', () => {
+  it('ships the five complete built-in themes with Plain Paper as the default', () => {
     const themes = listThemeDefinitions();
 
     expect(DEFAULT_THEME_ID).toBe('plain-paper');
@@ -20,8 +20,10 @@ describe('themeRegistry', () => {
       'plain-paper',
       'night-current',
       'ink-basin',
+      'abstract',
+      'brutalist',
     ]);
-    expect(themes.map((theme) => theme.scheme)).toEqual(['light', 'dark', 'light']);
+    expect(themes.map((theme) => theme.scheme)).toEqual(['light', 'dark', 'light', 'light', 'light']);
   });
 
   it('falls back to the default theme for unknown persisted values', () => {
@@ -37,7 +39,7 @@ describe('themeRegistry', () => {
     expect(tokens.editor.caret).toBe(theme.core.accent);
     expect(tokens.markdown.link).toBe(theme.core.accent);
     expect(tokens.terminal.background).toBe(theme.overrides?.terminal?.background);
-    expect(tokens.terminal.brightBlue).toBe('#91bef0');
+    expect(tokens.terminal.brightBlue).toBe('#9dc8e4');
     expect(tokens.ai.deletedBg).toContain(theme.core.aiDeleted);
     expect(tokens.ai.reviewMarkBgStrong).toBeDefined();
   });
@@ -48,8 +50,18 @@ describe('themeRegistry', () => {
     expect(getVditorPreviewTheme('night-current')).toBe('dark');
     expect(getVditorHighlightStyle('night-current')).toBe('github-dark');
     expect(resolveTerminalTheme('night-current')).toMatchObject({
-      background: '#101821',
-      brightWhite: '#f2f6f8',
+      background: '#11161c',
+      brightWhite: '#f3f6f8',
     });
+  });
+
+  it('keeps the abstract theme inside the red, blue, yellow, black, and white palette', () => {
+    const tokens = resolveTerminalTheme('abstract');
+
+    expect(getThemeDefinition('abstract').core.surface).toBe('#eeeeea');
+    expect(tokens.green).toBe('#1e5a8a');
+    expect(tokens.brightGreen).toBe('#2e7ab5');
+    expect(tokens.magenta).toBe('#c8311b');
+    expect(tokens.cyan).toBe('#1e5a8a');
   });
 });

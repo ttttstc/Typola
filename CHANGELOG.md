@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨池”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
+- 新增第五套主题「粗野」(id: `brutalist`)：新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
+- 新增第四套主题「抽象」(id: `abstract`)：采用蒙德里安 De Stijl 经典配色 —— 白底 (`#ffffff`) + 黑色网格 (`#1a1a1a`) + 蒙德里安红 (`#c8311b`) / 蓝 (`#1e5a8a`) / 黄 (`#e8b810`) 三原色强调。accent 用红、aiInserted 用蓝、aiDeleted 用红、warning 用黄；终端 ANSI 也按红 / 蓝 / 黄 / 黑 / 白体系对齐，不再出现绿色映射。设置 → 外观 → 主题卡片可直接切换。
+- 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨韵”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
 - 修复 PR #146 主题系统检视意见：补齐旧 `theme: "dark"` 到 `night-current` 的迁移、`npm run build:themes` 生成主题 CSS、主题卡片键盘导航、Vditor / Mermaid / xterm 主题同步，以及 PDF 导出不跟随应用主题的残留清理。
 - 新增 Calm Workspace 动效基础设施：引入 `motion`、`@floating-ui/react` 与 `@formkit/auto-animate`，并提供统一的 MotionProvider / motion token，供后续面板、tooltip 与列表动效复用。
 - AI 工作台补齐 #112 Phase 3：Codex CLI 进入 AI 执行设置的检测卡片与 runtime registry，但保持检测-only，不进入 Composer 可发送 Provider；新增裁剪版 `mocks/` 目录用于后续 parser/golden 回归。
@@ -33,9 +35,17 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 修复浮动大纲误把 fenced code block 内的 `#` 行识别为标题、导致点击大纲跳转偏移的问题；工具栏 hover 提示改为顶层浮层显示，并按当前界面语言展示不含快捷键的文案。
+- 素笺主题：把 `selection` 由 `#ead8ca`（带粉感的桃色）改为 `#e3dccf`，更接近 Claude 设计语言的低饱和暖灰选中态。
+- 深海主题：danger 与 ai-deleted 由玫瑰粉 `#d08a82` 改为暖灰偏珊瑚的 `#bd8a78`，与冷调蓝调色板不再冲突。
+- 墨韵主题：所有 canvas / surface / border / selection / preview.canvas 中带轻微暖色偏移的 hex 全部拉回纯灰（`R = G = B`），杜绝任何第四种颜色。
+- 素笺主题二次收束：把 `danger`/`ai-deleted` 从 `#a6533f` 抬到 `#bd6240`（OKLCH hue 22°→33°，从红-橙过渡区推向橙色），`ai-primary`/`review-mark` 由 `#8a6757` 降饱和到 `#867060`，`selection` 由 `#e3dccf` 进一步降到 `#dad6c9`，warning `#9a6c36` → `#a86d36` 更接近琥珀，去掉残留的粉/桃视觉。
+- 深海主题二次收束：把 `danger`/`ai-deleted` 从 `#bd8a78` 压到 `#b17a5a`（明显橙-棕，pink 接近 0），warning `#c8a46f` → `#c8985e` 推向 amber，整体 warm 色 token 与素笺 sienna 体系对齐，避免在冷蓝调色板中突兀。
+- 清扫 app.css 里散落的硬编码 `oklch(...h=25-30)` 粉色入口：`.skill-hub-error`、`.selection-result-card-error`、`.diff-hunk-delete`、`.review-sidebar-item-tool-danger:hover` 统一跟随 `--theme-danger` token；`.file-tree-icon-doc svg` 由 `h=30` salmon 改为 `h=110` 黄绿，避免残留粉色在场景错误条、选区 AI 错误卡、diff 删除行或文件树 doc 图标上出现。
+- 修复素笺 / 深海下顶部工具栏 active 状态、模式切换器外壳、右栏壳、文件 tab 滑块、编辑器当前行和 SkillHub 场景模板卡片 / badge 仍透出粉色或多色分类块的问题：普通主题改为中性纸面 / 边框层级，抽象主题单独用红、蓝、黄、黑、白表达场景强调。
 
 ### Changed
 
+- 重新收束三套主题配色：默认主题恢复经典 light 的暖白/暖橙层级，深海降低彩色噪声，墨韵改为纯黑白灰体系；状态标签色也改为跟随主题 token，减少同页框体色彩过多的问题。
 - 明确 Windows 分发边界：对外发布物是安装包和 portable zip，包内 `Typola.exe` 不作为单独裸 exe 分发产物。
 - Windows 安装版同时产出 NSIS `setup.exe` 与 `.msi`：WebView2 bootstrapper 会作为资源打进单个安装文件；NSIS 在安装后执行检测，MSI 由应用启动前预检执行检测，不需要用户额外下载第二个安装文件。
 - Windows portable 首选入口改为直接运行 `Typola.exe`：应用会在创建窗口前执行 WebView2 预检，缺失时运行随包 bootstrapper；无网或安装失败时会显性提示用户先安装 WebView2，不再静默退出。

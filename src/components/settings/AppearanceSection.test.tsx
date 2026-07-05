@@ -23,7 +23,7 @@ describe('AppearanceSection', () => {
     host.remove();
   });
 
-  it('renders the three built-in theme cards and applies a theme when clicked', async () => {
+  it('renders the five built-in theme cards and applies a theme when clicked', async () => {
     await act(async () => {
       root.render(React.createElement(AppearanceSection));
     });
@@ -33,6 +33,8 @@ describe('AppearanceSection', () => {
       'plain-paper',
       'night-current',
       'ink-basin',
+      'abstract',
+      'brutalist',
     ]);
 
     await act(async () => {

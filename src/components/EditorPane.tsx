@@ -96,6 +96,13 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
   // 选区浮条状态:跟着 CodeMirror 选区变化重算 rect + hasSelection。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  // 浮条"稳定"计数器:仅在 mouseup 时 +1,让浮条只在松手后开始 debounce。
+  // 拖选过程中(还没 mouseup)即使 selectionchange 频繁触发,stableTick 不变,
+  // 浮条 useEffect 不会重启 timer,不会闪烁、不会盖住后续 mousedown 区域。
+  const floatingStableTickRef = useRef(0);
+  const [floatingStableTick, setFloatingStableTick] = useState(0);
+  // 拖选状态:mousedown → true,mouseup → false。期间禁止任何破坏选区的副作用。
+  const isDraggingRef = useRef(false);
   // 搜索 reveal 期间抑制浮条 —— dispatch 设 selection 会触发同步 updateListener。
   // CodeMirror 的 selectionchange 在 dispatch 后下一个 microtask 触发,250ms 实测足够
   // 覆盖 selection commit + 重排;时间越短偶尔会让浮条闪一下,越长会延迟用户主动选区。
@@ -132,13 +139,29 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
     };
     // CodeMirror 没有 selectionChange 事件,用 document selectionchange 兜底
     const onChange = () => window.requestAnimationFrame(computeFromSelection);
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      // 只追踪编辑器正文内的拖选起始,不要吞掉浮条/菜单/工具栏的 mousedown。
+      if (editorView.contentDOM.contains(target)) {
+        isDraggingRef.current = true;
+      }
+    };
+    const onMouseUp = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      // 松手 → 浮条允许开始 debounce。
+      computeFromSelection();
+      floatingStableTickRef.current += 1;
+      setFloatingStableTick(floatingStableTickRef.current);
+    };
     document.addEventListener('selectionchange', onChange);
-    window.addEventListener('mouseup', onChange);
-    window.addEventListener('keyup', onChange);
+    window.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('mousedown', onMouseDown);
     return () => {
       document.removeEventListener('selectionchange', onChange);
-      window.removeEventListener('mouseup', onChange);
-      window.removeEventListener('keyup', onChange);
+      window.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('mousedown', onMouseDown);
     };
   }, [editorView]);
 
@@ -394,6 +417,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
         <SelectionFloatingBar
           rect={floatingRect}
           hasSelection={floatingHasSelection}
+          stableTick={floatingStableTick}
           onPick={(action, origin) => triggerAIAction(action, origin)}
         />
       )}
