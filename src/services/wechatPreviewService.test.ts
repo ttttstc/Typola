@@ -8,6 +8,7 @@ import {
   createHtmlExportFileName,
   createHtmlExportInlineArticleHtml,
   createHtmlExportPresetTemplateText,
+  createHtmlExportPreviewStyles,
   createHtmlExportResult,
   createWechatExportFileName,
   createWechatArticleStyles,
@@ -207,6 +208,27 @@ describe('wechatPreviewService', () => {
     expect(result.clipboardHtml).not.toContain('url(');
     expect(paragraph.style.color).toBe('rgb(9, 8, 7)');
     expect(paragraph.style.border).toContain('1px solid');
+  });
+
+  it('appends a theme-following dark layer to preview styles only, leaving export hardcoded', () => {
+    const preset = BUILT_IN_HTML_EXPORT_PRESETS.find((item) => item.id === 'html-wechat-style');
+    if (!preset) throw new Error('missing wechat preset');
+
+    const previewStyles = createHtmlExportPreviewStyles(preset);
+    const articleStyles = createHtmlExportArticleStyles(preset);
+
+    // 预览样式 = 预设样式 + 暗色跟随层
+    expect(previewStyles).toContain('.typola-html-article p');
+    expect(previewStyles).toContain("html[data-color-scheme='dark']");
+    expect(previewStyles).toContain('var(--theme-text-primary)');
+    expect(previewStyles).toContain('var(--theme-surface)');
+
+    // 导出路径不应引入主题变量，保持自包含的写死颜色
+    expect(articleStyles).not.toContain("html[data-color-scheme='dark']");
+    expect(articleStyles).not.toContain('var(--theme-');
+    const result = createHtmlExportResult('', '<h1>标题</h1><p>正文</p>', { preset });
+    expect(result.clipboardHtml).not.toContain('var(--theme-');
+    expect(result.clipboardHtml).not.toContain("html[data-color-scheme='dark']");
   });
 
   it('uses the same preset-driven inline article for clipboard and HTML export documents', () => {

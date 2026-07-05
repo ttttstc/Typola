@@ -1649,8 +1649,16 @@ html[data-color-scheme='dark'] .export-menu {
 }
 
 .editor-pane .cm-editor .cm-selectionBackground,
+.editor-pane .cm-editor .cm-content ::selection,
 .editor-pane .cm-editor ::selection {
-  background: color-mix(in oklch, var(--theme-accent) 24%, transparent);
+  background: var(--theme-selection) !important;
+  color: var(--theme-text-primary);
+}
+
+/* 全局选中样式：让选区在所有视图（包括 Vditor）都可见 */
+::selection {
+  background: var(--theme-selection);
+  color: var(--theme-text-primary);
 }
 
 /* CM6 markdown 缂栬緫鍣細瑕嗙洊涓婃柟 .editor-pane .cm-editor 鐨?--font-mono锛?
@@ -1901,7 +1909,7 @@ html[data-color-scheme='dark'] .export-menu {
   width: 100%;
   min-height: 0;
   border: 0;
-  background: #fff;
+  background: var(--theme-paper);
 }
 
 /* ===== HTML Table Viewer (complex table "view original" overlay) ===== */
@@ -2735,7 +2743,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   margin: 0 auto;
   padding: 28px 26px 34px;
   border: 1px solid var(--theme-border-soft);
-  background: #fff;
+  background: var(--theme-paper);
+  color: var(--theme-text-primary);
 }
 
 .wechat-preview-empty,
@@ -3122,7 +3131,7 @@ html[data-theme-id='brutalist'] *::after {
    - 排除大纲(.floating-toc*)、正文文件 tab(.editor-tab*)、skill 项(.skill-hub-item*)、
      文件树(.file-tree-item / .file-tree-folder / .file-tree-action):这些都是「展示控件」,
      不应带硬阴影。skill 场景卡(.skill-hub-scene-card)保留硬阴影 —— 8 个场景入口。 */
-html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action),
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item),
 html[data-theme-id='brutalist'] .skill-hub-scene-card,
 html[data-theme-id='brutalist'] .op-card,
 html[data-theme-id='brutalist'] .artifact-center-card,
@@ -3136,7 +3145,7 @@ html[data-theme-id='brutalist'] .theme-card {
 }
 
 /* 按钮 hover:鼠尾草绿 #4ECDC4 背景 + 黑字 + 抬起; 卡片 hover:抬起 */
-html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):hover:not(:disabled),
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):hover:not(:disabled),
 html[data-theme-id='brutalist'] a:hover {
   background-color: #4ECDC4 !important;
   color: #000 !important;
@@ -3155,7 +3164,7 @@ html[data-theme-id='brutalist'] .theme-card:hover {
   box-shadow: 6px 6px 0 0 #000 !important;
 }
 
-html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):active:not(:disabled),
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):active:not(:disabled),
 html[data-theme-id='brutalist'] a:active {
   background-color: #4ECDC4 !important;
   color: #000 !important;
@@ -8031,8 +8040,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   padding: 14px 14px 18px;
   border: 1px solid var(--theme-border-soft);
   border-radius: 5px;
-  background: #fff;
-  color: #333;
+  background: var(--theme-paper);
+  color: var(--theme-text-primary);
 }
 
 .settings-html-preview-article h1,
@@ -8364,6 +8373,47 @@ html[data-color-scheme='dark'] .word-paper-content h4 {
 html[data-color-scheme='dark'] .word-paper-content th,
 html[data-color-scheme='dark'] .word-paper-content td {
   border-color: var(--theme-border-soft);
+}
+
+/* 暗色下：Word 纸张内容全跟随主题色，覆盖预设 hex */
+html[data-color-scheme='dark'] .word-paper-content,
+html[data-color-scheme='dark'] .word-paper-content p,
+html[data-color-scheme='dark'] .word-paper-content li,
+html[data-color-scheme='dark'] .word-paper-content span,
+html[data-color-scheme='dark'] .word-paper-content td {
+  color: var(--theme-text-primary) !important;
+}
+
+html[data-color-scheme='dark'] .word-paper-content * {
+  background-color: transparent !important;
+}
+
+html[data-color-scheme='dark'] .word-paper-content table {
+  color: var(--theme-text-primary) !important;
+}
+
+html[data-color-scheme='dark'] .word-paper-content th {
+  background-color: var(--theme-surface) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+html[data-color-scheme='dark'] .word-paper-content pre,
+html[data-color-scheme='dark'] .word-paper-content pre code,
+html[data-color-scheme='dark'] .word-paper-content :not(pre) > code {
+  color: var(--theme-text-primary) !important;
+}
+
+html[data-color-scheme='dark'] .word-paper-content blockquote,
+html[data-color-scheme='dark'] .word-paper-content blockquote p {
+  color: var(--theme-text-secondary) !important;
+}
+
+html[data-color-scheme='dark'] .word-paper-content a {
+  color: var(--theme-accent) !important;
+}
+
+html[data-color-scheme='dark'] .word-paper-content hr::before {
+  color: var(--theme-border-soft) !important;
 }
 
 /* ===== Terminal Panel ===== */
@@ -8877,8 +8927,12 @@ html[data-color-scheme='dark'] .word-paper-content td {
   z-index: 905;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
+  width: max-content;
+  inline-size: max-content;
+  max-width: calc(100vw - 12px);
+  max-inline-size: calc(100vw - 12px);
+  gap: 1px;
+  padding: 3px;
   border: 1px solid var(--theme-ai-selection-border);
   border-radius: 10px;
   background: var(--theme-ai-selection-bg);
@@ -8895,9 +8949,12 @@ html[data-color-scheme='dark'] .word-paper-content td {
 .selection-floating-bar-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 11px;
-  min-height: 30px;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px 8px;
+  width: auto;
+  min-width: 0;
+  min-height: 26px;
   border: none;
   border-radius: 7px;
   background: transparent;
@@ -8922,7 +8979,7 @@ html[data-color-scheme='dark'] .word-paper-content td {
 }
 
 .selection-floating-bar-label {
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
