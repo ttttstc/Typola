@@ -1,4 +1,4 @@
-import { Archive, Eye, FileText, GitCompare, RefreshCw, RotateCcw, Search, Trash2, Undo2, X } from 'lucide-react';
+import { Archive, Eye, FileImage, FileText, FolderOpen, GitCompare, RefreshCw, RotateCcw, Search, Trash2, Undo2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ArtifactRecord, ArtifactViewMode } from '../../services/artifacts/types';
 import { artifactBasename } from '../../services/artifacts/manifest';
@@ -15,8 +15,12 @@ type ArtifactCenterPanelProps = {
   onUndoOverwrite: (record: ArtifactRecord) => void;
   onRefresh: () => void;
   onClose: () => void;
+  onOpenExternal?: (path: string) => void;
+  onRevealInFolder?: (path: string) => void;
   /** Issue #156 §12.2:HTML/HTM 产物入口预览右侧面板。 */
   onPreviewHtml?: (path: string) => void;
+  /** Issue #156 §12.2 补充:HTML 产物「源码」按钮 — 打开到主编辑器并切到 source 模式。 */
+  onOpenSource?: (path: string) => void;
 };
 
 function kindLabel(kind: string): string {
@@ -35,11 +39,19 @@ function kindLabel(kind: string): string {
 }
 
 function isHtmlKind(kind: string): boolean {
-  return kind === 'html';
+  return kind === 'html' || kind === 'wechat-html' || kind === 'ppt-html';
 }
 
 function isHtmlPrimary(primary: string): boolean {
   return /\.html?$/i.test(primary);
+}
+
+function isImageKind(kind: string): boolean {
+  return kind === 'asset';
+}
+
+function isImagePrimary(primary: string): boolean {
+  return /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i.test(primary);
 }
 
 function statusLabel(status: string): string {
@@ -71,7 +83,10 @@ export function ArtifactCenterPanel({
   onUndoOverwrite,
   onRefresh,
   onClose,
+  onOpenExternal,
+  onRevealInFolder,
   onPreviewHtml,
+  onOpenSource,
 }: ArtifactCenterPanelProps) {
   const [mode, setMode] = useState<ArtifactViewMode>('session');
   const [query, setQuery] = useState('');
@@ -145,11 +160,17 @@ export function ArtifactCenterPanel({
             // 文件后缀作 fallback,避免 manifest.kind 缺失或异常时仍按 markdown 行为走 onOpen。
             const isHtml = isHtmlKind(manifest.kind) || isHtmlPrimary(primary);
             const htmlPreviewAvailable = isHtml && !!onPreviewHtml;
+            const isImage = isImageKind(manifest.kind) || isImagePrimary(primary);
+            const externalOpenAvailable = isImage && !!onOpenExternal;
             const handlePrimaryAction = htmlPreviewAvailable
               ? () => onPreviewHtml!(primary)
+              : externalOpenAvailable
+                ? () => onOpenExternal!(primary)
               : () => onOpen(primary);
             const primaryActionTitle = htmlPreviewAvailable
               ? `${primary}\n点击在右侧预览`
+              : externalOpenAvailable
+                ? `${primary}\n点击用系统图片工具打开`
               : `${primary}\n点击在主编辑器打开`;
             return (
               <li key={`${primary}-${manifest.updatedAt ?? manifest.createdAt}`} className={`artifact-center-card ${record.legacy ? 'legacy' : ''}`}>
@@ -172,13 +193,22 @@ export function ArtifactCenterPanel({
                 <div className="artifact-center-card-actions">
                   {htmlPreviewAvailable ? (
                     <button type="button" className="primary" onClick={() => onPreviewHtml!(primary)}><Eye size={13} />预览</button>
+                  ) : externalOpenAvailable ? (
+                    <button type="button" className="primary" onClick={() => onOpenExternal!(primary)}><FileImage size={13} />打开</button>
                   ) : (
                     <button type="button" className="primary" onClick={() => onOpen(primary)}>打开</button>
                   )}
                   {isHtml && (
-                    <button type="button" onClick={() => onOpen(primary)} title="在主编辑器打开源码">源码</button>
+                    <button
+                      type="button"
+                      onClick={() => (onOpenSource ?? onOpen)(primary)}
+                      title={onOpenSource ? '在主编辑器打开源码' : '在主编辑器打开'}
+                    >
+                      源码
+                    </button>
                   )}
                   {manifest.actions?.compareWithCurrent && <button type="button" onClick={() => onCompare(primary)}><GitCompare size={13} />对比</button>}
+                  {onRevealInFolder && <button type="button" onClick={() => onRevealInFolder(primary)}><FolderOpen size={13} />所在文件夹</button>}
                   {canOverwrite && !overwritten && <button type="button" onClick={() => onOverwrite(record)}><RotateCcw size={13} />覆盖原文</button>}
                   {overwritten && <button type="button" onClick={() => onUndoOverwrite(record)}><Undo2 size={13} />撤销覆盖</button>}
                   {manifest.actions?.archive && <button type="button" onClick={() => onArchive(primary)}><Archive size={13} />归档</button>}

@@ -280,6 +280,24 @@ function injectBaseTag(html: string, baseHref?: string): string {
   return `<!doctype html><html><head>${baseTag}</head><body>${html}</body></html>`;
 }
 
+function injectPreviewViewportStyle(html: string): string {
+  const style = `<style data-typola-html-preview-fit>
+html,body{max-width:100%;overflow-x:auto;}
+img,video,canvas,svg,iframe{max-width:100%;height:auto;}
+table{max-width:100%;overflow-wrap:anywhere;}
+pre,code{white-space:pre-wrap;overflow-wrap:anywhere;}
+*{box-sizing:border-box;}
+</style>`;
+  if (html.includes('data-typola-html-preview-fit')) return html;
+  if (/<head\b[^>]*>/i.test(html)) {
+    return html.replace(/<head\b[^>]*>/i, (match) => `${match}\n${style}`);
+  }
+  if (/<html\b[^>]*>/i.test(html)) {
+    return html.replace(/<html\b[^>]*>/i, (match) => `${match}\n<head>${style}</head>`);
+  }
+  return `<!doctype html><html><head>${style}</head><body>${html}</body></html>`;
+}
+
 // 给一段 HTML 源(完整 HTML 或片段)注入 base href 并补齐文档骨架。
 // 不读任何外部资源,适合在 Tauri 之外的纯前端/jsdom 环境跑测试。
 export function buildHtmlPreviewDocument(source: string, options: HtmlPreviewBuildOptions = {}): string {
@@ -289,7 +307,7 @@ export function buildHtmlPreviewDocument(source: string, options: HtmlPreviewBui
     ? source
     : `<!doctype html><html><head></head><body>${source}</body></html>`;
 
-  return injectBaseTag(shell, baseHref);
+  return injectPreviewViewportStyle(injectBaseTag(shell, baseHref));
 }
 
 // 在 buildHtmlPreviewDocument 基础上,额外把本地 CSS / JS / 图片 / 媒体资源

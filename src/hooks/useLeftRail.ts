@@ -8,6 +8,7 @@ type UseLeftRailOptions = {
   defaultWidth: number;
   minWidth: number;
   maxWidth: number;
+  initialMode?: LeftRailMode;
 };
 
 type UseLeftRailResult = {
@@ -29,8 +30,9 @@ export function useLeftRail({
   defaultWidth,
   minWidth,
   maxWidth,
+  initialMode = 'none',
 }: UseLeftRailOptions): UseLeftRailResult {
-  const [leftRailMode, setLeftRailMode] = useState<LeftRailMode>('none');
+  const [leftRailMode, setLeftRailMode] = useState<LeftRailMode>(initialMode);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(defaultWidth);
   const [leftResizing, setLeftResizing] = useState<LeftRailMode>('none');
 

@@ -36,7 +36,12 @@ function dirname(path: string): string {
   return index >= 0 ? path.slice(0, index) : '';
 }
 
-export function HtmlPreviewPane({ filePath, fileName, onBackToArtifacts, onClose }: HtmlPreviewPaneProps) {
+export function HtmlPreviewPane({
+  filePath,
+  fileName,
+  onBackToArtifacts,
+  onClose,
+}: HtmlPreviewPaneProps) {
   const [state, setState] = useState<HtmlPreviewState>({ status: 'idle', srcDoc: '' });
 
   const loadPreview = useCallback(async () => {
@@ -83,6 +88,8 @@ export function HtmlPreviewPane({ filePath, fileName, onBackToArtifacts, onClose
 
   const handleOpenInBrowser = useCallback(async () => {
     try {
+      // 用 openPath 而非 openUrl(file://):后者受 allow-default-urls 限制(只允许
+      // mailto/tel/http/https),file:// 不在列,会抛「URL not allowed」。
       const { openPath } = await import('@tauri-apps/plugin-opener');
       await openPath(filePath);
     } catch (error) {

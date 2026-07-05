@@ -42,8 +42,16 @@ const BRIDGE_SCRIPT = `<script data-typola-bridge="${HTML_PRESENTATION_BRIDGE_SO
     const target = document.activeElement && document.activeElement !== document.body
       ? document.activeElement
       : document;
-    target.dispatchEvent(new KeyboardEvent('keydown', eventInit));
-    target.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+    const down = new KeyboardEvent('keydown', eventInit);
+    const up = new KeyboardEvent('keyup', eventInit);
+    target.dispatchEvent(down);
+    target.dispatchEvent(up);
+    document.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+    document.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+    document.body?.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+    document.body?.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+    window.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+    window.dispatchEvent(new KeyboardEvent('keyup', eventInit));
   }
 
   window.addEventListener('message', (event) => {

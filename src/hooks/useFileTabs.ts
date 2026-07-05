@@ -212,7 +212,7 @@ export function useFileTabs({
     }
     setDiskChangeMessage('');
     setTransientMessage('');
-    setHtmlPresentationVisible(false);
+    setHtmlPresentationVisible(opened.fileType === 'html');
     setFindVisible(false);
     if (opened.fileType === 'docx') {
       setRightPanelMode('none');
@@ -267,7 +267,7 @@ export function useFileTabs({
     setDiskChangeMessage('');
     setTransientMessage('');
     setFindVisible(false);
-    setHtmlPresentationVisible(false);
+    setHtmlPresentationVisible(tab.file.fileType === 'html');
     if (tab.file.fileType === 'docx') {
       setRightPanelMode('none');
     }

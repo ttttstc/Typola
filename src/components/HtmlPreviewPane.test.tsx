@@ -136,6 +136,29 @@ describe('HtmlPreviewPane (Issue #156)', () => {
     expect(opener.openPath).toHaveBeenCalledWith('/tmp/x.html');
   });
 
+  it('forwards Windows paths unchanged to opener.openPath', async () => {
+    const opener = await import('@tauri-apps/plugin-opener');
+
+    await act(async () => {
+      root.render(
+        <HtmlPreviewPane
+          filePath={String.raw`C:\用户资料\demo deck\x.html`}
+          onBackToArtifacts={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+      await flushPromises();
+    });
+
+    await act(async () => {
+      queryButton(host, '在浏览器打开').click();
+      await flushPromises();
+    });
+
+    // openPath 接受原始 Windows 路径(由 Tauri 自己做 normalize),不需要我们再 URL-encode。
+    expect(opener.openPath).toHaveBeenCalledWith(String.raw`C:\用户资料\demo deck\x.html`);
+  });
+
   it('clears the preview when the close button is clicked', async () => {
     const onBackToArtifacts = vi.fn();
     const onClose = vi.fn();

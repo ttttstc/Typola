@@ -35,6 +35,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复本地 HTML 与产物打开体验：启动时会展开上次工作区文件树；HTML 文件默认进入预览而不是源码；右侧 HTML 预览会压缩常见宽内容并用浏览器打开 file URL；产物中心图片默认调用系统图片工具打开。
+- 调整 HTML 与文件操作体验：HTML 预览回到中间主栏并可与源码模式来回切换；HTML 翻页桥接会同时派发到 window/document/body；产物中心和文件树右键菜单新增“打开所在文件夹”等有效操作。
 - 修复浮动大纲误把 fenced code block 内的 `#` 行识别为标题、导致点击大纲跳转偏移的问题；工具栏 hover 提示改为顶层浮层显示，并按当前界面语言展示不含快捷键的文案。
 - 修复选中文字后的 AI 浮条被主题按钮样式撑满整屏的问题；浮条现在按内容宽度贴近选区上方显示，并提升 CM6 / Vditor / 原生选区高亮对比度，方便辨认已选文本。
 - 素笺主题：把 `selection` 由 `#ead8ca`（带粉感的桃色）改为 `#e3dccf`，更接近 Claude 设计语言的低饱和暖灰选中态。
