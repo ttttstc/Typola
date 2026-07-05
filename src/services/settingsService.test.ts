@@ -15,6 +15,7 @@ import {
   getCustomHtmlExportPresetLimit,
   getHtmlExportPreset,
   getHtmlExportPresetConfig,
+  getLastWorkspaceRoot,
   getSettings,
   listEnabledExportPresets,
   listEnabledHtmlExportPresets,
@@ -29,6 +30,7 @@ import {
   setExportPresetEnabled,
   setHtmlExportPreset,
   setHtmlExportPresetEnabled,
+  setLastWorkspaceRoot,
   updateSettings,
 } from './settingsService';
 import type { CustomHtmlExportPresetId, HtmlExportPreset } from './htmlExportPresets';
@@ -651,5 +653,32 @@ describe('settingsService', () => {
     expect(getSettings().customExportPresets['custom:team-brief']).toBeUndefined();
     expect(getSettings().disabledExportPresetIds).toContain('report');
     expect(listEnabledExportPresets().map((preset) => preset.id)).not.toContain('report');
+  });
+});
+
+describe('workspace root persistence', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('returns an empty string when nothing is persisted', () => {
+    expect(getLastWorkspaceRoot()).toBe('');
+  });
+
+  it('round-trips a workspace root through localStorage', () => {
+    setLastWorkspaceRoot('D:/work/project');
+    expect(getLastWorkspaceRoot()).toBe('D:/work/project');
+  });
+
+  it('clears the stored value when given an empty string', () => {
+    setLastWorkspaceRoot('D:/work/project');
+    setLastWorkspaceRoot('   ');
+    expect(getLastWorkspaceRoot()).toBe('');
+    expect(localStorage.getItem('typola-last-workspace-root')).toBeNull();
+  });
+
+  it('trims surrounding whitespace', () => {
+    setLastWorkspaceRoot('  D:/work/project  ');
+    expect(getLastWorkspaceRoot()).toBe('D:/work/project');
   });
 });

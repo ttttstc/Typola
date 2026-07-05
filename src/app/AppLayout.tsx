@@ -6,8 +6,10 @@ import {
   getExportPresetConfig,
   clearLastOpenedPath,
   getLastOpenedPath,
+  getLastWorkspaceRoot,
   resolvePreviewFontFamily,
   resolvePreviewHeadingFontFamily,
+  setLastWorkspaceRoot,
 } from '../services/settingsService';
 import { firstOpenableDocumentPath, isOpenableDocumentPath } from '../services/fileDrop';
 import { useSettings } from '../hooks/useSettings';
@@ -189,7 +191,11 @@ export function AppLayout() {
       requestId: (current?.requestId ?? 0) + 1,
     }));
   }, []);
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [workspaceRoot, setWorkspaceRootState] = useState(() => getLastWorkspaceRoot());
+  const setWorkspaceRoot = useCallback((next: string) => {
+    setWorkspaceRootState(next);
+    setLastWorkspaceRoot(next);
+  }, []);
   const [settingsVisible, setSettingsVisible] = useState(false);
   // P1-E:从外部(场景卡)跳转时指定的初始段
   const [settingsInitialSection, setSettingsInitialSection] = useState<'aiCli' | undefined>(undefined);
