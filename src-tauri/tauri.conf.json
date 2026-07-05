@@ -49,8 +49,7 @@
     "updater": {
       "endpoints": [
         "https://github.com/ttttstc/Typola/releases/latest/download/latest.json"
-      ],
-      "pubkey": ""
+      ]
     }
   },
     "bundle": {
