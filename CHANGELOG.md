@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 修复浮动大纲误把 fenced code block 内的 `#` 行识别为标题、导致点击大纲跳转偏移的问题；工具栏 hover 提示改为顶层浮层显示，并按当前界面语言展示不含快捷键的文案。
+- 修复选中文字后的 AI 浮条被主题按钮样式撑满整屏的问题；浮条现在按内容宽度贴近选区上方显示，并提升 CM6 / Vditor / 原生选区高亮对比度，方便辨认已选文本。
 - 素笺主题：把 `selection` 由 `#ead8ca`（带粉感的桃色）改为 `#e3dccf`，更接近 Claude 设计语言的低饱和暖灰选中态。
 - 深海主题：danger 与 ai-deleted 由玫瑰粉 `#d08a82` 改为暖灰偏珊瑚的 `#bd8a78`，与冷调蓝调色板不再冲突。
 - 墨韵主题：所有 canvas / surface / border / selection / preview.canvas 中带轻微暖色偏移的 hex 全部拉回纯灰（`R = G = B`），杜绝任何第四种颜色。

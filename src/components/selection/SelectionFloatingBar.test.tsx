@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SelectionFloatingBar } from './SelectionFloatingBar';
+import '../../styles/app.css';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -61,6 +62,24 @@ describe('SelectionFloatingBar', () => {
     expect(bar).not.toBeNull();
     // 3 个高频动作按钮(润色/名词解释/加检视意见),其余走右键菜单
     expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
+  });
+
+  it('回归:浮条和按钮宽度按内容收缩,不被主题按钮规则撑满', () => {
+    act(() => {
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
+    });
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    const bar = host.querySelector('.selection-floating-bar');
+    const item = host.querySelector('.selection-floating-bar-item');
+
+    expect(bar).not.toBeNull();
+    expect((bar as HTMLElement).style.width).toBe('max-content');
+    expect((bar as HTMLElement).style.maxWidth).toBe('calc(100vw - 12px)');
+    expect((item as HTMLElement).style.flex).toBe('0 0 auto');
+    expect((item as HTMLElement).style.width).toBe('auto');
   });
 
   it('点动作按钮 → onPick(action, origin) 带视口坐标', () => {

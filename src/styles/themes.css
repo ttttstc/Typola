@@ -65,10 +65,10 @@ html[data-theme-id='night-current'] {
   --theme-border: #303942;
   --theme-border-soft: color-mix(in oklch, var(--theme-border) 58%, transparent);
   --theme-border-hover: color-mix(in oklch, var(--theme-border) 70%, var(--theme-text-primary));
-  --theme-accent: #7fb4d6;
+  --theme-accent: #5db8c4;
   --theme-accent-soft: color-mix(in oklch, var(--theme-accent) 10%, transparent);
   --theme-accent-muted: color-mix(in oklch, var(--theme-accent) 42%, var(--theme-border));
-  --theme-selection: #293d4c;
+  --theme-selection: #2c5466;
   --theme-success: #7fb09a;
   --theme-danger: #b17a5a;
   --theme-warning: #c8985e;
