@@ -38,6 +38,10 @@ function isHtmlKind(kind: string): boolean {
   return kind === 'html';
 }
 
+function isHtmlPrimary(primary: string): boolean {
+  return /\.html?$/i.test(primary);
+}
+
 function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     running: '生成中',
@@ -137,12 +141,22 @@ export function ArtifactCenterPanel({
             const primary = manifest.primaryFile;
             const canOverwrite = isOverwritableArtifact(record);
             const overwritten = Boolean(manifest.overwrite?.backupPath);
+            // Issue #156 §12.2:HTML/HTM 产物默认动作是预览,不是源码打开。
+            // 文件后缀作 fallback,避免 manifest.kind 缺失或异常时仍按 markdown 行为走 onOpen。
+            const isHtml = isHtmlKind(manifest.kind) || isHtmlPrimary(primary);
+            const htmlPreviewAvailable = isHtml && !!onPreviewHtml;
+            const handlePrimaryAction = htmlPreviewAvailable
+              ? () => onPreviewHtml!(primary)
+              : () => onOpen(primary);
+            const primaryActionTitle = htmlPreviewAvailable
+              ? `${primary}\n点击在右侧预览`
+              : `${primary}\n点击在主编辑器打开`;
             return (
               <li key={`${primary}-${manifest.updatedAt ?? manifest.createdAt}`} className={`artifact-center-card ${record.legacy ? 'legacy' : ''}`}>
                 <div className="artifact-center-card-main">
                   <div className="artifact-center-card-title">
                     <span className="artifact-center-kind">{kindLabel(manifest.kind)}</span>
-                    <button type="button" onClick={() => onOpen(primary)} title={primary}>
+                    <button type="button" onClick={handlePrimaryAction} title={primaryActionTitle}>
                       {manifest.title || artifactBasename(primary)}
                     </button>
                   </div>
@@ -156,10 +170,14 @@ export function ArtifactCenterPanel({
                   </div>
                 </div>
                 <div className="artifact-center-card-actions">
-                  {isHtmlKind(manifest.kind) && onPreviewHtml && (
-                    <button type="button" onClick={() => onPreviewHtml(primary)}><Eye size={13} />预览</button>
+                  {htmlPreviewAvailable ? (
+                    <button type="button" className="primary" onClick={() => onPreviewHtml!(primary)}><Eye size={13} />预览</button>
+                  ) : (
+                    <button type="button" className="primary" onClick={() => onOpen(primary)}>打开</button>
                   )}
-                  <button type="button" onClick={() => onOpen(primary)}>打开</button>
+                  {isHtml && (
+                    <button type="button" onClick={() => onOpen(primary)} title="在主编辑器打开源码">源码</button>
+                  )}
                   {manifest.actions?.compareWithCurrent && <button type="button" onClick={() => onCompare(primary)}><GitCompare size={13} />对比</button>}
                   {canOverwrite && !overwritten && <button type="button" onClick={() => onOverwrite(record)}><RotateCcw size={13} />覆盖原文</button>}
                   {overwritten && <button type="button" onClick={() => onUndoOverwrite(record)}><Undo2 size={13} />撤销覆盖</button>}

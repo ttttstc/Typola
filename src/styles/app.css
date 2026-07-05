@@ -2004,6 +2004,21 @@ html[data-color-scheme='dark'] .export-menu {
   font-style: italic;
 }
 
+.html-preview-error-detail {
+  margin-top: 4px;
+  padding: 6px 8px;
+  font-family: var(--theme-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--theme-text-secondary);
+  background: var(--theme-paper, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--theme-border);
+  border-radius: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .html-preview-frame {
   flex: 1;
   width: 100%;

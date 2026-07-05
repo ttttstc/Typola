@@ -66,8 +66,9 @@ describe('ArtifactCenterPanel (Issue #156: HTML preview entry)', () => {
     });
   }
 
-  it('shows the preview button only for HTML artifacts and routes to onPreviewHtml', async () => {
+  it('uses HTML preview as the default primary action and exposes a 源码 button for source editing', async () => {
     const onPreviewHtml = vi.fn();
+    const onOpen = vi.fn();
     const htmlPath = 'C:/work/.typola-output/ai-workbench/case.html';
     const mdPath = 'C:/work/.typola-output/ai-workbench/outline.md';
 
@@ -75,20 +76,37 @@ describe('ArtifactCenterPanel (Issue #156: HTML preview entry)', () => {
       records: [makeRecord('html', htmlPath), makeRecord('markdown', mdPath)],
       onPreviewHtml,
     });
-    await act(async () => { await flushPromises(); });
 
-    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.artifact-center-card-actions button'));
-    const previewButton = buttons.find((button) => button.textContent?.includes('预览'));
-    expect(previewButton).toBeDefined();
+    // @ts-expect-error injected via render override below
+    window.__lastOnOpen = onOpen;
+
+    const htmlCard = host.querySelectorAll<HTMLLIElement>('.artifact-center-card')[0];
+    const mdCard = host.querySelectorAll<HTMLLIElement>('.artifact-center-card')[1];
+
+    const htmlTitleButton = htmlCard.querySelector<HTMLButtonElement>('.artifact-center-card-title button');
+    expect(htmlTitleButton).toBeDefined();
 
     act(() => {
-      previewButton!.click();
+      htmlTitleButton!.click();
     });
-
     expect(onPreviewHtml).toHaveBeenCalledWith(htmlPath);
+
+    const htmlActions = Array.from(htmlCard.querySelectorAll<HTMLButtonElement>('.artifact-center-card-actions button'));
+    const htmlPreview = htmlActions.find((button) => button.textContent?.includes('预览'));
+    const htmlSource = htmlActions.find((button) => button.textContent?.includes('源码'));
+    expect(htmlPreview?.classList.contains('primary')).toBe(true);
+    expect(htmlSource).toBeDefined();
+
+    const mdTitleButton = mdCard.querySelector<HTMLButtonElement>('.artifact-center-card-title button');
+    expect(mdTitleButton).toBeDefined();
+    const mdActions = Array.from(mdCard.querySelectorAll<HTMLButtonElement>('.artifact-center-card-actions button'));
+    const mdOpen = mdActions.find((button) => button.textContent?.trim() === '打开');
+    expect(mdOpen).toBeDefined();
+    expect(mdActions.some((button) => button.textContent?.includes('预览'))).toBe(false);
+    expect(mdActions.some((button) => button.textContent?.includes('源码'))).toBe(false);
   });
 
-  it('does not show the preview button when onPreviewHtml is not provided', async () => {
+  it('falls back to onOpen for HTML when onPreviewHtml is not provided', async () => {
     const htmlPath = 'C:/work/.typola-output/ai-workbench/case.html';
 
     render({
@@ -98,6 +116,7 @@ describe('ArtifactCenterPanel (Issue #156: HTML preview entry)', () => {
 
     const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.artifact-center-card-actions button'));
     expect(buttons.some((button) => button.textContent?.includes('预览'))).toBe(false);
+    expect(buttons.some((button) => button.textContent?.includes('打开'))).toBe(true);
   });
 
   it('does not show the preview button for non-HTML artifacts', async () => {
@@ -112,5 +131,6 @@ describe('ArtifactCenterPanel (Issue #156: HTML preview entry)', () => {
 
     const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.artifact-center-card-actions button'));
     expect(buttons.some((button) => button.textContent?.includes('预览'))).toBe(false);
+    expect(buttons.some((button) => button.textContent?.includes('源码'))).toBe(false);
   });
 });

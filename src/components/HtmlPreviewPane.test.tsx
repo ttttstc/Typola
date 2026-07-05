@@ -13,6 +13,10 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
   openPath: vi.fn(async () => undefined),
 }));
 
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(async () => undefined),
+}));
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function flushPromises(): Promise<void> {
@@ -69,6 +73,7 @@ describe('HtmlPreviewPane (Issue #156)', () => {
           onClose={onClose}
         />,
       );
+      await flushPromises();
       await flushPromises();
       await flushPromises();
     });
@@ -167,12 +172,14 @@ describe('HtmlPreviewPane (Issue #156)', () => {
       );
       await flushPromises();
       await flushPromises();
+      await flushPromises();
     });
 
     const initialCallCount = readTextFile.mock.calls.length;
 
     await act(async () => {
       queryButton(host, '刷新').click();
+      await flushPromises();
       await flushPromises();
       await flushPromises();
     });

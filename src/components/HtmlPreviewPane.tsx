@@ -30,12 +30,31 @@ const STATUS_LABELS: Record<HtmlPreviewStatus, string> = {
 // 但不给 same-origin,避免预览内容获得主窗口的能力面。
 const IFRAME_SANDBOX = 'allow-scripts allow-forms allow-modals allow-popups allow-presentation';
 
+function dirname(path: string): string {
+  const normalized = path.replaceAll('\\', '/');
+  const index = normalized.lastIndexOf('/');
+  return index >= 0 ? path.slice(0, index) : '';
+}
+
 export function HtmlPreviewPane({ filePath, fileName, onBackToArtifacts, onClose }: HtmlPreviewPaneProps) {
   const [state, setState] = useState<HtmlPreviewState>({ status: 'idle', srcDoc: '' });
 
   const loadPreview = useCallback(async () => {
     setState((prev) => ({ ...prev, status: 'loading' }));
     try {
+      // 1. 先把 HTML 所在目录动态加进 fs scope,允许 plugin-fs 读本地资源。
+      //    capabilities 里的 fs:scope 是固定路径集,AI 工作区可能落在用户任意目录,
+      //    需要在这里显式 allow 才能跨 scope 边界。
+      const dir = dirname(filePath);
+      if (dir) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('allow_html_preview_directory', { dir });
+        } catch (allowError) {
+          // 允许 scope 失败不阻断主流程,后面真正 readTextFile 失败时再交给 error 态。
+          console.warn('Failed to allow html preview directory:', allowError);
+        }
+      }
       const [{ readTextFile, readFile }] = await Promise.all([
         import('@tauri-apps/plugin-fs'),
       ]);
@@ -131,6 +150,11 @@ export function HtmlPreviewPane({ filePath, fileName, onBackToArtifacts, onClose
         aria-live="polite"
       >
         {statusText}
+        {state.status === 'error' && state.errorMessage && (
+          <div className="html-preview-error-detail" title={state.errorMessage}>
+            {state.errorMessage}
+          </div>
+        )}
       </div>
       {state.status === 'ready' && (
         <iframe
