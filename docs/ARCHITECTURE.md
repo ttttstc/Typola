@@ -17,7 +17,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `src/components/TerminalPanel.tsx` uses xterm.js for the bottom terminal panel.
 - `src/services/themeRegistry.ts` defines the Typola theme registry. The app ships five complete appearance themes: `plain-paper`, `night-current`, `ink-basin`, `abstract`, and `brutalist` (shown as 素笺 / 深海 / 墨韵 / 抽象 / 粗野). Settings persist `themeId` plus `themeOptions`; unknown ids fall back to `plain-paper`, while legacy `theme: "dark"` settings migrate to `night-current`. `brutalist` is a Neo-brutalism × vintage tool-manual theme — 0 border-radius, 1px pure-black borders, 5×5px hard shadow on interactive surfaces with hover/active translate feedback, a 30px grid paper background, and Noto Serif SC / JetBrains Mono / Outfit system-font stack.
 - `src/components/conversation/ConversationPanel.tsx` provides the left AI Workbench conversation surface for Skill OS M1.
-- `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge AI Provider headless stdout into typed message state and UI-friendly diagnostics. Claude Code is the current provider; OpenCode is planned as a second provider using the same CLI-shaped integration path.
+- `src/hooks/useAgentSession.ts` and `src/services/agent/*` bridge AI Provider headless stdout into typed message state and UI-friendly diagnostics. Claude Code and OpenCode are sendable providers; Codex CLI is registered for detection only until a parser/execution path exists.
 - `src/services/documentWatchService.ts` bridges file watcher commands/events for the active document.
 - `src-tauri/src/lib.rs` owns system file open/read/write commands, directory listing, document watching, single-instance forwarding, terminal PTY commands, AI CLI detection (`agent_detect`), and the headless AI Provider session commands used by the AI Workbench.
 
@@ -33,7 +33,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - `tauri-plugin-single-instance` forwards secondary process argv paths to the running window through the existing `opened-paths` event.
 - The active file is watched by Rust `notify` through `watch_opened_document` / `unwatch_opened_document`. External changes emit `file-changed`; the frontend suppresses events that arrive within 1.5s of a known self-write.
 - If reopen-last-file fails, the stale path is cleared so the next launch does not retry a permanently missing document.
-- Recently opened files are stored as lightweight local metadata in `localStorage` and filtered in memory for `Cmd/Ctrl+Shift+P`; Typola does not scan the filesystem or workspace during quick open.
+- Recently opened files are stored as lightweight local metadata in `localStorage` and filtered in memory for `Ctrl+Shift+P`; Typola does not scan the filesystem or workspace during quick open.
 - Pasted clipboard images are written through the Rust `write_attachment_file` command into a sibling `assets/` directory for the current document, returning a relative Markdown image path to the editor.
 
 ## Editing Utilities
@@ -52,8 +52,7 @@ The terminal is implemented with Tauri commands plus event streaming:
 - `terminal_data` carries raw bytes from Rust. The frontend decodes bytes with `TextDecoder` using the current default encoding, which avoids Rust-side lossy UTF-8 replacement on Windows shells.
 - Terminal registry locks are held only while resolving session handles. PTY write/resize/kill operations run outside the global registry lock so one blocked session does not freeze other sessions.
 - `terminal_clear` writes `ESC[3J ESC[2J ESC[H` to the PTY in addition to clearing the xterm viewport.
-- Windows shell resolution prefers `pwsh.exe`, then `powershell.exe`, then `cmd.exe`.
-- macOS/Linux shell resolution prefers `$SHELL`, then `/bin/zsh`, `/bin/bash`, and `/bin/sh`.
+- Windows shell resolution prefers `pwsh.exe`, then `powershell.exe`, then `cmd.exe`. Current release documentation and distribution target Windows.
 - The front end derives terminal cwd from the selected workspace tree first, then the opened file path; otherwise Rust falls back to the user home directory.
 
 ## Theme System
@@ -104,4 +103,3 @@ The terminal is implemented with Tauri commands plus event streaming:
 - Portable builds are produced by `scripts/build-portable.mjs`.
 - On Windows, the portable packager copies `typola.exe`, `MicrosoftEdgeWebview2Setup.exe`, a runtime note, and `Start-Typola.cmd` into a staging folder and emits `bundle/portable/*_windows-x64_portable.zip`. Users can launch `Typola.exe` directly: the Rust startup preflight checks the WebView2 Runtime before creating the app window, runs the bundled bootstrapper when the runtime is missing, and shows a visible error plus the official WebView2 download page if installation still fails. `Start-Typola.cmd` remains as a diagnostic fallback with the same preflight.
 - The inner Windows `typola.exe` is an implementation detail of the installer / portable package, not a supported standalone release artifact. Official Windows distribution artifacts are the installer and the portable zip.
-- On macOS, the portable packager zips the generated `.app` bundle into `bundle/portable/*_macos-*_portable.zip`.
