@@ -270,7 +270,7 @@ const THEME_DEFINITIONS: readonly ThemeDefinition[] = [
   },
   {
     id: 'ink-basin',
-    name: '墨韵',
+    name: '墨池',
     description: '纯黑白灰文档工作台，只用明度建立层级。',
     meta: '黑白灰',
     scheme: 'light',
