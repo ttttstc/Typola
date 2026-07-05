@@ -9,7 +9,7 @@ import {
 } from '../services/settingsService';
 import {
   copyWechatPreviewToClipboard,
-  createHtmlExportArticleStyles,
+  createHtmlExportPreviewStyles,
   createHtmlExportResult,
   exportHtmlDocument,
   type WechatPreviewResult,
@@ -235,7 +235,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
 
   return (
     <aside className="wechat-preview-panel" aria-label={t('wechatPreviewAria')}>
-      <style>{createHtmlExportArticleStyles(htmlExportPreset)}</style>
+      <style>{createHtmlExportPreviewStyles(htmlExportPreset)}</style>
       <div className="wechat-preview-header">
         <div className="wechat-preview-heading">
           <div className="wechat-preview-title-row">
