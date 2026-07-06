@@ -34,15 +34,15 @@ describe('HtmlPresentationPane', () => {
     vi.clearAllMocks();
   });
 
-  it('renders an isolated sandbox iframe from the HTML source and supports toolbar actions', async () => {
-    const onBack = vi.fn();
+  it('默认进 iframe 预览,toolbar 提供 源码/预览 切换 + 浏览器', async () => {
+    const onOpenInBrowser = vi.fn();
 
     await act(async () => {
       root.render(
         <HtmlPresentationPane
           source="<h1>Slide 1</h1>"
           filePath="/Users/demo/deck/index.html"
-          onBack={onBack}
+          onOpenInBrowser={onOpenInBrowser}
         />,
       );
       await flushPromises();
@@ -55,26 +55,55 @@ describe('HtmlPresentationPane', () => {
     expect(iframe?.getAttribute('sandbox')).not.toContain('allow-same-origin');
     expect(iframe?.srcdoc).toContain('<h1>Slide 1</h1>');
     expect(iframe?.srcdoc).toContain('<base href="file:///Users/demo/deck/">');
-
-    const postMessage = vi.spyOn(iframe!.contentWindow!, 'postMessage').mockImplementation(() => undefined);
+    // 旧版的 上一页/下一页 已被替换为 源码/预览 切换。
+    expect(host.querySelector('button[aria-label="上一页"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="下一页"]')).toBeNull();
 
     await act(async () => {
-      queryButton(host, '下一页').click();
-      queryButton(host, '上一页').click();
-      queryButton(host, '返回阅读预览').click();
+      queryButton(host, '在浏览器打开').click();
       await flushPromises();
     });
 
-    expect(postMessage).toHaveBeenNthCalledWith(
-      1,
-      { source: 'typola-html-presentation', command: 'next' },
-      '*',
-    );
-    expect(postMessage).toHaveBeenNthCalledWith(
-      2,
-      { source: 'typola-html-presentation', command: 'previous' },
-      '*',
-    );
-    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onOpenInBrowser).toHaveBeenCalledTimes(1);
+  });
+
+  it('切换到源码模式后渲染 <pre> 显示原始 HTML,不再有 iframe', async () => {
+    await act(async () => {
+      root.render(
+        <HtmlPresentationPane
+          source="<h1>Slide 1</h1><p>hello</p>"
+          filePath="/Users/demo/deck/index.html"
+        />,
+      );
+      await flushPromises();
+    });
+
+    const sourceTab = host.querySelector<HTMLButtonElement>('button[role="tab"][aria-selected="false"]');
+    expect(sourceTab?.textContent).toContain('源码');
+
+    await act(async () => {
+      sourceTab!.click();
+      await flushPromises();
+    });
+
+    expect(host.querySelector('iframe')).toBeNull();
+    const pre = host.querySelector('pre');
+    expect(pre?.textContent).toContain('<h1>Slide 1</h1>');
+    expect(pre?.textContent).toContain('<p>hello</p>');
+  });
+
+  it('通过 initialMode="source" 直接进入源码视图', async () => {
+    await act(async () => {
+      root.render(
+        <HtmlPresentationPane
+          source="<p>raw</p>"
+          initialMode="source"
+        />,
+      );
+      await flushPromises();
+    });
+
+    expect(host.querySelector('iframe')).toBeNull();
+    expect(host.querySelector('pre')?.textContent).toContain('<p>raw</p>');
   });
 });

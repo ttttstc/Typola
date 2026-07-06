@@ -47,6 +47,7 @@ describe('htmlPresentationService', () => {
     expect(doc).toContain('<script>window.deckStarted = true;</script>');
     expect(doc).toContain(TYPOLA_PRESENTATION_BRIDGE_ID);
     expect(doc).toContain(TYPOLA_PRESENTATION_MESSAGE_TYPE);
+    expect(doc).toContain('window.dispatchEvent(new KeyboardEvent');
   });
 
   it('keeps an existing base href and only injects the bridge script', () => {

@@ -32,6 +32,7 @@
     "fs:allow-stat",
     "fs:allow-exists",
     "opener:default",
+    "opener:allow-open-path",
     {
       "identifier": "fs:scope",
       "allow": [

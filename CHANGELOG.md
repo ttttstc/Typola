@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- AI 产物中心支持 HTML 产物轻量预览（issue #156）：`.html` / `.htm` 产物新增「预览」按钮，在右侧面板用 sandboxed iframe 直接展示 AI 生成的页面，本地 CSS / JS / 图片 / 音视频资源会被内联进 `srcDoc`；toolbar 提供「返回产物中心 / 刷新 / 在浏览器打开 / 关闭」。通用 HTML 文档构建与本地资源内联能力抽到 `src/services/htmlPreviewService.ts`，`htmlPresentationService` 复用同一套通用层，只保留演示模式专属的 bridge script。
 - 新增第五套主题「粗野」(id: `brutalist`)：新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
 - 新增第四套主题「抽象」(id: `abstract`)：采用蒙德里安 De Stijl 经典配色 —— 白底 (`#ffffff`) + 黑色网格 (`#1a1a1a`) + 蒙德里安红 (`#c8311b`) / 蓝 (`#1e5a8a`) / 黄 (`#e8b810`) 三原色强调。accent 用红、aiInserted 用蓝、aiDeleted 用红、warning 用黄；终端 ANSI 也按红 / 蓝 / 黄 / 黑 / 白体系对齐，不再出现绿色映射。设置 → 外观 → 主题卡片可直接切换。
 - 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨韵”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
@@ -34,6 +35,14 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 Windows MSI 安装到受限目录时可能报 “verify that you have access to that directory” 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
+- 修复缺少 Microsoft Edge WebView2 Runtime 时可能还没显示引导就启动失败的问题：Windows 启动预检前移到 `main()`，早于 Tauri WebView 初始化；缺失时先运行随包 bootstrapper，失败后提示用户安装并打开官方页面。
+- 修复 Vditor WYSIWYG 代码块拖选多行时选区容易被异步渲染/折叠重排打断的问题；代码块正文显式允许文本选择，拖选期间暂停 mermaid/katex/折叠等会改 DOM 的 idle 重排。
+- 补充文件内搜索/替换多行匹配回归测试，确认代码块内外的多行内容可查找、单次替换和全部替换。
+- 修复本地 HTML 与产物打开体验：启动时会展开上次工作区文件树；HTML 文件默认进入预览而不是源码；右侧 HTML 预览会压缩常见宽内容并用浏览器打开 file URL；产物中心图片默认调用系统图片工具打开。
+- 调整 HTML 与文件操作体验：HTML 预览回到中间主栏并可与源码模式来回切换；HTML 翻页桥接会同时派发到 window/document/body；产物中心和文件树右键菜单新增“打开所在文件夹”等有效操作。
+- 修复 Windows 上点击「浏览器/系统默认应用打开」报「Not allowed to open path \\?\D」的问题：根因是 `tauri-plugin-opener` 的 `opener:scope` 用 `std::fs::canonicalize` 把绝对路径变成 Windows device path，跟 capabilities 里 `$HOME`/`$DESKTOP` 等 glob 永远匹配不上。新增自定义 Rust 命令 `open_path_external` 走 `tauri_plugin_opener::open_path` crate 级 helper(直接用 ShellExecuteW,不经 scope 校验),前后端都接入新命令。
+- HTML 演示模式源码/预览切换按钮的 active 状态改为 `theme-paper` 文字色,在亮、暗主题下与 `--theme-accent` 背景都满足对比度,不再有橙色背景配糊字。
 - 修复浮动大纲误把 fenced code block 内的 `#` 行识别为标题、导致点击大纲跳转偏移的问题；工具栏 hover 提示改为顶层浮层显示，并按当前界面语言展示不含快捷键的文案。
 - 修复选中文字后的 AI 浮条被主题按钮样式撑满整屏的问题；浮条现在按内容宽度贴近选区上方显示，并提升 CM6 / Vditor / 原生选区高亮对比度，方便辨认已选文本。
 - 素笺主题：把 `selection` 由 `#ead8ca`（带粉感的桃色）改为 `#e3dccf`，更接近 Claude 设计语言的低饱和暖灰选中态。

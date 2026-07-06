@@ -62,7 +62,7 @@ Most importantly, AI output does not stay buried in chat history. It becomes loc
 
 ### Desktop experience
 
-- Windows and macOS support.
+- Current releases target Windows.
 - File associations, single-instance open, and auto-update support.
 - Integrated bottom terminal that starts from the selected workspace or current file directory.
 - Auto-save exists as a setting, but is off by default to avoid accidental overwrites.
@@ -75,7 +75,7 @@ Download one of the following from GitHub Releases:
 
 - `Typola_*_x64-setup.exe`
 
-Use the installer if you want file associations and auto-update support. Windows ships both `setup.exe` and `.msi` installers, and each package includes the WebView2 bootstrapper in the single installer file so machines without WebView2 can be repaired automatically.
+Use the installer if you want file associations and auto-update support. Windows ships both `setup.exe` and `.msi` installers. The installer lets users choose the destination folder; `.msi` requests administrator permission when installing to Program Files or another protected directory, while `setup.exe` defaults to a current-user install. Each package includes the WebView2 bootstrapper; if the runtime is missing, Typola runs the bootstrapper before creating the app window and shows a clear installation guide if repair fails.
 
 ### Windows portable
 
@@ -83,10 +83,6 @@ Download `Typola_*_windows-x64_portable.zip`, fully extract it, and run `Typola.
 
 > The portable build does not write into Program Files, but the first launch runs the bundled WebView2 bootstrapper when the runtime is missing. If the computer is offline or installation fails, Typola shows a visible error and opens the official installation page. `Start-Typola.cmd` is kept only as a diagnostic fallback.
 > Do not distribute the inner `Typola.exe` as a standalone artifact. Windows releases are distributed as installers and portable zip packages.
-
-### macOS
-
-Download the `.dmg` matching your architecture, open it, and drag `Typola.app` into Applications. If macOS blocks first launch, allow it under Privacy & Security.
 
 ## AI CLI Setup
 

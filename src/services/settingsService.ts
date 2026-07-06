@@ -47,6 +47,7 @@ import {
 const STORAGE_KEY = 'typola-settings';
 const LEGACY_KEY = 'typola-export-settings';
 const LAST_FILE_KEY = 'typola-last-opened-file';
+const LAST_WORKSPACE_ROOT_KEY = 'typola-last-workspace-root';
 const FONT_DEFAULTS_VERSION = 3;
 
 export const SETTINGS_CHANGED_EVENT = 'typola-settings-changed';
@@ -984,6 +985,19 @@ export function setLastOpenedPath(path: string): void {
 
 export function clearLastOpenedPath(): void {
   localStorage.removeItem(LAST_FILE_KEY);
+}
+
+export function getLastWorkspaceRoot(): string {
+  return (localStorage.getItem(LAST_WORKSPACE_ROOT_KEY) || '').trim();
+}
+
+export function setLastWorkspaceRoot(root: string): void {
+  const normalized = root.trim();
+  if (!normalized) {
+    localStorage.removeItem(LAST_WORKSPACE_ROOT_KEY);
+    return;
+  }
+  localStorage.setItem(LAST_WORKSPACE_ROOT_KEY, normalized);
 }
 
 // ---- Backward-compatible API ----

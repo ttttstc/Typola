@@ -6,8 +6,10 @@ import {
   getExportPresetConfig,
   clearLastOpenedPath,
   getLastOpenedPath,
+  getLastWorkspaceRoot,
   resolvePreviewFontFamily,
   resolvePreviewHeadingFontFamily,
+  setLastWorkspaceRoot,
 } from '../services/settingsService';
 import { firstOpenableDocumentPath, isOpenableDocumentPath } from '../services/fileDrop';
 import { useSettings } from '../hooks/useSettings';
@@ -185,7 +187,11 @@ export function AppLayout() {
       requestId: (current?.requestId ?? 0) + 1,
     }));
   }, []);
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [workspaceRoot, setWorkspaceRootState] = useState(() => getLastWorkspaceRoot());
+  const setWorkspaceRoot = useCallback((next: string) => {
+    setWorkspaceRootState(next);
+    setLastWorkspaceRoot(next);
+  }, []);
   const [settingsVisible, setSettingsVisible] = useState(false);
   // P1-E:从外部(场景卡)跳转时指定的初始段
   const [settingsInitialSection, setSettingsInitialSection] = useState<'aiCli' | undefined>(undefined);
@@ -376,6 +382,7 @@ export function AppLayout() {
     defaultWidth: WORKSPACE_PANEL_DEFAULT_WIDTH,
     minWidth: LEFT_PANEL_MIN_WIDTH,
     maxWidth: LEFT_PANEL_MAX_WIDTH,
+    initialMode: workspaceRoot ? 'workspace' : 'none',
   });
   const { docMode, setDocMode } = useDocumentMode({
     enabled: file.fileType !== 'docx',
@@ -707,6 +714,10 @@ export function AppLayout() {
     editorCommandRef.current?.focus();
   }, [handleContentChange]);
 
+  const replaceFromFindPanel = useCallback((value: string) => {
+    handleContentChange(value);
+  }, [handleContentChange]);
+
   // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档:
   // P0-2 走编辑器的 commitAIReplacement,把整篇合并作为一条原子操作压入 AI 撤销栈,
   // 一次 Ctrl+Z 整体回退。回退失败时退化为 replaceCurrentContent。
@@ -926,8 +937,11 @@ export function AppLayout() {
 
   const handleToggleEditorMode = useCallback(() => {
     if (file.fileType === 'docx') return;
-    setHtmlPresentationVisible(false);
-    setEditorMode((mode) => mode === 'source' ? 'wysiwyg' : 'source');
+    setEditorMode((mode) => {
+      const next = mode === 'source' ? 'wysiwyg' : 'source';
+      setHtmlPresentationVisible(file.fileType === 'html' && next !== 'source');
+      return next;
+    });
   }, [file.fileType]);
 
   const handleToggleWordPreview = useCallback(() => {
@@ -1428,6 +1442,42 @@ export function AppLayout() {
     }
   }, [effectiveAiWorkspaceRoot, file.path, handleOpenPath]);
 
+  const handleOpenHtmlInBrowser = useCallback(async (path: string) => {
+    if (!path) return;
+    try {
+      // 自定义命令 open_path_external — 绕开 tauri-plugin-opener 的
+      // opener:scope 验证,后者用 canonicalize 后会把 Windows 路径变成
+      // \\?\D:\... 形式,跟 capabilities 里 $HOME/$DESKTOP 等 glob 永远
+      // 匹配不上,报「Not allowed to open path \\?\D」。
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_path_external', { path });
+    } catch (error) {
+      console.warn('Failed to open HTML in browser:', error);
+      await messageDialog(String(error), { title: '浏览器打开失败' });
+    }
+  }, []);
+
+  const handleOpenArtifactExternally = useCallback(async (path: string) => {
+    try {
+      // 同上,绕开 opener scope。image / 任意本地文件都用 ShellExecuteW 派发。
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_path_external', { path });
+    } catch (error) {
+      console.warn('Failed to open artifact externally:', error);
+      await messageDialog(String(error), { title: '打开失败' });
+    }
+  }, []);
+
+  const handleRevealPathInFolder = useCallback(async (path: string) => {
+    try {
+      const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+      await revealItemInDir(path);
+    } catch (error) {
+      console.warn('Failed to reveal path in folder:', error);
+      await messageDialog(String(error), { title: '打开所在文件夹失败' });
+    }
+  }, []);
+
   useEffect(() => {
     if (!isTauriRuntime) return;
     const title = file.dirty ? `* ${file.name}` : file.name;
@@ -1476,7 +1526,7 @@ export function AppLayout() {
       <HtmlPresentationPane
         source={file.content}
         filePath={file.path}
-        onBack={() => setHtmlPresentationVisible(false)}
+        onOpenInBrowser={() => { void handleOpenHtmlInBrowser(file.path); }}
       />
     </Suspense>
   ) : editorEngine === 'cm6' ? (
@@ -1590,6 +1640,22 @@ export function AppLayout() {
       onUndoOverwrite={(record) => { void handleUndoArtifactOverwrite(record); }}
       onRefresh={refreshArtifactLibrary}
       onClose={() => setRightPanelMode('none')}
+      onOpenExternal={(path) => { void handleOpenArtifactExternally(path); }}
+      onRevealInFolder={(path) => { void handleRevealPathInFolder(path); }}
+      onPreviewHtml={(path) => {
+        void handleOpenPath(path)
+          .then(() => setRightPanelMode('none'))
+          .catch((error) => console.warn('Failed to open HTML artifact:', error));
+      }}
+      onOpenSource={(path) => {
+        void handleOpenPath(path)
+          .then(() => {
+            // 用户明确点了「源码」,跳到主编辑器并切到 source 模式。
+            setEditorMode('source');
+            setRightPanelMode('none');
+          })
+          .catch((error) => console.warn('Failed to open HTML source:', error));
+      }}
     />
   ) : null;
 
@@ -1701,6 +1767,8 @@ export function AppLayout() {
           onOpenFile: (path) => {
             void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
           },
+          onRevealInFolder: (path) => { void handleRevealPathInFolder(path); },
+          onOpenExternal: (path) => { void handleOpenArtifactExternally(path); },
         }}
         onLeftPanelResize={handleLeftPanelResizerPointerDown}
         showToc={!isDocx}
@@ -1769,7 +1837,7 @@ export function AppLayout() {
         source={file.content}
         readOnly={isDocx}
         onCloseFind={() => setFindVisible(false)}
-        onReplaceSource={replaceCurrentContent}
+        onReplaceSource={replaceFromFindPanel}
         onNavigate={handleSearchNavigate}
         quickOpenVisible={quickOpenVisible}
         recentFiles={recentFiles}

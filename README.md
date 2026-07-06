@@ -79,7 +79,7 @@
 
 - `Typola_*_x64-setup.exe`
 
-适合长期使用、文件关联和自动更新。Windows 安装包提供 `setup.exe` 与 `.msi` 两种形式，都会把 WebView2 bootstrapper 打进单个安装文件；目标机器缺少 WebView2 Runtime 时会自动补齐。
+适合长期使用、文件关联和自动更新。Windows 安装包提供 `setup.exe` 与 `.msi` 两种形式，安装时可以选择目录；`.msi` 安装到 Program Files 等受限目录时会请求管理员权限，`setup.exe` 默认走当前用户安装。安装包会携带 WebView2 bootstrapper；目标机器缺少 WebView2 Runtime 时，Typola 会在创建窗口前先运行 bootstrapper，失败时给出明确安装指引。
 
 ### Windows 免安装版
 
