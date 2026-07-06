@@ -97,10 +97,14 @@
       "webviewInstallMode": {
         "type": "skip"
       },
+      "wix": {
+        "template": "./windows/main.wxs"
+      },
       "nsis": {
         "installerHooks": "./windows/hooks.nsh",
         "installerIcon": "icons/icon.ico",
-        "uninstallerIcon": "icons/icon.ico"
+        "uninstallerIcon": "icons/icon.ico",
+        "installMode": "currentUser"
       }
     },
     "android": {

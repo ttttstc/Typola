@@ -46,7 +46,7 @@ export function FindReplacePanel({
   // 展开状态(对齐 Typora 范式):面板每次打开默认折叠(只显示查找),Ctrl+H 触发时
   // 才展开第二行;面板打开期间用户可手动 toggle 且不会被 focusTarget 后续变化覆盖。
   // 关闭重新打开重置初始状态。
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => visible && focusTarget === 'replace');
   const wasVisibleRef = useRef(visible);
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
@@ -128,17 +128,27 @@ export function FindReplacePanel({
   };
 
   const replaceCurrent = () => {
-    const match = matches[activeIndex];
+    const liveMatches = findSearchMatches(source, query, options);
+    const match = liveMatches[Math.min(activeIndex, liveMatches.length - 1)];
     if (!match || readOnly) return;
     const next = replaceSearchMatch(source, match, replacement);
     onReplaceSource(next);
-    setActiveIndex(Math.max(0, activeIndex - 1));
+    setActiveIndex(Math.min(activeIndex, Math.max(0, liveMatches.length - 2)));
+    window.requestAnimationFrame(() => {
+      const input = expanded ? replaceInputRef.current : findInputRef.current;
+      input?.focus();
+    });
   };
 
   const replaceAll = () => {
-    if (matches.length === 0 || readOnly) return;
-    onReplaceSource(replaceAllSearchMatches(source, matches, replacement));
+    const liveMatches = findSearchMatches(source, query, options);
+    if (liveMatches.length === 0 || readOnly) return;
+    onReplaceSource(replaceAllSearchMatches(source, liveMatches, replacement));
     setActiveIndex(0);
+    window.requestAnimationFrame(() => {
+      const input = expanded ? replaceInputRef.current : findInputRef.current;
+      input?.focus();
+    });
   };
 
   const toggleOption = (key: keyof SearchOptions) => {

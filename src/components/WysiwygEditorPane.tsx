@@ -514,8 +514,13 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       if (mermaidIdleTimerRef.current !== null) {
         window.clearTimeout(mermaidIdleTimerRef.current);
       }
+      if (isDraggingIrRef.current) {
+        mermaidIdleTimerRef.current = null;
+        return;
+      }
       mermaidIdleTimerRef.current = window.setTimeout(() => {
         mermaidIdleTimerRef.current = null;
+        if (isDraggingIrRef.current) return;
         const host = hostRef.current;
         if (!host) return;
         void renderMermaidIn(host, {

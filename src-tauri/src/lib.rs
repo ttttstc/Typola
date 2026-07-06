@@ -25,7 +25,7 @@ use tauri_plugin_fs::FsExt;
 mod export;
 
 #[cfg(target_os = "windows")]
-mod windows_runtime {
+pub mod windows_runtime {
     use std::{
         env,
         os::windows::process::CommandExt,
@@ -1555,9 +1555,6 @@ fn terminal_clear(state: tauri::State<'_, TerminalStore>, term_id: u32) -> Resul
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[cfg(target_os = "windows")]
-    windows_runtime::ensure_webview2_runtime();
-
     tauri::Builder::default()
         .manage(OpenedPaths(Mutex::new(collect_initial_open_paths())))
         .manage(TerminalStore::default())

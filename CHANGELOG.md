@@ -35,6 +35,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 Windows MSI 安装到受限目录时可能报 “verify that you have access to that directory” 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
+- 修复缺少 Microsoft Edge WebView2 Runtime 时可能还没显示引导就启动失败的问题：Windows 启动预检前移到 `main()`，早于 Tauri WebView 初始化；缺失时先运行随包 bootstrapper，失败后提示用户安装并打开官方页面。
+- 修复 Vditor WYSIWYG 代码块拖选多行时选区容易被异步渲染/折叠重排打断的问题；代码块正文显式允许文本选择，拖选期间暂停 mermaid/katex/折叠等会改 DOM 的 idle 重排。
+- 补充文件内搜索/替换多行匹配回归测试，确认代码块内外的多行内容可查找、单次替换和全部替换。
 - 修复本地 HTML 与产物打开体验：启动时会展开上次工作区文件树；HTML 文件默认进入预览而不是源码；右侧 HTML 预览会压缩常见宽内容并用浏览器打开 file URL；产物中心图片默认调用系统图片工具打开。
 - 调整 HTML 与文件操作体验：HTML 预览回到中间主栏并可与源码模式来回切换；HTML 翻页桥接会同时派发到 window/document/body；产物中心和文件树右键菜单新增“打开所在文件夹”等有效操作。
 - 修复 Windows 上点击「浏览器/系统默认应用打开」报「Not allowed to open path \\?\D」的问题：根因是 `tauri-plugin-opener` 的 `opener:scope` 用 `std::fs::canonicalize` 把绝对路径变成 Windows device path，跟 capabilities 里 `$HOME`/`$DESKTOP` 等 glob 永远匹配不上。新增自定义 Rust 命令 `open_path_external` 走 `tauri_plugin_opener::open_path` crate 级 helper(直接用 ShellExecuteW,不经 scope 校验),前后端都接入新命令。

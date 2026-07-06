@@ -10073,6 +10073,8 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   overflow-x: auto;
   padding: 4px 12px;
   white-space: pre;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .vditor-ir [data-type="code-block"] > pre.vditor-ir__marker--pre > span[data-type="code-block-open-marker"],
@@ -10099,6 +10101,8 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   font: inherit;
   padding: 0;
   white-space: pre;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .vditor-ir [data-type="code-block"] span[data-type="code-block-info-marker"],

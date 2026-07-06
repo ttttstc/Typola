@@ -714,6 +714,10 @@ export function AppLayout() {
     editorCommandRef.current?.focus();
   }, [handleContentChange]);
 
+  const replaceFromFindPanel = useCallback((value: string) => {
+    handleContentChange(value);
+  }, [handleContentChange]);
+
   // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档:
   // P0-2 走编辑器的 commitAIReplacement,把整篇合并作为一条原子操作压入 AI 撤销栈,
   // 一次 Ctrl+Z 整体回退。回退失败时退化为 replaceCurrentContent。
@@ -1833,7 +1837,7 @@ export function AppLayout() {
         source={file.content}
         readOnly={isDocx}
         onCloseFind={() => setFindVisible(false)}
-        onReplaceSource={replaceCurrentContent}
+        onReplaceSource={replaceFromFindPanel}
         onNavigate={handleSearchNavigate}
         quickOpenVisible={quickOpenVisible}
         recentFiles={recentFiles}
