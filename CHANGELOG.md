@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- 新增 issue #155 文档自动化 MVP 设计：沉淀 Typola 自动化的概念模型、权限 Gate、模板存储策略、与 AI Workbench / SkillHub / Artifact Center / 导出链路 / 终端的集成边界，以及可拆分的后续垂直切片。
+- 新增 issue #155 文档自动化 demo：工具栏新增“自动化”入口，右侧自动化中心可运行 3 个内置模板，展示 Context Packet、动作 Gate 摘要和 Execution 记录；本地摘要模板会写入 `.typola-output/<conversationId>/automation-*` 并进入 AI 产物中心，AI 摘要模板复用当前 AI Workbench Provider 发送 prompt。
 - AI 产物中心支持 HTML 产物轻量预览（issue #156）：`.html` / `.htm` 产物新增「预览」按钮，在右侧面板用 sandboxed iframe 直接展示 AI 生成的页面，本地 CSS / JS / 图片 / 音视频资源会被内联进 `srcDoc`；toolbar 提供「返回产物中心 / 刷新 / 在浏览器打开 / 关闭」。通用 HTML 文档构建与本地资源内联能力抽到 `src/services/htmlPreviewService.ts`，`htmlPresentationService` 复用同一套通用层，只保留演示模式专属的 bridge script。
 - 新增第五套主题「粗野」(id: `brutalist`)：新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
 - 新增第四套主题「抽象」(id: `abstract`)：采用蒙德里安 De Stijl 经典配色 —— 白底 (`#ffffff`) + 黑色网格 (`#1a1a1a`) + 蒙德里安红 (`#c8311b`) / 蓝 (`#1e5a8a`) / 黄 (`#e8b810`) 三原色强调。accent 用红、aiInserted 用蓝、aiDeleted 用红、warning 用黄；终端 ANSI 也按红 / 蓝 / 黄 / 黑 / 白体系对齐，不再出现绿色映射。设置 → 外观 → 主题卡片可直接切换。
@@ -35,6 +37,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复自动化面板内容较长时无法上下滚动的问题；修复工作区位于 `D:\...` 等非默认用户目录时，自动化摘要产物写入 `.typola-output` 被 Tauri `allow-mkdir` scope 拒绝的问题。
+- 优化自动化 demo 反馈：自动化面板顶部固定显示最近一次执行结果，浏览器预览中运行写盘/AI 模板时会明确提示需要 Tauri 桌面运行时，并在 Context Packet 中展示产物目录是否就绪。
 - 修复 Windows MSI 安装到受限目录时可能报 “verify that you have access to that directory” 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
 - 修复缺少 Microsoft Edge WebView2 Runtime 时可能还没显示引导就启动失败的问题：Windows 启动预检前移到 `main()`，早于 Tauri WebView 初始化；缺失时先运行随包 bootstrapper，失败后提示用户安装并打开官方页面。
 - 修复 Vditor WYSIWYG 代码块拖选多行时选区容易被异步渲染/折叠重排打断的问题；代码块正文显式允许文本选择，拖选期间暂停 mermaid/katex/折叠等会改 DOM 的 idle 重排。

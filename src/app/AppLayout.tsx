@@ -28,6 +28,7 @@ import { AppLayoutChrome } from '../components/AppLayoutChrome';
 import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
 import { SkillHubPanel } from '../components/SkillHubPanel';
 import { ArtifactCenterPanel } from '../components/artifacts/ArtifactCenterPanel';
+import { AutomationCenterPanel } from '../components/automation/AutomationCenterPanel';
 import { SelectionResultCard } from '../components/selection/SelectionResultCard';
 import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor';
 import { ReviewSidebarPanel } from '../components/review/ReviewSidebarPanel';
@@ -36,6 +37,7 @@ import { useReviewState } from '../hooks/useReviewState';
 import { useRevisionList } from '../hooks/useRevisionList';
 import { buildReviewMarkdown, type ReviewComment } from '../services/review/reviewState';
 import { ensureArtifactManifest } from '../services/artifacts/manifest';
+import { ensureArtifactOutputScope } from '../services/artifacts/outputScope';
 import type { ArtifactRecord } from '../services/artifacts/types';
 import { saveFileDialog } from '../services/dialogService';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -54,6 +56,15 @@ import { useLeftRail } from '../hooks/useLeftRail';
 import { useRightPanel, type RightPanelMode } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
 import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skillHub';
+import {
+  buildAutomationContext,
+  loadAutomationExecutions,
+  loadBuiltinAutomationTemplates,
+  runAutomation,
+  saveAutomationExecution,
+  type AutomationExecution,
+  type AutomationTemplate,
+} from '../services/automation';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
@@ -199,6 +210,11 @@ export function AppLayout() {
   const [findFocusTarget, setFindFocusTarget] = useState<'find' | 'replace'>('find');
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
+  const [automationContextTick, setAutomationContextTick] = useState(0);
+  const [automationExecutions, setAutomationExecutions] = useState<AutomationExecution[]>(() => (
+    typeof window === 'undefined' ? [] : loadAutomationExecutions()
+  ));
+  const [runningAutomationExecutionId, setRunningAutomationExecutionId] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
@@ -344,7 +360,8 @@ export function AppLayout() {
   );
   const [defaultAiWorkspaceRoot, setDefaultAiWorkspaceRoot] = useState('');
   useEffect(() => {
-    if (!isTauriRuntime) return;
+    const tauriInvoke = (window as typeof window & { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke;
+    if (!isTauriRuntime || typeof tauriInvoke !== 'function') return;
     let cancelled = false;
     void import('@tauri-apps/api/path')
       .then(async ({ homeDir, join }) => {
@@ -435,6 +452,7 @@ export function AppLayout() {
   const { skillHub, skillHubError, handleSaveSkillHub, handleReloadSkillHub } = useSkillHubState();
   // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
   const [skillPrefill, setSkillPrefill] = useState<{ tick: number; text: string } | null>(null);
+  const automationTemplates = useMemo(() => loadBuiltinAutomationTemplates(), []);
   const {
     agentChangedPaths,
     workspaceTreeVersion,
@@ -1337,6 +1355,144 @@ export function AppLayout() {
     refreshKey: `${artifactLibraryRefreshKey}:${agentChangedPaths.size}:${convManager.activeConvId}:${file.path}`,
   });
 
+  const buildCurrentAutomationContext = useCallback((template?: AutomationTemplate) => {
+    const selection = editorCommandRef.current?.getSelection() ?? null;
+    const fileMode = file.fileType === 'docx'
+      ? 'docx'
+      : file.fileType === 'html'
+        ? 'html'
+        : editorMode === 'source'
+          ? 'source'
+          : 'markdown';
+    return buildAutomationContext({
+      document: file.fileType === 'docx' ? undefined : {
+        path: file.path || undefined,
+        name: file.name,
+        markdown: editorCommandRef.current?.getMarkdown() ?? file.content,
+        dirty: file.dirty,
+        mode: fileMode,
+      },
+      selection,
+      workspaceRoot: workspaceRoot || undefined,
+      aiWorkspaceRoot: effectiveAiWorkspaceRoot,
+      outputRoot: outputBaseDir,
+      provider: convManager.activeProvider,
+      activeConversationId: convManager.activeConvId,
+      model: convManager.activeConv?.currentModel,
+      artifacts: artifactRecords,
+      wordPresetId: settings.exportPresetId,
+      htmlPresetId: settings.htmlExportPresetId,
+    }, template);
+  }, [
+    artifactRecords,
+    convManager.activeConv?.currentModel,
+    convManager.activeConvId,
+    convManager.activeProvider,
+    effectiveAiWorkspaceRoot,
+    editorMode,
+    file.content,
+    file.dirty,
+    file.fileType,
+    file.name,
+    file.path,
+    outputBaseDir,
+    settings.exportPresetId,
+    settings.htmlExportPresetId,
+    workspaceRoot,
+  ]);
+
+  const automationContext = useMemo(
+    () => buildCurrentAutomationContext(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buildCurrentAutomationContext, automationContextTick],
+  );
+
+  const handleRunAutomationTemplate = useCallback(async (template: AutomationTemplate) => {
+    const context = buildCurrentAutomationContext(template);
+    const saveExecution = (execution: AutomationExecution) => {
+      setRunningAutomationExecutionId(execution.status === 'running' || execution.status === 'waiting-for-gate'
+        ? execution.id
+        : null);
+      setAutomationExecutions(saveAutomationExecution(execution));
+    };
+    const execution = await runAutomation(template, context, {
+      insertText: (text, placement) => {
+        if (placement === 'replace-selection') {
+          editorCommandRef.current?.replaceSelection(text);
+        } else if (placement === 'append') {
+          const next = `${editorCommandRef.current?.getMarkdown() ?? file.content}${text}`;
+          editorCommandRef.current?.setMarkdown(next);
+          handleContentChange(next);
+        } else {
+          editorCommandRef.current?.insertText(text);
+        }
+      },
+      createArtifact: async ({ filename, title, content }) => {
+        if (!isTauriRuntime) {
+          throw new Error('当前是浏览器预览，无法写入 .typola-output。请使用 npm run tauri dev 打开桌面运行时后重试。');
+        }
+        if (!outputBaseDir) {
+          throw new Error('请先设置或选择 AI 工作区，自动化产物需要写入 .typola-output。');
+        }
+        const safeName = filename.replace(/[<>:"|?*\u0000-\u001f]/gu, '-');
+        const dirName = `automation-${Date.now().toString(36)}`;
+        const targetDir = joinLocalPath(outputBaseDir, convManager.activeConvId, dirName);
+        const targetPath = joinLocalPath(targetDir, safeName);
+        const { mkdir } = await import('@tauri-apps/plugin-fs');
+        await ensureArtifactOutputScope(outputBaseDir);
+        await mkdir(targetDir, { recursive: true });
+        await writeTextFile(targetPath, content);
+        await ensureArtifactManifest({
+          primaryFile: targetPath,
+          outputRoot: outputBaseDir,
+          workspaceRoot: effectiveAiWorkspaceRoot,
+          sourceType: 'flow_generation',
+          documentPath: file.path || undefined,
+          documentName: file.path ? file.name : undefined,
+          conversationId: convManager.activeConvId,
+          agentId: 'typola-automation',
+          agentLabel: 'Typola 自动化',
+          title,
+        });
+        rememberArtifact(targetPath);
+        setArtifactLibraryRefreshKey((key) => key + 1);
+        return { path: targetPath, title };
+      },
+      runAiPrompt: async ({ prompt, title }) => {
+        if (!isTauriRuntime) {
+          throw new Error('当前是浏览器预览，无法启动 AI Provider。请使用 npm run tauri dev 打开桌面运行时后重试。');
+        }
+        const conversationId = convManager.createConversation(title ?? template.title, undefined, convManager.activeProvider);
+        setLeftRailMode('aiWorkbench');
+        await convManager.send(prompt, {
+          conversationId,
+          currentFileContextPath: file.path || undefined,
+          referencePaths: file.path ? [file.path] : undefined,
+        });
+        return { conversationId, title: title ?? template.title };
+      },
+    }, saveExecution);
+    if (execution.status === 'succeeded') {
+      setTransientMessage(`自动化完成:${template.title}`);
+      showExportToast({ type: 'success', title: '自动化完成', detail: template.title });
+    } else if (execution.status === 'failed') {
+      showExportToast({ type: 'error', title: '自动化失败', detail: execution.error });
+    }
+  }, [
+    buildCurrentAutomationContext,
+    convManager,
+    effectiveAiWorkspaceRoot,
+    file.content,
+    file.name,
+    file.path,
+    handleContentChange,
+    isTauriRuntime,
+    outputBaseDir,
+    rememberArtifact,
+    setLeftRailMode,
+    showExportToast,
+  ]);
+
   useEffect(() => {
     if (!outputBaseDir || agentChangedPaths.size === 0) return;
     const active = convManager.activeConv;
@@ -1498,6 +1654,7 @@ export function AppLayout() {
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
     rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
+    rightPanelMode === 'automation' && !isDocx ? 'automation-panel-open' : '',
     leftRailMode !== 'none' ? 'left-panel-open' : '',
     leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
@@ -1657,6 +1814,17 @@ export function AppLayout() {
           .catch((error) => console.warn('Failed to open HTML source:', error));
       }}
     />
+  ) : rightPanelMode === 'automation' && !isDocx ? (
+    <AutomationCenterPanel
+      templates={automationTemplates}
+      context={automationContext}
+      executions={automationExecutions}
+      runningExecutionId={runningAutomationExecutionId}
+      onRunTemplate={(template) => { void handleRunAutomationTemplate(template); }}
+      onRefreshContext={() => setAutomationContextTick((tick) => tick + 1)}
+      onOpenArtifact={(path) => { void handleOpenPath(path).catch((error) => console.warn('Failed to open automation artifact:', error)); }}
+      onClose={() => setRightPanelMode('none')}
+    />
   ) : null;
 
   const docxPane = (
@@ -1684,6 +1852,7 @@ export function AppLayout() {
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
           artifactsVisible: rightPanelMode === 'artifacts',
+          automationsVisible: rightPanelMode === 'automation',
           reviewDirty: reviewStateApi.state.dirty,
           terminalVisible,
           editingDisabled: isDocx,
@@ -1693,6 +1862,7 @@ export function AppLayout() {
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
+          onToggleAutomations: () => setRightPanelMode((mode) => (mode === 'automation' ? 'none' : 'automation')),
           onToggleTerminal: handleToggleTerminal,
           onSetDocMode: (next) => void setDocMode(next),
           onNew: handleNewFile,
