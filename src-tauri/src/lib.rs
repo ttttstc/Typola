@@ -548,6 +548,27 @@ fn allow_html_preview_directory(app: tauri::AppHandle, dir: String) -> Result<()
         .map_err(|error| format!("failed to allow html preview directory: {error}"))
 }
 
+fn is_typola_output_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(|name| name.eq_ignore_ascii_case(".typola-output"))
+}
+
+// 自动化 / AI 产物写入可能落在用户选择的任意工作区下,例如 D:\md files。
+// 静态 fs:scope 无法枚举这些路径,因此在写入前动态放行当前 `.typola-output`
+// 目录。只接受目录名为 `.typola-output` 的路径,避免把整个工作区递归开放。
+#[tauri::command]
+fn allow_artifact_output_directory(app: tauri::AppHandle, dir: String) -> Result<(), String> {
+    let path = PathBuf::from(&dir);
+    if !is_typola_output_dir(&path) {
+        return Err("refused: artifact output scope must be a .typola-output directory".into());
+    }
+
+    app.fs_scope()
+        .allow_directory(&path, true)
+        .map_err(|error| format!("failed to allow artifact output directory: {error}"))
+}
+
 // 用系统默认应用打开本地文件。绕开 tauri-plugin-opener 的 opener:scope,
 // 因为它的 Scope::is_path_allowed 用 std::fs::canonicalize 把绝对路径变成
 // \\?\D:\... 这种 Windows device path 形式,跟 capabilities 里声明的
@@ -1605,6 +1626,7 @@ pub fn run() {
             force_close_main_window,
             allow_asset_directory,
             allow_html_preview_directory,
+            allow_artifact_output_directory,
             open_path_external,
             read_opened_document,
             write_opened_document,
@@ -3214,6 +3236,18 @@ mod tests {
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("typola-{}-{}", std::process::id(), name))
+    }
+
+    #[test]
+    fn typola_output_scope_accepts_output_root() {
+        assert!(is_typola_output_dir(Path::new(r"D:\md files\.typola-output")));
+        assert!(is_typola_output_dir(Path::new("/tmp/workspace/.typola-output")));
+    }
+
+    #[test]
+    fn typola_output_scope_rejects_workspace_and_children() {
+        assert!(!is_typola_output_dir(Path::new(r"D:\md files")));
+        assert!(!is_typola_output_dir(Path::new(r"D:\md files\.typola-output\conv-1")));
     }
 
     #[test]

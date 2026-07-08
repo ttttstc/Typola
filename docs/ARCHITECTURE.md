@@ -87,6 +87,16 @@ The terminal is implemented with Tauri commands plus event streaming:
 - Provider parsers may emit an `artifact_file` event when JSON output reports Write/Edit-style tool calls with a file path. The workspace watcher listens only to the effective `.typola-output/` directory as a provider-neutral fallback, avoiding recursive watches on the whole home/workspace tree. The artifact center scans `.typola-output/` through the Rust `scan_artifacts` command, which only accepts a canonical `.typola-output` root and returns manifest metadata plus legacy files without relying on frontend `fs:scope` grants for arbitrary workspaces. The UI shows artifacts as right-bottom filename chips and right-panel list entries; clicking a chip opens the file in the central editor, and `archive_artifact_to_workspace` moves a temporary artifact into the workspace with automatic name de-duplication. The artifact center persists lightweight `artifact.json` manifests and can overwrite or undo-overwrite a source document; those commands are guarded in Rust by canonical path checks, so the target must match the manifest/current document expectation or remain inside the explicit workspace root.
 - The headless workbench coexists with the terminal-based flow-mode agent path. The left rail is a single state machine (`none` / `workspace` / `aiWorkbench`), so file tree and AI Workbench are mutually exclusive and never create a fourth column. The existing bottom PTY terminal remains unchanged and flow mode no longer auto-opens it.
 
+## Document Automation
+
+- Issue #155 的产品与架构设计沉淀在 `docs/AUTOMATION_MVP_DESIGN.md`。计划中的 MVP 把自动化定位为 Typola 内部可审阅的文档模板执行链，而不是通用工作流画布、后台 task runner 或终端命令编排器。
+- 自动化概念模型是 `Trigger -> Condition -> Context Packet -> Action[] -> Gate -> Sink -> Execution`。第一版只接受手动触发和选区手动触发；保存钩子、导出钩子、文件监听、定时运行、MCP 调用和终端命令都属于后续阶段。
+- 模板 registry 合并三类来源：应用内置只读模板、用户全局模板 `<appConfigDir>/typola/automations/*.json`、项目模板 `<workspaceRoot>/.typola/automations/*.json`。项目模板默认不受信，也不能覆盖内置模板。
+- 自动化 runner 应该是套在现有深 Module 之上的小 Interface：AI 动作走 provider-aware 的 AI Workbench 会话路径，生成文件走现有 `.typola-output/<conversationId>/` artifact manifest 路径，导出动作复用 Word / HTML / PDF 导出服务，破坏性文档/文件动作复用 Artifact Center 已有的受控命令和确认模型。
+- Gate 决策集中在自动化权限层。写 `.typola-output` 产物可以自动执行；覆盖当前文档、归档到工作区、追加项目文件或写导出产物必须弹出明确确认。受信模板最多跳过轻确认，不能跳过强确认。
+- Execution 历史是架构的一部分，不是 UI 附属物。每次运行都记录模板 id/来源、trigger、上下文摘要、action 状态、gate 结果、输出 artifact/文件引用和错误，用户不需要解析 AI 对话文本也能复盘自动化做过什么。
+- 当前 demo 代码位于 `src/services/automation/*` 和 `src/components/automation/AutomationCenterPanel.tsx`。`AppLayout` 负责把当前文档、选区、AI Provider、Artifact Center、导出预设组装成 Context Packet，并把 `create_artifact` 动作接回现有 artifact manifest / `.typola-output` / 产物中心刷新链路。由于 AI 工作区可位于 `D:\md files` 这类静态 capability 无法预先枚举的位置，前端写入/监控产物前会调用 Rust `allow_artifact_output_directory`，仅把当前目录名为 `.typola-output` 的输出根目录递归加入 `plugin-fs` scope；全局 `fs:scope` 仍保持收紧。
+
 ## Product Rules
 
 - Product name is `Typola`.

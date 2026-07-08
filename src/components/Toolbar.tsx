@@ -15,6 +15,7 @@ import {
   SaveAll,
   SlidersHorizontal,
   Terminal,
+  Workflow,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -50,6 +51,7 @@ type ToolbarProps = {
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
   artifactsVisible?: boolean;
+  automationsVisible?: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
   docMode: DocMode;
@@ -59,6 +61,7 @@ type ToolbarProps = {
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleArtifacts?: () => void;
+  onToggleAutomations?: () => void;
   onToggleTerminal: () => void;
   onSetDocMode: (next: DocMode) => void;
   onNew: () => void;
@@ -79,9 +82,9 @@ type ToolbarProps = {
 
 export function Toolbar({
   dirty, fileName,
-  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
+  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible, automationsVisible,
   terminalVisible, editingDisabled, docMode, reviewDirty,
-  onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
+  onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts, onToggleAutomations,
   onToggleTerminal, onSetDocMode,
   onNew, onOpen, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
@@ -322,6 +325,18 @@ export function Toolbar({
               aria-label={t('toolbarArtifactsLabel')}
             >
               <PackageOpen size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
+          {onToggleAutomations && (
+            <button
+              className={automationsVisible ? 'active' : ''}
+              onClick={onToggleAutomations}
+              disabled={editingDisabled}
+              data-no-window-drag="true"
+              data-tooltip={t('toolbarAutomationsLabel')}
+              aria-label={t('toolbarAutomationsLabel')}
+            >
+              <Workflow size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}
           <button

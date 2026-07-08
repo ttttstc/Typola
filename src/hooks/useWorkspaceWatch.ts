@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MutableRefObject } from 'react';
+import { ensureArtifactOutputScope } from '../services/artifacts/outputScope';
 import { filterSelfWritePaths } from '../services/selfWriteFilter';
 
 function pathStartsWith(path: string, root: string): boolean {
@@ -48,6 +49,7 @@ export function useWorkspaceWatch({
     void import('../services/workspaceWatchService')
       .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
         const { mkdir } = await import('@tauri-apps/plugin-fs');
+        await ensureArtifactOutputScope(outputRoot);
         await mkdir(outputRoot, { recursive: true });
         await watchWorkspace(watchRoot);
         return onWorkspaceChanged((payload) => {

@@ -53,6 +53,7 @@
 - 内置报告生成、PPT 制作、HTML 制作等场景入口。
 - Claude Skill 与 OpenCode command 会按当前 Provider 分开扫描和展示；系统推荐项会显示安装状态，未安装时提供安装 / 配置引导。
 - 用户也可以把本机已有 skill / command 添加到场景模板中。
+- 自动化中心 demo 可手动运行内置文档模板，展示 Context Packet、Gate 摘要和 Execution 记录，并能把本地摘要写入产物中心。
 - AI 生成的文件会统一进入当前 AI 工作区的 `.typola-output/<conversationId>/`，不再散落在聊天记录里。
 - 右侧产物中心可查看当前会话或全部产物，支持打开、对比、归档、删除、覆盖原文和撤销覆盖。
 
@@ -189,6 +190,7 @@ scripts/             打包、portable、updater manifest 辅助脚本
 
 - [架构说明](./docs/ARCHITECTURE.md)
 - [AI 工作台 Skill OS](./docs/AI_WORKBENCH_SKILL_OS.md)
+- [文档自动化 MVP 设计](./docs/AUTOMATION_MVP_DESIGN.md)
 - [OpenCode Provider PRD](./docs/AI_WORKBENCH_OPENCODE_PRD.md)
 - [AI Diff Preview](./docs/AI_DIFF_PREVIEW_SPEC.md)
 - [AI 编辑与检视](./docs/AI_EDIT_AND_REVIEW_SPEC.md)
