@@ -51,6 +51,17 @@
 - typecheck / vitest / cargo check 全过
 - `npm run tauri:build:local` 出包给用户测试（per memory: Tauri 本地 build 必跑）
 - 视觉 QA：手测一个 3 层嵌套文档，能展开/折叠；点 heading 文字仍是跳转；active heading 父链自动展开
+- 自动化单测：`src/services/tocTree.test.ts` 18 个用例 / `src/components/FloatingToc.test.tsx` 6 个 RTL effect 用例
+
+### 手动 QA checklist（review #11）
+
+- [ ] 折叠 h1 后 active 切到 h1 子 → h1 自动展开（`FloatingToc.test.tsx` 已覆盖）
+- [ ] 用户主动折叠 active 父链后，折叠保持（不被 effect 反向展开，review #1 已覆盖）
+- [ ] activeIndex=-1（未滚动）不引发任何状态变更
+- [ ] 切文件后 collapsed 清空（review #2 已覆盖）
+- [ ] 5+ 层嵌套的缩进不串行
+- [ ] 屏幕阅读器朗读 chevron 时能识别折叠哪个 heading（review #5：aria-label 拼上 item.text）
+- [ ] 叶子 heading 不渲染 focusable button，列宽对齐保留（review #4）
 
 ## 不在范围内
 

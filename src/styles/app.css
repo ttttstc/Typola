@@ -1426,7 +1426,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   padding: 3px 12px 3px 0;
   border: none;
   background: transparent;
-  color: var(--muted);
+  /* Inherit color from .floating-toc-row so :hover / .active on the row
+     actually reach the heading text. Review #3 on PR #173. */
+  color: inherit;
   font-family: var(--font-body);
   font-size: 13px;
   line-height: 19px;
@@ -1446,6 +1448,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   display: flex;
   align-items: stretch;
   padding-left: calc(12px + var(--toc-depth, 0) * 12px);
+  color: var(--muted);
 }
 
 .floating-toc-row:hover,
@@ -1488,16 +1491,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .floating-toc-chevron:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
-}
-
-.floating-toc-item:hover,
-.floating-toc-item.active {
-  color: var(--fg);
-  background: var(--control-active-bg);
-}
-
-.floating-toc-item.active {
-  color: var(--accent);
 }
 
 /* ===== Editor Pane ===== */

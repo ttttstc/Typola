@@ -51,6 +51,26 @@ describe('buildTocTree', () => {
     };
     expect(walk(tree)).toEqual([0, 1, 2]);
   });
+
+  it('groups consecutive same-level headings as siblings under the prior ancestor', () => {
+    // h1, h2, h2, h2, h1 → 2 roots, 3 siblings under first h1, 1 sibling under second h1.
+    // Exercises the >= branch of the pop loop with multiple pops between siblings.
+    const tree = buildTocTree([h(1, 'a'), h(2, 'a.1'), h(2, 'a.2'), h(2, 'a.3'), h(1, 'b')]);
+    expect(tree).toHaveLength(2);
+    expect(tree[0].item.text).toBe('a');
+    expect(tree[0].children.map((c) => c.item.text)).toEqual(['a.1', 'a.2', 'a.3']);
+    expect(tree[1].item.text).toBe('b');
+    expect(tree[1].children).toEqual([]);
+  });
+
+  it('clears the stack between adjacent root-level headings', () => {
+    // h3, h2, h1, h2: no shallower ancestor for the leading h3 / h2, so
+    // they each become roots. Final h2 attaches to the new h1 root. This
+    // exercises the multi-pop path of the >= branch.
+    const tree = buildTocTree([h(3, 'orphan'), h(2, 'mid'), h(1, 'root'), h(2, 'child')]);
+    expect(tree.map((n) => n.item.text)).toEqual(['orphan', 'mid', 'root']);
+    expect(tree[2].children.map((c) => c.item.text)).toEqual(['child']);
+  });
 });
 
 describe('findAncestorChain', () => {
@@ -98,5 +118,19 @@ describe('filterCollapsed', () => {
 
   it('returns an empty list for an empty tree', () => {
     expect(filterCollapsed([], new Set([0]))).toEqual([]);
+  });
+
+  it('ignores a collapsed key that does not match any node', () => {
+    // 99 is out of range — should be a no-op, not a crash or a missing-item glitch.
+    const tree = buildTocTree([h(1, 'a'), h(2, 'a.1')]);
+    expect(flatIndex(filterCollapsed(tree, new Set([99])))).toEqual([0, 1]);
+  });
+
+  it('keeps a collapsed leaf key but has nothing to hide', () => {
+    // Collapsing a leaf (no descendants) is harmless: the leaf is still emitted,
+    // and its (empty) subtree is naturally excluded. The behavior is just
+    // "filterCollapsed is a no-op for that key".
+    const tree = buildTocTree([h(1, 'a'), h(2, 'a.1')]);
+    expect(flatIndex(filterCollapsed(tree, new Set([1])))).toEqual([0, 1]);
   });
 });
