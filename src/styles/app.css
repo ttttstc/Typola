@@ -1382,12 +1382,15 @@ html[data-color-scheme='dark'] .export-menu {
 
 .floating-toc-item {
   display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 24px;
-  padding: 3px 12px 3px calc(12px + var(--toc-depth, 0) * 12px);
+  padding: 3px 12px 3px 0;
   border: none;
   background: transparent;
-  color: var(--theme-text-secondary);
+  /* Inherit color from .floating-toc-row so :hover / .active on the row
+     actually reach the heading text. Review #3 on PR #173. */
+  color: inherit;
   font-family: var(--font-body);
   font-size: 13px;
   line-height: 19px;
@@ -1403,14 +1406,53 @@ html[data-color-scheme='dark'] .export-menu {
   white-space: nowrap;
 }
 
-.floating-toc-item:hover,
-.floating-toc-item.active {
+.floating-toc-row {
+  display: flex;
+  align-items: stretch;
+  padding-left: calc(12px + var(--toc-depth, 0) * 12px);
+  color: var(--theme-text-secondary);
+}
+
+.floating-toc-row:hover,
+.floating-toc-row.active {
   color: var(--theme-text-primary);
   background: var(--theme-control-active-bg);
 }
 
-.floating-toc-item.active {
+.floating-toc-row.active {
   color: var(--theme-accent);
+}
+
+.floating-toc-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  flex: 0 0 20px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.floating-toc-chevron.is-leaf {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.floating-toc-chevron:hover {
+  color: var(--fg);
+  background: var(--control-hover-bg, transparent);
+}
+
+.floating-toc-chevron:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 /* ===== Editor Pane ===== */
@@ -3303,7 +3345,7 @@ html[data-theme-id='brutalist'] *::after {
    - 排除大纲(.floating-toc*)、正文文件 tab(.editor-tab*)、skill 项(.skill-hub-item*)、
      文件树(.file-tree-item / .file-tree-folder / .file-tree-action):这些都是「展示控件」,
      不应带硬阴影。skill 场景卡(.skill-hub-scene-card)保留硬阴影 —— 8 个场景入口。 */
-html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item),
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.floating-toc-chevron):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item),
 html[data-theme-id='brutalist'] .skill-hub-scene-card,
 html[data-theme-id='brutalist'] .op-card,
 html[data-theme-id='brutalist'] .artifact-center-card,
@@ -3317,7 +3359,7 @@ html[data-theme-id='brutalist'] .theme-card {
 }
 
 /* 按钮 hover:鼠尾草绿 #4ECDC4 背景 + 黑字 + 抬起; 卡片 hover:抬起 */
-html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):hover:not(:disabled),
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.floating-toc-chevron):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):hover:not(:disabled),
 html[data-theme-id='brutalist'] a:hover {
   background-color: #4ECDC4 !important;
   color: #000 !important;
@@ -3336,7 +3378,7 @@ html[data-theme-id='brutalist'] .theme-card:hover {
   box-shadow: 6px 6px 0 0 #000 !important;
 }
 
-html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):active:not(:disabled),
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.floating-toc-chevron):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):active:not(:disabled),
 html[data-theme-id='brutalist'] a:active {
   background-color: #4ECDC4 !important;
   color: #000 !important;
@@ -3359,6 +3401,8 @@ html[data-theme-id='brutalist'] .floating-toc-preference,
 html[data-theme-id='brutalist'] .floating-toc-switch,
 html[data-theme-id='brutalist'] .floating-toc-list,
 html[data-theme-id='brutalist'] .floating-toc-item,
+html[data-theme-id='brutalist'] .floating-toc-row,
+html[data-theme-id='brutalist'] .floating-toc-chevron,
 html[data-theme-id='brutalist'] .floating-toc-tick,
 html[data-theme-id='brutalist'] .editor-tabbar,
 html[data-theme-id='brutalist'] .editor-tab,
