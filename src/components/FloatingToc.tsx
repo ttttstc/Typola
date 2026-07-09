@@ -1,8 +1,13 @@
-import { Pin, PinOff, X } from 'lucide-react';
-import { type CSSProperties, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, Pin, PinOff, X } from 'lucide-react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import type { TocItem } from '../types/document';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
+import {
+  buildTocTree,
+  filterCollapsed,
+  findAncestorChain,
+} from '../services/tocTree';
 
 type FloatingTocProps = {
   items: TocItem[];
@@ -28,11 +33,57 @@ export function FloatingToc({
   const [expanded, setExpanded] = useState(false);
   const railRef = useRef<HTMLButtonElement>(null);
   const suppressRailFocusRef = useRef(false);
+  // Collapsed subtree roots, keyed by TocItem.flatIndex. Transient per session
+  // (Q2): unmounting the panel (close + reopen) or switching files resets.
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   const panelVisible = pinned || expanded;
   const railLabel = t('openTocHint');
   const pinLabel = pinned ? t('unpinTocHint') : t('pinTocHint');
   const closeLabel = t('closeTocHint');
   const alwaysPinnedLabel = t('tocAlwaysPinnedLabel');
+  const collapseLabel = t('tocCollapse');
+  const expandLabel = t('tocExpand');
+
+  const tree = useMemo(() => buildTocTree(items), [items]);
+  const visibleItems = useMemo(
+    () => filterCollapsed(tree, collapsed),
+    [tree, collapsed],
+  );
+
+  // The chevron column is only meaningful for headings that have descendants.
+  // For leaves we render a hidden placeholder so indentation stays consistent
+  // across rows (Q4 / risk 4). Computed before the early return so the hook
+  // order is stable when `items` flips between empty / non-empty.
+  const subtreeIndex = useMemo(() => {
+    const hasChildren = new Set<number>();
+    const visit = (nodes: ReturnType<typeof buildTocTree>) => {
+      nodes.forEach((node) => {
+        if (node.children.length > 0) hasChildren.add(node.flatIndex);
+        visit(node.children);
+      });
+    };
+    visit(tree);
+    return hasChildren;
+  }, [tree]);
+
+  // Active heading must stay visible. If a tracked active heading lives under
+  // a collapsed ancestor, force-expand the chain (mirrors the search-match
+  // auto-expand in AppLayout.handleSearchNavigate).
+  useEffect(() => {
+    if (activeIndex < 0 || activeIndex >= items.length) return;
+    const chain = findAncestorChain(tree, activeIndex);
+    if (!chain) return;
+    const toExpand = chain.slice(0, -1); // skip the active node itself
+    if (toExpand.every((i) => !collapsed.has(i))) return;
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const i of toExpand) {
+        if (next.delete(i)) changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [activeIndex, collapsed, items.length, tree]);
 
   if (items.length === 0) return null;
 
@@ -68,6 +119,18 @@ export function FloatingToc({
     setExpanded(false);
     if (pinned) onPinnedChange(false);
     focusRailAfterCollapse();
+  };
+
+  const toggleCollapsed = (flatIndex: number) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(flatIndex)) {
+        next.delete(flatIndex);
+      } else {
+        next.add(flatIndex);
+      }
+      return next;
+    });
   };
 
   return (
@@ -137,18 +200,40 @@ export function FloatingToc({
           </button>
         )}
         <nav className="floating-toc-list" aria-label={t('documentTocLabel')}>
-          {items.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`floating-toc-item toc-h${item.level} ${index === activeIndex ? 'active' : ''}`}
-              style={{ '--toc-depth': Math.min(Math.max(item.level - 1, 0), 5) } as CSSProperties}
-              aria-current={index === activeIndex ? 'location' : undefined}
-              onClick={() => onNavigate(item, index)}
-            >
-              <span>{item.text}</span>
-            </button>
-          ))}
+          {visibleItems.map(({ item, flatIndex }) => {
+            const hasSubtree = subtreeIndex.has(flatIndex);
+            const isCollapsed = collapsed.has(flatIndex);
+            return (
+              <div
+                key={item.id}
+                className={`floating-toc-row toc-h${item.level} ${flatIndex === activeIndex ? 'active' : ''}`}
+                style={{ '--toc-depth': Math.min(Math.max(item.level - 1, 0), 5) } as CSSProperties}
+              >
+                <button
+                  type="button"
+                  className={`floating-toc-chevron ${hasSubtree ? '' : 'is-leaf'}`}
+                  aria-label={hasSubtree ? (isCollapsed ? expandLabel : collapseLabel) : undefined}
+                  aria-expanded={hasSubtree ? !isCollapsed : undefined}
+                  aria-hidden={!hasSubtree}
+                  tabIndex={hasSubtree ? 0 : -1}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (hasSubtree) toggleCollapsed(flatIndex);
+                  }}
+                >
+                  {hasSubtree && (isCollapsed ? <ChevronRight size={12} aria-hidden="true" /> : <ChevronDown size={12} aria-hidden="true" />)}
+                </button>
+                <button
+                  type="button"
+                  className="floating-toc-item"
+                  aria-current={flatIndex === activeIndex ? 'location' : undefined}
+                  onClick={() => onNavigate(item, flatIndex)}
+                >
+                  <span>{item.text}</span>
+                </button>
+              </div>
+            );
+          })}
         </nav>
       </div>
     </aside>
