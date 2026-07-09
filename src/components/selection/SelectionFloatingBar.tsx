@@ -10,13 +10,17 @@
 //   - 选区文本 hash 与上次一致 → 跳过(纯坐标微抖不计)。
 //   - 选区从非空 → 空:立即隐藏。
 //   - Esc:隐藏(只对当前选区)。
+//   - 右端子按钮 `⋯` 触发 mini menu:「本页不再展示」「全局隐藏」。
 //
 // 定位:渲染时用 rect 估算初始位置 → useLayoutEffect 在已渲染的 div 上读真实尺寸
 // 精确回弹(直接改 DOM style)。**不要**把渲染 gate 在一个"需要先渲染才能算出来"
 // 的 position state 上,否则鸡生蛋死锁(浮条永不显示)。
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SELECTION_ACTIONS, type SelectionActionId } from '../../services/agent/selectionActions';
+import { translate, type I18nKey } from '../../services/i18n';
+import { useSettings } from '../../hooks/useSettings';
+import { Tooltip } from '../ui/Tooltip';
 
 // 浮条只暴露 3 个高频动作:润色 / 名词解释 / 加检视意见。
 // 自定义 / 扩写 / 缩写 / 校对走右键菜单(场景更完整,不适合塞进浮动窄条)。
@@ -44,11 +48,26 @@ type Props = {
   stableTick: number;
   /** 选择动作时回调,带触发点视口坐标(用于浮卡定位) */
   onPick: (action: SelectionActionId, origin: { x: number; y: number }) => void;
+  /** 本页不再展示:filePath 维度 session suppress,本次不弹直到换文档。 */
+  onDismissSession?: () => void;
+  /** 全局隐藏:写 selectionFloatingBarEnabled=false + 关闭设置 UI 提示。 */
+  onHideGlobally?: () => void;
 };
 
-export function SelectionFloatingBar({ rect, hasSelection, stableTick, onPick }: Props) {
+export function SelectionFloatingBar({
+  rect,
+  hasSelection,
+  stableTick,
+  onPick,
+  onDismissSession,
+  onHideGlobally,
+}: Props) {
+  const settings = useSettings();
+  const t = useCallback((key: I18nKey) => translate(settings.locale, key), [settings.locale]);
   const [visible, setVisible] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
   const showTimerRef = useRef<number | null>(null);
   const dismissedForCurrentSelectionRef = useRef(false);
   const lastStableTickRef = useRef(0);
@@ -174,6 +193,54 @@ export function SelectionFloatingBar({ rect, hasSelection, stableTick, onPick }:
           </button>
         );
       })}
+      {(onDismissSession || onHideGlobally) && (
+        <div
+          className="selection-floating-bar-more-wrap"
+          onMouseEnter={() => setMoreOpen(true)}
+          onMouseLeave={() => setMoreOpen(false)}
+        >
+          <button
+            ref={moreBtnRef}
+            type="button"
+            className="selection-floating-bar-item selection-floating-bar-more"
+            style={{ flex: '0 0 auto', width: 'auto', padding: '4px 6px' }}
+            aria-label={t('floatingBarTooltip')}
+            title={t('floatingBarTooltip')}
+          >
+            <span aria-hidden="true">⋯</span>
+          </button>
+          {moreOpen && (
+            <div className="selection-floating-bar-more-menu" role="menu">
+              {onDismissSession && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="selection-floating-bar-more-item"
+                  onClick={() => { setMoreOpen(false); onDismissSession(); }}
+                >
+                  {t('floatingBarHideThisPage')}
+                </button>
+              )}
+              {onHideGlobally && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="selection-floating-bar-more-item"
+                  onClick={() => { setMoreOpen(false); onHideGlobally(); }}
+                >
+                  {t('floatingBarHideGlobal')}
+                </button>
+              )}
+            </div>
+          )}
+          <Tooltip
+            label={t('floatingBarTooltip')}
+            reference={moreBtnRef.current}
+            placement="top"
+            open={!moreOpen && moreBtnRef.current !== null ? undefined : false}
+          />
+        </div>
+      )}
     </div>
   );
 }

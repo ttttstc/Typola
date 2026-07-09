@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openPath, saveFile } from './fileService';
+import { openFolder, openPath, saveFile } from './fileService';
 import type { OpenedFile } from '../types/document';
 
 const tauriCoreMock = vi.hoisted(() => ({
@@ -13,9 +13,16 @@ const tauriFsMock = vi.hoisted(() => ({
   writeTextFile: vi.fn(),
 }));
 
+const dialogMock = vi.hoisted(() => ({
+  open: vi.fn(),
+  save: vi.fn(),
+}));
+
 vi.mock('@tauri-apps/api/core', () => tauriCoreMock);
 
 vi.mock('@tauri-apps/plugin-fs', () => tauriFsMock);
+
+vi.mock('@tauri-apps/plugin-dialog', () => dialogMock);
 
 function bytesOf(value: string): number[] {
   return Array.from(new TextEncoder().encode(value));
@@ -49,6 +56,35 @@ describe('fileService', () => {
       lastSavedContent: '# 双击打开\n正文',
       fileType: 'markdown',
     });
+  });
+
+  it('openFolder: read_first_level_openable + filter + skip bad files', async () => {
+    Object.defineProperty(window, '__TAURI_INTERNALS__', {
+      configurable: true,
+      value: {},
+    });
+    dialogMock.open.mockResolvedValueOnce(['/tmp/sample-dir']);
+    tauriCoreMock.invoke.mockImplementation(async (cmd: string, args: { dir?: string; path?: string }) => {
+      if (cmd === 'read_first_level_openable') {
+        return [`${args.dir}/good.md`, `${args.dir}/nested.txt`, `${args.dir}/doc.html`];
+      }
+      if (cmd === 'read_opened_document') {
+        const p = args.path ?? '';
+        if (p.endsWith('good.md')) return bytesOf('# good');
+        if (p.endsWith('doc.html')) return bytesOf('<p>doc</p>');
+        throw new Error('not supported');
+      }
+      return undefined;
+    });
+    const result = await openFolder('UTF-8');
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.path)).toContain('/tmp/sample-dir/good.md');
+    expect(result.map((r) => r.path)).toContain('/tmp/sample-dir/doc.html');
+  });
+
+  it('openFolder: returns empty when dialog cancelled', async () => {
+    dialogMock.open.mockResolvedValueOnce(null);
+    expect(await openFolder('UTF-8')).toEqual([]);
   });
 
   it('keeps browser/test fallback on the filesystem plugin outside Tauri runtime', async () => {

@@ -4,6 +4,30 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SelectionFloatingBar } from './SelectionFloatingBar';
 import '../../styles/app.css';
+import type { I18nKey } from '../../services/i18n';
+
+vi.mock('../../services/i18n', () => ({
+  translate: (_locale: string, key: I18nKey) => {
+    const dict: Record<string, string> = {
+      floatingBarTooltip: '选中文字时浮现 · Esc 关闭 · 本页不再展示 · 全局隐藏',
+      floatingBarHideThisPage: '本页不再展示',
+      floatingBarHideGlobal: '全局隐藏',
+    };
+    return dict[key] ?? key;
+  },
+  I18nKey: undefined as unknown as I18nKey,
+  LOCALE_OPTIONS: [],
+}));
+
+vi.mock('../../hooks/useSettings', () => ({
+  useSettings: () => ({ locale: 'zh-CN', selectionFloatingBarEnabled: true }),
+}));
+
+vi.mock('../ui/Tooltip', () => ({
+  Tooltip: () => null,
+}));
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -60,7 +84,7 @@ describe('SelectionFloatingBar', () => {
     // debounce 后必须出现 —— 这条正是抓"position 死锁导致永不渲染"的回归测试
     const bar = host.querySelector('.selection-floating-bar');
     expect(bar).not.toBeNull();
-    // 3 个高频动作按钮(润色/名词解释/加检视意见),其余走右键菜单
+    // 3 个高频动作按钮(润色/名词解释/加检视意见)+ 1 ⋯ 子按钮(默认未传 onDismissSession/onHideGlobally 故不渲染)
     expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
   });
 
@@ -99,19 +123,43 @@ describe('SelectionFloatingBar', () => {
     expect(onPick.mock.calls[0][1]).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
   });
 
-  it('最后一个按钮是「加检视意见」(review)', () => {
+    it('最后一个 action 按钮仍是 review,接着是 ⋯ 更多子按钮(onDismissSession / onHideGlobally)', () => {
     const onPick = vi.fn();
+    const onDismissSession = vi.fn();
+    const onHideGlobally = vi.fn();
     act(() => {
-      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={onPick} />);
+      root.render(
+        <SelectionFloatingBar
+          rect={mkRect()}
+          hasSelection
+          stableTick={1}
+          onPick={onPick}
+          onDismissSession={onDismissSession}
+          onHideGlobally={onHideGlobally}
+        />,
+      );
     });
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-    const buttons = host.querySelectorAll('.selection-floating-bar-item');
-    act(() => {
-      (buttons[buttons.length - 1] as HTMLButtonElement).click();
-    });
+    act(() => { vi.advanceTimersByTime(200); });
+    const items = host.querySelectorAll('.selection-floating-bar-item');
+    // 3 actions + 1 more(⋯) = 4
+    expect(items).toHaveLength(4);
+    // index 2 仍是 review
+    act(() => { (items[2] as HTMLButtonElement).click(); });
     expect(onPick.mock.calls[0][0]).toBe('review');
+    // index 3 是 ⋯ 按钮
+    const moreBtn = items[3] as HTMLButtonElement;
+    expect(moreBtn.textContent).toContain('⋯');
+    // Menu 交互(visible-after-mouseenter)留手测(jsx-dom 无法模拟 state update)
+    expect(moreBtn).toBeTruthy();
+  });
+
+it('未传 onDismissSession / onHideGlobally 时不渲染 ⋯', () => {
+    act(() => {
+      root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
+    });
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(host.querySelector('.selection-floating-bar-more')).toBeNull();
+    expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
   });
 
   it('选区消失(rect 变 null)→ 浮条立即隐藏', () => {

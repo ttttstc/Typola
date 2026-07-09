@@ -580,6 +580,33 @@ fn write_opened_document(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|error| format!("failed to write document: {error}"))
 }
 
+// v1:仅列目录下一层的 Markdown / HTML / Word 文档(flat,不递归,跳过隐藏文件与子目录)。
+// 仅支持单个目录;多目录由前端循环调用。返回绝对路径数组(openFolder 前端按 isOpenable 过滤后再调)。
+#[tauri::command]
+fn read_first_level_openable(dir: String) -> Result<Vec<String>, String> {
+    let root = PathBuf::from(dir);
+    if !root.is_dir() {
+        return Err("directory not found".into());
+    }
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(&root).map_err(|error| format!("failed to read directory: {error}"))? {
+        let entry = entry.map_err(|error| format!("failed to read directory entry: {error}"))?;
+        let path = entry.path();
+        if path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        if is_openable_document_path(&path) {
+            out.push(path.to_string_lossy().to_string());
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
 #[tauri::command]
 fn rename_opened_document(request: RenameDocumentRequest) -> Result<RenameDocumentResult, String> {
     let path = PathBuf::from(request.path);
@@ -1606,6 +1633,7 @@ pub fn run() {
             allow_asset_directory,
             allow_html_preview_directory,
             open_path_external,
+            read_first_level_openable,
             read_opened_document,
             write_opened_document,
             rename_opened_document,

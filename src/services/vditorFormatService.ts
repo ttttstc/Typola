@@ -47,6 +47,19 @@ export async function applyVditorFormat(editor: Vditor, action: FormatAction): P
     case 'hr':
       editor.insertValue('\n\n---\n\n', true);
       return;
+    case 'quote-up':
+    case 'quote-down':
+      applyQuoteLevel(editor, action.type === 'quote-up');
+      return;
+    case 'link-edit':
+      await applyLinkEdit(editor);
+      return;
+    case 'clear-format':
+      applyClearFormat(editor);
+      return;
+    case 'codeblock-lang':
+      await applyCodeblockLang(editor);
+      return;
     case 'cut':
       document.execCommand('cut');
       return;
@@ -130,6 +143,121 @@ function selectAllInIr(editor: Vditor) {
 
 function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+// 取光标所在行(从 value 中按光标位置反查)。
+// 简化:用 IR DOM 选区读出行文本,再在 source 里找对应行。
+function currentLineRange(editor: Vditor): { start: number; end: number; text: string } | null {
+  const ir = getIrElement(editor);
+  if (!ir) return null;
+  const sel = ir.ownerDocument?.defaultView?.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  let node: Node | null = range.startContainer;
+  if (node && node.nodeType !== Node.TEXT_NODE) {
+    node = node.firstChild;
+  }
+  if (!node) return null;
+  // 向上找段落级祖先(P / H1..H6 / LI / BLOCKQUOTE)。
+  let el: HTMLElement | null = node instanceof HTMLElement ? node : node.parentElement;
+  while (el && el !== ir && !/^(H[1-6]|P|LI|BLOCKQUOTE)$/.test(el.tagName)) {
+    el = el.parentElement;
+  }
+  if (!el || el === ir) return null;
+  const lineText = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (!lineText) return null;
+  const value = editor.getValue();
+  // 在 source 里找与 lineText 匹配的行(去掉 markdown 前缀后比对)。
+  let offset = 0;
+  for (const rawLine of value.split('\n')) {
+    const normalized = rawLine.replace(/^\s{0,3}(#{1,6}\s+|>\s*|[-\*+]\s+|\d+\.\s+)/, '').replace(/\s+/g, ' ').trim();
+    if (normalized === lineText) {
+      return { start: offset, end: offset + rawLine.length, text: rawLine };
+    }
+    offset += rawLine.length + 1;
+  }
+  return null;
+}
+
+// 升级/降级引用:在行首加 / 剥一个 `> ` 前缀。
+function applyQuoteLevel(editor: Vditor, upgrade: boolean): void {
+  const line = currentLineRange(editor);
+  if (!line) return;
+  const value = editor.getValue();
+  const prefix = value.slice(0, line.start);
+  const suffix = value.slice(line.end);
+  let body = line.text;
+  // 去掉行首空白 + 已有引用前缀。
+  const match = body.match(/^(\s*)((?:>\s*)+)(.*)$/);
+  let indent = '';
+  let quote = '';
+  let rest = body;
+  if (match) {
+    indent = match[1];
+    quote = match[2];
+    rest = match[3];
+  }
+  const depth = (quote.match(/>/g) ?? []).length;
+  let newQuote = quote;
+  if (upgrade) {
+    newQuote = quote + '> ';
+  } else if (depth > 0) {
+    newQuote = quote.replace(/^>\s*/, '');
+  }
+  const newLine = indent + newQuote + rest;
+  editor.updateValue(prefix + newLine + suffix);
+}
+
+// 编辑链接:选区必须是 markdown 链接 `[label](url)`,prompt 改 url。
+async function applyLinkEdit(editor: Vditor): Promise<void> {
+  const sel = editor.getSelection();
+  if (!sel) return;
+  const m = sel.match(/^\[([^\]]*)\]\(([^)]+)\)$/);
+  if (!m) return;
+  const label = m[1];
+  const currentUrl = m[2];
+  const next = window.prompt('链接网址', currentUrl);
+  if (next === null) return;
+  const value = editor.getValue();
+  const idx = value.indexOf(sel);
+  if (idx < 0) return;
+  const nextValue = value.slice(0, idx) + `[${label}](${next})` + value.slice(idx + sel.length);
+  editor.updateValue(nextValue);
+}
+
+// 清除格式:strip 选区文本的常见 markdown 标记。
+function applyClearFormat(editor: Vditor): void {
+  const sel = editor.getSelection();
+  if (!sel) return;
+  const stripped = sel
+    .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
+    .replace(/_{1,3}([^_]+)_{1,3}/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s{0,3}(?:[-*+]|\d+\.)\s+/gm, '');
+  if (stripped === sel) return;
+  const value = editor.getValue();
+  const idx = value.indexOf(sel);
+  if (idx < 0) return;
+  editor.updateValue(value.slice(0, idx) + stripped + value.slice(idx + sel.length));
+}
+
+// 编辑代码块语言:选区必须是 fenced code block `` ```lang\n...\n``` ``,prompt 改 lang。
+async function applyCodeblockLang(editor: Vditor): Promise<void> {
+  const sel = editor.getSelection();
+  if (!sel) return;
+  const m = sel.match(/^```([^\n]*)\n([\s\S]*?)\n```$/);
+  if (!m) return;
+  const currentLang = m[1];
+  const code = m[2];
+  const next = window.prompt('代码语言', currentLang);
+  if (next === null) return;
+  const fence = '```' + next + '\n' + code + '\n```';
+  const value = editor.getValue();
+  const idx = value.indexOf(sel);
+  if (idx < 0) return;
+  editor.updateValue(value.slice(0, idx) + fence + value.slice(idx + sel.length));
 }
 
 function getIrElement(editor: Vditor): HTMLElement | null {

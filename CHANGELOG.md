@@ -6,7 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- AI 产物中心支持 HTML 产物轻量预览（issue #156）：`.html` / `.htm` 产物新增「预览」按钮，在右侧面板用 sandboxed iframe 直接展示 AI 生成的页面，本地 CSS / JS / 图片 / 音视频资源会被内联进 `srcDoc`；toolbar 提供「返回产物中心 / 刷新 / 在浏览器打开 / 关闭」。通用 HTML 文档构建与本地资源内联能力抽到 `src/services/htmlPreviewService.ts`，`htmlPresentationService` 复用同一套通用层，只保留演示模式专属的 bridge script。
+- 选区菜单窄化对齐 Typora/Obsidian(`width: max-content; max-width: 240px`,kbd 间距收紧 16→10px);右键菜单新增 5 个基础编辑能力:升级引用 / 降级引用 / 编辑链接 / 清除格式 / 编辑代码块语言,均走 `applyVditorFormat` 现有分发,Vditor IR 模式直接操作选中/选区 + `updateValue` 重渲染;新增 i18n keys `contextMenuQuoteUp / contextMenuQuoteDown / contextMenuLinkEdit / contextMenuClearFormat / contextMenuCodeblockLang` 中英日三译。
+- 选区浮条右端加 `⋯` 子按钮 + hover tooltip,mini menu 暴露两项:「本页不再展示」(filePath 维度 session suppress,直到切文档)与「全局隐藏」(直接写 `selectionFloatingBarEnabled=false`,与设置页 toggle 同步);新增 keys `floatingBarHideThisPage / floatingBarHideGlobal / floatingBarTooltip` 中英日三译;tooltip 用现有 Tooltip 组件浮显。
+- 工具栏新增「打开文件夹」按钮(Cmd+Shift+O),选夹后走新增 Tauri cmd `read_first_level_openable` 仅列一层 md/html/docx(不递归,跳过隐藏文件与节点_modules/dist/target/.git),批量入 tab(last active),单文件打开失败不阻塞其他(#170);新增 keys `toolbarOpenFolderTitle / toolbarOpenFolderLabel` 中英日三译;fileService 加 `openFolder` 函数,useFileTabs 加 `handleOpenFolder` 回调。
+
+### Fixed
+
 - 新增第五套主题「粗野」(id: `brutalist`)：新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
 - 新增第四套主题「抽象」(id: `abstract`)：采用蒙德里安 De Stijl 经典配色 —— 白底 (`#ffffff`) + 黑色网格 (`#1a1a1a`) + 蒙德里安红 (`#c8311b`) / 蓝 (`#1e5a8a`) / 黄 (`#e8b810`) 三原色强调。accent 用红、aiInserted 用蓝、aiDeleted 用红、warning 用黄；终端 ANSI 也按红 / 蓝 / 黄 / 黑 / 白体系对齐，不再出现绿色映射。设置 → 外观 → 主题卡片可直接切换。
 - 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨韵”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
