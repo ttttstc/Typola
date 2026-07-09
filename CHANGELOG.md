@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+<<<<<<< HEAD
 - 修复 Windows MSI 安装到受限目录时可能报 “verify that you have access to that directory” 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
 - 修复缺少 Microsoft Edge WebView2 Runtime 时可能还没显示引导就启动失败的问题：Windows 启动预检前移到 `main()`，早于 Tauri WebView 初始化；缺失时先运行随包 bootstrapper，失败后提示用户安装并打开官方页面。
 - 修复 Vditor WYSIWYG 代码块拖选多行时选区容易被异步渲染/折叠重排打断的问题；代码块正文显式允许文本选择，拖选期间暂停 mermaid/katex/折叠等会改 DOM 的 idle 重排。
