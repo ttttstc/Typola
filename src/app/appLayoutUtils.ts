@@ -1,4 +1,5 @@
 import type { TocItem } from '../types/document';
+import { collectMarkdownHeadings } from '../services/markdownHeadings';
 
 export const RIGHT_PANEL_MIN_WIDTH = 320;
 export const RIGHT_PANEL_MAX_WIDTH = 760;
@@ -49,17 +50,7 @@ export function imageExtensionFromMime(type: string): string {
 }
 
 export function extractToc(content: string): TocItem[] {
-  const headings: TocItem[] = [];
-  const regex = /^(#{1,6})\s+(.+)$/gm;
-  let match: RegExpExecArray | null;
-  let idx = 0;
-  while ((match = regex.exec(content)) !== null) {
-    const level = match[1].length;
-    const text = match[2].trim();
-    const id = `toc-${idx++}`;
-    headings.push({ level, text, id });
-  }
-  return headings;
+  return collectMarkdownHeadings(content).map(({ level, text, id }) => ({ level, text, id }));
 }
 
 export function toUpdateErrorMessage(error: unknown): string {

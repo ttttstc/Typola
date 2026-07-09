@@ -1,5 +1,4 @@
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
+import { loadKatex } from './lazyKatex';
 
 export type KatexRenderOptions = {
   theme?: 'light' | 'dark';
@@ -25,6 +24,7 @@ export async function renderKatexIn(
   if (blocks.length === 0) return;
 
   const activeMath = getActiveMath(container);
+  const katex = await loadKatex();
   for (const block of blocks) {
     if (block.el.getAttribute(RENDERED_ATTR) === 'true') continue;
     if (block.el.classList.contains(SKIP_CLASS)) continue;

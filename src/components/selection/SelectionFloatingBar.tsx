@@ -6,9 +6,10 @@
 //   - 两者共用 SELECTION_ACTIONS,点击都走 onPick → useEditorSelectionBridge 的 C 混合分流
 //
 // 行为:
-//   - 选区从空 → 非空:200ms debounce 后浮现(避免拖选过程中闪烁)
-//   - 选区从非空 → 空:立即隐藏
-//   - Esc:隐藏(只对当前选区)
+//   - 仅在选区文本稳定 + 鼠标已松手(mouseup)后才考虑弹出 — 拖选过程中绝不弹,避免闪烁和遮挡。
+//   - 选区文本 hash 与上次一致 → 跳过(纯坐标微抖不计)。
+//   - 选区从非空 → 空:立即隐藏。
+//   - Esc:隐藏(只对当前选区)。
 //
 // 定位:渲染时用 rect 估算初始位置 → useLayoutEffect 在已渲染的 div 上读真实尺寸
 // 精确回弹(直接改 DOM style)。**不要**把渲染 gate 在一个"需要先渲染才能算出来"
@@ -17,10 +18,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SELECTION_ACTIONS, type SelectionActionId } from '../../services/agent/selectionActions';
 
-const ACTION_IDS: SelectionActionId[] = ['polish', 'shorten', 'expand', 'explain', 'proofread', 'custom', 'review'];
-const SHOW_DEBOUNCE_MS = 200;
-const ESTIMATED_WIDTH = 360;
-const ESTIMATED_HEIGHT = 36;
+// 浮条只暴露 3 个高频动作:润色 / 名词解释 / 加检视意见。
+// 自定义 / 扩写 / 缩写 / 校对走右键菜单(场景更完整,不适合塞进浮动窄条)。
+const ACTION_IDS: SelectionActionId[] = ['polish', 'explain', 'review'];
+const SHOW_DEBOUNCE_MS = 160;
+const ESTIMATED_WIDTH = 240;
+const ESTIMATED_HEIGHT = 34;
 const GAP = 8;
 const PADDING = 6;
 
@@ -34,15 +37,22 @@ type Props = {
   rect: FloatingBarRect | null;
   /** 当前选区是否仍有有效非空文本 */
   hasSelection: boolean;
+  /**
+   * 自增计数器,父组件在 mouseup 时 +1。浮条只在递增后的"稳定态"开始 debounce,
+   * 拖选过程中(mouseup 还没发生)即使 rect 变也不会重启 timer。
+   */
+  stableTick: number;
   /** 选择动作时回调,带触发点视口坐标(用于浮卡定位) */
   onPick: (action: SelectionActionId, origin: { x: number; y: number }) => void;
 };
 
-export function SelectionFloatingBar({ rect, hasSelection, onPick }: Props) {
+export function SelectionFloatingBar({ rect, hasSelection, stableTick, onPick }: Props) {
   const [visible, setVisible] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const showTimerRef = useRef<number | null>(null);
   const dismissedForCurrentSelectionRef = useRef(false);
+  const lastStableTickRef = useRef(0);
+  const lastSelectionHashRef = useRef<string>('');
 
   // debounce 显示;选区消失立即隐藏
   useEffect(() => {
@@ -53,9 +63,19 @@ export function SelectionFloatingBar({ rect, hasSelection, onPick }: Props) {
       }
       setVisible(false);
       dismissedForCurrentSelectionRef.current = false;
+      lastStableTickRef.current = 0;
+      lastSelectionHashRef.current = '';
       return;
     }
+    // 拖选过程中(mouseup 没发生,stableTick 没递增)即使 rect 变也不重启 timer。
+    if (stableTick === lastStableTickRef.current) return;
     if (dismissedForCurrentSelectionRef.current) return;
+    // 选区文本 hash 一致 → 纯坐标微抖,忽略。
+    const text = typeof window !== 'undefined' ? window.getSelection()?.toString() ?? '' : '';
+    const hash = `${text.length}|${text.slice(0, 24)}|${text.slice(-8)}`;
+    if (hash === lastSelectionHashRef.current && visible) return;
+    lastSelectionHashRef.current = hash;
+    lastStableTickRef.current = stableTick;
     if (showTimerRef.current !== null) window.clearTimeout(showTimerRef.current);
     showTimerRef.current = window.setTimeout(() => {
       showTimerRef.current = null;
@@ -67,7 +87,7 @@ export function SelectionFloatingBar({ rect, hasSelection, onPick }: Props) {
         showTimerRef.current = null;
       }
     };
-  }, [rect, hasSelection]);
+  }, [rect, hasSelection, stableTick]);
 
   // 渲染后用真实尺寸精确定位 + 视口回弹(paint 前跑,不闪)。
   useLayoutEffect(() => {
@@ -125,7 +145,12 @@ export function SelectionFloatingBar({ rect, hasSelection, onPick }: Props) {
       className="selection-floating-bar"
       role="toolbar"
       aria-label="选区 AI 动作"
-      style={{ left: initLeft, top: initTop }}
+      style={{
+        left: initLeft,
+        top: initTop,
+        width: 'max-content',
+        maxWidth: 'calc(100vw - 12px)',
+      }}
       // 阻止 mousedown 默认行为,免得点浮条按钮时把编辑器选区清掉
       onMouseDown={(event) => event.preventDefault()}
     >
@@ -137,6 +162,7 @@ export function SelectionFloatingBar({ rect, hasSelection, onPick }: Props) {
             key={id}
             type="button"
             className="selection-floating-bar-item"
+            style={{ flex: '0 0 auto', width: 'auto' }}
             onClick={() => handlePick(id)}
             title={action.label}
             aria-label={action.label}

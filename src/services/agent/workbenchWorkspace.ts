@@ -12,6 +12,6 @@ export function resolveWorkbenchWorkspaceRoot({
   configuredWorkspaceRoot,
   defaultWorkspaceRoot,
 }: WorkbenchWorkspaceInputs): string | undefined {
-  return nonEmpty(configuredWorkspaceRoot)
-    ?? nonEmpty(defaultWorkspaceRoot);
+  return nonEmpty(defaultWorkspaceRoot)
+    ?? nonEmpty(configuredWorkspaceRoot);
 }

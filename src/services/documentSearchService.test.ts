@@ -36,6 +36,22 @@ describe('documentSearchService', () => {
     expect(replaceAllSearchMatches(source, matches, '1')).toBe('1 two 1');
   });
 
+  it('finds and replaces multi-line matches', () => {
+    const source = '```ts\nconst a = 1;\nconst b = 2;\n```\n\nconst a = 1;\nconst b = 2;\n';
+    const query = 'const a = 1;\nconst b = 2;';
+    const matches = findSearchMatches(source, query, {
+      caseSensitive: true,
+      wholeWord: false,
+      regex: false,
+    });
+
+    expect(matches.map((match) => match.text)).toEqual([query, query]);
+    expect(replaceSearchMatch(source, matches[0], 'const sum = a + b;')).toContain('```ts\nconst sum = a + b;\n```');
+    expect(replaceAllSearchMatches(source, matches, 'const sum = a + b;')).toBe(
+      '```ts\nconst sum = a + b;\n```\n\nconst sum = a + b;\n',
+    );
+  });
+
   it('tracks repeated visible search terms across adjacent emphasis markers', () => {
     const source = '_alpha_ _beta_ _gamma_\n\nfoo first foo second foo third beta last\n';
     const options = { caseSensitive: false, wholeWord: false, regex: false };

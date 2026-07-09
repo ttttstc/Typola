@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ArrowLeft, BarChart3, CalendarDays, Check, ClipboardList, Globe, PenLine,
-  Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, TriangleAlert, type LucideProps,
+  Plus, Presentation, RefreshCw, Search, Sparkles, Trash2, type LucideProps,
 } from 'lucide-react';
 import type { AgentProvider } from '../services/agent/provider';
 import { listLocalSkills, type Skill } from '../services/agent/skillScanner';
@@ -14,6 +14,7 @@ import {
   removeCustomSkillFromScene,
   skillCapabilityLabel,
   type SkillHub,
+  type SkillPickPayload,
   type SkillRef,
   type SkillSceneTemplate,
   type SkillTemplateRef,
@@ -24,7 +25,7 @@ export type SkillHubPanelProps = {
   activeWorkspaceRoot?: string;
   hub: SkillHub;
   loadError?: string;
-  onPickSkill: (skillName: string) => void;
+  onPickSkill: (payload: SkillPickPayload) => void;
   onInstallSkill: (prompt: string) => void;
   onSaveHub: (hub: SkillHub) => Promise<void>;
   onReload: () => Promise<void>;
@@ -38,6 +39,14 @@ type SkillCard = {
   installed: boolean;
   path?: string;
   template?: SkillTemplateRef;
+  builtin?: boolean;
+  output?: SkillTemplateRef['output'];
+};
+
+type SkillSection = {
+  id: 'system' | 'custom';
+  title: string;
+  cards: SkillCard[];
 };
 
 const SCENE_ICONS: Record<string, ComponentType<LucideProps>> = {
@@ -46,6 +55,12 @@ const SCENE_ICONS: Record<string, ComponentType<LucideProps>> = {
 
 function normalizeKey(name: string): string {
   return name.trim().replace(/^\/+/u, '').toLowerCase();
+}
+
+function skillItemClassName(skill: SkillCard): string {
+  const classes = ['skill-hub-item'];
+  if (!skill.installed) classes.push('is-disabled');
+  return classes.join(' ');
 }
 
 function skillTitle(skill: SkillRef | SkillTemplateRef, local?: Skill): string {
@@ -257,34 +272,35 @@ export function SkillHubPanel({
   };
 
   const selectedScene = systemScenes.find((scene) => scene.id === selectedSceneId) ?? null;
-  const cards = useMemo<SkillCard[]>(() => {
-    if (!selectedScene) return [];
+  const { systemCards, customCards } = useMemo<{ systemCards: SkillCard[]; customCards: SkillCard[] }>(() => {
+    if (!selectedScene) return { systemCards: [], customCards: [] };
     const custom = getSceneAdditionsForProvider(hub, selectedScene.id, activeProvider);
-    return [
-      ...selectedScene.skills.map((skill) => {
-        const local = resolveSystemLocal(skill, localSkills);
-        return {
-          name: skill.name,
-          label: skillTitle(skill, local),
-          summary: skillSummary(skill, local),
-          system: true,
-          installed: Boolean(local),
-          path: local?.path ?? (activeProvider === 'claude' ? skill.expectedPath : undefined),
-          template: skill,
-        };
-      }),
-      ...custom.map((skill) => {
-        const local = localSkills.find((entry) => normalizeKey(entry.name) === normalizeKey(skill.name));
-        return {
-          name: skill.name,
-          label: skillTitle(skill, local),
-          summary: skillSummary(skill, local),
-          system: false,
-          installed: Boolean(local),
-          path: local?.path,
-        };
-      }),
-    ];
+    const system: SkillCard[] = selectedScene.skills.map((skill) => {
+      const local = resolveSystemLocal(skill, localSkills);
+      return {
+        name: skill.name,
+        label: skillTitle(skill, local),
+        summary: skillSummary(skill, local),
+        system: true,
+        installed: Boolean(local),
+        path: local?.path ?? (activeProvider === 'claude' ? skill.expectedPath : undefined),
+        template: skill,
+        builtin: Boolean(skill.builtin),
+        output: skill.output,
+      };
+    });
+    const userCards: SkillCard[] = custom.map((skill) => {
+      const local = localSkills.find((entry) => normalizeKey(entry.name) === normalizeKey(skill.name));
+      return {
+        name: skill.name,
+        label: skillTitle(skill, local),
+        summary: skillSummary(skill, local),
+        system: false,
+        installed: Boolean(local),
+        path: local?.path,
+      };
+    });
+    return { systemCards: system, customCards: userCards };
   }, [activeProvider, hub, localSkills, selectedScene]);
 
   const saveHub = async (nextHub: SkillHub) => {
@@ -300,7 +316,13 @@ export function SkillHubPanel({
     await saveHub(removeCustomSkillFromScene(hub, sceneId, skillName));
   };
 
-  const installedCount = cards.filter((card) => card.installed).length;
+  const installedCount = systemCards.filter((card) => card.installed).length
+    + customCards.filter((card) => card.installed).length;
+  const sections: SkillSection[] = [
+    { id: 'system', title: '推荐 skill', cards: systemCards },
+    { id: 'custom', title: '自定义 skill', cards: customCards },
+  ];
+  const visibleSections = sections.filter((section) => section.cards.length > 0);
 
   return (
     <div className="skill-hub-panel">
@@ -340,8 +362,8 @@ export function SkillHubPanel({
               <button
                 type="button"
                 key={scene.id}
+                data-scene-id={scene.id}
                 className="skill-hub-scene-card"
-                style={{ '--scene-accent': scene.accent } as React.CSSProperties}
                 onClick={() => setSelectedSceneId(scene.id)}
               >
                 <span className="skill-hub-scene-icon" aria-hidden>
@@ -368,86 +390,139 @@ export function SkillHubPanel({
               <Plus size={13} /> 添加 {capabilityLabel}
             </button>
           </div>
-          {cards.length === 0 ? (
+          {visibleSections.length === 0 ? (
             <div className="skill-hub-empty">
               <p>该场景还没有预置 {capabilityLabel}。</p>
               <p className="skill-hub-hint">点击右上角添加本机已有 {capabilityLabel}。</p>
             </div>
           ) : (
-            <ul className="skill-hub-items">
-              {cards.map((skill) => {
-                const sourceUrl = skill.template?.installSource;
-                const displayName = activeProvider === 'opencode' ? skill.name : `/${skill.name}`;
-                return (
-                <li key={`${skill.system ? 'system' : 'custom'}-${skill.name}`}>
-                  <div className={`skill-hub-item ${skill.installed ? '' : 'is-disabled'}`}>
-                    <button
-                      type="button"
-                      className="skill-hub-item-main"
-                      onClick={() => {
-                        if (skill.installed) onPickSkill(skill.name);
-                        else if (skill.template) onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider));
-                      }}
-                      title={skill.path ? `${skill.name} — ${skill.path}` : skill.name}
-                    >
-                      <span className="skill-hub-item-topline">
-                        <span className="skill-hub-item-name">
-                          {displayName}
-                          {sourceUrl && (
-                            <button
-                              type="button"
-                              className="skill-hub-item-source"
-                              title={`来源：${sourceUrl}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openSourceUrl(sourceUrl);
-                              }}
-                            >
-                              <GitHubIcon size={12} />
-                            </button>
-                          )}
-                          {skill.system && !sourceUrl && (
-                            <span className="skill-hub-item-no-source" title="缺少 GitHub 来源 URL">
-                              <TriangleAlert size={10} />
+            <div className="skill-hub-categories">
+              {visibleSections.map((section) => (
+                <section key={section.id} className="skill-hub-category">
+                  <h3 className="skill-hub-category-title">
+                    {section.title} · {section.cards.length} 个
+                  </h3>
+                  <ul className="skill-hub-items">
+                    {section.cards.map((skill) => {
+                      const sourceUrl = skill.template?.installSource;
+                      const displayName = activeProvider === 'opencode' ? skill.name : `/${skill.name}`;
+                      return (
+                      <li key={`${skill.system ? 'system' : 'custom'}-${skill.name}`}>
+                        <div className={skillItemClassName(skill)}>
+                          <button
+                            type="button"
+                            className="skill-hub-item-main"
+                            onClick={() => {
+                              if (skill.installed && selectedScene) {
+                                onPickSkill({ scene: selectedScene, skill: { name: skill.name, label: skill.label, template: skill.template } });
+                              } else if (skill.template) {
+                                onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider));
+                              }
+                            }}
+                            title={skill.path ? `${skill.name} — ${skill.path}` : skill.name}
+                          >
+                            <span className="skill-hub-item-topline">
+                              <span className="skill-hub-item-name">{displayName}</span>
                             </span>
-                          )}
-                        </span>
-                      </span>
-                      <strong>{skill.label}</strong>
-                      {skill.summary && <span className="skill-hub-item-desc">{skill.summary}</span>}
-                    </button>
-                    <div className="skill-hub-item-actions">
-                      {skill.system ? (
-                        !skill.installed && (
-                          <button type="button" onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}>
-                            {installActionLabel}
+                            <strong>{skill.label}</strong>
+                            {skill.summary && <span className="skill-hub-item-desc">{skill.summary}</span>}
+                            {(skill.builtin || skill.output || sourceUrl || (skill.system && !skill.builtin && !sourceUrl)) && (
+                              <small className="skill-hub-item-meta">
+                                {skill.builtin && (
+                                  <span className="skill-hub-item-meta-item">内置 prompt-only</span>
+                                )}
+                                {skill.output && (
+                                  <span className="skill-hub-item-meta-item">产物 {skill.output}</span>
+                                )}
+                                {sourceUrl && (
+                                  <button
+                                    type="button"
+                                    className="skill-hub-item-meta-source"
+                                    title={`来源：${sourceUrl}`}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openSourceUrl(sourceUrl);
+                                    }}
+                                  >
+                                    <GitHubIcon size={11} /> 来源 GitHub
+                                  </button>
+                                )}
+                                {skill.system && !skill.builtin && !sourceUrl && (
+                                  <span className="skill-hub-item-meta-item" title="缺少 GitHub 来源 URL">
+                                    缺少来源
+                                  </span>
+                                )}
+                              </small>
+                            )}
                           </button>
-                        )
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void removeCustomSkill(selectedScene.id, skill.name)}
-                          title={`移除自定义 ${capabilityLabel}`}
-                          aria-label={`移除自定义 ${capabilityLabel}`}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                      <span className={`skill-hub-badge ${skill.installed ? 'installed' : 'missing'}`}>
-                        {skill.installed ? '已安装' : '未安装'}
-                      </span>
-                    </div>
-                  </div>
-                </li>
-                );
-              })}
-            </ul>
+                          <div className="skill-hub-item-actions">
+                            {!skill.system ? (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => void removeCustomSkill(selectedScene.id, skill.name)}
+                                  title={`移除自定义 ${capabilityLabel}`}
+                                  aria-label={`移除自定义 ${capabilityLabel}`}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                                <span className={`skill-hub-badge ${skill.installed ? 'installed' : 'missing'}`}>
+                                  {skill.installed ? '已安装' : '未安装'}
+                                </span>
+                              </>
+                            ) : skill.builtin ? (
+                              <span
+                                className="skill-hub-badge builtin"
+                                title="内置 prompt-only skill,执行靠自然语言,不依赖本机 CLI 安装"
+                              >
+                                内置
+                              </span>
+                            ) : skill.installed ? (
+                              <span className="skill-hub-badge installed">已安装</span>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}
+                                >
+                                  {installActionLabel}
+                                </button>
+                                <span className="skill-hub-badge missing">未安装</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
+              {systemCards.length > 0 && customCards.length === 0 && (
+                <div className="skill-hub-empty-hint" role="status">
+                  <span>
+                    还没有自定义条目。把本机已安装的skill/工具加入进来
+                  </span>
+                  <button
+                    type="button"
+                    className="skill-hub-empty-hint-btn"
+                    onClick={() => setAddDialogOpen(true)}
+                  >
+                    <Plus size={11} /> 去添加
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </>
       )}
       <div className="skill-hub-footer">
-        <span>{selectedScene ? `${installedCount}/${cards.length} 可用` : `${systemScenes.length} 个场景`}</span>
+        <span>
+          {selectedScene
+            ? `${installedCount}/${systemCards.length + customCards.length} 可用`
+            : `${systemScenes.length} 个场景`}
+        </span>
         {(scanning || reloading) && <span className="skill-hub-footer-meta">扫描中…</span>}
       </div>
       {selectedScene && addDialogOpen && (

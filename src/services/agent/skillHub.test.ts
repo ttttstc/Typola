@@ -45,29 +45,6 @@ describe('parseSkillHubJson', () => {
     expect(hub.hiddenSystemSkills.ppt).toEqual(['x']);
   });
 
-  it('converts legacy v1 categories into user scene additions', () => {
-    const raw = JSON.stringify({
-      version: 1,
-      categories: [
-        {
-          id: 'ppt',
-          label: 'PPT',
-          skills: [
-            { name: '/baoyu-slide-deck' },
-            { name: 'reviewer', description: '审稿助手' },
-          ],
-        },
-      ],
-    });
-    const { hub, error } = parseSkillHubJson(raw);
-    expect(error).toBeUndefined();
-    expect(hub.version).toBe(2);
-    expect(hub.sceneAdditions.ppt).toEqual([
-      { name: 'baoyu-slide-deck' },
-      { name: 'reviewer', description: '审稿助手' },
-    ]);
-  });
-
   it('round-trips through serializeSkillHub', () => {
     const hub = {
       version: 2 as const,
@@ -90,9 +67,18 @@ describe('skill hub helpers', () => {
     expect(removeCustomSkillFromScene(added, 'ppt', 'custom-ppt').sceneAdditions.ppt).toEqual([]);
   });
 
-  it('defines the first system templates', () => {
+  it('defines the M2.5 system templates', () => {
     expect(SYSTEM_SKILL_SCENES.map((scene) => scene.id)).toEqual([
-      'daily', 'summary', 'ppt', 'html', 'wechat', 'data',
+      'common', 'daily', 'report', 'ppt', 'html', 'longform', 'knowledge', 'research',
+    ]);
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'common')?.skills.map((skill) => skill.name)).toEqual([
+      'markitdown',
+      'baoyu-url-to-markdown',
+      'humanizer',
+      'humanizer-zh',
+      'huashu-proofreading',
+      'baoyu-translate',
+      'huashu-md-to-pdf',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'ppt')?.skills.map((skill) => skill.name)).toEqual([
       'huawei-style-ppt-skill',
@@ -100,6 +86,7 @@ describe('skill hub helpers', () => {
       'huashu-slides',
       'baoyu-slide-deck',
       'ppt-master',
+      'huashu-design',
     ]);
     expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')?.skills.map((skill) => skill.name)).toEqual([
       'frontend-slides',
@@ -107,10 +94,26 @@ describe('skill hub helpers', () => {
       'baoyu-markdown-to-html',
       'html-ppt-skill',
       'md2html',
+      'huashu-md-html',
+      'huashu-design',
     ]);
-    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'wechat')?.skills.map((skill) => skill.name)).toEqual([
-      'ni-writer',
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'report')?.skills.map((skill) => skill.name)).toEqual([
+      // 3 个 builtin prompt-only skill + 2 个 installSource-based skill。
+      'report-summary',
+      'project-retro-report',
+      'executive-summary',
+      'editorial-card-screenshot',
+      'info-card-designer',
     ]);
+    const dailySkills = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'daily')!.skills;
+    expect(dailySkills.map((skill) => skill.name)).toEqual([
+      'nb',
+      'data-report-html',
+    ]);
+    // data-report-html 是 builtin prompt-only skill,执行完全靠 prefill。
+    expect(dailySkills.find((skill) => skill.name === 'data-report-html')?.builtin).toBe(true);
+    expect(dailySkills.find((skill) => skill.name === 'data-report-html')?.prefill?.length).toBeGreaterThan(0);
+    expect(SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'knowledge')?.skills).toEqual([]);
   });
 
   it('每个系统场景都带 icon 和 accent(场景卡渲染依赖)', () => {
@@ -121,19 +124,18 @@ describe('skill hub helpers', () => {
   });
 
   it('filters system templates by supported CLI provider', () => {
+    // M2.5 起系统模板默认仅 claude,opencode provider 看不到任何系统模板。
+    // 若要让某个 skill 同时支持 opencode,在数据里显式加 supportedProviders。
     expect(getSystemSkillScenesForProvider('claude').find((scene) => scene.id === 'ppt')?.skills.map((skill) => skill.name)).toEqual([
       'huawei-style-ppt-skill',
       'guizang-ppt-skill',
       'huashu-slides',
       'baoyu-slide-deck',
       'ppt-master',
+      'huashu-design',
     ]);
-    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'html')?.skills.map((skill) => skill.name)).toEqual([
-      'frontend-slides',
-      'guizang-ppt-skill',
-      'baoyu-markdown-to-html',
-      'html-ppt-skill',
-    ]);
+    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'ppt')?.skills).toEqual([]);
+    expect(getSystemSkillScenesForProvider('opencode').find((scene) => scene.id === 'html')?.skills).toEqual([]);
   });
 
   it('filters user-added Claude skills out for OpenCode provider', () => {
@@ -173,7 +175,8 @@ describe('skill hub helpers', () => {
   it('builds install prompt with source fallback', () => {
     const skill = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'html')!.skills[0];
     expect(buildSkillInstallPrompt(skill)).toContain('请帮我安装 Claude skill：frontend-slides');
-    expect(buildSkillInstallPrompt(skill)).toContain(skill.expectedPath);
+    // M2.5: 预置 skill 仅提供 installSource(GitHub URL),不再有 expectedPath(绝对路径)。
+    expect(buildSkillInstallPrompt(skill)).toContain(skill.installSource!);
   });
 
   it('builds OpenCode command install prompt without Claude copy', () => {
@@ -186,8 +189,114 @@ describe('skill hub helpers', () => {
     expect(prompt).toContain('%USERPROFILE%\\.config\\opencode\\commands\\frontend-slides.md');
   });
 
+  it('builds Claude install prompt for builtin prefill skill with full instructions', () => {
+    // M2.5 builtin prompt-only skill 的安装 prompt 必须包含 prefill 原文 +
+    // 要求 Claude 在本机创建 SKILL.md,否则点击「让 Claude 安装」无法产出可用 skill。
+    const dataReportHtml = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'daily')!
+      .skills.find((skill) => skill.name === 'data-report-html')!;
+    const prompt = buildSkillInstallPrompt(dataReportHtml, 'claude');
+
+    expect(prompt).toContain('请帮我把内置 Typola skill「data-report-html」安装为本地 Claude skill');
+    expect(prompt).toContain('~/.claude/skills/data-report-html/SKILL.md');
+    expect(prompt).toContain('/data-report-html');
+    // prefill 原文必须出现 — 这是 review 修复的核心:不能只让 Claude 看到名字和用途。
+    expect(prompt).toContain('执行说明');
+    expect(prompt).toContain(dataReportHtml.prefill!);
+    // 不能退化成弱来源:旧分支会写成 `来源:data-report-html`,修复后不该再出现这个字符串。
+    expect(prompt).not.toContain('来源:data-report-html');
+  });
+
+  it('builds OpenCode install prompt for builtin prefill skill', () => {
+    const reportSummary = SYSTEM_SKILL_SCENES.find((scene) => scene.id === 'report')!
+      .skills.find((skill) => skill.name === 'report-summary')!;
+    const prompt = buildSkillInstallPrompt(reportSummary, 'opencode');
+
+    expect(prompt).toContain('请帮我把内置 Typola skill「report-summary」安装为本地 OpenCode command');
+    expect(prompt).toContain('.opencode/commands/report-summary.md');
+    expect(prompt).toContain('opencode run --command report-summary');
+    expect(prompt).toContain(reportSummary.prefill!);
+  });
+
+  it('every non-builtin system skill with installSource has a non-empty URL', () => {
+    // 之前漏 humanizer;现在每个有 installSource 的 skill 都该是真实 URL,不能是空字符串。
+    const offenders: string[] = [];
+    for (const scene of SYSTEM_SKILL_SCENES) {
+      for (const skill of scene.skills) {
+        if (skill.builtin) continue;
+        if (skill.installSource !== undefined && skill.installSource.trim().length === 0) {
+          offenders.push(`${scene.id}/${skill.name}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('builds provider-specific skill prefill text', () => {
-    expect(buildSkillPrefill('claude', 'frontend-slides')).toBe('/frontend-slides ');
-    expect(buildSkillPrefill('opencode', '/frontend-slides')).toBe('请使用 frontend-slides：');
+    // 普通 Claude skill (无 prefill 模板) 走 fallback goal 分支。
+    expect(buildSkillPrefill('claude', { name: 'frontend-slides' })).toBe(
+      '/frontend-slides\n\n请使用 frontend-slides 完成当前任务。',
+    );
+    expect(buildSkillPrefill('opencode', { name: 'frontend-slides' })).toBe(
+      '请使用 frontend-slides：\n\n请使用 frontend-slides 完成当前任务。',
+    );
+  });
+
+  it('buildSkillPrefill builtin skill returns prefill only (no slash)', () => {
+    // builtin skill 不生成 /name slash,执行完全靠自然语言。
+    const builtinSkill = {
+      name: 'data-report-html',
+      label: '数据报表 HTML',
+      summary: '...',
+      system: true as const,
+      builtin: true,
+      prefill: '请基于当前文档生成数据报表 HTML。',
+    };
+    expect(buildSkillPrefill('claude', builtinSkill)).toBe('请基于当前文档生成数据报表 HTML。');
+    expect(buildSkillPrefill('opencode', builtinSkill)).toBe('请基于当前文档生成数据报表 HTML。');
+  });
+
+  it('buildSkillPrefill skill with prefill template injects /name + template', () => {
+    const skill = {
+      name: 'editorial-card-screenshot',
+      label: '编辑风信息卡',
+      summary: '...',
+      system: true as const,
+      prefill: '请基于当前文档生成信息卡。',
+    };
+    expect(buildSkillPrefill('claude', skill)).toBe(
+      '/editorial-card-screenshot\n\n请基于当前文档生成信息卡。',
+    );
+    expect(buildSkillPrefill('opencode', skill)).toBe(
+      '请使用 editorial-card-screenshot：\n\n请基于当前文档生成信息卡。',
+    );
+  });
+
+  it('buildSkillPrefill uses scene label for fallback goal', () => {
+    const scene = {
+      id: 'report' as const,
+      label: '报告总结',
+      description: '',
+      icon: 'ClipboardList',
+      accent: '',
+      skills: [],
+    };
+    expect(buildSkillPrefill('claude', { name: 'nb' }, scene)).toBe(
+      '/nb\n\n请基于当前文档执行「报告总结」场景下的「nb」任务。',
+    );
+    // skill.label 优先于 name 用于 fallback 文案。
+    expect(buildSkillPrefill('claude', { name: 'nb', label: '本地笔记周报' }, scene)).toBe(
+      '/nb\n\n请基于当前文档执行「报告总结」场景下的「本地笔记周报」任务。',
+    );
+  });
+
+  it('buildSkillPrefill strips leading slash from skill name', () => {
+    expect(buildSkillPrefill('claude', { name: '/frontend-slides' })).toBe(
+      '/frontend-slides\n\n请使用 frontend-slides 完成当前任务。',
+    );
+  });
+
+  it('buildSkillPrefill returns empty for empty skill name', () => {
+    expect(buildSkillPrefill('claude', { name: '' })).toBe('');
+    expect(buildSkillPrefill('claude', { name: '   ' })).toBe('');
   });
 });

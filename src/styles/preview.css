@@ -259,10 +259,10 @@
 .typola-mermaid-error {
   margin: 0.5em 0;
   padding: 8px 12px;
-  border-left: 3px solid #c0392b;
+  border-left: 3px solid var(--theme-danger);
   border-radius: 4px;
-  background: #fdecea;
-  color: #a93226;
+  background: var(--theme-surface);
+  color: var(--theme-danger);
   font-family: var(--font-mono);
   font-size: 0.85em;
   line-height: 1.5;

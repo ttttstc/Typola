@@ -26,6 +26,7 @@ import type { SelectionAnchor } from '../services/agent/types';
 import type { ReviewComment } from '../services/review/reviewState';
 import { buildSearchRegExp, getSearchMatchOccurrenceIndex } from '../services/documentSearchService';
 import type { SearchOptions } from '../services/documentSearchService';
+import { getMermaidTheme, getVditorHighlightStyle, getVditorPreviewTheme } from '../services/themeRegistry';
 
 type WysiwygEditorPaneProps = {
   source: string;
@@ -218,6 +219,9 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   ref,
 ) {
   const settings = useSettings();
+  const mermaidTheme = getMermaidTheme(settings.themeId);
+  const vditorTheme = getVditorPreviewTheme(settings.themeId);
+  const vditorHighlightStyle = getVditorHighlightStyle(settings.themeId);
   const t = useCallback(
     (key: Parameters<typeof translate>[1]) => translate(settings.locale, key),
     [settings.locale],
@@ -269,6 +273,12 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   // 选区浮条状态:跟着 IR 选区变化重算 rect + hasSelection;由 selectionchange listener 更新。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
+  // 浮条"稳定"计数器:仅在 mouseup 时 +1,让浮条只在松手后开始 debounce。
+  const floatingStableTickRef = useRef(0);
+  const [floatingStableTick, setFloatingStableTick] = useState(0);
+  // 拖选状态:IR 内的 mousedown → true,mouseup → false。期间禁止 collapseExpandedMarkers
+  // 等任何修改 IR DOM 的副作用(否则 DOM 节点失效 → 选区瞬间被浏览器清掉)。
+  const isDraggingIrRef = useRef(false);
   const suppressFloatingBarRef = useRef(false);
   // Heading 折叠集合:键 = `<level>:<text>`,跨 source 行变化稳定。
   // 关文档 / 切 filePath 时清空(useEffect 见下)。
@@ -504,12 +514,17 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       if (mermaidIdleTimerRef.current !== null) {
         window.clearTimeout(mermaidIdleTimerRef.current);
       }
+      if (isDraggingIrRef.current) {
+        mermaidIdleTimerRef.current = null;
+        return;
+      }
       mermaidIdleTimerRef.current = window.setTimeout(() => {
         mermaidIdleTimerRef.current = null;
+        if (isDraggingIrRef.current) return;
         const host = hostRef.current;
         if (!host) return;
         void renderMermaidIn(host, {
-          theme: settings.theme === 'dark' ? 'dark' : 'default',
+          theme: mermaidTheme,
           editable: true,
         });
         void renderKatexIn(host);
@@ -520,6 +535,13 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
     const scheduleCollapseIdle = () => {
       if (collapseIdleTimerRef.current !== null) {
         window.clearTimeout(collapseIdleTimerRef.current);
+      }
+      // 拖选过程中绝不修改 IR DOM(collapse 移除 .vditor-ir__node--expand
+      // class 会让隐藏的 marker span 重新出现,导致选区 Range 对应的 DOM 节点失效,
+      // 浏览器自动清掉 selection → "明明选中了却选不到")。
+      if (isDraggingIrRef.current) {
+        collapseIdleTimerRef.current = null;
+        return;
       }
       collapseIdleTimerRef.current = window.setTimeout(() => {
         collapseIdleTimerRef.current = null;
@@ -581,7 +603,26 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       scheduleMermaidIdleRender();
       scheduleCollapseIdle();
     };
+    const onIrMouseDown = (event: MouseEvent) => {
+      const editor = editorRef.current;
+      const ir = editor ? getIrElement(editor) : null;
+      if (!ir) return;
+      const target = event.target as Node | null;
+      if (target && ir.contains(target)) {
+        isDraggingIrRef.current = true;
+      }
+    };
+    const onWindowMouseUp = () => {
+      if (!isDraggingIrRef.current) return;
+      isDraggingIrRef.current = false;
+      // 松手 → 浮条允许开始 debounce(给个新 tick,SelectionFloatingBar 才会启动 timer)。
+      handleSelectionChange();
+      floatingStableTickRef.current += 1;
+      setFloatingStableTick(floatingStableTickRef.current);
+    };
     document.addEventListener('selectionchange', handleSelectionChange);
+    document.addEventListener('mousedown', onIrMouseDown, true);
+    window.addEventListener('mouseup', onWindowMouseUp);
 
     let cancelled = false;
     void Promise.all([
@@ -613,12 +654,12 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
             codeBlockPreview: false,
           },
           theme: {
-            current: 'light',
+            current: vditorTheme,
             path: '',
           },
           hljs: {
             enable: true,
-            style: 'github',
+            style: vditorHighlightStyle,
             lineNumber: false,
           },
         },
@@ -626,7 +667,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
           const host = hostRef.current;
           if (host) {
             void resolveLocalImages(host, filePath);
-            void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+            void renderMermaidIn(host, { theme: mermaidTheme, editable: true });
             void renderKatexIn(host);
             applyHeadingFolds(host, editor.getValue(), foldedHeadingsRef.current);
           }
@@ -648,7 +689,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
             const host = hostRef.current;
             if (host) {
               void resolveLocalImages(host, filePath);
-              void renderMermaidIn(host, { theme: settings.theme === 'dark' ? 'dark' : 'default', editable: true });
+              void renderMermaidIn(host, { theme: mermaidTheme, editable: true });
               void renderKatexIn(host);
               applyHeadingFolds(host, editor.getValue(), foldedHeadingsRef.current);
             }
@@ -683,6 +724,8 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       cancelled = true;
       host.removeEventListener('scroll', handleScroll, { capture: true } as EventListenerOptions);
       document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('mousedown', onIrMouseDown, true);
+      window.removeEventListener('mouseup', onWindowMouseUp);
       if (scrollRafId !== null) window.cancelAnimationFrame(scrollRafId);
       if (collapseTimerRef.current !== null) {
         window.clearTimeout(collapseTimerRef.current);
@@ -699,7 +742,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       editorRef.current?.destroy();
       editorRef.current = null;
     };
-  }, [filePath, onChange, t]);
+  }, [filePath, mermaidTheme, onChange, t, vditorHighlightStyle, vditorTheme]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -1006,6 +1049,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
         <SelectionFloatingBar
           rect={floatingRect}
           hasSelection={floatingHasSelection}
+          stableTick={floatingStableTick}
           onPick={(action, origin) => triggerAIAction(action, origin)}
         />
       )}

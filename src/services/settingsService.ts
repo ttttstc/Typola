@@ -28,6 +28,12 @@ import {
 import type { AgentProvider } from './agent/provider';
 import { normalizeAgentProvider } from './agent/provider';
 import {
+  DEFAULT_THEME_ID,
+  normalizeThemeId,
+  type AppThemeOptions,
+  type ThemeId,
+} from './themeRegistry';
+import {
   DEFAULT_LICENSE_STATE,
   STANDARD_PRESET_SLOT_LIMIT,
   activateBetaLicenseCode,
@@ -41,6 +47,7 @@ import {
 const STORAGE_KEY = 'typola-settings';
 const LEGACY_KEY = 'typola-export-settings';
 const LAST_FILE_KEY = 'typola-last-opened-file';
+const LAST_WORKSPACE_ROOT_KEY = 'typola-last-workspace-root';
 const FONT_DEFAULTS_VERSION = 3;
 
 export const SETTINGS_CHANGED_EVENT = 'typola-settings-changed';
@@ -233,7 +240,8 @@ export interface AppSettings {
   aiWorkspaceRecents: string[];
   aiPluginDirs: string[];
   // 外观
-  theme: 'light' | 'dark';
+  themeId: ThemeId;
+  themeOptions: AppThemeOptions;
   zoomLevel: number;
 }
 
@@ -295,7 +303,10 @@ const defaults: AppSettings = {
   aiWorkspaceRoot: '',
   aiWorkspaceRecents: [],
   aiPluginDirs: [],
-  theme: 'light',
+  themeId: DEFAULT_THEME_ID,
+  themeOptions: {
+    reviewEnhanceMarks: true,
+  },
   zoomLevel: 100,
 };
 
@@ -425,6 +436,15 @@ function normalizeImageCopyDestination(value: unknown): string {
 
 function normalizeImageUploadCommand(value: unknown): string {
   return typeof value === 'string' ? value.replace(/[\0\r\n]/g, ' ').trim().slice(0, 1000) : '';
+}
+
+function normalizeThemeOptions(value: unknown): AppThemeOptions {
+  const input = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<AppThemeOptions>
+    : {};
+  return {
+    reviewEnhanceMarks: input.reviewEnhanceMarks !== false,
+  };
 }
 
 function quoteFontName(name: string): string {
@@ -723,6 +743,19 @@ function migrateLegacySettings(stored: Partial<AppSettings>): Partial<AppSetting
   const next = { ...stored };
   let changed = false;
   try {
+    const legacyTheme = (next as Partial<AppSettings> & { theme?: unknown }).theme;
+    if (!next.themeId && legacyTheme === 'dark') {
+      next.themeId = 'night-current';
+      changed = true;
+    } else if (!next.themeId && legacyTheme === 'light') {
+      next.themeId = DEFAULT_THEME_ID;
+      changed = true;
+    }
+    if (legacyTheme !== undefined) {
+      delete (next as Partial<AppSettings> & { theme?: unknown }).theme;
+      changed = true;
+    }
+
     const legacyRaw = localStorage.getItem(LEGACY_KEY);
     if (legacyRaw) {
       const legacy = JSON.parse(legacyRaw);
@@ -847,6 +880,8 @@ export function getSettings(): AppSettings {
       aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
       aiWorkspaceRecents: normalizePathList(stored.aiWorkspaceRecents).slice(0, 8),
       aiPluginDirs: normalizePathList(stored.aiPluginDirs),
+      themeId: normalizeThemeId(stored.themeId),
+      themeOptions: normalizeThemeOptions(stored.themeOptions),
     };
     settingsSnapshot = normalized;
     settingsSnapshotRaw = localStorage.getItem(STORAGE_KEY);
@@ -934,6 +969,8 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     aiWorkspaceRoot: normalizeExecutablePath(patch.aiWorkspaceRoot ?? current.aiWorkspaceRoot),
     aiWorkspaceRecents: normalizePathList(patch.aiWorkspaceRecents ?? current.aiWorkspaceRecents).slice(0, 8),
     aiPluginDirs: normalizePathList(patch.aiPluginDirs ?? current.aiPluginDirs),
+    themeId: normalizeThemeId(patch.themeId ?? current.themeId),
+    themeOptions: normalizeThemeOptions(patch.themeOptions ?? current.themeOptions),
   };
   return persistSettings(merged);
 }
@@ -948,6 +985,19 @@ export function setLastOpenedPath(path: string): void {
 
 export function clearLastOpenedPath(): void {
   localStorage.removeItem(LAST_FILE_KEY);
+}
+
+export function getLastWorkspaceRoot(): string {
+  return (localStorage.getItem(LAST_WORKSPACE_ROOT_KEY) || '').trim();
+}
+
+export function setLastWorkspaceRoot(root: string): void {
+  const normalized = root.trim();
+  if (!normalized) {
+    localStorage.removeItem(LAST_WORKSPACE_ROOT_KEY);
+    return;
+  }
+  localStorage.setItem(LAST_WORKSPACE_ROOT_KEY, normalized);
 }
 
 // ---- Backward-compatible API ----

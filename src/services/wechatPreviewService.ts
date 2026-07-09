@@ -434,6 +434,76 @@ export function createWechatArticleStyles(customCss = ''): string {
   return createHtmlExportArticleStyles(defaultHtmlExportPreset(), customCss);
 }
 
+// 预览专用：暗色主题下跟随系统主题色，覆盖预设写死的浅色文字/背景。
+// 只作用于应用内预览（WeChat 预览面板、设置页预设样例），
+// 导出路径（clipboardHtml / 内联样式）保持写死颜色，微信端才能自包含。
+// 直接用 var(--theme-*) 输出，因此这段不能经过会剥离 var() 的 CSS 净化流程。
+// html[data-color-scheme='dark'] 提升了特异性并带 !important，可稳压预设自身的 !important。
+const HTML_EXPORT_PREVIEW_DARK_CSS = `
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS},
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} p,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} li,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} span,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} em,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} strong,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} b {
+  color: var(--theme-text-primary) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} h1,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} h2,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} h3,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} h4,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} h5,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} h6 {
+  color: var(--theme-text-primary) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} a {
+  color: var(--theme-accent) !important;
+  border-bottom-color: color-mix(in oklch, var(--theme-accent) 40%, transparent) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} * {
+  background-color: transparent !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} pre,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} code,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} th {
+  background-color: var(--theme-surface) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} pre code,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} pre code * {
+  color: var(--theme-text-primary) !important;
+  background-color: transparent !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} blockquote,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} blockquote p {
+  color: var(--theme-text-secondary) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} blockquote {
+  border-left-color: var(--theme-accent) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} h2 {
+  border-bottom-color: var(--theme-border-soft) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} th,
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} td {
+  border-color: var(--theme-border-soft) !important;
+}
+html[data-color-scheme='dark'] .${WECHAT_ARTICLE_CLASS} hr {
+  border-color: var(--theme-border-soft) !important;
+  border-top-color: var(--theme-border-soft) !important;
+  background-color: var(--theme-border-soft) !important;
+  background-image: none !important;
+}
+`;
+
+// 应用内预览的样式 = 预设净化样式 + 暗色主题跟随层（追加在后，源码顺序靠后）。
+export function createHtmlExportPreviewStyles(
+  preset: HtmlExportPreset = defaultHtmlExportPreset(),
+  customCss = '',
+): string {
+  return `${createHtmlExportArticleStyles(preset, customCss)}\n\n${HTML_EXPORT_PREVIEW_DARK_CSS}`;
+}
+
 export function createHtmlExportDocument(
   articleHtml: string,
   options: HtmlExportOptions = {},

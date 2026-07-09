@@ -51,3 +51,4 @@ website/dist/
 /*.html
 !/index.html
 /*.js
+src/experimental/

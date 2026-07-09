@@ -17,6 +17,7 @@ type TooltipProps = {
   shortcut?: string;
   reference: HTMLElement | null;
   placement?: Placement;
+  open?: boolean;
 };
 
 export function Tooltip({
@@ -24,11 +25,13 @@ export function Tooltip({
   shortcut,
   reference,
   placement = 'top',
+  open: controlledOpen,
 }: TooltipProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
   const { refs, floatingStyles, context } = useFloating({
     open,
-    onOpenChange: setOpen,
+    onOpenChange: setUncontrolledOpen,
     placement,
     middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
   });
@@ -41,7 +44,7 @@ export function Tooltip({
     refs.setReference(reference);
   }, [reference, refs]);
 
-  if (!reference || !open) {
+  if (!reference || !open || !label) {
     return null;
   }
 

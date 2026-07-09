@@ -15,6 +15,7 @@ import {
   getCustomHtmlExportPresetLimit,
   getHtmlExportPreset,
   getHtmlExportPresetConfig,
+  getLastWorkspaceRoot,
   getSettings,
   listEnabledExportPresets,
   listEnabledHtmlExportPresets,
@@ -29,6 +30,7 @@ import {
   setExportPresetEnabled,
   setHtmlExportPreset,
   setHtmlExportPresetEnabled,
+  setLastWorkspaceRoot,
   updateSettings,
 } from './settingsService';
 import type { CustomHtmlExportPresetId, HtmlExportPreset } from './htmlExportPresets';
@@ -98,6 +100,47 @@ describe('settingsService', () => {
 
     localStorage.setItem('typola-settings', JSON.stringify({ tocAlwaysPinned: 'yes' }));
     expect(getSettings().tocAlwaysPinned).toBe(false);
+  });
+
+  it('persists the selected Typola theme and falls back to Plain Paper for unknown theme ids', () => {
+    expect(getSettings()).toMatchObject({
+      themeId: 'plain-paper',
+      themeOptions: {
+        reviewEnhanceMarks: true,
+      },
+    });
+
+    updateSettings({
+      themeId: 'ink-basin',
+      themeOptions: { reviewEnhanceMarks: false },
+    });
+    expect(getSettings()).toMatchObject({
+      themeId: 'ink-basin',
+      themeOptions: {
+        reviewEnhanceMarks: false,
+      },
+    });
+
+    localStorage.setItem('typola-settings', JSON.stringify({
+      themeId: 'dark',
+      themeOptions: { reviewEnhanceMarks: 'yes' },
+    }));
+    expect(getSettings()).toMatchObject({
+      themeId: 'plain-paper',
+      themeOptions: {
+        reviewEnhanceMarks: true,
+      },
+    });
+  });
+
+  it('migrates the legacy dark appearance switch to the Night Current theme', () => {
+    localStorage.setItem('typola-settings', JSON.stringify({ theme: 'dark' }));
+
+    expect(getSettings().themeId).toBe('night-current');
+    expect(JSON.parse(localStorage.getItem('typola-settings') || '{}')).toMatchObject({
+      themeId: 'night-current',
+    });
+    expect(JSON.parse(localStorage.getItem('typola-settings') || '{}').theme).toBeUndefined();
   });
 
   it('migrates legacy export settings without recursive reads', () => {
@@ -610,5 +653,32 @@ describe('settingsService', () => {
     expect(getSettings().customExportPresets['custom:team-brief']).toBeUndefined();
     expect(getSettings().disabledExportPresetIds).toContain('report');
     expect(listEnabledExportPresets().map((preset) => preset.id)).not.toContain('report');
+  });
+});
+
+describe('workspace root persistence', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('returns an empty string when nothing is persisted', () => {
+    expect(getLastWorkspaceRoot()).toBe('');
+  });
+
+  it('round-trips a workspace root through localStorage', () => {
+    setLastWorkspaceRoot('D:/work/project');
+    expect(getLastWorkspaceRoot()).toBe('D:/work/project');
+  });
+
+  it('clears the stored value when given an empty string', () => {
+    setLastWorkspaceRoot('D:/work/project');
+    setLastWorkspaceRoot('   ');
+    expect(getLastWorkspaceRoot()).toBe('');
+    expect(localStorage.getItem('typola-last-workspace-root')).toBeNull();
+  });
+
+  it('trims surrounding whitespace', () => {
+    setLastWorkspaceRoot('  D:/work/project  ');
+    expect(getLastWorkspaceRoot()).toBe('D:/work/project');
   });
 });

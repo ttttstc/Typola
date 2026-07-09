@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- AI 产物中心支持 HTML 产物轻量预览（issue #156）：`.html` / `.htm` 产物新增「预览」按钮，在右侧面板用 sandboxed iframe 直接展示 AI 生成的页面，本地 CSS / JS / 图片 / 音视频资源会被内联进 `srcDoc`；toolbar 提供「返回产物中心 / 刷新 / 在浏览器打开 / 关闭」。通用 HTML 文档构建与本地资源内联能力抽到 `src/services/htmlPreviewService.ts`，`htmlPresentationService` 复用同一套通用层，只保留演示模式专属的 bridge script。
+- 新增第五套主题「粗野」(id: `brutalist`)：新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
+- 新增第四套主题「抽象」(id: `abstract`)：采用蒙德里安 De Stijl 经典配色 —— 白底 (`#ffffff`) + 黑色网格 (`#1a1a1a`) + 蒙德里安红 (`#c8311b`) / 蓝 (`#1e5a8a`) / 黄 (`#e8b810`) 三原色强调。accent 用红、aiInserted 用蓝、aiDeleted 用红、warning 用黄；终端 ANSI 也按红 / 蓝 / 黄 / 黑 / 白体系对齐，不再出现绿色映射。设置 → 外观 → 主题卡片可直接切换。
+- 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨韵”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
+- 修复 PR #146 主题系统检视意见：补齐旧 `theme: "dark"` 到 `night-current` 的迁移、`npm run build:themes` 生成主题 CSS、主题卡片键盘导航、Vditor / Mermaid / xterm 主题同步，以及 PDF 导出不跟随应用主题的残留清理。
 - 新增 Calm Workspace 动效基础设施：引入 `motion`、`@floating-ui/react` 与 `@formkit/auto-animate`，并提供统一的 MotionProvider / motion token，供后续面板、tooltip 与列表动效复用。
 - AI 工作台补齐 #112 Phase 3：Codex CLI 进入 AI 执行设置的检测卡片与 runtime registry，但保持检测-only，不进入 Composer 可发送 Provider；新增裁剪版 `mocks/` 目录用于后续 parser/golden 回归。
 - AI 工作台补齐 #112 Phase 2 输出链路：OpenCode 写文件工具现在会进入 `artifact_file` 产物回流，CLI 相对路径会归一到当前会话 `.typola-output/<conversationId>/`，非白名单扩展名（如 `.yaml`/源码文件）也能进入产物 toast/manifest 链路。
@@ -14,7 +19,7 @@ All notable changes to this project will be documented in this file.
 - 新增 v0.5 AI 产物中心：AI 生成物会标准化为本地 artifact manifest，右栏可按当前会话或全部 `.typola-output` 产物浏览，并支持打开、对比、归档、删除、覆盖原文与撤销覆盖。
 - 新增 AI Workbench OpenCode Provider 规划文档：沉淀 AI Provider 术语、ADR、PRD 与 GitHub issue 拆分，用于跟踪在同一左侧 AI 工作台中接入 OpenCode CLI。
 - AI 工作台新增 OpenCode Provider 主链路：Composer 底部可切换 Claude Code / OpenCode，设置页可配置 OpenCode CLI 路径与模型，OpenCode 使用 `opencode run` 接入同一 headless 会话与产物回流流程。
-- 新增正式的免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`，macOS 会在对应 target 的 `bundle/portable/` 生成 `*_macos-*_portable.zip`。
+- 新增正式的 Windows 免安装版打包命令：`npm run tauri:build:portable`。Windows 现在会在 `src-tauri/target/release/bundle/portable/` 生成 `*_windows-x64_portable.zip`。
 - 新增左侧目录文件树：支持打开一个目录、展开/折叠子目录、从文件树打开支持的文档，未保存文件会在文件树名称前显示 `*`。
 - 设置页新增 `AI CLI` 分区：可配置 Claude CLI 路径并检测 `claude --version`，供后续 AI 集成功能使用。
 - 新增 Skill OS M1 左侧 AI 工作台：工具栏可展开 Claude 对话面板，文件树自动收起，支持直连 Claude CLI、多轮 resume、思考流/正文/工具卡/完成状态渲染，以及错误诊断与重试入口。
@@ -25,11 +30,33 @@ All notable changes to this project will be documented in this file.
 - 编辑器与右侧预览同步滚动：编辑器滚动时右侧 Word / 公众号预览按 scroll ratio 单向同步（rAF 节流，零额外重渲染）。
 - 未保存改动统一三按钮对话框：tab 关闭与窗口关闭命中未保存文档时弹出「保存 / 不保存 / 取消」一次性确认（自定义 React 模态，Tauri WebView 下可靠）。
 - 新增 Mermaid 图表渲染：阅读、心流、检视、HTML 预览和 Word 预览会把 ` ```mermaid ` 代码块渲染为 SVG 图，语法错误保留源码并显示错误条，WYSIWYG 中右键图表可复制 SVG。
-- 新增 PDF 导出：工具栏「导出 PDF」与 `Cmd/Ctrl+P` 会按阅读模式渲染当前文档，生成 A4 / 2cm 页边距的 PDF 文件。
+- 新增 PDF 导出：工具栏「导出 PDF」与 `Ctrl+P` 会按阅读模式渲染当前文档，生成 A4 / 2cm 页边距的 PDF 文件。
 - 新增 CM6 编辑器内核 Phase 4 导出桥接：HTML 预览、Word 纸张预览与 PDF 导出统一通过 `markdownToExportHtml` 从 Markdown source 渲染导出 HTML，减少对编辑器 DOM 的依赖；PDF 导出改为后台写入默认导出路径并通过 toast 汇报结果。
+
+### Fixed
+
+- 修复 Windows MSI 安装到受限目录时可能报 “verify that you have access to that directory” 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
+- 修复缺少 Microsoft Edge WebView2 Runtime 时可能还没显示引导就启动失败的问题：Windows 启动预检前移到 `main()`，早于 Tauri WebView 初始化；缺失时先运行随包 bootstrapper，失败后提示用户安装并打开官方页面。
+- 修复 Vditor WYSIWYG 代码块拖选多行时选区容易被异步渲染/折叠重排打断的问题；代码块正文显式允许文本选择，拖选期间暂停 mermaid/katex/折叠等会改 DOM 的 idle 重排。
+- 补充文件内搜索/替换多行匹配回归测试，确认代码块内外的多行内容可查找、单次替换和全部替换。
+- 修复本地 HTML 与产物打开体验：启动时会展开上次工作区文件树；HTML 文件默认进入预览而不是源码；右侧 HTML 预览会压缩常见宽内容并用浏览器打开 file URL；产物中心图片默认调用系统图片工具打开。
+- 调整 HTML 与文件操作体验：HTML 预览回到中间主栏并可与源码模式来回切换；HTML 翻页桥接会同时派发到 window/document/body；产物中心和文件树右键菜单新增“打开所在文件夹”等有效操作。
+- 修复 Windows 上点击「浏览器/系统默认应用打开」报「Not allowed to open path \\?\D」的问题：根因是 `tauri-plugin-opener` 的 `opener:scope` 用 `std::fs::canonicalize` 把绝对路径变成 Windows device path，跟 capabilities 里 `$HOME`/`$DESKTOP` 等 glob 永远匹配不上。新增自定义 Rust 命令 `open_path_external` 走 `tauri_plugin_opener::open_path` crate 级 helper(直接用 ShellExecuteW,不经 scope 校验),前后端都接入新命令。
+- HTML 演示模式源码/预览切换按钮的 active 状态改为 `theme-paper` 文字色,在亮、暗主题下与 `--theme-accent` 背景都满足对比度,不再有橙色背景配糊字。
+- 修复浮动大纲误把 fenced code block 内的 `#` 行识别为标题、导致点击大纲跳转偏移的问题；工具栏 hover 提示改为顶层浮层显示，并按当前界面语言展示不含快捷键的文案。
+- 修复选中文字后的 AI 浮条被主题按钮样式撑满整屏的问题；浮条现在按内容宽度贴近选区上方显示，并提升 CM6 / Vditor / 原生选区高亮对比度，方便辨认已选文本。
+- 素笺主题：把 `selection` 由 `#ead8ca`（带粉感的桃色）改为 `#e3dccf`，更接近 Claude 设计语言的低饱和暖灰选中态。
+- 深海主题：danger 与 ai-deleted 由玫瑰粉 `#d08a82` 改为暖灰偏珊瑚的 `#bd8a78`，与冷调蓝调色板不再冲突。
+- 墨韵主题：所有 canvas / surface / border / selection / preview.canvas 中带轻微暖色偏移的 hex 全部拉回纯灰（`R = G = B`），杜绝任何第四种颜色。
+- 素笺主题二次收束：把 `danger`/`ai-deleted` 从 `#a6533f` 抬到 `#bd6240`（OKLCH hue 22°→33°，从红-橙过渡区推向橙色），`ai-primary`/`review-mark` 由 `#8a6757` 降饱和到 `#867060`，`selection` 由 `#e3dccf` 进一步降到 `#dad6c9`，warning `#9a6c36` → `#a86d36` 更接近琥珀，去掉残留的粉/桃视觉。
+- 深海主题二次收束：把 `danger`/`ai-deleted` 从 `#bd8a78` 压到 `#b17a5a`（明显橙-棕，pink 接近 0），warning `#c8a46f` → `#c8985e` 推向 amber，整体 warm 色 token 与素笺 sienna 体系对齐，避免在冷蓝调色板中突兀。
+- 清扫 app.css 里散落的硬编码 `oklch(...h=25-30)` 粉色入口：`.skill-hub-error`、`.selection-result-card-error`、`.diff-hunk-delete`、`.review-sidebar-item-tool-danger:hover` 统一跟随 `--theme-danger` token；`.file-tree-icon-doc svg` 由 `h=30` salmon 改为 `h=110` 黄绿，避免残留粉色在场景错误条、选区 AI 错误卡、diff 删除行或文件树 doc 图标上出现。
+- 修复素笺 / 深海下顶部工具栏 active 状态、模式切换器外壳、右栏壳、文件 tab 滑块、编辑器当前行和 SkillHub 场景模板卡片 / badge 仍透出粉色或多色分类块的问题：普通主题改为中性纸面 / 边框层级，抽象主题单独用红、蓝、黄、黑、白表达场景强调。
 
 ### Changed
 
+- 重新收束三套主题配色：默认主题恢复经典 light 的暖白/暖橙层级，深海降低彩色噪声，墨韵改为纯黑白灰体系；状态标签色也改为跟随主题 token，减少同页框体色彩过多的问题。
+- 更新主 README 中文文案：明确当前发布面向 Windows，移除非 Windows 安装 / 打包描述，并同步 CM6 live preview、AI 工作台、SkillHub、主题、选区浮条与导出交付的最新能力。
 - 明确 Windows 分发边界：对外发布物是安装包和 portable zip，包内 `Typola.exe` 不作为单独裸 exe 分发产物。
 - Windows 安装版同时产出 NSIS `setup.exe` 与 `.msi`：WebView2 bootstrapper 会作为资源打进单个安装文件；NSIS 在安装后执行检测，MSI 由应用启动前预检执行检测，不需要用户额外下载第二个安装文件。
 - Windows portable 首选入口改为直接运行 `Typola.exe`：应用会在创建窗口前执行 WebView2 预检，缺失时运行随包 bootstrapper；无网或安装失败时会显性提示用户先安装 WebView2，不再静默退出。
@@ -66,14 +93,14 @@ All notable changes to this project will be documented in this file.
 - 主 WYSIWYG 编辑区改为宽版排版：Vditor 正文容器不再居中限宽，左右留白提升到 120px；右侧预览面板默认宽度提升到 520px、最小宽度提升到 400px，优先保证阅读和编辑宽度。
 - 右侧 Word / HTML 预览展开时默认改为左侧编辑区与右侧预览区约 `2:1` 宽度比例；双击分隔条会恢复该比例，拖拽时右侧预览最小宽度收窄到 320px。
 - 顶部应用工具栏背景与阅读底色统一，居中文件名字号提升到 13px 并增强对比度，改善窗口顶部的一致性和可读性。
-- 新增文件内查找/替换面板：`Cmd/Ctrl+F` 与 `Cmd/Ctrl+H` 都会同时展示查找和替换输入，分别聚焦查找框或替换框；支持上/下一个、大小写、全词和正则选项，替换逻辑对只读 Word 预览禁用。
-- 新增最近文件与快速打开：打开、拖拽、系统传入或恢复文档后会记录最近文件，`Cmd/Ctrl+Shift+P` 可按文件名或路径片段快速过滤并打开。
+- 新增文件内查找/替换面板：`Ctrl+F` 与 `Ctrl+H` 都会同时展示查找和替换输入，分别聚焦查找框或替换框；支持上/下一个、大小写、全词和正则选项，替换逻辑对只读 Word 预览禁用。
+- 新增最近文件与快速打开：打开、拖拽、系统传入或恢复文档后会记录最近文件，`Ctrl+Shift+P` 可按文件名或路径片段快速过滤并打开。
 - 状态栏新增文档统计：编辑时延迟计算词数、字符数、段落数和预计阅读时间，避免每次输入同步重算。
 - 新增编辑辅助入口：支持插入链接、图片、Markdown 表格，并支持将剪贴板图片异步保存到当前文档同级 `assets/` 后插入相对路径。
 - 底部状态栏新增"状态栏路径"设置项（外观页），可选"完整路径 / 仅文件名 / 首尾保留（推荐）"三种展示策略；默认"首尾保留"模式下，长路径会自动 ellipsis 收缩到 ≤60 字符且始终保留文件名，不会再撑开状态栏。完整路径仍可通过 `title` 提示或双击复制。
 - 状态栏高度固定为 22px；状态栏文案、复制反馈与"未保存"标记同步加 `flex-shrink: 0` 避免被长路径挤压。
-- 设置页移除独立的"快捷键"Tab；快捷键信息直接合并到 Toolbar 等可交互元素的 `title` 中，覆盖打开 / 保存 / 另存为 / 源码 / Word 预览 / HTML 预览 / 设置 7 个核心按钮（`Cmd+O` / `Cmd+S` / `Cmd+Shift+S` / `Cmd+Alt+S` / `Cmd+Alt+P` / `Cmd+Alt+M` / `Cmd+,`），中 / 英 / 日三语同步。设置页导航现为通用 / 编辑器 / 预览 / 外观 / Word 导出 / HTML 导出 / 授权 / 关于 共 8 个 Tab。
-- 新增快捷键：`Cmd+Alt+S` 切换源码模式、`Cmd+Alt+P` 切换 Word 纸张预览、`Cmd+Alt+M` 切换 HTML 预览、`Cmd+,` 打开设置；与既有 `Cmd+O` / `Cmd+S` / `Cmd+Shift+S` / `Cmd+Shift+E` 合并为一致的快捷键面板。
+- 设置页移除独立的"快捷键"Tab；快捷键信息直接合并到 Toolbar 等可交互元素的 `title` 中，覆盖打开 / 保存 / 另存为 / 源码 / Word 预览 / HTML 预览 / 设置 7 个核心按钮（`Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` / `Ctrl+Alt+S` / `Ctrl+Alt+P` / `Ctrl+Alt+M` / `Ctrl+,`），中 / 英 / 日三语同步。设置页导航现为通用 / 编辑器 / 预览 / 外观 / Word 导出 / HTML 导出 / 授权 / 关于 共 8 个 Tab。
+- 新增快捷键：`Ctrl+Alt+S` 切换源码模式、`Ctrl+Alt+P` 切换 Word 纸张预览、`Ctrl+Alt+M` 切换 HTML 预览、`Ctrl+,` 打开设置；与既有 `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` / `Ctrl+Shift+E` 合并为一致的快捷键面板。
 - 重构 HTML 阅读预览 / Markdown 预览切换为 Vditor WYSIWYG 一体化（ISS-155 / DEC-085）：所有 Markdown 与 HTML 文档默认直接进入 Vditor WYSIWYG（`mode: 'ir'`），普通段落与不含 `rowspan` / `colspan` 的简单表格内文字可直接编辑；含 `rowspan` / `colspan` 的复杂表格区域在 Vditor 中标记为 `contenteditable="false"` + `data-typola-locked="table"`，结构与文字均不可改，输入回调对比原 `findHtmlTableBlocks` 自动恢复被改动的复杂表格源码。
 
 ### Performance
@@ -120,7 +147,7 @@ All notable changes to this project will be documented in this file.
 - 修复多文件 tab 中当前活动文件刚被编辑后，关闭 tab 或关闭窗口可能没有提示未保存修改的问题。
 - 彻底修复右上角关闭按钮可能无响应的问题：关闭请求现在先拦截确认，再显式销毁窗口；销毁过程中的重复关闭事件会直接放行，并提供 Rust 后端强制关闭兜底。
 - 关闭存在未保存文档的窗口时改为“保存并关闭 / 不保存关闭 / 取消关闭”流程，选择保存会先写回所有未保存文档，保存失败则取消关闭，降低数据丢失风险。
-- 修复编辑器聚焦时 `Ctrl/Cmd+S` 被编辑器快捷键保护提前放行、无法触发保存的问题。
+- 修复编辑器聚焦时 `Ctrl+S` 被编辑器快捷键保护提前放行、无法触发保存的问题。
 - 正文编辑区滚动条右侧留白收敛到 30px，减少编辑区无效空白。
 - 修复 PR 审查发现的高严重度安全与数据风险：Tauri CSP 移除 `script-src` 的 `unsafe-inline`，文件系统能力移除 `fs:default` 并限制到常用用户文档目录 / 对话框授权路径，另存为统一走 Rust 写入校验；打开、拖入或系统传入新文件前会提示未保存内容，避免静默丢失。
 - 修复全局快捷键在 Vditor、CodeMirror、输入框等编辑焦点中抢占按键的问题；编辑区内按键会交回编辑器处理。
@@ -131,7 +158,7 @@ All notable changes to this project will be documented in this file.
 - 新增单实例文件打开转发：Windows / Linux 第二次启动 Typola 并传入文档路径时，会复用已有窗口并通过 `opened-paths` 打开文件，避免同一文档被多个进程分叉编辑。
 - 修复重新打开上次文件失败后路径永远保留的问题；失败一次后会清理过期 `lastOpenedPath`，下次启动不再反复尝试同一路径。
 - 修复 Markdown 文件中通过 `![](./path.webp)` 引用的本地相对路径图片（WebP / PNG / JPG / GIF 等）无法在 Vditor 编辑区、Word 纸张预览、HTML 导出预览中正常渲染的问题：新增 `localImageResolver` 服务，在 Vditor 渲染完成后自动将 `<img src="./relative">` 解析为 Tauri asset 协议 URL（`https://asset.localhost/...`），与已有的 `htmlPresentationService` 共用路径解析逻辑。`.webp` 与 `.png` / `.jpg` 表现一致。
-- 修复 PDF 导出评审问题：导出链路改为离屏 hidden webview 打印，不再复用主窗口；前后端都增加了导出互斥保护，导出中显示遮罩，成功提示包含完整保存路径，`Ctrl/Cmd+P` 的快捷键调整也同步写入按钮提示与文档说明。
+- 修复 PDF 导出评审问题：导出链路改为离屏 hidden webview 打印，不再复用主窗口；前后端都增加了导出互斥保护，导出中显示遮罩，成功提示包含完整保存路径，`Ctrl+P` 的快捷键调整也同步写入按钮提示与文档说明。
 
 - 修复 Vditor WYSIWYG（即时渲染）模式中输入 `**foo**` 后 `**` 字符仍以蓝色 marker 持续可见、加粗看上去未生效的问题：`WysiwygEditorPane` 监听 `keydown` 钩子并在停顿 220ms 后强制清除 IR 节点的 `vditor-ir__node--expand` class，与 Vditor 自身 `blurEvent` 行为对齐；编辑过程中不打断用户，持续键入时 marker 仍可见，停顿后自动折叠。
 

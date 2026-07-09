@@ -6,8 +6,10 @@ import {
   getExportPresetConfig,
   clearLastOpenedPath,
   getLastOpenedPath,
+  getLastWorkspaceRoot,
   resolvePreviewFontFamily,
   resolvePreviewHeadingFontFamily,
+  setLastWorkspaceRoot,
 } from '../services/settingsService';
 import { firstOpenableDocumentPath, isOpenableDocumentPath } from '../services/fileDrop';
 import { useSettings } from '../hooks/useSettings';
@@ -51,7 +53,7 @@ import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
 import { useRightPanel, type RightPanelMode } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
-import { buildSkillPrefill } from '../services/agent/skillHub';
+import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skillHub';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
@@ -62,6 +64,7 @@ import { calculateDocumentStats } from '../services/documentStatsService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
+import { applyThemeToDocument } from '../services/themeDom';
 import {
   formatImageSrc,
   isImagePath,
@@ -172,17 +175,23 @@ export function AppLayout() {
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
     previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
   }, []);
-  const handlePreviewHeadingScroll = useCallback((change: { index: number; withinRatio: number }) => {
+  const handlePreviewHeadingScroll = useCallback((change: { index: number }) => {
     if (Date.now() < syncLockUntilRef.current) return;
     if (change.index < 0) return;
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
-    setSourceHeadingScrollRequest({
+    // 不传 withinRatio:preview 与 editor 的 heading 段高不同(渲染/字体/行距差异),
+    // 段内比例在两侧不可一一对应,只传 heading 索引对齐到 heading 起点,
+    // 段内精确滚动交给 preview 自身保留,避免反向跟随在段内漂移。
+    setSourceHeadingScrollRequest((current) => ({
       index: change.index,
-      withinRatio: change.withinRatio,
-      requestId: Date.now(),
-    });
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
   }, []);
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [workspaceRoot, setWorkspaceRootState] = useState(() => getLastWorkspaceRoot());
+  const setWorkspaceRoot = useCallback((next: string) => {
+    setWorkspaceRootState(next);
+    setLastWorkspaceRoot(next);
+  }, []);
   const [settingsVisible, setSettingsVisible] = useState(false);
   // P1-E:从外部(场景卡)跳转时指定的初始段
   const [settingsInitialSection, setSettingsInitialSection] = useState<'aiCli' | undefined>(undefined);
@@ -338,7 +347,10 @@ export function AppLayout() {
     if (!isTauriRuntime) return;
     let cancelled = false;
     void import('@tauri-apps/api/path')
-      .then(({ homeDir }) => homeDir())
+      .then(async ({ homeDir, join }) => {
+        const home = await homeDir();
+        return join(home, '.typola', 'userdata');
+      })
       .then((path) => {
         if (!cancelled) setDefaultAiWorkspaceRoot(path);
       })
@@ -370,6 +382,7 @@ export function AppLayout() {
     defaultWidth: WORKSPACE_PANEL_DEFAULT_WIDTH,
     minWidth: LEFT_PANEL_MIN_WIDTH,
     maxWidth: LEFT_PANEL_MAX_WIDTH,
+    initialMode: workspaceRoot ? 'workspace' : 'none',
   });
   const { docMode, setDocMode } = useDocumentMode({
     enabled: file.fileType !== 'docx',
@@ -386,6 +399,11 @@ export function AppLayout() {
     flowLeftPanelWidth: FLOW_LEFT_PANEL_WIDTH,
     flowRightPanelWidth: FLOW_RIGHT_PANEL_WIDTH,
   });
+
+  useEffect(() => {
+    document.documentElement.dataset.docMode = docMode;
+    document.documentElement.dataset.reviewEnhanceMarks = settings.themeOptions.reviewEnhanceMarks ? 'true' : 'false';
+  }, [docMode, settings.themeOptions.reviewEnhanceMarks]);
 
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
   const reviewStateApi = useReviewState(file.path);
@@ -498,9 +516,8 @@ export function AppLayout() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = settings.theme;
-    document.documentElement.style.colorScheme = settings.theme;
-  }, [settings.theme]);
+    applyThemeToDocument(document, settings.themeId);
+  }, [settings.themeId]);
 
   useEffect(() => {
     /* Kick off the settings chunk immediately on mount so the modal is fully
@@ -675,7 +692,6 @@ export function AppLayout() {
         content: file.content,
         fileName: file.name,
         filePath: file.path || undefined,
-        theme: settings.theme,
         resolvedPreviewFontFamily: resolvePreviewFontFamily(settings),
         resolvedPreviewHeadingFontFamily: resolvePreviewHeadingFontFamily(settings),
         previewFontSize: settings.previewFontSize,
@@ -696,6 +712,10 @@ export function AppLayout() {
   const replaceCurrentContent = useCallback((value: string) => {
     handleContentChange(value);
     editorCommandRef.current?.focus();
+  }, [handleContentChange]);
+
+  const replaceFromFindPanel = useCallback((value: string) => {
+    handleContentChange(value);
   }, [handleContentChange]);
 
   // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档:
@@ -917,8 +937,11 @@ export function AppLayout() {
 
   const handleToggleEditorMode = useCallback(() => {
     if (file.fileType === 'docx') return;
-    setHtmlPresentationVisible(false);
-    setEditorMode((mode) => mode === 'source' ? 'wysiwyg' : 'source');
+    setEditorMode((mode) => {
+      const next = mode === 'source' ? 'wysiwyg' : 'source';
+      setHtmlPresentationVisible(file.fileType === 'html' && next !== 'source');
+      return next;
+    });
   }, [file.fileType]);
 
   const handleToggleWordPreview = useCallback(() => {
@@ -950,11 +973,18 @@ export function AppLayout() {
     setTerminalCreateRequest((request) => request + 1);
   }, []);
 
-  const handlePickSkill = useCallback((skillName: string) => {
+  const handlePickSkill = useCallback((payload: SkillPickPayload) => {
     const provider = convManager.activeProvider;
-    convManager.createConversation(skillName, skillName, provider);
+    const title = payload.skill.label ?? payload.skill.name;
+    convManager.createConversation(title, payload.skill.name, provider);
     setLeftRailMode('aiWorkbench');
-    setSkillPrefill({ tick: Date.now(), text: buildSkillPrefill(provider, skillName) });
+    // 用 scene + skill 派生 prefill,符合 plan §10.3 三种分支
+    // (builtin/prefill 模板/fallback goal)。
+    const template = payload.skill.template;
+    setSkillPrefill({
+      tick: Date.now(),
+      text: buildSkillPrefill(provider, template ?? { name: payload.skill.name, system: true }, payload.scene),
+    });
   }, [convManager]);
 
   const handleInstallSkill = useCallback((prompt: string) => {
@@ -1412,6 +1442,42 @@ export function AppLayout() {
     }
   }, [effectiveAiWorkspaceRoot, file.path, handleOpenPath]);
 
+  const handleOpenHtmlInBrowser = useCallback(async (path: string) => {
+    if (!path) return;
+    try {
+      // 自定义命令 open_path_external — 绕开 tauri-plugin-opener 的
+      // opener:scope 验证,后者用 canonicalize 后会把 Windows 路径变成
+      // \\?\D:\... 形式,跟 capabilities 里 $HOME/$DESKTOP 等 glob 永远
+      // 匹配不上,报「Not allowed to open path \\?\D」。
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_path_external', { path });
+    } catch (error) {
+      console.warn('Failed to open HTML in browser:', error);
+      await messageDialog(String(error), { title: '浏览器打开失败' });
+    }
+  }, []);
+
+  const handleOpenArtifactExternally = useCallback(async (path: string) => {
+    try {
+      // 同上,绕开 opener scope。image / 任意本地文件都用 ShellExecuteW 派发。
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_path_external', { path });
+    } catch (error) {
+      console.warn('Failed to open artifact externally:', error);
+      await messageDialog(String(error), { title: '打开失败' });
+    }
+  }, []);
+
+  const handleRevealPathInFolder = useCallback(async (path: string) => {
+    try {
+      const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+      await revealItemInDir(path);
+    } catch (error) {
+      console.warn('Failed to reveal path in folder:', error);
+      await messageDialog(String(error), { title: '打开所在文件夹失败' });
+    }
+  }, []);
+
   useEffect(() => {
     if (!isTauriRuntime) return;
     const title = file.dirty ? `* ${file.name}` : file.name;
@@ -1460,7 +1526,7 @@ export function AppLayout() {
       <HtmlPresentationPane
         source={file.content}
         filePath={file.path}
-        onBack={() => setHtmlPresentationVisible(false)}
+        onOpenInBrowser={() => { void handleOpenHtmlInBrowser(file.path); }}
       />
     </Suspense>
   ) : editorEngine === 'cm6' ? (
@@ -1574,6 +1640,22 @@ export function AppLayout() {
       onUndoOverwrite={(record) => { void handleUndoArtifactOverwrite(record); }}
       onRefresh={refreshArtifactLibrary}
       onClose={() => setRightPanelMode('none')}
+      onOpenExternal={(path) => { void handleOpenArtifactExternally(path); }}
+      onRevealInFolder={(path) => { void handleRevealPathInFolder(path); }}
+      onPreviewHtml={(path) => {
+        void handleOpenPath(path)
+          .then(() => setRightPanelMode('none'))
+          .catch((error) => console.warn('Failed to open HTML artifact:', error));
+      }}
+      onOpenSource={(path) => {
+        void handleOpenPath(path)
+          .then(() => {
+            // 用户明确点了「源码」,跳到主编辑器并切到 source 模式。
+            setEditorMode('source');
+            setRightPanelMode('none');
+          })
+          .catch((error) => console.warn('Failed to open HTML source:', error));
+      }}
     />
   ) : null;
 
@@ -1594,7 +1676,6 @@ export function AppLayout() {
     <>
       <AppLayoutChrome
         appStyle={appStyle}
-        theme={settings.theme}
         toolbarProps={{
           dirty: file.dirty,
           fileName: file.name,
@@ -1686,6 +1767,8 @@ export function AppLayout() {
           onOpenFile: (path) => {
             void handleOpenPath(path).catch((error) => console.warn('Failed to open workspace file:', error));
           },
+          onRevealInFolder: (path) => { void handleRevealPathInFolder(path); },
+          onOpenExternal: (path) => { void handleOpenArtifactExternally(path); },
         }}
         onLeftPanelResize={handleLeftPanelResizerPointerDown}
         showToc={!isDocx}
@@ -1754,7 +1837,7 @@ export function AppLayout() {
         source={file.content}
         readOnly={isDocx}
         onCloseFind={() => setFindVisible(false)}
-        onReplaceSource={replaceCurrentContent}
+        onReplaceSource={replaceFromFindPanel}
         onNavigate={handleSearchNavigate}
         quickOpenVisible={quickOpenVisible}
         recentFiles={recentFiles}

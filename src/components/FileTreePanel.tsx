@@ -28,6 +28,8 @@ type FileTreePanelProps = {
   refreshKey?: number;
   onRootChange: (path: string) => void;
   onOpenFile: (path: string) => void;
+  onRevealInFolder?: (path: string) => void;
+  onOpenExternal?: (path: string) => void;
 };
 
 type TreeNodeProps = {
@@ -39,6 +41,8 @@ type TreeNodeProps = {
   refreshKey?: number;
   loadingHint: string;
   onOpenFile: (path: string) => void;
+  onRevealInFolder?: (path: string) => void;
+  onOpenExternal?: (path: string) => void;
   styleIndex?: number;
 };
 
@@ -52,10 +56,23 @@ function getFileIconMeta(name: string): { Icon: typeof FileText; className: stri
   return { Icon: FileText, className: '' };
 }
 
-function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, refreshKey, loadingHint, onOpenFile, styleIndex = 0 }: TreeNodeProps) {
+function TreeNode({
+  entry,
+  depth,
+  activePath,
+  dirtyPaths,
+  agentChangedPaths,
+  refreshKey,
+  loadingHint,
+  onOpenFile,
+  onRevealInFolder,
+  onOpenExternal,
+  styleIndex = 0,
+}: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<WorkspaceEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const active = !entry.isDir && activePath === entry.path;
   const isAgentChanged = !entry.isDir && Boolean(agentChangedPaths?.has(entry.path));
   const fileMeta = !entry.isDir ? getFileIconMeta(entry.name) : null;
@@ -70,6 +87,27 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
       .finally(() => setLoading(false));
   }, [entry.isDir, entry.path, expanded, refreshKey]);
 
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('blur', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('blur', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [menu]);
+
+  const copyPath = async () => {
+    try {
+      await navigator.clipboard?.writeText(entry.path);
+    } catch (error) {
+      console.warn('Failed to copy workspace path:', error);
+    }
+  };
+
   return (
     <div
       className="file-tree-node"
@@ -82,6 +120,11 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
         onClick={() => {
           if (entry.isDir) setExpanded((value) => !value);
           else onOpenFile(entry.path);
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setMenu({ x: event.clientX, y: event.clientY });
         }}
         title={entry.path}
       >
@@ -103,6 +146,39 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
         )}
         <span className="file-tree-name">{dirtyPaths.has(entry.path) ? `*${entry.name}` : entry.name}</span>
       </button>
+      {menu && (
+        <div
+          className="file-tree-context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          role="menu"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {entry.isDir ? (
+            <button type="button" role="menuitem" onClick={() => { setExpanded((value) => !value); setMenu(null); }}>
+              {expanded ? '收起文件夹' : '展开文件夹'}
+            </button>
+          ) : (
+            <>
+              <button type="button" role="menuitem" onClick={() => { onOpenFile(entry.path); setMenu(null); }}>
+                在 Typola 打开
+              </button>
+              {onOpenExternal && (
+                <button type="button" role="menuitem" onClick={() => { onOpenExternal(entry.path); setMenu(null); }}>
+                  用系统默认应用打开
+                </button>
+              )}
+            </>
+          )}
+          {onRevealInFolder && (
+            <button type="button" role="menuitem" onClick={() => { onRevealInFolder(entry.path); setMenu(null); }}>
+              打开所在文件夹
+            </button>
+          )}
+          <button type="button" role="menuitem" onClick={() => { void copyPath(); setMenu(null); }}>
+            复制路径
+          </button>
+        </div>
+      )}
       {expanded && (
         <div className="file-tree-children">
           {loading && <div className="file-tree-loading" style={{ paddingLeft: `${24 + depth * 14}px` }}>{loadingHint}</div>}
@@ -117,6 +193,8 @@ function TreeNode({ entry, depth, activePath, dirtyPaths, agentChangedPaths, ref
               refreshKey={refreshKey}
               loadingHint={loadingHint}
               onOpenFile={onOpenFile}
+              onRevealInFolder={onRevealInFolder}
+              onOpenExternal={onOpenExternal}
               styleIndex={index}
             />
           ))}
@@ -135,6 +213,8 @@ export function FileTreePanel({
   refreshKey,
   onRootChange,
   onOpenFile,
+  onRevealInFolder,
+  onOpenExternal,
 }: FileTreePanelProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -191,6 +271,8 @@ export function FileTreePanel({
             refreshKey={refreshKey}
             loadingHint={t('fileTreeLoadingChild')}
             onOpenFile={onOpenFile}
+            onRevealInFolder={onRevealInFolder}
+            onOpenExternal={onOpenExternal}
             styleIndex={index}
           />
         ))}

@@ -9,6 +9,7 @@ import { VDITOR_PREVIEW_I18N } from '../services/vditorPreviewConfig';
 import { createHtmlReadingPreviewHtml } from '../services/htmlReadingPreviewService';
 import { resolveLocalImages } from '../services/localImageResolver';
 import { renderMermaidIn } from '../services/mermaidRenderer';
+import { getMermaidTheme, getVditorHighlightStyle, getVditorPreviewTheme } from '../services/themeRegistry';
 
 type PreviewPaneProps = {
   source: string;
@@ -17,7 +18,7 @@ type PreviewPaneProps = {
   renderMode?: 'markdown' | 'html';
   filePath?: string;
   onScrollRatio?: (ratio: number) => void;
-  onPreviewHeadingScroll?: (change: { index: number; withinRatio: number }) => void;
+  onPreviewHeadingScroll?: (change: { index: number; withinRatio?: number }) => void;
 };
 
 export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(function PreviewPane(
@@ -28,6 +29,9 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
   const deferredSource = useDeferredValue(source);
   const deferredTocIds = useDeferredValue(tocIds);
   const settings = useSettings();
+  const mermaidTheme = getMermaidTheme(settings.themeId);
+  const vditorTheme = getVditorPreviewTheme(settings.themeId);
+  const vditorHighlightStyle = getVditorHighlightStyle(settings.themeId);
   const renderFeatures = useMemo(
     () => detectMarkdownRenderFeatures(deferredSource),
     [deferredSource],
@@ -49,7 +53,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     if (renderMode === 'html') {
       el.innerHTML = createHtmlReadingPreviewHtml(deferredSource);
       void resolveLocalImages(el, filePath);
-      void renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+      void renderMermaidIn(el, { theme: mermaidTheme });
       applyTocIds(el, deferredTocIds);
       return;
     }
@@ -61,17 +65,17 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     ]).then(([, { default: Vditor }]) => {
       if (cancelled) return;
       Vditor.preview(el, deferredSource, {
-        mode: 'light',
+        mode: vditorTheme,
         anchor: 0,
         cdn: '/vditor',
         i18n: VDITOR_PREVIEW_I18N,
         icon: undefined,
         theme: {
-          current: 'light',
+          current: vditorTheme,
           path: '',
         },
         hljs: {
-          style: 'github',
+          style: vditorHighlightStyle,
           enable: renderFeatures.hasHighlightableCode,
           lineNumber: false,
         },
@@ -81,7 +85,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
         after() {
           if (cancelled) return;
           void (async () => {
-            await renderMermaidIn(el, { theme: settings.theme === 'dark' ? 'dark' : 'default' });
+            await renderMermaidIn(el, { theme: mermaidTheme });
             await resolveLocalImages(el, filePath);
             if (deferredTocIds.length > 0) applyTocIds(el, deferredTocIds);
           })();
@@ -92,7 +96,16 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
     return () => {
       cancelled = true;
     };
-  }, [deferredSource, deferredTocIds, filePath, renderFeatures.hasHighlightableCode, renderMode, settings.theme]);
+  }, [
+    deferredSource,
+    deferredTocIds,
+    filePath,
+    renderFeatures.hasHighlightableCode,
+    mermaidTheme,
+    renderMode,
+    vditorHighlightStyle,
+    vditorTheme,
+  ]);
 
   useImperativeHandle(ref, () => {
     const findScroller = (): HTMLElement | null => {
@@ -136,10 +149,14 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
         const ratio = max > 0 ? scroller.scrollTop / max : 0;
         onScrollRatio?.(ratio);
         if (onPreviewHeadingScroll) {
-          // 用 heading 元素 offsetTop 二分找当前可见 heading
+          // 用 heading 元素 offsetTop 二分找当前可见 heading。
+          // 仅传 heading index,不传 withinRatio —— editor 与 preview 的 heading 段高
+          // 完全不同(render 后高度、字体、行距都不同),段内比例在两侧不可一一对应,
+          // 传 ratio 反而导致反向跟随在段内漂移。editor 收到后只 scrollIntoView 到
+          // heading 起点,preview 自身保留段内精确位置,两侧在 heading 边界对齐即可。
           const headings = scroller.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
           if (headings.length === 0) {
-            onPreviewHeadingScroll({ index: -1, withinRatio: 0 });
+            onPreviewHeadingScroll({ index: -1 });
             return;
           }
           const scrollTop = scroller.scrollTop;
@@ -155,15 +172,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
               hi = mid - 1;
             }
           }
-          if (idx < 0) {
-            onPreviewHeadingScroll({ index: -1, withinRatio: 0 });
-            return;
-          }
-          const start = headings[idx].offsetTop;
-          const end = idx + 1 < headings.length ? headings[idx + 1].offsetTop : scroller.scrollHeight;
-          const sectionHeight = Math.max(1, end - start);
-          const within = (scrollTop - start) / sectionHeight;
-          onPreviewHeadingScroll({ index: idx, withinRatio: Math.max(0, Math.min(1, within)) });
+          onPreviewHeadingScroll({ index: idx });
         }
       });
     };

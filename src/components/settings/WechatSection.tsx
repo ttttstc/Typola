@@ -15,7 +15,7 @@ import {
 } from '../../services/settingsService';
 import {
   HtmlExportPresetImportError,
-  createHtmlExportArticleStyles,
+  createHtmlExportPreviewStyles,
   importHtmlExportPresetFromCss,
   importHtmlExportPresetFromJson,
 } from '../../services/wechatPreviewService';
@@ -98,7 +98,7 @@ function HtmlPreviewArticle({ zoomed = false }: { zoomed?: boolean }) {
 }
 
 function HtmlPreviewSample({ preset, onExpand }: { preset: HtmlExportPreset; onExpand: () => void }) {
-  const styles = useMemo(() => createHtmlExportArticleStyles(preset), [preset]);
+  const styles = useMemo(() => createHtmlExportPreviewStyles(preset), [preset]);
 
   return (
     <div className="settings-html-preview" aria-label={`${preset.name} HTML 文章预览`}>
@@ -125,7 +125,7 @@ function HtmlPreviewZoom({
   preset: HtmlExportPreset;
   onClose: () => void;
 }) {
-  const styles = useMemo(() => createHtmlExportArticleStyles(preset), [preset]);
+  const styles = useMemo(() => createHtmlExportPreviewStyles(preset), [preset]);
 
   return (
     <div
