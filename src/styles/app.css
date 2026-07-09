@@ -1420,9 +1420,10 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .floating-toc-item {
   display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 24px;
-  padding: 3px 12px 3px calc(12px + var(--toc-depth, 0) * 12px);
+  padding: 3px 12px 3px 0;
   border: none;
   background: transparent;
   color: var(--muted);
@@ -1439,6 +1440,54 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.floating-toc-row {
+  display: flex;
+  align-items: stretch;
+  padding-left: calc(12px + var(--toc-depth, 0) * 12px);
+}
+
+.floating-toc-row:hover,
+.floating-toc-row.active {
+  color: var(--fg);
+  background: var(--control-active-bg);
+}
+
+.floating-toc-row.active {
+  color: var(--accent);
+}
+
+.floating-toc-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  flex: 0 0 20px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.floating-toc-chevron.is-leaf {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.floating-toc-chevron:hover {
+  color: var(--fg);
+  background: var(--control-hover-bg, transparent);
+}
+
+.floating-toc-chevron:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .floating-toc-item:hover,
