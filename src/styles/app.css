@@ -9071,6 +9071,9 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   color: var(--theme-text-primary);
   font-size: 12.5px;
   user-select: none;
+  /* 901 > 900(.editor-ctx-menu),被右键菜单叠压时仍能看见。
+     < 1000(.ant-tooltip) 让 tooltip 仍可浮在最上层。 */
+  z-index: 901;
 }
 .typola-table-submenu-title {
   padding: 4px 10px 6px;

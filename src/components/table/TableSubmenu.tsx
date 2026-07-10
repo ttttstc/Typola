@@ -26,12 +26,13 @@ export interface TableContext {
   isHeader: boolean;
 }
 
-/** 从 event.target 反查 TableContext;不在 table 内返回 null。 */
+/** 从 event.target 反查 TableContext;不在 table 内返回 null。
+ *  - M9:text.node 没有 closest → 向上取 parentElement 让 cell 内文本点击仍能命中菜单。 */
 export function getTableContext(target: EventTarget | null): TableContext | null {
-  if (!(target instanceof Element)) return null;
-  const cellEl = target.closest('th, td') as HTMLTableCellElement | HTMLTableHeaderCellElement | null;
-  const rowEl = target.closest('tr');
-  const tableEl = target.closest('table');
+  const el = target instanceof Element ? target : (target instanceof Node ? target.parentElement : null);
+  const cellEl = el?.closest('th, td') as HTMLTableCellElement | HTMLTableHeaderCellElement | null;
+  const rowEl = el?.closest('tr');
+  const tableEl = el?.closest('table');
   if (!cellEl || !rowEl || !tableEl) return null;
   const cellIndex = Array.from(rowEl.children).findIndex((c) => c === cellEl);
   const rowIndex = Array.from(tableEl.querySelectorAll(':scope > thead > tr, :scope > tbody > tr')).findIndex(
@@ -77,13 +78,21 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuPr
     const next = mutate(data);
     if (next === data) return; // no-op(禁删等)
     const newSource = computeNewTableSource(editor, ctx.tableEl, next);
+    if (newSource === null) {
+      // 操作被拒绝(退化路径),仍关闭 menu 让 UI 不卡死。
+      setVisible(false);
+      onClose();
+      return;
+    }
     editor.updateValue(newSource);
     setVisible(false);
     onClose();
     onUpdated?.();
   };
 
-  // 菜单位置:在 cell 右下方(若空间不够则左/上回弹)。
+  // 菜单关闭全靠 item 点击触发 setVisible(false)+onClose();不走 onMouseLeave,
+  // 避免鼠标在 menu 内移动就立刻收 menu 的 PR #174 H2 同款问题。
+  // Esc 关闭由 useEffect register。
   const rect = ctx.cellEl.getBoundingClientRect();
   const style: React.CSSProperties = {
     position: 'fixed',
@@ -93,7 +102,7 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuPr
   };
 
   return (
-    <div className="typola-table-submenu" role="menu" style={style} onMouseLeave={() => { setVisible(false); onClose(); }}>
+    <div className="typola-table-submenu" role="menu" style={style}>
       <div className="typola-table-submenu-title">{t('tableMenuTitle')}</div>
       <button type="button" role="menuitem" className="typola-table-submenu-item" onClick={() => run((d) => insertRow(d, ctx.rowIndex))}>
         {t('tableMenuInsertRowAbove')}
@@ -123,10 +132,13 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuPr
         if (idx >= 0) {
           const next = full.slice(0, idx) + full.slice(idx + tableSource.length);
           editor.updateValue(next);
+          setVisible(false);
+          onClose();
+          onUpdated?.();
+        } else {
+          // 找不到原文,拒绝操作避免清空正文(M6 同源修复)。
+          console.warn('[tableSubmenu] deleteTable: cannot locate table in source; abort');
         }
-        setVisible(false);
-        onClose();
-        onUpdated?.();
       }}>
         {t('tableMenuDeleteTable')}
       </button>
@@ -144,16 +156,18 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuPr
   );
 }
 
-/** 把 IR 中 tableEl 对应的 markdown source 替换为 serializeTable(next) 后的新 source。 */
-function computeNewTableSource(editor: Vditor, tableEl: HTMLTableElement, next: TableData): string {
+/** 把 IR 中 tableEl 对应的 markdown source 替换为 serializeTable(next) 后的新 source。
+ *  - 多 table 场景下 indexOf 会错:退化路径拒绝 update,返回原文,不让"清空正文"发生。 */
+function computeNewTableSource(editor: Vditor, tableEl: HTMLTableElement, next: TableData): string | null {
   const data = parseTableFromIr(tableEl);
   const oldSource = serializeTable(data);
   const newSource = serializeTable(next);
   const full = editor.getValue();
   const idx = full.indexOf(oldSource);
   if (idx < 0) {
-    // 退化:直接 setValue(newSource)(会清空正文,但至少不崩溃)。
-    return newSource;
+    // 退化:找不到原文位置 → 拒绝操作而不是清空正文(M6 修复)。
+    console.warn('[tableSubmenu] cannot locate table in source; abort to avoid data loss');
+    return null;
   }
   return full.slice(0, idx) + newSource + full.slice(idx + oldSource.length);
 }

@@ -331,6 +331,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
     const ir = getIrElement(editorRef.current);
     if (!ir || !(event.target instanceof Node) || !ir.contains(event.target)) return;
     // 表格单元格右键 → 走 TableSubmenu。
+    // event.target 不一定 instanceof Element(TableSubmenu 内部做了 text node 兼容)。
     const tableCtx = getTableContext(event.target);
     if (tableCtx) {
       event.preventDefault();

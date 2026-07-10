@@ -34,7 +34,8 @@ export function parseTableFromIr(tableEl: HTMLTableElement): TableData {
   const cells: string[][] = [];
   for (const row of rows) {
     const rowCells = Array.from(row.querySelectorAll(':scope > th, :scope > td'));
-    cells.push(rowCells.map((c) => (c.textContent ?? '').replace(/\s+$/, '')));
+    // IR DOM 把 cell 内的 <br> 换成 \\n 序列化;这里反向还原。
+    cells.push(rowCells.map((c) => unescapeCell(c.textContent ?? '')));
   }
   // 对齐:从每个 th/td 的 style.textAlign 推断。
   const firstRow = rows[0];
@@ -49,16 +50,40 @@ export function parseTableFromIr(tableEl: HTMLTableElement): TableData {
   return { cells, colAligns };
 }
 
+/** 把单个 cell 文本中的 `\|` 反义回 `|`、`<br>` 反义回 `\\n`。 */
+export function unescapeCell(s: string): string {
+  return s
+    .split('<br>')
+    .join('\n')
+    .split('\\|')
+    .join('|')
+    // 兼容 IR 渲染 <br/>、<br /> 的写法。
+    .split('<br/>')
+    .join('\n')
+    .split('<br />')
+    .join('\n');
+}
+
+/** 把单个 cell 原始文本中 `|` 以及换行义成 IR 安全的形式。 */
+export function escapeCell(s: string): string {
+  return s
+    .split('|')
+    .join('\\|')
+    .split('\n')
+    .join('<br>');
+}
+
 /** 把 `string[][]` 序列化为 pipe table Markdown source。 */
 export function serializeTable(data: TableData): string {
   const { cells, colAligns } = data;
   if (cells.length === 0) return '';
   const colCount = cells[0].length;
   // 每列最小宽度 3(留 `---`),header 行按实际 cell 长度。
+  // 用 escapeCell 之后的长度宽度保证列对齐不会错位。
   const widths: number[] = new Array(colCount).fill(3);
   for (const row of cells) {
     for (let c = 0; c < colCount; c += 1) {
-      const w = (row[c] ?? '').length;
+      const w = escapeCell(row[c] ?? '').length;
       if (w > widths[c]) widths[c] = w;
     }
   }
@@ -67,7 +92,7 @@ export function serializeTable(data: TableData): string {
     if (w < 3) widths[idx] = 3;
   });
   const formatRow = (row: string[]): string =>
-    '| ' + row.map((cell, c) => cell.padEnd(widths[c], ' ')).join(' | ') + ' |';
+    '| ' + row.map((cell, c) => escapeCell(cell).padEnd(widths[c], ' ')).join(' | ') + ' |';
   const sepRow = colAligns.map((a, c) => {
     const w = widths[c];
     if (a === 'center') return ':' + '-'.repeat(Math.max(1, w - 2)) + ':';
