@@ -2,14 +2,11 @@ import { useCallback, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { TocItem } from '../types/document';
 import { updateSettings } from '../services/settingsService';
-import type { EditorMode } from '../components/Toolbar';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 
 type UseTocStateOptions = {
-  editorMode: EditorMode;
   alwaysPinned: boolean;
   setSourceHeadingScrollRequest: Dispatch<SetStateAction<SourceHeadingScrollRequest | undefined>>;
-  trackDomHeadings?: boolean;
 };
 
 type UseTocStateResult = {
@@ -27,10 +24,8 @@ type UseTocStateResult = {
  * Holds TOC pinning, active heading tracking, and source-mode TOC jumps.
  */
 export function useTocState({
-  editorMode,
   alwaysPinned,
   setSourceHeadingScrollRequest,
-  trackDomHeadings = true,
 }: UseTocStateOptions): UseTocStateResult {
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
@@ -40,11 +35,15 @@ export function useTocState({
   const tocPinned = tocSessionPinned || alwaysPinned;
 
   const handleTocNavigate = useCallback((_item: TocItem, index: number) => {
+    pendingNavigationRef.current = index;
     setSourceHeadingScrollRequest((current) => ({
       index,
       requestId: (current?.requestId ?? 0) + 1,
     }));
     setActiveTocIndex(index);
+    window.setTimeout(() => {
+      if (pendingNavigationRef.current === index) pendingNavigationRef.current = null;
+    }, 300);
   }, [setSourceHeadingScrollRequest]);
 
   const handleTocPinnedChange = useCallback((nextPinned: boolean) => {
@@ -62,54 +61,12 @@ export function useTocState({
   }, []);
 
   const handleEditorHeadingChange = useCallback((index: number) => {
+    if (pendingNavigationRef.current !== null) {
+      pendingNavigationRef.current = null;
+      return;
+    }
     if (index >= 0) setActiveTocIndex(index);
   }, []);
-
-  useEffect(() => {
-    if (!trackDomHeadings || toc.length === 0) return;
-    if (editorMode === 'source') return;
-
-    const updateActiveHeading = () => {
-      const rootRect = mainContentRef.current?.getBoundingClientRect();
-      const anchorTop = (rootRect?.top ?? 0) + 96;
-      let nextActive = 0;
-
-      toc.forEach((item, index) => {
-        const heading = resolveTocHeading(item, index);
-        if (!heading) return;
-        if (heading.getBoundingClientRect().top <= anchorTop) {
-          nextActive = index;
-        }
-      });
-
-      setActiveTocIndex((current) => current === nextActive ? current : nextActive);
-    };
-
-    const root = mainContentRef.current;
-    let frame: number | null = null;
-    const scheduleUpdate = () => {
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = null;
-        updateActiveHeading();
-      });
-    };
-    const observer = new MutationObserver(scheduleUpdate);
-
-    root?.addEventListener('scroll', scheduleUpdate, { capture: true, passive: true });
-    window.addEventListener('resize', scheduleUpdate);
-    if (root) {
-      observer.observe(root, { childList: true, subtree: true });
-    }
-    scheduleUpdate();
-
-    return () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      root?.removeEventListener('scroll', scheduleUpdate, true);
-      window.removeEventListener('resize', scheduleUpdate);
-      observer.disconnect();
-    };
-  }, [editorMode, mainContentRef, resolveTocHeading, toc, trackDomHeadings]);
 
   return {
     toc,

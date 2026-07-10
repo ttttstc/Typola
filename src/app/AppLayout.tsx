@@ -204,24 +204,6 @@ export function AppLayout() {
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
   const [transientMessage, setTransientMessage] = useState('');
-  const resolveTocHeading = useCallback((item: TocItem, index: number): HTMLElement | null => {
-    const byId = document.getElementById(item.id);
-    if (byId instanceof HTMLElement) return byId;
-
-    const root = mainContentRef.current;
-    if (!root) return null;
-
-    // atomic-editor 标题行是 .cm-line.cm-atomic-hN，而不是语义 hN。
-    const headings = root.querySelectorAll<HTMLElement>(
-      '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, '
-      + '.vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6, '
-      + '.cm-content h1, .cm-content h2, .cm-content h3, .cm-content h4, .cm-content h5, .cm-content h6, '
-      + '.cm-content .cm-line.cm-atomic-h1, .cm-content .cm-line.cm-atomic-h2, '
-      + '.cm-content .cm-line.cm-atomic-h3, .cm-content .cm-line.cm-atomic-h4, '
-      + '.cm-content .cm-line.cm-atomic-h5, .cm-content .cm-line.cm-atomic-h6',
-    );
-    return headings[index] ?? null;
-  }, []);
   const {
     toc,
     setToc,
@@ -232,11 +214,8 @@ export function AppLayout() {
     handleTocAlwaysPinnedChange,
     handleEditorHeadingChange: handleTocEditorHeadingChange,
   } = useTocState({
-    editorMode,
     alwaysPinned: settings.tocAlwaysPinned,
     setSourceHeadingScrollRequest,
-    // CM6 虚拟化行 DOM，当前标题索引由 previewSyncExtension 提供。
-    trackDomHeadings: false,
   });
   const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
     handleTocEditorHeadingChange(change.index);
