@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 - 源码模式保留 CM6 标题折叠、缩放和预览同步核心扩展；仅关闭 Markdown live preview widget，搜索命中折叠内容会自动展开。
 - 修复 CM6 写作模式的检视标记与大纲联动：检视意见以 CM6 decoration 标注对应源码行，atomic-editor 标题行可正确驱动悬浮大纲的跳转与当前项。
 - 修复 CM6 格式快捷键与批量替换边界：`Ctrl/Cmd+B`、`Ctrl/Cmd+I` 在已有标记内改为取消格式；重叠替换范围会被拒绝，避免生成不可预期的文稿内容。
-- 新增 `MarkdownAnalysisService`：以 Lezer GFM 语法树为主、集中必要行扫描，统一输出标题/大纲/折叠区、任务、链接/图片、代码块、数学块、Mermaid、表格与文档统计；TOC、CM6 折叠与状态栏改用同一 source-hash 缓存分析结果，并覆盖 10k 行基线。
+- 新增 `MarkdownAnalysisService`：以 Lezer GFM 语法树统一输出标题/大纲/折叠区与文档统计；TOC、CM6 折叠与状态栏改用同一 source-hash 缓存分析结果，并覆盖 Setext 标题、fenced code 与 10k 行基线。任务、链接、图片及复杂块交互由后续专项继续接入。
 
 ### Added
 

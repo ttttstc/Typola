@@ -1,80 +1,44 @@
-import { describe, expect, it, vi } from 'vitest';
-import { analyzeMarkdown, clearMarkdownAnalysisCache, scheduleMarkdownAnalysis } from './markdownAnalysisService';
-
-const fixture = [
-  '# 总览',
-  '',
-  '- [ ] 待办',
-  '  - [x] 已完成',
-  '',
-  '[官网](https://typola.dev "主页")',
-  '![封面](./cover.png "图片")',
-  '',
-  '```mermaid',
-  'graph TD',
-  '```',
-  '',
-  '```math',
-  'x^2',
-  '```',
-  '',
-  '$$',
-  'E = mc^2',
-  '$$',
-  '',
-  '| 名称 | 值 |',
-  '| --- | --- |',
-  '| A | B |',
-  '',
-  '## 子节',
-  '',
-  '```md',
-  '# 不是标题',
-  '- [ ] 不是任务',
-  '[不是链接](https://example.com)',
-  '```',
-].join('\n');
+import { describe, expect, it } from 'vitest';
+import { _clearMarkdownAnalysisCacheForTests, analyzeMarkdown } from './markdownAnalysisService';
 
 describe('markdownAnalysisService', () => {
-  it('collects Markdown structure from one source of truth', () => {
-    const result = analyzeMarkdown(fixture);
+  it('collects ATX and Setext headings while ignoring fenced examples', () => {
+    const result = analyzeMarkdown([
+      '# 总览',
+      '',
+      '子节',
+      '=====',
+      '',
+      '```md',
+      '# 不是标题',
+      '```',
+      '',
+      '### 收尾 ###',
+    ].join('\r\n'));
 
-    expect(result.headings.map(({ text, level }) => [text, level])).toEqual([['总览', 1], ['子节', 2]]);
-    expect(result.foldSections).toHaveLength(2);
-    expect(result.foldSections[0]).toMatchObject({ title: '总览', level: 1 });
-    expect(result.tasks.map(({ checked, text, depth }) => [checked, text, depth])).toEqual([
-      [false, '待办', 0],
-      [true, '已完成', 1],
+    expect(result.headings.map(({ text, level }) => [text, level])).toEqual([
+      ['总览', 1],
+      ['子节', 1],
+      ['收尾', 3],
     ]);
-    expect(result.links).toEqual([expect.objectContaining({ label: '官网', url: 'https://typola.dev', title: '主页' })]);
-    expect(result.images).toEqual([expect.objectContaining({ alt: '封面', src: './cover.png', title: '图片' })]);
-    expect(result.codeBlocks.map(({ language }) => language)).toEqual(['mermaid', 'math', 'md']);
-    expect(result.mermaidBlocks).toHaveLength(1);
-    expect(result.mathBlocks).toHaveLength(2);
-    expect(result.tables).toHaveLength(1);
-    expect(result.stats.words).toBeGreaterThan(0);
-    expect(result.stats.cjkCharacters).toBeGreaterThan(0);
+    expect(result.foldSections).toHaveLength(3);
+    expect(result.foldSections[0]).toMatchObject({ title: '总览', level: 1, lineFrom: 1 });
+  });
+
+  it('keeps document statistics compatible and reports zero minutes for empty text', () => {
+    expect(analyzeMarkdown('').stats).toEqual({ characters: 0, words: 0, paragraphs: 0, readingMinutes: 0 });
+    expect(analyzeMarkdown('# 标题\n\nHello world，这是正文。').stats).toMatchObject({
+      words: 8,
+      paragraphs: 2,
+      readingMinutes: 1,
+    });
   });
 
   it('caches identical source hashes and invalidates changed source', () => {
-    clearMarkdownAnalysisCache();
+    _clearMarkdownAnalysisCacheForTests();
     const first = analyzeMarkdown('# A');
     expect(analyzeMarkdown('# A')).toBe(first);
     expect(analyzeMarkdown('# B')).not.toBe(first);
-  });
-
-  it('publishes analysis after the requested debounce delay', () => {
-    vi.useFakeTimers();
-    const onResult = vi.fn();
-    scheduleMarkdownAnalysis('# 延迟标题', onResult, 180);
-
-    vi.advanceTimersByTime(179);
-    expect(onResult).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
-    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({
-      headings: [expect.objectContaining({ text: '延迟标题' })],
-    }));
-    vi.useRealTimers();
   });
 
   it('keeps a 10k-line document within the synchronous analysis budget', () => {
