@@ -152,6 +152,14 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
       return;
     }
 
+    try {
+      inlineHandleLine(record, trimmed);
+    } catch (error) {
+      onEvent({ type: 'error', message: `handleOpenCodeLine 异常: ${String(error)}` });
+    }
+  };
+
+  function inlineHandleLine(record: Record<string, unknown>, trimmed: string): void {
     const type = firstString(record.type, record.event);
     if (type && isToolEventType(type)) {
       const tool = readToolEvent(record);
@@ -223,6 +231,12 @@ export function createOpenCodeStreamHandler(onEvent: Emit) {
   return {
     feed(chunk: string) {
       buffer += chunk;
+      // 死循环保护:buffer 持续增长但长期找不到 \n → provider 异常。限制单 buffer 2MB。
+      if (buffer.length > 2 * 1024 * 1024) {
+        onEvent({ type: 'error', message: 'OpenCode 输出流异常:buffer 超过 2MB 未见到换行,已强制截断' });
+        buffer = '';
+        return;
+      }
       const lines = buffer.split(/\r?\n/u);
       buffer = lines.pop() ?? '';
       for (const line of lines) handleLine(line);

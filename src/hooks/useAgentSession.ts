@@ -280,7 +280,7 @@ export function useConversationManager({
     waiters.forEach((resolve) => resolve());
   }, []);
 
-  const waitForConversationExit = useCallback((convId: string, timeoutMs = 5000) => {
+  const waitForConversationExit = useCallback((convId: string, timeoutMs = 8000) => {
     const conv = conversationsRef.current.get(convId);
     if (!conv || conv.runState !== 'running') return Promise.resolve();
     return new Promise<void>((resolve) => {
@@ -547,6 +547,10 @@ export function useConversationManager({
     }
   }, [appendAssistantEvent, claudeModel, claudePath, extraAllowedDirs, openCodeModel, openCodePath, pluginDirs, queueAssistantEvent, updateConv, workspaceRoot]);
 
+  // cancel —— 无条件兜底版。
+  // 立刻置 idle + 强制杀进程(taskkill /T /F,由后端 agent_session_cancel 处理),
+  // 不依赖 onAgentExit 汇入。onAgentExit 兜底清理在 waitForConversationExit
+  // 8s 超时后也强制收尾,确保 provider 卡死/流 hang/非法 JSON 都不阻塞 UI。
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;
     const conv = conversationsRef.current.get(convId);
@@ -557,10 +561,14 @@ export function useConversationManager({
     handlersRef.current.delete(convId);
     if (conv.runId) silencedRunIdsRef.current.add(conv.runId);
     if (conv.runId) {
-      const exitWait = waitForConversationExit(convId);
-      await cancelAgentSession(conv.runId).catch((error) => {
+      const exitWait = waitForConversationExit(convId).then(() => {
+        updateConv(convId, { runState: 'idle', cancelRequested: false, lastError: '' });
+      });
+      void cancelAgentSession(conv.runId).catch((error) => {
         console.warn('Failed to cancel agent session:', error);
       });
+      // 立刻恢复 UI 输入 —— 不等待 onAgentExit
+      updateConv(convId, { runState: 'idle', cancelRequested: false });
       await exitWait;
     }
   }, [updateConv, waitForConversationExit]);
