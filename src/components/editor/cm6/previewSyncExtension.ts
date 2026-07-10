@@ -1,6 +1,6 @@
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { collectMarkdownHeadings } from '../../../services/markdownHeadings';
+import { analyzeMarkdown } from '../../../services/markdownAnalysisService';
 
 export type PreviewHeadingChange = {
   index: number;
@@ -14,7 +14,7 @@ type PreviewSyncOptions = {
 
 /** 在 doc 中收集所有 ATXHeading(#, ##, ...)的 [from, level] 列表。 */
 function collectHeadings(state: EditorState): Array<{ from: number; level: number }> {
-  return collectMarkdownHeadings(state.doc.toString()).map(({ from, level }) => ({ from, level }));
+  return analyzeMarkdown(state.doc.toString()).headings.map(({ from, level }) => ({ from, level }));
 }
 
 /** 给定 scrollTop 像素位置,找当前可见 heading + 段内比例(0..1)。

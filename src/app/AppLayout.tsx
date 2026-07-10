@@ -60,7 +60,7 @@ import type { TypolaEditorKernel } from '../types/editorCore';
 import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { calculateDocumentStats } from '../services/documentStatsService';
+import { analyzeMarkdown } from '../services/markdownAnalysisService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
@@ -73,7 +73,7 @@ import {
   resolveCopyDestination,
   resolveImageInsertAction,
 } from '../services/imageInsert';
-import { collectHeadingSections, foldKey, type FoldKey } from '../services/headingFoldService';
+import { foldKey, type FoldKey } from '../services/headingFoldService';
 import {
   extractToc,
   escapeRegExp,
@@ -84,7 +84,6 @@ import {
   joinLocalPath,
   LEFT_PANEL_MAX_WIDTH,
   LEFT_PANEL_MIN_WIDTH,
-  lineIndexAtOffset,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_RESIZER_GAP,
@@ -304,11 +303,17 @@ export function AppLayout() {
   useEffect(() => {
     setFoldedHeadings(new Set());
   }, [activeTabId]);
-  const debouncedStatsSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 260);
-  const documentStats = useMemo(
-    () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
-    [debouncedStatsSource, file.fileType],
+  const debouncedAnalysisSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 180);
+  const markdownAnalysis = useMemo(
+    () => analyzeMarkdown(debouncedAnalysisSource),
+    [debouncedAnalysisSource],
   );
+  const documentStats = file.fileType === 'docx' ? undefined : markdownAnalysis.stats;
+  useEffect(() => {
+    // Ignore the previous tab's delayed value until it catches up with current source.
+    if (file.fileType === 'docx' || debouncedAnalysisSource !== file.content) return;
+    setToc(markdownAnalysis.headings.map(({ level, text }, index) => ({ level, text, id: `toc-${index}` })));
+  }, [debouncedAnalysisSource, file.content, file.fileType, markdownAnalysis, setToc]);
   const [defaultAiWorkspaceRoot, setDefaultAiWorkspaceRoot] = useState('');
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -751,16 +756,16 @@ export function AppLayout() {
     // 让 IR 里的 case/regex/wholeWord 匹配跟 FindReplacePanel 的 findSearchMatches 完全一致。
     //
     // PR5:折叠区域内命中时先自动展开 — 否则命中位置不可视,scrollIntoView 也无意义。
-    // 用 collectHeadingSections 找覆盖 match 位置的最深 heading section,
+    // 用 MarkdownAnalysisService 找覆盖 match 位置的 heading section,
     // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
     if (editorMode === 'source') {
-      const sections = collectHeadingSections(file.content);
-      const matchStartLine = lineIndexAtOffset(file.content, match.index);
+      const sections = analyzeMarkdown(file.content).foldSections;
       const coveringKeys: FoldKey[] = [];
       for (const section of sections) {
-        if (section.headingLine <= matchStartLine && matchStartLine <= section.endLine) {
+        if (section.from <= match.index && match.index < section.to) {
           // 展开命中行所在的完整父链,否则只展开最深层时父 heading 仍可能折住内容。
-          coveringKeys.push(foldKey(section.level, section.text, section.sectionIndex));
+          const sectionIndex = Number(section.headingId.slice('heading-'.length));
+          coveringKeys.push(foldKey(section.level, section.title, sectionIndex));
         }
       }
       if (coveringKeys.some((key) => foldedHeadings.has(key))) {

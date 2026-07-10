@@ -13,14 +13,13 @@
 // - ViewPlugin 的 update 在折叠变化时回调 onChange,让 React 把状态镜像到
 //   editorRef,确保 wheel zoom 等触发扩展重建时折叠能从 React state 恢复。
 
-import { ensureSyntaxTree } from '@codemirror/language';
 import { StateEffect, StateField, Transaction, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { extractAtxHeadingText, foldKey, type FoldKey } from '../../../services/headingFoldService';
+import { analyzeMarkdown } from '../../../services/markdownAnalysisService';
 
 const FOLD_TOGGLE_CLASS = 'typola-heading-fold-toggle';
 const FOLDED_LINE_CLASS = 'typola-cm-line-folded';
-const SYNTAX_TREE_BUDGET_MS = 200;
 
 const toggleFoldEffect = StateEffect.define<FoldKey>();
 const setFoldedEffect = StateEffect.define<ReadonlySet<FoldKey>>();
@@ -50,25 +49,12 @@ type HeadingFoldOptions = {
 type HeadingInfo = { from: number; level: number; text: string; sectionIndex: number };
 
 function collectHeadings(view: EditorView): HeadingInfo[] | null {
-  const headings: HeadingInfo[] = [];
-  const tree = ensureSyntaxTree(view.state, view.state.doc.length, SYNTAX_TREE_BUDGET_MS);
-  if (!tree) return null;
-  const cursor = tree.cursor();
-  let sectionIndex = 0;
-  do {
-    const name = cursor.type.name;
-    if (name.startsWith('ATXHeading')) {
-      const level = Number(name.slice('ATXHeading'.length));
-      if (level >= 1 && level <= 6) {
-        const raw = view.state.doc.sliceString(cursor.from, cursor.to);
-        const text = extractAtxHeadingText(raw);
-        if (text) {
-          headings.push({ from: cursor.from, level, text, sectionIndex: sectionIndex++ });
-        }
-      }
-    }
-  } while (cursor.next());
-  return headings;
+  return analyzeMarkdown(view.state.doc.toString()).headings.map((heading, sectionIndex) => ({
+    from: heading.from,
+    level: heading.level,
+    text: heading.text || extractAtxHeadingText(view.state.doc.sliceString(heading.from, heading.to)),
+    sectionIndex,
+  }));
 }
 
 class FoldToggleWidget extends WidgetType {
