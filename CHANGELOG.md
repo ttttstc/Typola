@@ -12,8 +12,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- 修复 IR 表格编辑在文档包含同内容表格时可能误改第一张表的问题：定位不唯一时拒绝操作；删除整表同步采用同一保护。
-- 新增第五套主题「粗野」(id: `brutalist`)：新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
+- 修复 AI 会话停止竞态：启动尚未返回 runId 时停止会立即恢复输入；取消后重发不会再被旧进程退出事件中断。
+- 修复源码编辑器选区浮条在缺少隐藏回调时仍展示无效「本文档不再展示／全局隐藏」按钮的问题。
+- 修复 IR 表格编辑在文档包含同内容表格时可能误改第一张表的问题：定位不唯一时拒绝操作；删除整表同步采用同一保护。新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
 - 新增第四套主题「抽象」(id: `abstract`)：采用蒙德里安 De Stijl 经典配色 —— 白底 (`#ffffff`) + 黑色网格 (`#1a1a1a`) + 蒙德里安红 (`#c8311b`) / 蓝 (`#1e5a8a`) / 黄 (`#e8b810`) 三原色强调。accent 用红、aiInserted 用蓝、aiDeleted 用红、warning 用黄；终端 ANSI 也按红 / 蓝 / 黄 / 黑 / 白体系对齐，不再出现绿色映射。设置 → 外观 → 主题卡片可直接切换。
 - 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨韵”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
 - 修复 PR #146 主题系统检视意见：补齐旧 `theme: "dark"` 到 `night-current` 的迁移、`npm run build:themes` 生成主题 CSS、主题卡片键盘导航、Vditor / Mermaid / xterm 主题同步，以及 PDF 导出不跟随应用主题的残留清理。
@@ -41,8 +42,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-<<<<<<< HEAD
-- 修复 Windows MSI 安装到受限目录时可能报 “verify that you have access to that directory” 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
+- 修复 Windows MSI 安装到受限目录时可能报 "verify that you have access to that directory" 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
 - 修复缺少 Microsoft Edge WebView2 Runtime 时可能还没显示引导就启动失败的问题：Windows 启动预检前移到 `main()`，早于 Tauri WebView 初始化；缺失时先运行随包 bootstrapper，失败后提示用户安装并打开官方页面。
 - 修复 Vditor WYSIWYG 代码块拖选多行时选区容易被异步渲染/折叠重排打断的问题；代码块正文显式允许文本选择，拖选期间暂停 mermaid/katex/折叠等会改 DOM 的 idle 重排。
 - 补充文件内搜索/替换多行匹配回归测试，确认代码块内外的多行内容可查找、单次替换和全部替换。

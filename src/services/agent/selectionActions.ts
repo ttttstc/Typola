@@ -1,9 +1,11 @@
 // 选区右键 AI 动作定义 + 注入文本构造。
 // M3 选区注入最小入口：5 个固定模板 + 1 个自定义（空模板）+ 1 个检视(走 reviewState,不调 AI)。
 import {
+  Ban,
   BookOpen,
   ChevronsDownUp,
   ChevronsUpDown,
+  EyeOff,
   MessageSquare,
   PenLine,
   SpellCheck,
@@ -12,7 +14,7 @@ import {
 } from 'lucide-react';
 
 // 改写已砍:跟"润色"语义重叠,润色加自定义要求后基本覆盖改写场景。
-export type SelectionActionId = 'polish' | 'shorten' | 'expand' | 'explain' | 'custom' | 'review' | 'proofread';
+export type SelectionActionId = 'polish' | 'shorten' | 'expand' | 'explain' | 'custom' | 'review' | 'proofread' | 'dismiss-session' | 'hide-globally';
 
 // icon 改为 lucide 组件,跟工具栏视觉语言统一(原 emoji 视觉过乱)。
 export const SELECTION_ACTIONS: Record<SelectionActionId, { label: string; icon: LucideIcon; template: string }> = {
@@ -51,6 +53,16 @@ export const SELECTION_ACTIONS: Record<SelectionActionId, { label: string; icon:
     label: '校对',
     icon: SpellCheck,
     template: '请检查以下文字中的错别字、语法错误和标点误用。如有错误，输出修正后的版本；如果没有错误，输出原文。只输出结果，不要任何解释。',
+  },
+  'dismiss-session': {
+    label: '本页不再展示',
+    icon: EyeOff,
+    template: '',
+  },
+  'hide-globally': {
+    label: '全局隐藏',
+    icon: Ban,
+    template: '',
   },
 };
 

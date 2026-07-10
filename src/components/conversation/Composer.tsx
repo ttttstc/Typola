@@ -65,6 +65,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 }: ComposerProps, ref) {
   const [value, setValue] = useState('');
   const [panel, setPanel] = useState<'mcp' | 'plugins' | null>(null);
+  // 已停止:用户点停止后立刻切到"已停止"态(<1s 响应),并允许新发送。再次 send/reset 时复位。
+  const [stopped, setStopped] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const providerLabel = getAgentProviderConfig(activeProvider).label;
   const {
@@ -112,11 +114,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const text = value.trim();
     if (!text || disabled || running) return;
     setValue('');
+    setStopped(false);
     const next = appendContext(text);
     onSend(next.text, {
       currentFileContextPath: next.currentFileContextPath,
       referencePaths: next.referencePaths,
     });
+  };
+
+  const handleCancel = () => {
+    if (!running) return;
+    setStopped(true);
+    onCancel();
   };
 
   const handleOpenMcp = () => {
@@ -213,8 +222,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           </span>
         </div>
         {running ? (
-          <button type="button" onClick={onCancel} title="停止">
+          <button type="button" onClick={handleCancel} title="停止">
             <Square size={14} /> 停止
+          </button>
+        ) : stopped ? (
+          <button type="button" onClick={handleSubmit} disabled={disabled || !value.trim()} title="发送 Ctrl+Enter" className="composer-stopped-btn">
+            <Send size={14} /> 已停止 · 发送
           </button>
         ) : (
           <button type="button" onClick={handleSubmit} disabled={disabled || !value.trim()} title="发送 Ctrl+Enter">

@@ -29,6 +29,9 @@ export type AgentMessage =
 
 export type SelectionAnchor = {
   filePath: string;
+  // source 字符串的 UTF-16 code unit 偏移,等同于 source.charCodeAt(i) 的 i。
+  // 由编辑器(CM6/Vditor)的 selection offset 直接写入,与 JS 字符串索引语义一致。
+  // 对含 surrogate pair(emoji 等)的文本,一个码点占 2 个 unit,但 from/to 仍按 unit 计数。
   from: number;
   to: number;
   originalText: string;

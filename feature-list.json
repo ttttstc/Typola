@@ -1,0 +1,122 @@
+{
+  "project": "Typola",
+  "created": "2026-07-10",
+  "change_id": "claude-theme-toolbar-stop",
+  "source_design": "docs/plans/20260710-claude-theme-toolbar-stop-office-hours.md",
+  "tech_stack": {
+    "language": "TypeScript",
+    "frontend": "React + Vite",
+    "styling": "CSS variables (themeRegistry.ts + themes.css via theme-css-builder.mjs)",
+    "backend": "Rust + Tauri",
+    "test_framework": "Vitest + e2e (Playwright)"
+  },
+  "quality_gates": {
+    "theme_delta_e_max": 2.0,
+    "stop_idle_max_ms": 1000,
+    "cancel_force_timeout_ms": 8000
+  },
+  "constraints": [
+    "CON-1: 仅改 plain-paper (素笺) 主题,深海/墨池/抽象/粗野不动",
+    "CON-2: 仅改 SelectionFloatingBar,不动 SelectionAIMenu",
+    "CON-3: 不新增后端 Tauri 命令,仅复用现有 agent_session_cancel",
+    "CON-4: 停止后不 toast 错误,只显示「已停止」状态",
+    "CON-5: 全局隐藏落 selectionFloatingBarEnabled=false",
+    "CON-6: 本文档维度 session suppress 在 session storage"
+  ],
+  "assumptions": [
+    "ASM-1: 用户接受素笺整体换色(包括 canvas/paper/surface)",
+    "ASM-2: 用户接受全局关闭浮条后,右键同时弹出 EditorContextMenu",
+    "ASM-3: 停止按钮等待 onAgentExit 最大 8s,超时强制收尾",
+    "ASM-4: Claude.ai 浅色参考值: bg #faf9f5 / ui #f5f2eb / accent #d97757 / link #6e5fbe / danger #a83a3a / success #3a7a5b"
+  ],
+  "required_configs": [],
+  "reference_tokens": {
+    "claude-dot-ai-light": {
+      "bg": "#faf9f5",
+      "ui": "#f5f2eb",
+      "accent": "#d97757",
+      "link_ai_primary": "#6e5fbe",
+      "danger": "#a83a3a",
+      "success": "#3a7a5b"
+    }
+  },
+  "features": [
+    {
+      "id": 1,
+      "category": "theme",
+      "title": "素笺配色对齐 Claude.ai 浅色主色 (editor + ai + panels)",
+      "description": "将 plain-paper 的核心 token 替换为 Claude.ai 浅色参考值,ΔE<2。包括 canvas/paper/surface/text/accent/ai-primary/success/danger/warning,并通过 build:themes 重新生成 themes.css。",
+      "priority": "high",
+      "status": "failing",
+      "verification_steps": [
+        "Given 应用 plain-paper 主题,When 读取 --theme-canvas / --theme-paper / --theme-accent / --theme-ai-primary,Then 值等于参考值 #faf9f5 / #fbfaf6 / #d97757 / #6e5fbe(允许 ΔE<2)",
+        "Given 应用 plain-paper 主题,When npm run build:themes 执行后,Then 输出无报错,dest 文件 themes.css 已更新",
+        "Given 任意组件引用 --theme-ai-primary,Then 渲染结果显示 Claude 蓝紫色 #6e5fbe 而非原 #867060"
+      ],
+      "dependencies": [],
+      "ui": true,
+      "ui_entry": "/settings/appearance",
+      "design_section": "Premises-1",
+      "build_contract_ref": "THEME-TOKEN-MAP",
+      "requirements_refs": ["FR-1"]
+    },
+    {
+      "id": 2,
+      "category": "ui",
+      "title": "浮条加「本文档不再展示」「全局隐藏」独立按钮",
+      "description": "在 SelectionFloatingBar 浮条 polish/explain/review 之后加两个与现有一样 icon+label 样式的独立按钮;全局隐藏落 selectionFloatingBarEnabled=false;本文档走 session storage path 维度 suppress",
+      "priority": "high",
+      "status": "failing",
+      "verification_steps": [
+        "Given 用户在编辑器选中非空文本 mouseup,When 浮条出现,Then polish/explain/review 之后显示两个独立按钮「本文档不再展示」「全局隐藏」,样式与现有一致(icon+label)",
+        "Given 浮条显示,When 点击「本文档不再展示」,Then 本次会话该 path 不再弹浮条,切换文档后恢复",
+        "Given 浮条显示,When 点击「全局隐藏」,Then selectionFloatingBarEnabled 写为 false,浮条立刻消失,设置页开关同步关闭"
+      ],
+      "dependencies": [1],
+      "ui": true,
+      "ui_entry": "编辑器选区浮条",
+      "design_section": "Premises-2",
+      "build_contract_ref": "TOOLBAR-INDEPENDENT-BUTTONS",
+      "requirements_refs": ["FR-2", "FR-3"]
+    },
+    {
+      "id": 3,
+      "category": "ui",
+      "title": "全局 contextmenu 事件关闭浮条",
+      "description": "任何 contextmenu 触发后,SelectionFloatingBar.visible=false;即使与 EditorContextMenu 同时弹出也可接受",
+      "priority": "high",
+      "status": "failing",
+      "verification_steps": [
+        "Given 浮条显示,When 用户在文档区右键,Then 浮条立刻消失(即使 EditorContextMenu 同时弹)",
+        "Given 浮条显示,When 用户在浮条本身右键,Then 浮条立刻消失",
+        "Given 浮条隐藏,When 用户右键,Then 浮条不出现"
+      ],
+      "dependencies": [1],
+      "ui": true,
+      "ui_entry": "编辑器选区浮条",
+      "design_section": "Premises-3",
+      "build_contract_ref": "TOOLBAR-CONTEXTMENU-CLOSE",
+      "requirements_refs": ["FR-4"]
+    },
+    {
+      "id": 4,
+      "category": "core",
+      "title": "停止按钮无条件兜底 <1s idle",
+      "description": "cancel 路径: 前端立刻置 idle + 后端 taskkill /T /F + 不依赖 onAgentExit 汇入,异常场景(provider 卡死/非法 JSON/流 hang)均可在 8s 超时内强制收尾。UI 显示「已停止」状态",
+      "priority": "high",
+      "status": "failing",
+      "verification_steps": [
+        "Given AI 输出流,When 用户点击停止,Then <1s 内 Composer 输入框重新可输入",
+        "Given provider 返回非法 JSON,When 触发解析错误,Then 流 handler 停止解析并 flush,死循环保护生效,错误显示在对话中",
+        "Given provider 进程 hang,When 用户点停止 + 8s 超时,then 前端强制 idle + taskkill /T /F 调用日志可见,不依赖 onAgentExit",
+        "Given provider 正常流,When 用户点停止,Then UI 显示「已停止」状态"
+      ],
+      "dependencies": [],
+      "ui": true,
+      "ui_entry": "Composer 停止按钮",
+      "design_section": "Premises-4",
+      "build_contract_ref": "CANCEL-UNCONDITIONAL",
+      "requirements_refs": ["FR-5"]
+    }
+  ]
+}
