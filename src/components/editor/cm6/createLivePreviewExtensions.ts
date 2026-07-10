@@ -9,6 +9,7 @@ import { headingFoldExtension } from './headingFoldExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 
 type CreateLivePreviewExtensionsOptions = {
+  livePreview?: boolean;
   baseSize: number;
   onZoomChange?: (size: number) => void;
   onPreviewHeadingChange?: (change: PreviewHeadingChange) => void;
@@ -19,17 +20,28 @@ type CreateLivePreviewExtensionsOptions = {
 export function createLivePreviewExtensions(
   options: CreateLivePreviewExtensionsOptions = { baseSize: 14 },
 ): Extension[] {
-  const { baseSize, onZoomChange, onPreviewHeadingChange, foldedHeadings, onFoldChange } = options;
-  return [
-    inlinePreview(),
-    tables(),
-    imageBlocks(),
-    imageFallbackExtension(),
-    mathPreviewExtension(),
-    mermaidPreviewExtension(),
+  const {
+    livePreview = true,
+    baseSize,
+    onZoomChange,
+    onPreviewHeadingChange,
+    foldedHeadings,
+    onFoldChange,
+  } = options;
+  const extensions: Extension[] = [
     headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }),
     wheelZoomExtension({ baseSize, onChange: onZoomChange }),
     previewSyncExtension({ onChange: onPreviewHeadingChange }),
   ];
+  if (livePreview) {
+    extensions.unshift(
+      inlinePreview(),
+      tables(),
+      imageBlocks(),
+      imageFallbackExtension(),
+      mathPreviewExtension(),
+      mermaidPreviewExtension(),
+    );
+  }
+  return extensions;
 }
-

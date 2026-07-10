@@ -36,16 +36,16 @@ test('CM6 source editor accepts repeated insertText without breaking the documen
   expect(source ?? '').toContain('复杂表达式');
 });
 
-test('CM6 中文输入后再切回 WYSIWYG 不丢内容', async ({ page }) => {
+test('CM6 中文输入后切回写作模式不丢内容', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
   await page.keyboard.insertText('# 中文标题\n\n中文段落内容。\n');
 
   await page.getByRole('button', { name: '源码模式' }).click();
-  await expect(page.locator('.wysiwyg-editor-pane')).toBeVisible();
+  await expect(page.locator('.cm6-markdown-editor-pane')).toBeVisible();
 
-  await expect(page.locator('.wysiwyg-editor-pane')).toContainText('中文标题');
-  await expect(page.locator('.wysiwyg-editor-pane')).toContainText('中文段落内容。');
+  await expect(page.locator('.cm6-markdown-editor-pane')).toContainText('中文标题');
+  await expect(page.locator('.cm6-markdown-editor-pane')).toContainText('中文段落内容。');
 });
 
 test('CM6 中文长 paragraph 在 Ctrl+End 后仍能继续输入', async ({ page }) => {
