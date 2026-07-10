@@ -1,19 +1,19 @@
 // @vitest-environment jsdom
-import { EditorState, type Extension } from '@codemirror/state';
+import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { history, undo } from '@codemirror/commands';
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyTableFormat } from './tableFormatService';
 import { findTableAt } from '../../components/editor/cm6/table/tableTypes';
-import { pasteTableData } from '../../components/editor/cm6/table/tableCommands';
 
-function createView(doc: string, from = 0, to = doc.length, extensions: Extension[] = []) {
+function createView(doc: string, from = 0, to = doc.length) {
   const host = document.createElement('div');
   document.body.append(host);
   const view = new EditorView({
     state: EditorState.create({
       doc,
       selection: { anchor: from, head: to },
-      extensions,
+      extensions: [history()],
     }),
     parent: host,
   });
@@ -34,11 +34,8 @@ const SAMPLE_TABLE = [
 ].join('\n');
 
 describe('applyTableFormat', () => {
-  it('inserts a N×M GFM table in one CM6 transaction', () => {
-    let changes = 0;
-    const { view } = createView('hello', 0, 0, [EditorView.updateListener.of((update) => {
-      if (update.docChanged) changes++;
-    })]);
+  it('inserts a N×M GFM table and undoes as a single transaction', () => {
+    const { view } = createView('hello', 0, 0);
 
     applyTableFormat(view, { type: 'table-insert', rows: 3, cols: 3 });
     const after = view.state.doc.toString();
@@ -46,7 +43,8 @@ describe('applyTableFormat', () => {
     expect(after).toContain('| --- | --- | --- |');
     expect(after).toContain('| cell | cell | cell |');
 
-    expect(changes).toBe(1);
+    undo(view);
+    expect(view.state.doc.toString()).toBe('hello');
     view.destroy();
   });
 
@@ -67,64 +65,6 @@ describe('applyTableFormat', () => {
     applyTableFormat(view, { type: 'table-align', align: 'center', colIndex: 1 });
     expect(view.state.doc.toString()).toContain('| --- | :---: | --- |');
     view.destroy();
-  });
-
-  it('normalizes the selected separator cell before applying alignment', () => {
-    const padded = SAMPLE_TABLE.replace('| --- | --- | --- |', '| --- |  :---  | --- |');
-    const { view } = createView(padded, padded.indexOf('H2'), 0);
-
-    applyTableFormat(view, { type: 'table-align', align: 'right', colIndex: 1 });
-    expect(view.state.doc.toString()).toContain('| --- | ---: | --- |');
-    view.destroy();
-  });
-
-  it('inserts and deletes table rows through one CM6 transaction each', () => {
-    const { view } = createView(SAMPLE_TABLE, SAMPLE_TABLE.indexOf('| a |'), 0);
-
-    applyTableFormat(view, { type: 'table-row-insert', after: true });
-    expect(view.state.doc.toString()).toContain('| cell | cell | cell |');
-    view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf('| cell |') } });
-    applyTableFormat(view, { type: 'table-row-delete' });
-    expect(view.state.doc.toString()).not.toContain('| cell | cell | cell |');
-    view.destroy();
-  });
-
-  it('adds the first body row to a header-only table', () => {
-    const table = ['| H1 | H2 |', '| --- | --- |'].join('\n');
-    const { view } = createView(table, table.indexOf('H1'), 0);
-
-    applyTableFormat(view, { type: 'table-row-insert', after: true });
-    expect(view.state.doc.toString()).toBe(`${table}\n| cell | cell |`);
-    view.destroy();
-  });
-
-  it('inserts and deletes the column under the cursor', () => {
-    const pos = SAMPLE_TABLE.indexOf('H2');
-    const { view } = createView(SAMPLE_TABLE, pos, pos);
-
-    applyTableFormat(view, { type: 'table-column-insert', after: true });
-    expect(view.state.doc.toString()).toContain('| H1 | H2 | Header | H3 |');
-    view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf('Header') } });
-    applyTableFormat(view, { type: 'table-column-delete' });
-    expect(view.state.doc.toString()).toContain('| H1 | H2 | H3 |');
-    view.destroy();
-  });
-
-  it('converts TSV, CSV, and HTML table clipboard data to Markdown tables', () => {
-    const tsv = createView('', 0, 0);
-    expect(pasteTableData(tsv.view, '名称\t值\nA\tB')).toBe(true);
-    expect(tsv.view.state.doc.toString()).toContain('| 名称 | 值 |');
-    tsv.view.destroy();
-
-    const csv = createView('', 0, 0);
-    expect(pasteTableData(csv.view, '名称,值\nA,B')).toBe(true);
-    expect(csv.view.state.doc.toString()).toContain('| 名称 | 值 |');
-    csv.view.destroy();
-
-    const html = createView('', 0, 0);
-    expect(pasteTableData(html.view, '', '<table><tr><th>名称</th><th>值</th></tr><tr><td>A</td><td>B</td></tr></table>')).toBe(true);
-    expect(html.view.state.doc.toString()).toContain('| 名称 | 值 |');
-    html.view.destroy();
   });
 
   it('falls back to first column when colIndex is omitted and cursor is in header row', () => {
