@@ -121,10 +121,10 @@ export function buildReviewMarkdown(source: string, comments: ReviewComment[]): 
   // 即便所有 anchor 都失败、或调用方传错路径,意见仍能从文末完整找回。
   // 每条意见前面带「第 N 行」便于肉眼定位;anchor.from 越界(原文已改)时显示「定位失效」。
   const summary = comments.map((c, i) => {
-    const quote = truncate(c.anchor.originalText.replace(/\n+/g, ' '), 80);
+    const quote = reviewEscape(truncate(c.anchor.originalText.replace(/\n+/g, ' '), 80));
     const line = lineNumberForAnchor(source, c.anchor.from);
     const prefix = line === null ? '定位失效 · ' : `第 ${line} 行 · `;
-    return `### ${i + 1}. ${prefix}针对片段「${quote}」\n\n${c.text}`;
+    return `### ${i + 1}. ${prefix}针对片段「${quote}」\n\n${reviewEscape(c.text)}`;
   }).join('\n\n');
   result = `${result.replace(/\s+$/u, '')}\n\n---\n\n## 检视意见汇总\n\n${summary}\n`;
 
@@ -161,6 +161,11 @@ export function lineNumberForAnchor(source: string, offset: number): number | nu
     if (source.charCodeAt(i) === 10) line += 1;
   }
   return line;
+}
+
+function reviewEscape(text: string): string {
+  // 转义文末汇总 markdown 特殊字符,避免含 `#*[] 的意见把 ### 标题行渲染异常。
+  return text.replace(/[`[\]#*]/g, '\\$&');
 }
 
 function truncate(text: string, max: number): string {

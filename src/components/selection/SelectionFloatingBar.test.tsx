@@ -84,7 +84,7 @@ describe('SelectionFloatingBar', () => {
     // debounce 后必须出现 —— 这条正是抓"position 死锁导致永不渲染"的回归测试
     const bar = host.querySelector('.selection-floating-bar');
     expect(bar).not.toBeNull();
-    // 3 个高频动作按钮(润色/名词解释/加检视意见)+ 1 ⋯ 子按钮(默认未传 onDismissSession/onHideGlobally 故不渲染)
+    // 默认只显示 3 个高频动作；未传隐藏回调时不显示无效按钮。
     expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
   });
 
@@ -123,7 +123,7 @@ describe('SelectionFloatingBar', () => {
     expect(onPick.mock.calls[0][1]).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
   });
 
-    it('最后一个 action 按钮仍是 review,接着是 ⋯ 更多子按钮(onDismissSession / onHideGlobally)', () => {
+  it('传隐藏回调时显示两个独立按钮并触发对应回调', () => {
     const onPick = vi.fn();
     const onDismissSession = vi.fn();
     const onHideGlobally = vi.fn();
@@ -141,27 +141,20 @@ describe('SelectionFloatingBar', () => {
     });
     act(() => { vi.advanceTimersByTime(200); });
     const items = host.querySelectorAll('.selection-floating-bar-item');
-    // 3 actions + 1 more(⋯) = 4
-    expect(items).toHaveLength(4);
-    // index 2 仍是 review
+    expect(items).toHaveLength(5);
     act(() => { (items[2] as HTMLButtonElement).click(); });
     expect(onPick.mock.calls[0][0]).toBe('review');
-    // index 3 是 ⋯ 按钮
-    const moreBtn = items[3] as HTMLButtonElement;
-    expect(moreBtn.textContent).toContain('⋯');
-    // Menu 交互(visible-after-mouseenter)留手测(jsx-dom 无法模拟 state update)
-    expect(moreBtn).toBeTruthy();
-    // aria-haspopup / aria-expanded 给屏幕阅读器
-    expect(moreBtn.getAttribute('aria-haspopup')).toBe('menu');
-    expect(moreBtn.getAttribute('aria-expanded')).toBe('false');
+    act(() => { (items[3] as HTMLButtonElement).click(); });
+    act(() => { (items[4] as HTMLButtonElement).click(); });
+    expect(onDismissSession).toHaveBeenCalledOnce();
+    expect(onHideGlobally).toHaveBeenCalledOnce();
   });
 
-  it('未传 onDismissSession / onHideGlobally 时不渲染 ⋯', () => {
+  it('未传隐藏回调时不渲染隐藏按钮', () => {
     act(() => {
       root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
     });
     act(() => { vi.advanceTimersByTime(200); });
-    expect(host.querySelector('.selection-floating-bar-more')).toBeNull();
     expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
   });
 

@@ -191,6 +191,56 @@ describe('useConversationManager', () => {
     expect(api?.runState).toBe('idle');
   });
 
+  it('cancels a start that has not returned runId and restores idle immediately', async () => {
+    let resolveStart: ((value: { runId: string; conversationId: string; sessionUuid: string; resumed: boolean; agentPath: string; provider: AgentProvider }) => void) | undefined;
+    headlessMock.startAgentSession.mockImplementation((_request) => new Promise((resolve) => {
+      resolveStart = resolve;
+    }));
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    let sendPromise: Promise<void> | undefined;
+    act(() => { sendPromise = api?.send('hello'); });
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+    await act(async () => { await api?.cancel(); });
+    expect(api?.runState).toBe('idle');
+
+    await act(async () => {
+      resolveStart?.({ runId: 'run-1', conversationId: convId, sessionUuid: 'session-1', resumed: false, agentPath: 'opencode', provider: 'opencode' });
+      await sendPromise;
+    });
+    expect(headlessMock.cancelAgentSession).toHaveBeenCalledWith('run-1');
+  });
+
+  it('ignores cancelled run exit after a new run starts in the same conversation', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+    await act(async () => { await api?.send('first'); });
+    const convId = headlessMock.startAgentSession.mock.calls[0][0].conversationId;
+    await act(async () => { await api?.cancel(); });
+    await act(async () => { await api?.send('second'); });
+    expect(api?.runState).toBe('running');
+
+    act(() => {
+      exitHandler?.({ runId: 'run-1', conversationId: convId, sessionUuid: 'session-1', exitCode: 1, cancelled: true, stderrTail: '' });
+    });
+    expect(api?.runState).toBe('running');
+  });
+
   it('routes relative artifact_file events into the conversation output directory', async () => {
     const onArtifactFile = vi.fn();
     act(() => {

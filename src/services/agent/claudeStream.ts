@@ -367,6 +367,12 @@ export function createClaudeStreamHandler(
   function feed(chunk: string) {
     buffer += chunk;
     let nl;
+    // 死循环保护:buffer 持续增长但长期找不到 \n → provider 异常。限制单 buffer 2MB。
+    if (buffer.length > 2 * 1024 * 1024) {
+      onEvent({ type: 'error', message: 'Claude 输出流异常:buffer 超过 2MB 未见到换行,已强制截断' });
+      buffer = '';
+      return;
+    }
     while ((nl = buffer.indexOf('\n')) !== -1) {
       const line = buffer.slice(0, nl).trim();
       buffer = buffer.slice(nl + 1);
@@ -378,7 +384,11 @@ export function createClaudeStreamHandler(
         onEvent({ type: 'raw', line });
         continue;
       }
-      handleObject(obj);
+      try {
+        handleObject(obj);
+      } catch (error) {
+        onEvent({ type: 'error', message: `handleClaudeObject 异常: ${String(error)}` });
+      }
     }
   }
 
