@@ -263,6 +263,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   useEffect(() => {
     undoStackRef.current = [];
     setFoldedHeadings(new Set());
+    floatingBarHiddenDocsRef.current = new Set();
   }, [filePath]);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -280,6 +281,8 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   // 等任何修改 IR DOM 的副作用(否则 DOM 节点失效 → 选区瞬间被浏览器清掉)。
   const isDraggingIrRef = useRef(false);
   const suppressFloatingBarRef = useRef(false);
+  // 浮条"本页不再展示"抑制集合:filePath 维度,文档级 session。在 filePath reset 时清空。
+  const floatingBarHiddenDocsRef = useRef<Set<string>>(new Set());
   // Heading 折叠集合:键 = `<level>:<text>`,跨 source 行变化稳定。
   // 关文档 / 切 filePath 时清空(useEffect 见下)。
   const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
@@ -334,6 +337,21 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
     if (!editor) return;
     editor.focus();
     void applyVditorFormat(editor, action);
+  }, []);
+
+  // 浮条"本页不再展示":filePath 维度 session suppress。
+  const handleFloatingBarDismissSession = useCallback(() => {
+    if (filePath) floatingBarHiddenDocsRef.current.add(filePath);
+    setFloatingHasSelection(false);
+    setFloatingRect(null);
+  }, [filePath]);
+
+  // 浮条"全局隐藏":写设置(由 useSettings 订阅刷新)。
+  const handleFloatingBarHideGlobally = useCallback(() => {
+    // 动态 import 避免拉大首屏;本模块所在位置已在 useSettings 订阅链。
+    void import('../services/settingsService').then(({ updateSettings }) => {
+      updateSettings({ selectionFloatingBarEnabled: false });
+    });
   }, []);
 
   const handleCopyMermaidSvg = useCallback(async () => {
@@ -576,6 +594,14 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       }
       const range = sel.getRangeAt(0);
       if (!ir.contains(range.commonAncestorContainer)) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        scheduleMermaidIdleRender();
+        scheduleCollapseIdle();
+        return;
+      }
+      // 浮条"本页不再展示"抑制:同文档后续选区不再自动弹浮条,直到切文档。
+      if (filePath && floatingBarHiddenDocsRef.current.has(filePath)) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
         scheduleMermaidIdleRender();
@@ -1051,6 +1077,8 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
           hasSelection={floatingHasSelection}
           stableTick={floatingStableTick}
           onPick={(action, origin) => triggerAIAction(action, origin)}
+          onDismissSession={handleFloatingBarDismissSession}
+          onHideGlobally={handleFloatingBarHideGlobally}
         />
       )}
     </div>

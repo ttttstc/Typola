@@ -83,6 +83,35 @@ export async function openPath(path: string, encoding: DefaultEncoding = 'UTF-8'
   return { path, name, content, dirty: false, lastSavedContent: content, fileType };
 }
 
+// 选一个或多个文件夹,仅取每目录下一层的 Markdown/HTML/Word 文档(flat first-level,不递归)。
+// 跳过当前不属于 openable 的,单个文件打开失败不阻塞其他。
+export async function openFolder(encoding: DefaultEncoding = 'UTF-8'): Promise<OpenedFile[]> {
+  if (!isTauriRuntime()) return [];
+  const { invoke } = await import('@tauri-apps/api/core');
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const selected = await open({ directory: true, multiple: true });
+  if (!selected) return [];
+  const dirs = (Array.isArray(selected) ? selected : [selected]) as string[];
+  const result: OpenedFile[] = [];
+  for (const dir of dirs) {
+    let entries: string[] = [];
+    try {
+      entries = await invoke<string[]>('read_first_level_openable', { dir });
+    } catch (error) {
+      console.warn('read_first_level_openable failed:', dir, error);
+      continue;
+    }
+    for (const p of entries) {
+      try {
+        result.push(await openPath(p, encoding));
+      } catch (error) {
+        console.warn('跳过无法打开的文件:', p, error);
+      }
+    }
+  }
+  return result;
+}
+
 export async function saveFile(file: OpenedFile): Promise<OpenedFile> {
   if (!file.path) return saveFileAs(file);
 

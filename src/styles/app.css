@@ -8969,7 +8969,8 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
 .editor-ctx-menu {
   position: fixed;
   z-index: 900;
-  min-width: 196px;
+  width: max-content;
+  max-width: 240px;
   padding: 6px;
   border: 1px solid var(--theme-border);
   border-radius: 10px;
@@ -9055,7 +9056,7 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   background: transparent;
   border: 0;
   padding: 0;
-  margin-left: 16px;
+  margin-left: 10px;
 }
 
 /* 绂佺敤 Vditor 鑷甫鐨勫叏灞忓浘鐗囬瑙?overlay 鈥斺€?鍏抽棴鎸夐挳鍦?Tauri webview 涓嬩簨浠?
@@ -9228,6 +9229,54 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   font-weight: 500;
   letter-spacing: 0.01em;
 }
+
+/* 浮条右端子按钮更多菜单 (floating bar more menu) ================================ */
+.selection-floating-bar-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.selection-floating-bar-more {
+  font-size: 15px;
+  padding: 4px 6px;
+  min-width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.selection-floating-bar-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 99;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-panel-bg);
+  box-shadow: 0 8px 24px var(--theme-shadow-soft);
+}
+
+.selection-floating-bar-more-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--theme-text-primary);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.selection-floating-bar-more-item:hover {
+  background: var(--theme-control-hover-bg);
+}
+
+
 
 /* 閫夊尯鍘熷湴缁撴灉瀵规瘮鍗?SelectionResultCard) ============================ */
 .selection-result-card {

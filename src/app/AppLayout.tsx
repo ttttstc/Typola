@@ -308,6 +308,7 @@ export function AppLayout() {
     setDiffPreview,
     handleUnsavedChoice,
     handleOpen,
+    handleOpenFolder,
     handleNewFile,
     handleOpenPath,
     handleSwitchTab,
@@ -1109,6 +1110,7 @@ export function AppLayout() {
       if (e.key === 's' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleSave(); return; }
       if (isEditableShortcutTarget(e.target)) return;
       if (e.key === 'o' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleOpen(); return; }
+      if (e.key === 'o' && e.shiftKey && !e.altKey) { e.preventDefault(); void handleOpenFolder(); return; }
       if (e.key === 'n' && !e.shiftKey && !e.altKey) { e.preventDefault(); handleNewFile(); return; }
       if (e.key === 'e' && e.shiftKey && !e.altKey) { e.preventDefault(); handleExportWord(); return; }
       if (e.key === 's' && e.altKey && !e.shiftKey) { e.preventDefault(); handleToggleEditorMode(); return; }
@@ -1127,6 +1129,7 @@ export function AppLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [
     handleOpen,
+    handleOpenFolder,
     handleNewFile,
     handleSave,
     handleSaveAs,
@@ -1697,6 +1700,7 @@ export function AppLayout() {
           onSetDocMode: (next) => void setDocMode(next),
           onNew: handleNewFile,
           onOpen: handleOpen,
+          onOpenFolder: handleOpenFolder,
           onSave: handleSave,
           onSaveAs: handleSaveAs,
           onRename: () => handleRequestRename(),

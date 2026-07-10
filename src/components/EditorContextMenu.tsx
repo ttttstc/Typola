@@ -7,6 +7,8 @@ export type FormatAction =
   | { type: 'heading'; level: HeadingLevel }
   | { type: 'bold' | 'italic' | 'strike' | 'inline-code' }
   | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' }
+  | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
+  | { type: 'link-edit' }
   | { type: 'cut' | 'copy' | 'paste' | 'select-all' };
 
 type Props = {
@@ -109,14 +111,19 @@ export function EditorContextMenu({
       <MenuItem label="删除线" onClick={() => pick({ type: 'strike' })} />
       <MenuItem label="行内代码" hint="Ctrl+G" onClick={() => pick({ type: 'inline-code' })} />
       <MenuItem label="链接" hint="Ctrl+K" onClick={() => pick({ type: 'link' })} />
+      <MenuItem label="编辑链接" onClick={() => pick({ type: 'link-edit' })} />
 
       <div className="editor-ctx-separator" />
 
       <MenuItem label="引用块" onClick={() => pick({ type: 'quote' })} />
+      <MenuItem label="升级引用" hint="Ctrl+." onClick={() => pick({ type: 'quote-up' })} />
+      <MenuItem label="降级引用" hint="Ctrl+," onClick={() => pick({ type: 'quote-down' })} />
+      <MenuItem label="清除格式" hint="Ctrl+\" onClick={() => pick({ type: 'clear-format' })} />
       <MenuItem label="无序列表" onClick={() => pick({ type: 'ul' })} />
       <MenuItem label="有序列表" onClick={() => pick({ type: 'ol' })} />
       <MenuItem label="任务列表" onClick={() => pick({ type: 'task' })} />
       <MenuItem label="代码块" onClick={() => pick({ type: 'codeblock' })} />
+      <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
       <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
 
       <div className="editor-ctx-separator" />

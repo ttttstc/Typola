@@ -96,7 +96,7 @@ export function EditorSection() {
       <div className="settings-row">
         <div>
           <div className="settings-label">选区浮条</div>
-          <div className="settings-help">关掉后选中文字不自动浮现工具条;右键菜单与 Ctrl+K 仍可用。</div>
+          <div className="settings-help">关掉后选中文字不自动浮现工具条;右键菜单与 Ctrl+K 仍可用。浮条右端「⋯」按钮可选「本页不再展示」(当前文档不弹)或「全局隐藏」(写入同一开关)。</div>
         </div>
         <button
           className={`toggle-switch ${settings.selectionFloatingBarEnabled ? 'on' : ''}`}

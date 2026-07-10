@@ -5,6 +5,7 @@ import {
   FileDown,
   FilePlus,
   FileText,
+  FolderDown,
   FolderOpen,
   PackageOpen,
   ImagePlus,
@@ -63,6 +64,7 @@ type ToolbarProps = {
   onSetDocMode: (next: DocMode) => void;
   onNew: () => void;
   onOpen: () => void;
+  onOpenFolder?: () => void;
   onSave: () => void;
   onSaveAs: () => void;
   onRename?: () => void;
@@ -83,7 +85,7 @@ export function Toolbar({
   terminalVisible, editingDisabled, docMode, reviewDirty,
   onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
   onToggleTerminal, onSetDocMode,
-  onNew, onOpen, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
+  onNew, onOpen, onOpenFolder, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
@@ -164,6 +166,11 @@ export function Toolbar({
           <button data-no-window-drag="true" onClick={onOpen} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
             <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
           </button>
+          {onOpenFolder && (
+            <button data-no-window-drag="true" onClick={onOpenFolder} data-tooltip={t('toolbarOpenFolderTitle')} aria-label={t('toolbarOpenFolderLabel')}>
+              <FolderDown size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
           <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
             <Save size={iconSize} strokeWidth={strokeWidth} />
           </button>

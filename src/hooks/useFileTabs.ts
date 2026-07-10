@@ -57,6 +57,7 @@ type UseFileTabsResult = {
   setDiffPreview: Dispatch<SetStateAction<DiffPreview>>;
   handleUnsavedChoice: (decision: UnsavedDecision) => void;
   handleOpen: () => Promise<void>;
+  handleOpenFolder: () => Promise<void>;
   handleNewFile: () => void;
   handleOpenPath: (path: string) => Promise<void>;
   handleSwitchTab: (tabId: string) => void;
@@ -234,6 +235,15 @@ export function useFileTabs({
     const { openFile } = await import('../services/fileService');
     const opened = await openFile(defaultEncodingRef.current);
     if (opened) {
+      if (opened.path) await allowAssetDirectoryForPath(opened.path);
+      applyOpenedFile(opened);
+    }
+  }, [applyOpenedFile]);
+
+  const handleOpenFolder = useCallback(async () => {
+    const { openFolder } = await import('../services/fileService');
+    const openedList = await openFolder(defaultEncodingRef.current);
+    for (const opened of openedList) {
       if (opened.path) await allowAssetDirectoryForPath(opened.path);
       applyOpenedFile(opened);
     }
@@ -715,6 +725,7 @@ export function useFileTabs({
     setDiffPreview,
     handleUnsavedChoice,
     handleOpen,
+    handleOpenFolder,
     handleNewFile,
     handleOpenPath,
     handleSwitchTab,
