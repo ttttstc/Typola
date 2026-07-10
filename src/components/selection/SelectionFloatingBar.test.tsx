@@ -151,9 +151,12 @@ describe('SelectionFloatingBar', () => {
     expect(moreBtn.textContent).toContain('⋯');
     // Menu 交互(visible-after-mouseenter)留手测(jsx-dom 无法模拟 state update)
     expect(moreBtn).toBeTruthy();
+    // aria-haspopup / aria-expanded 给屏幕阅读器
+    expect(moreBtn.getAttribute('aria-haspopup')).toBe('menu');
+    expect(moreBtn.getAttribute('aria-expanded')).toBe('false');
   });
 
-it('未传 onDismissSession / onHideGlobally 时不渲染 ⋯', () => {
+  it('未传 onDismissSession / onHideGlobally 时不渲染 ⋯', () => {
     act(() => {
       root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
     });

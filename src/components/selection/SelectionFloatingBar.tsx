@@ -69,6 +69,7 @@ export function SelectionFloatingBar({
   const barRef = useRef<HTMLDivElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const showTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
   const dismissedForCurrentSelectionRef = useRef(false);
   const lastStableTickRef = useRef(0);
   const lastSelectionHashRef = useRef<string>('');
@@ -139,6 +140,16 @@ export function SelectionFloatingBar({
     return () => document.removeEventListener('keydown', onKey, true);
   }, [visible]);
 
+  // 卸载时清掉关闭 timer,避免 component 已 unmount 还在 setState。
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, []);
+
   if (!visible || !rect) return null;
 
   // 初始估算位置(useLayoutEffect 会同帧用真实尺寸覆盖,不闪)。
@@ -197,7 +208,12 @@ export function SelectionFloatingBar({
         <div
           className="selection-floating-bar-more-wrap"
           onMouseEnter={() => setMoreOpen(true)}
-          onMouseLeave={() => setMoreOpen(false)}
+          // 留 80ms grace 让鼠标跨过 button→menu 间隙时不误关闭;
+          // setMoreOpen(true) 在 menu 的 onMouseEnter 触发,会覆盖 timeout=false。
+          onMouseLeave={() => {
+            const id = window.setTimeout(() => setMoreOpen(false), 80);
+            closeTimerRef.current = id;
+          }}
         >
           <button
             ref={moreBtnRef}
@@ -205,12 +221,24 @@ export function SelectionFloatingBar({
             className="selection-floating-bar-item selection-floating-bar-more"
             style={{ flex: '0 0 auto', width: 'auto', padding: '4px 6px' }}
             aria-label={t('floatingBarTooltip')}
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
             title={t('floatingBarTooltip')}
           >
             <span aria-hidden="true">⋯</span>
           </button>
           {moreOpen && (
-            <div className="selection-floating-bar-more-menu" role="menu">
+            <div
+              className="selection-floating-bar-more-menu"
+              role="menu"
+              onMouseEnter={() => {
+                // 进入 menu → 取消即将发生的 leave 关闭
+                if (closeTimerRef.current !== null) {
+                  window.clearTimeout(closeTimerRef.current);
+                  closeTimerRef.current = null;
+                }
+              }}
+            >
               {onDismissSession && (
                 <button
                   type="button"
@@ -237,7 +265,7 @@ export function SelectionFloatingBar({
             label={t('floatingBarTooltip')}
             reference={moreBtnRef.current}
             placement="top"
-            open={!moreOpen && moreBtnRef.current !== null ? undefined : false}
+            open={moreOpen ? false : undefined}
           />
         </div>
       )}

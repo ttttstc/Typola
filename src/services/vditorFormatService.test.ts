@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyVditorFormat } from './vditorFormatService';
+import { applyVditorFormat, transformQuoteLine } from './vditorFormatService';
 
 describe('vditorFormatService new actions', () => {
   let promptSpy: ReturnType<typeof vi.spyOn>;
@@ -66,6 +66,19 @@ describe('vditorFormatService new actions', () => {
     expect(editor.updateValue).toHaveBeenCalledWith('quote\nitem\nnumbered');
   });
 
+  it('clear-format: 不误伤 plain `>5` / `>` / `>abc` 箭头字符', async () => {
+    const editor = {
+      getValue: () => '>5\n> abc\n>foo',
+      getSelection: () => '>5\n> abc\n>foo',
+      updateValue: vi.fn(),
+    };
+    await applyVditorFormat(editor as never, { type: 'clear-format' });
+    // `>5` 单独 > 后是数字不是空白,保留
+    // `> abc` 是引用,剥
+    // `>foo` 后紧跟文本无空白(原 regex 会误伤),新版保留
+    expect(editor.updateValue).toHaveBeenCalledWith('>5\nabc\n>foo');
+  });
+
   it('codeblock-lang: replaces blank fenced code', async () => {
     const editor = {
       getValue: () => 'before\n```\nconsole.log(1);\n```\nafter',
@@ -96,5 +109,47 @@ describe('vditorFormatService new actions', () => {
     promptSpy.mockReturnValueOnce(null);
     await applyVditorFormat(editor as never, { type: 'codeblock-lang' });
     expect(editor.updateValue).not.toHaveBeenCalled();
+  });
+});
+
+describe('transformQuoteLine (quote-up / quote-down 纯函数)', () => {
+  it('upgrade 普通行 → 加一层 > ', () => {
+    expect(transformQuoteLine('hello', true)).toBe('> hello');
+  });
+
+  it('upgrade 嵌套 quote 行 → 多一层 > ', () => {
+    expect(transformQuoteLine('> hello', true)).toBe('>> hello');
+  });
+
+  it('upgrade `> > text`(`>` 之间有空格)按单层计(Markdown 同规范)', () => {
+    expect(transformQuoteLine('> > nested', true)).toBe('>>> nested');
+  });
+
+  it('upgrade 深度为 2 的 `>> text` 行 → 多一层 `>>> text`', () => {
+    expect(transformQuoteLine('>> hello', true)).toBe('>>> hello');
+  });
+
+  it('downgrade 嵌套 quote 行 → 剥一层', () => {
+    expect(transformQuoteLine('>> hello', false)).toBe('> hello');
+  });
+
+  it('downgrade 普通行 → 不动(无引用可剥)', () => {
+    expect(transformQuoteLine('hello', false)).toBe('hello');
+  });
+
+  it('保留缩进,压紧多余空格为 1', () => {
+    expect(transformQuoteLine('  >  nested quote', true)).toBe('  >>  nested quote');
+  });
+
+  it('嵌套 `>> text` 行 → upgrade 后 `>>> text`', () => {
+    expect(transformQuoteLine('>> hello', true)).toBe('>>> hello');
+  });
+
+  it('嵌套 `>> text` 行 → downgrade 后 `> text`', () => {
+    expect(transformQuoteLine('>> nested quote', false)).toBe('> nested quote');
+  });
+
+  it('剥到 0 层:多余空格归 body 前,quote 清理', () => {
+    expect(transformQuoteLine('  >  nested quote', false)).toBe('   nested quote');
   });
 });

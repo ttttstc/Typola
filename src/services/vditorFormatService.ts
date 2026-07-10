@@ -186,26 +186,36 @@ function applyQuoteLevel(editor: Vditor, upgrade: boolean): void {
   const value = editor.getValue();
   const prefix = value.slice(0, line.start);
   const suffix = value.slice(line.end);
-  let body = line.text;
-  // 去掉行首空白 + 已有引用前缀。
-  const match = body.match(/^(\s*)((?:>\s*)+)(.*)$/);
-  let indent = '';
-  let quote = '';
-  let rest = body;
-  if (match) {
-    indent = match[1];
-    quote = match[2];
-    rest = match[3];
-  }
-  const depth = (quote.match(/>/g) ?? []).length;
-  let newQuote = quote;
-  if (upgrade) {
-    newQuote = quote + '> ';
-  } else if (depth > 0) {
-    newQuote = quote.replace(/^>\s*/, '');
-  }
-  const newLine = indent + newQuote + rest;
+  const newLine = transformQuoteLine(line.text, upgrade);
   editor.updateValue(prefix + newLine + suffix);
+}
+
+// 纯函数:把一行 markdown 文本按 upgrade 切换 quote 深度(供单测直接覆盖)。
+//   普通行 + upgrade   → '> text'
+//   普通行 + !upgrade  → 'text'(no-op)
+//   '> text' + upgrade → '>> text'
+//   '>> text' + !upgrade→ '> text'
+//   缩进保留,quote↔body 间统一 1 空格(Markdown 兼容写法);`>  text` 等多空格场景统一压紧为 1。
+//
+// 算法:char-loop 抓 line 起始(跳过缩进)的连续 `>`,每层之间最多 1 个空格,
+// 任何文本字符即停。深度计算后重组:`>` × newDepth + 1 空格 + body。
+export function transformQuoteLine(text: string, upgrade: boolean): string {
+  const ws = text.match(/^[ \t]*/)![0];
+  const rest = text.slice(ws.length);
+  let i = 0;
+  let depth = 0;
+  while (i < rest.length && rest[i] === '>') {
+    depth += 1;
+    i += 1;
+    // 跳过 `>` 后紧跟的单空格(被我们视作 quote-layer 间的合法分隔)。
+    if (i < rest.length && rest[i] === ' ') i += 1;
+  }
+  const body = rest.slice(i);
+  const newDepth = upgrade ? depth + 1 : Math.max(0, depth - 1);
+  if (newDepth === 0) {
+    return ws + body;
+  }
+  return ws + '>'.repeat(newDepth) + ' ' + body;
 }
 
 // 编辑链接:选区必须是 markdown 链接 `[label](url)`,prompt 改 url。
@@ -226,6 +236,7 @@ async function applyLinkEdit(editor: Vditor): Promise<void> {
 }
 
 // 清除格式:strip 选区文本的常见 markdown 标记。
+// 严格 blockquote regex:要求 `> ` 后跟非空白内容,避免误伤 plain `>5`/`>`/`>abc` 等箭头字符。
 function applyClearFormat(editor: Vditor): void {
   const sel = editor.getSelection();
   if (!sel) return;
@@ -234,8 +245,8 @@ function applyClearFormat(editor: Vditor): void {
     .replace(/_{1,3}([^_]+)_{1,3}/g, '$1')
     .replace(/~~([^~]+)~~/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
-    .replace(/^\s{0,3}>\s?/gm, '')
-    .replace(/^\s{0,3}(?:[-*+]|\d+\.)\s+/gm, '');
+    .replace(/^(\s{0,3}>\s+)(?=\S)/gm, '')
+    .replace(/^\s{0,3}(?:[-*+]|\d+\.)\s+(?=\S)/gm, '');
   if (stripped === sel) return;
   const value = editor.getValue();
   const idx = value.indexOf(sel);
