@@ -496,6 +496,24 @@ test('preview font settings split Chinese, English, and heading choices', async 
   expect(fontState.heading).toContain('Georgia');
 });
 
+test('preview body text consumes the selected Chinese font stack', async ({ page }) => {
+  await page.goto('/');
+  await openEditor(page);
+  await page.keyboard.insertText('中文正文 English');
+
+  await page.getByRole('button', { name: '设置' }).click();
+  await page.getByRole('button', { name: '预览', exact: true }).click();
+  await page.getByLabel('中文字体').selectOption('Songti SC');
+  await page.getByLabel('英文字体').selectOption('Georgia');
+
+  const readingFontFamily = await page.locator('.app-layout').evaluate((el) => (
+    getComputedStyle(el).getPropertyValue('--reading-font-family')
+  ));
+
+  expect(readingFontFamily).toContain('Georgia');
+  expect(readingFontFamily).toContain('Songti SC');
+});
+
 test('Word export settings make the paper preview expandable', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '设置' }).click();
