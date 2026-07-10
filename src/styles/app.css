@@ -9059,6 +9059,51 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   margin-left: 10px;
 }
 
+
+/* Table Submenu (Vditor IR table edit) */
+.typola-table-submenu {
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  background: var(--theme-panel-bg);
+  box-shadow: 0 14px 36px var(--theme-shadow-soft);
+  color: var(--theme-text-primary);
+  font-size: 12.5px;
+  user-select: none;
+  /* 901 > 900(.editor-ctx-menu),被右键菜单叠压时仍能看见。
+     < 1000(.ant-tooltip) 让 tooltip 仍可浮在最上层。 */
+  z-index: 901;
+}
+.typola-table-submenu-title {
+  padding: 4px 10px 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--theme-text-secondary);
+  text-transform: uppercase;
+}
+.typola-table-submenu-sep {
+  height: 1px;
+  margin: 4px 4px;
+  background: var(--theme-border-soft);
+}
+.typola-table-submenu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--theme-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.typola-table-submenu-item:hover {
+  background: var(--theme-control-hover-bg);
+}
+
+
 /* 绂佺敤 Vditor 鑷甫鐨勫叏灞忓浘鐗囬瑙?overlay 鈥斺€?鍏抽棴鎸夐挳鍦?Tauri webview 涓嬩簨浠?
    wire 涓嶄笂,浼氬崱姝?Typora 涔熸病杩欏姛鑳姐€傚弻鍑诲浘鐗囩淮鎸?IR 榛樿琛屼负鍗冲彲(灞曞紑
    markdown 婧愮爜鍙紪杈?鍏夋爣绉诲嚭 350ms 鍚庣敱 collapseExpandedMarkers 鏀跺洖)銆?*/
