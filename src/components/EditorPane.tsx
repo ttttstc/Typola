@@ -363,8 +363,10 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         insert,
       }));
       if (safeChanges.some((change) => change.to < change.from)) return false;
+      const ordered = [...safeChanges].sort((a, b) => a.from - b.from || a.to - b.to);
+      if (ordered.some((change, index) => index > 0 && change.from < ordered[index - 1]!.to)) return false;
       try {
-        editorView.dispatch({ changes: safeChanges });
+        editorView.dispatch({ changes: ordered });
         editorView.focus();
         return true;
       } catch {
