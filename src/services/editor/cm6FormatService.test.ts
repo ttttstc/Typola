@@ -20,6 +20,22 @@ afterEach(() => {
 });
 
 describe('applyCm6Format', () => {
+  it.each([
+    ['bold', '**', '**'],
+    ['italic', '*', '*'],
+  ] as const)('toggles existing %s markers for selected text and cursor', (type, open, close) => {
+    const doc = `${open}文字${close}`;
+    const { view } = createView(doc, open.length, open.length + 2);
+
+    applyCm6Format(view, { type });
+    expect(view.state.doc.toString()).toBe('文字');
+
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc }, selection: { anchor: open.length + 1 } });
+    applyCm6Format(view, { type });
+    expect(view.state.doc.toString()).toBe('文字');
+    view.destroy();
+  });
+
   it('changes quote depth through a CM6 transaction', () => {
     const { view } = createView('> text', 0, 0);
 

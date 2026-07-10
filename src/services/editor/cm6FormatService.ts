@@ -81,6 +81,22 @@ function wrapInline(
   placeholder: string,
 ): void {
   const sel = view.state.selection.main;
+  const markerRange = findInlineMarkerRange(view, sel.from, sel.to, open, close);
+  if (markerRange) {
+    const { from, to } = markerRange;
+    view.dispatch({
+      changes: [
+        { from, to: from + open.length, insert: '' },
+        { from: to - close.length, to, insert: '' },
+      ],
+      selection: {
+        anchor: Math.max(from, sel.from - open.length),
+        head: Math.max(from, sel.to - open.length),
+      },
+    });
+    view.focus();
+    return;
+  }
   if (sel.empty) {
     const insert = `${open}${placeholder}${close}`;
     view.dispatch({
@@ -95,6 +111,38 @@ function wrapInline(
     });
   }
   view.focus();
+}
+
+/** 返回包围当前选区（或光标）的成对行内标记范围。 */
+function findInlineMarkerRange(
+  view: EditorView,
+  from: number,
+  to: number,
+  open: string,
+  close: string,
+): { from: number; to: number } | null {
+  const doc = view.state.doc;
+  if (
+    from >= open.length
+    && to + close.length <= doc.length
+    && view.state.sliceDoc(from - open.length, from) === open
+    && view.state.sliceDoc(to, to + close.length) === close
+  ) {
+    return { from: from - open.length, to: to + close.length };
+  }
+  if (from !== to) return null;
+
+  const line = doc.lineAt(from);
+  const before = view.state.sliceDoc(line.from, from);
+  const after = view.state.sliceDoc(from, line.to);
+  const openIndex = before.lastIndexOf(open);
+  const closeIndex = after.indexOf(close);
+  if (openIndex === -1 || closeIndex === -1) return null;
+
+  return {
+    from: line.from + openIndex,
+    to: from + closeIndex + close.length,
+  };
 }
 
 function wrapLink(view: EditorView): void {
