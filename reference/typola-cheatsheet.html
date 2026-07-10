@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>Typola 速查表</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">速查表</span>
+<h1>Typola 速查表</h1>
+<p class="subtitle">1 页全能力速查。复制粘贴到任何地方都不会丢。</p>
+
+<aside class="feature-frame">
+  <h2>4 句口诀(永不忘)</h2>
+  <dl>
+    <dt>Tab vs Pill</dt><dd><strong>Tab 管文件,Pill 管对话。</strong></dd>
+    <dt>左 vs 中</dt><dd><strong>左栏是草稿,中栏是成品。</strong></dd>
+    <dt>改稿顺序</dt><dd><strong>AI 改稿先 diff,采纳再回写。</strong></dd>
+    <dt>兜底</dt><dd><strong>降级不离本地,产物总回文件。</strong></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本速查表目录</strong><br>
+  <a class="toc-pill" href="#shortcut">全局快捷键</a>
+  <a class="toc-pill" href="#bar">浮条动作</a>
+  <a class="toc-pill" href="#card">右键 / Ctrl+K 动作</a>
+  <a class="toc-pill" href="#mode">三段文档模式</a>
+  <a class="toc-pill" href="#workbench">AI 工作台</a>
+  <a class="toc-pill" href="#review">检视 + 内联审阅</a>
+  <a class="toc-pill" href="#skill">SkillHub</a>
+  <a class="toc-pill" href="#artifact">产物中心</a>
+  <a class="toc-pill" href="#export">4 种导出</a>
+  <a class="toc-pill" href="#offline">离线降级</a>
+</nav>
+
+<h2 id="shortcut">全局快捷键</h2>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Ctrl</kbd> + <kbd>O</kbd></dt><dd>打开文件</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>保存</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></dt><dd>另存为</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd>查找</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>H</kbd></dt><dd>查找并替换</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></dt><dd>快速打开(文件 + 最近)</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>K</kbd></dt><dd>对选区打开 AI 动作菜单</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>撤销(含 AI 修改快照)</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>P</kbd></dt><dd>导出 PDF</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd></dt><dd>编辑辅助</dd>
+  <dt><kbd>Shift</kbd> + <kbd>A</kbd></dt><dd>切换心流 ↔ 阅读模式</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>,</kbd></dt><dd>打开设置</dd>
+  <dt><kbd>Esc</kbd></dt><dd>关闭浮卡 / 审阅态</dd>
+</dl>
+
+<h2 id="bar">浮条动作(选区出现 160ms 后)</h2>
+
+<dl class="shortcut-grid">
+  <dt><strong>润色</strong></dt><dd>Wand2 图标 — 流畅度 + 用词精炼</dd>
+  <dt><strong>解释术语</strong></dt><dd>BookOpen 图标 — 1-3 句话注解,<strong>不替换</strong></dd>
+  <dt><strong>加检视意见</strong></dt><dd>MessageSquare 图标 — 给本段加一条意见(不调 AI)</dd>
+</dl>
+
+<h2 id="card">右键 / Ctrl+K 动作</h2>
+
+<p>浮条只有 3 个,以下 4 个走菜单:</p>
+
+<dl class="shortcut-grid">
+  <dt><strong>缩写</strong></dt><dd>砍一半长度,保留核心信息</dd>
+  <dt><strong>扩写</strong></dt><dd>补充论据 / 例证,保持原风格立场</dd>
+  <dt><strong>校对</strong></dt><dd>改错别字、语法、标点</dd>
+  <dt><strong>自定义</strong></dt><dd>空模板,自己写要求(例如"翻成英文,保留技术名词")</dd>
+</dl>
+
+<h2 id="mode">三段文档模式</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">模式</th>
+      <th style="text-align:left;padding:8px 12px">适合</th>
+      <th style="text-align:left;padding:8px 12px">何时进入</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>阅读</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">90% 时间。所见即所得写稿</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">默认</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>心流</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">整稿让 AI 看、跨段问答</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><kbd>Shift</kbd>+<kbd>A</kbd></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>检视</strong></td>
+      <td style="padding:8px 12px">长稿攒意见 + AI 按意见改稿</td>
+      <td style="padding:8px 12px">顶栏三段控件</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="workbench">AI 工作台</h2>
+
+<dl class="shortcut-grid">
+  <dt>唤出</dt><dd><kbd>Shift</kbd> + <kbd>A</kbd> 或顶栏控件</dd>
+  <dt>发送</dt><dd><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dd>
+  <dt>停止生成</dt><dd>Composer 下方取消按钮</dd>
+  <dt>Provider 切换</dt><dd>Composer 底部药丸(Claude / OpenCode)</dd>
+  <dt>多会话管理</dt><dd>AI 工作台 header 的 💬 药丸 → 下拉切换 / 新建 / 关闭</dd>
+</dl>
+
+<div class="card">
+  <div class="card-title">5 种流式卡片</div>
+  <ul>
+    <li><strong>思考卡</strong>(Thought)— 折叠,默认不看</li>
+    <li><strong>正文卡</strong>(Markdown)— 打字机读它</li>
+    <li><strong>工具卡</strong>(Tool)— AI 在读你的文件,正常</li>
+    <li><strong>Done 状态栏</strong>— 耗时·token·估算花费</li>
+    <li><strong>错误诊断卡</strong>— 人话诊断 + Retry</li>
+  </ul>
+</div>
+
+<h2 id="review">检视 + 内联审阅</h2>
+
+<h3>检视图右栏</h3>
+
+<dl class="shortcut-grid">
+  <dt>跳转到意见位置</dt><dd>点右栏意见行 ▶</dd>
+  <dt>编辑意见</dt><dd>点意见行铅笔</dd>
+  <dt>删意见</dt><dd>点意见行 🗑</dd>
+  <dt>导出 review.md</dt><dd>右栏「导出检视版」</dd>
+  <dt>发 AI 改稿</dt><dd>右栏顶「AI 改稿」→ 「发 AI 修改」</dd>
+</dl>
+
+<h3>内联审阅态(中间编辑器接管)</h3>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Y</kbd></dt><dd>采纳当前 hunk,跳下一处</dd>
+  <dt><kbd>N</kbd></dt><dd>拒绝当前 hunk,跳下一处</dd>
+  <dt><kbd>Enter</kbd></dt><dd>下一处</dd>
+  <dt><kbd>Shift</kbd> + <kbd>Enter</kbd></dt><dd>上一处</dd>
+  <dt><kbd>Esc</kbd></dt><dd>退出审阅态(动过 hunk 弹确认)</dd>
+  <dt>右上「应用」</dt><dd>合并写回当前文档(原子,一次 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 全回滚)</dd>
+</dl>
+
+<h2 id="skill">SkillHub</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">场景</th>
+      <th style="text-align:left;padding:8px 12px">预置 skill</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>报告生成</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">空模板(等你手动加)</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>PPT 制作</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">huawei-style-ppt-skill · guizang-ppt-skill · huashu-slides · baoyu-slide-deck</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>HTML 制作</strong></td>
+      <td style="padding:8px 12px">frontend-slides</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card callout">
+  <div class="card-title">SkillHub 规则</div>
+  <ul>
+    <li>系统预置<strong>不可删</strong>,用户添加可删</li>
+    <li>未装的 skill → 卡片置灰 → 点击发"安装指令"给 AI 工作台当前对话</li>
+    <li><strong>每个 skill 一个独立 session UUID</strong>(互不串上下文)</li>
+    <li>Claude / OpenCode 看到的 skill 路径不一样(<code>~/.claude/skills/</code> vs <code>~/.opencode/commands/</code>)</li>
+  </ul>
+</div>
+
+<h2 id="artifact">产物中心</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">动作</th>
+      <th style="text-align:left;padding:8px 12px">去哪</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>落到磁盘</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>&lt;工作区&gt;/.typola-output/&lt;会话&gt;/</code> + 加进 <code>.gitignore</code></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>右下角 chip</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">点「打开」进中间编辑器</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>归档到工作区</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">自动改名去重 + 搬运出 <code>.typola-output</code></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>合并到当前文档</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">走第 5 课内联审阅</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>覆盖当前文档 + 撤销覆盖</strong></td>
+      <td style="padding:8px 12px">慎用,撤销 5 分钟内有效</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="export">4 种导出</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">导出</th>
+      <th style="text-align:left;padding:8px 12px">适合</th>
+      <th style="text-align:left;padding:8px 12px">快捷键</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>PDF</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">最终交付、本地归档</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><kbd>Ctrl</kbd>+<kbd>P</kbd></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>Word(.docx)</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">会再编辑的同事</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">菜单</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>HTML / 富文本 / 浏览器</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">网站 / 邮件 / 公众号</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">菜单</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>review.md</strong></td>
+      <td style="padding:8px 12px">协作者 / 喂 AI</td>
+      <td style="padding:8px 12px">检视模式右栏「导出检视版」</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="offline">离线降级</h2>
+
+<div class="card safe">
+  <div class="card-title">断网 → 你还有这些</div>
+  <ul class="check-list" style="margin:8px 0">
+    <li>全模式 Markdown 编辑</li>
+    <li>查找替换 / 文档统计 / 大纲</li>
+    <li>Word / PDF 导出 + 本地终端</li>
+    <li>主题切换 + 剪贴板图片</li>
+  </ul>
+</div>
+
+<div class="card danger">
+  <div class="card-title">断网 → 你没有这些</div>
+  <ul style="margin:8px 0">
+    <li>所有 AI 改稿 + AI 工作台对话</li>
+    <li>未装 skill → AI 装 skill(依赖于 AI)</li>
+  </ul>
+</div>
+
+<hr>
+
+<blockquote>
+  <p>教程到此结束。一稿一文,9 节看完,相信你对 Typola 心里有数了。
+    不懂就问 AI — 这是教材上的最后一句,也是真正用户阶段的开始。</p>
+</blockquote>
+
+</body>
+</html>

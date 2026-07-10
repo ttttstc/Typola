@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>上下文芯片:让 AI 看见你要的素材</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 3 课</span>
+<h1>上下文芯片:让 AI 看见你要的素材</h1>
+<p class="subtitle">8 分钟。把当前文档、附件、参考资料、MCP、Plugin 拼成 AI 能看见的 prompt 上下文。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>让 AI 改稿、问问题,光凭当前文档不够 — 你要把参考资料、调研稿、风格指南、上周的周报一并喂给 AI;
+    或者你想让 AI 知道某个 MCP 工具能用、某个 Plugin 目录里有哪些 skill。
+    <strong>这种"把哪些东西带入这一轮对话"的精细控制</strong>,是普通 chatbox 做不到的。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>Composer 上方有一条<strong>上下文芯片</strong>(ContextChipStrip)— 每行是一个 chip:<code>📄 当前文档</code>、<code>📎 附件 1</code>、<code>📎 附件 2</code>、<code>🔌 MCP 文件</code>、<code>🧩 Plugin 目录</code>。
+    每个 chip 可以单独去除(比如不要当前文档),也可以通过 Composer <code>+</code> 菜单加新附件。
+    这些 chip 会转成 CLI 的<strong>路径参数 + prompt 文本</strong>喂给 AI;AI 真正去看这些文件再回答。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Cursor / Copilot 把"项目索引"全局化(扫整棵树给你做检索),但写作者不需要;
+    Notion AI 把"上下文"做成页面链接注入,但写作者的素材不在 Notion 里。
+    Typola 走"显式芯片",你每轮要什么给什么 — <strong>不偷偷自动加文件、不做大文档 RAG 索引</strong>。
+    想让 AI 看什么,就加 chip;想去掉当前文档,直接点 chip 上的 ✕。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pre">前置</a>
+  <a class="toc-pill" href="#strip">看芯片行长啥样</a>
+  <a class="toc-pill" href="#add-file">加附件文件</a>
+  <a class="toc-pill" href="#drop">去掉某个芯片</a>
+  <a class="toc-pill" href="#mcp">加 MCP 配置</a>
+  <a class="toc-pill" href="#plugin">加 Plugin 目录</a>
+  <a class="toc-pill" href="#switch">换文档芯片</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2 课(AI 工作台能开能发消息)</li>
+  <li>有一份打开的文档</li>
+  <li>(可选)准备一份 markdown 或 txt 的"参考资料"在本地 — 比如风格指南、调研稿、上周周报</li>
+</ul>
+
+<h2 id="strip">1. 认识芯片行</h2>
+
+<p>唤出 AI 工作台(<kbd>Shift</kbd> + <kbd>A</kbd>)后,看 Composer 输入框<strong>上方</strong>那条横向小标签:</p>
+
+<pre><code>[📄 当前文档 note.md] [📎 style-guide.md] [+ 添加附件] [+ .mcp.json] [+ Plugin]</code></pre>
+
+<p>每个 chip 是一行精炼信息:<strong>图标 + 文件名 + 移除 ✕</strong>。
+这条线就是这一轮 AI<strong>能看见的全部文件清单</strong>。默认情况下:</p>
+
+<ul>
+  <li><strong>当前文档</strong> — 始终在场(除非你主动点 ✕)</li>
+  <li><strong>附件</strong> — 你按需加,无默认</li>
+  <li><strong>MCP 文件</strong> — Composer <code>+</code> 菜单开,默认无</li>
+  <li><strong>Plugin 目录</strong> — <code>设置</code> 里配置后才出现</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">芯片的真实作用</div>
+  <p>每个 chip 都会被 Typola 转成 CLI 调用参数:</p>
+  <ul>
+    <li><strong>Claude Code</strong>:文件路径作 <code>--add-dir</code> + prompt 文本里写「参考以下文件」</li>
+    <li><strong>OpenCode</strong>:每次发送都重复 <code>--file &lt;path&gt;</code>,prompt 文本也带参考文件 block</li>
+  </ul>
+  <p>AI 收到 prompt 后会调用 Read/Edit 工具去读这些文件;不是 Typola 提前把整文件内容塞 prompt。</p>
+</div>
+
+<h2 id="add-file">2. 加附件文件</h2>
+
+<ol>
+  <li>点 Composer 左下角的 <code>+</code> 按钮(在输入框外/底部,不是 chip 上的)</li>
+  <li>弹菜单里选「<strong>附件文件</strong>」</li>
+  <li>文件选择对话框打开,选一个或多个 markdown / txt / html</li>
+  <li>选择完毕,Composer 上方多出 <code>📎 文件名</code> chip</li>
+</ol>
+
+<p>加完即用。下一次发送时 AI 就能读它。</p>
+
+<div class="card">
+  <div class="card-title">用附件的常见 3 个场景</div>
+  <ul>
+    <li><strong>风格指南</strong>:让 AI 改稿时按指南(术语用词 / 句式长短 / 标题层级)</li>
+    <li><strong>参考资料</strong>:让 AI 把对话里"我引用某论文"的那种话术填到引用文件的具体出处</li>
+    <li><strong>上周周报</strong>:让 AI 写本周周报时,自动知道上周期项目进展、人员分配</li>
+  </ul>
+</div>
+
+<h2 id="drop">3. 去掉某个芯片</h2>
+
+<p>暂时不想要某个 chip 的引用?点 chip 上的 <strong>✕</strong> 就消失:</p>
+<ul>
+  <li>点当前文档的 ✕ → 这一轮 AI 看不到你这篇稿子(只看你直接发的 prompt 内容)</li>
+  <li>点附件的 ✕ → 这一轮不再喂这份附件(文件还在磁盘上,下次想用再加回来即可)</li>
+</ul>
+
+<p>常见场景:你在写一段说明 A 的小段,AI 没必要读整篇稿子。这一轮就把当前文档 ✕ 掉。</p>
+
+<div class="card danger">
+  <div class="card-title">关掉当前文档 ≠ 重置全局</div>
+  <p>很多人担心「关掉当前文档后,下一轮是不是还得加回来」。
+    不是的:你切回阅读模式之前,<strong>关 chip 的状态保留</strong>;切回阅读模式 / 退出心流模式也保留。
+    <strong>真正清芯片的是切文件(tab)</strong> — 切到下一篇文档时,旧芯片整批清空,新文档的当前文档 chip 顶上。</p>
+</div>
+
+<h2 id="mcp">4. 加 MCP 配置(MCP 文件)</h2>
+
+<p>如果你的工作目录里有 <code>.mcp.json</code>(Claude Code 或一些 MCP 配置格式),想在这一轮让 AI 用 MCP 工具,不用单独配置,只要在 Composer 的 <code>+</code> 菜单选「<strong>.mcp.json</strong>」就加进去。</p>
+
+<p>它会以 chip 的形式出现,告诉 CLI 这一轮要用哪份 MCP 配置(然后 CLI 自己解析)。</p>
+
+<div class="card callout">
+  <div class="card-title">MCP 配置的常见位置</div>
+  <p>用户级:<code>~/.claude.json</code> 或 <code>~/.opencode/mcp.json</code><br>
+  项目级:当前工作目录的 <code>.mcp.json</code>(Composer <code>+</code> 菜单的工作目录 = 你当前 Composer 上看到的 cwd)</p>
+</div>
+
+<h2 id="plugin">5. 加 Plugin 目录</h2>
+
+<p>Claude Code 的 <code>--plugin-dir</code> 参数让你告诉 CLI 你的 skill / 命令面板加载哪个目录。
+Typola 在 Composer <code>+</code> 菜单里提供「<strong>Plugin 目录</strong>」— 选择后这路径每次发请求都会被附加为 <code>--plugin-dir &lt;path&gt;</code>。</p>
+
+<ol>
+  <li>Composer <code>+</code> 菜单 → 「Plugin 目录」</li>
+  <li>选一个包含 <code>commands/</code> 或 <code>skills/</code> 的目录</li>
+  <li>之后发请求 AI 就能调那个目录里的命令</li>
+</ol>
+
+<div class="card">
+  <div class="card-title">Plugin 目录 = Skill 目录?</div>
+  <p>接近。Typola 内部有一个固定的 <strong>SkillHub</strong> 让你用卡片选(第 4 课展开),那走系统推荐。
+    <strong>Plugin 目录</strong> 是更底层的"告诉 CLI 这个路径下有我的东西" — 适合临时加一个本地 skill 仓库。</p>
+</div>
+
+<h2 id="switch">6. 切文档 = 整体重置芯片</h2>
+
+<p>写作者的常态:边写稿边开 AI 工作台,但 AI 工作区不一定只用一篇稿子。
+Typola 的设计:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">动作</th>
+      <th style="text-align:left;padding:8px 12px">芯片会怎么变</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">编辑器里切换文档 tab</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">旧文档的当前文档 chip 被新文档的当前文档 chip 顶替;附件芯片全部保留(它们是给当前 session 用的,跨文档仍生效)</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">切 Provider(Claude ↔ OpenCode)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">芯片清空,新 Provider 会话重新建立</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">开新会话(Pill 第 6 课展开)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">芯片按新会话需要重新加;不会从旧会话迁移</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">10 分钟任务:用风格指南 + 调研稿同时改稿</div>
+  <p>需要准备:一份<strong>风格指南</strong>(或随便 5 条用词规则 + 一句话品牌语)+ 一份<strong>调研稿</strong>(引用 + 数据)。</p>
+  <ol class="check-list">
+    <li>在工作目录下创建 <code>style-guide.md</code>(自己随便写 5 条规范,例如「用『用户』不用『客户』」、「段首不空两格」)。</li>
+    <li>创建 <code>research-notes.md</code>,塞进 3 条"摘自某地的引用"。</li>
+    <li>打开你的正稿,Composer <code>+</code> → 附件文件 → 选这两份。</li>
+    <li>Prompt 写:「<code>请用 style-guide.md 的规范改我的稿子,需要数据引用时从 research-notes.md 里取</code>」。</li>
+    <li>看 AI 输出是否符合 style-guide 规范、是否用了 research-notes 里的内容。</li>
+    <li>把当前文档芯片 ✕ 掉,再发同样的 prompt,看 AI 输出是否有差异(去掉当前文档意味着 AI 看不到你的稿子,自然"无米下锅")。</li>
+  </ol>
+  <p>✅ AI 用了规范且引用了数据 = 进入<a href="./0004-skillhub-scenes.html">第 4 课:Skill 场景</a>。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>加了附件 AI 说"看不到"</strong> — 多半是路径不对(Typola 传的是绝对路径)。
+    检查 Composer <code>+</code> 时选的文件是不是你预期的(Composer 不一定跟编辑器同目录)。</li>
+  <li><strong>AI 不读 MCP 文件</strong> — MCP 是你自己的 <code>.mcp.json</code> 格式要正确;Typola 只传路径,不在前端预先解析。</li>
+  <li><strong>Plugin 目录加了没生效</strong> — 重启 Typola 或重新发一轮,CLI 偶尔需要新一轮才挂新 Plugin。</li>
+  <li><strong>切文档后附件还在</strong> — <strong>这是设计,不是 bug</strong>。芯片生命周期不等于文档生命周期;你想清除就手动 ✕。</li>
+  <li><strong>+ 菜单里看不到 MCP 文件</strong> — 因为当前 Composer 工作目录还没确定(Picker 还没选)。先在 Composer 顶部 WorkingDir Picker 里选一个工作目录。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 4 课:<a href="./0004-skillhub-scenes.html"><strong>Skill 场景:报告 / PPT / HTML 的固定套路</strong></a>。
+右栏 SkillHub 让你用<strong>场景卡</strong>选一类任务(报告生成、PPT 制作、HTML 制作),每个场景预置了几个本机能用的 skill;点一下就开新会话。</p>
+
+<blockquote>
+  <p>切片权限报错 / 想问"为什么不自动传整目录" / 想给特定 skill 加权限?直接问 AI。</p>
+</blockquote>
+
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>运行期多会话:Pill 管对话,Tab 管文件</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 6 课</span>
+<h1>运行期多会话:Pill 管对话,Tab 管文件</h1>
+<p class="subtitle">6 分钟。把"AI 会话管理"这件事跟"文件管理"分开 — 一个是药丸(Pill),一个是 Tab。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>写作者常并行 2-3 件事:周报的草稿需要 AI 帮润色;另有一条 skill 调研跟同事相关;还有一份技术笔记在等 AI 帮你校对。
+      <strong>3 件事 = 3 个 AI 会话 = 互相不能串上下文</strong>(否则 AI 把"用户的语境"带到不相关的事里)。
+      普通 chatbox 只给你一个会话,要并行就需要你自己来回切。Typola 让这件事变简单。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>AI 工作台 header 有一个<strong>药丸按钮</strong>(<code>💬 &lt;当前会话名&gt; ▾ &lt;数量徽章&gt;</code>)。
+      点开 → 下拉菜单:列出会话列表 + 「新建」按钮 + 每条会话的「关闭」按钮。
+      药丸不像 Tab 占一整行,只是 header 里一颗圆角按钮,<strong>形态区别于编辑器顶部的文件 Tab</strong> — 一眼区分"文档是 Tab,会话是 Pill"。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Claude Desktop 用 Tab、Coze 用大列表、Notion AI 用对话侧栏 — 都太重。
+      Typola 学的是 <strong>OpenDesign</strong> 的 "Workspace tabs bar + Conversations pill" 双管分工,克制到极致:
+      <strong>下拉只做切换/新建/关闭,不做重命名/搜索/归档</strong>(那是"把对话变档案库",会引向 Claude Desktop 的聊天工作台,Typola 不干这事)。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pre">前置</a>
+  <a class="toc-pill" href="#pill">看药丸按钮</a>
+  <a class="toc-pill" href="#new">新建会话</a>
+  <a class="toc-pill" href="#switch">并行 3 个会话</a>
+  <a class="toc-pill" href="#close">关掉不需要的</a>
+  <a class="toc-pill" href="#forbidden">不做的事</a>
+  <a class="toc-pill" href="#lifetime">会话的寿命</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2 课(知道 AI 工作台在哪)</li>
+  <li>装好 CLI,检测通过</li>
+</ul>
+
+<h2 id="pill">1. 看药丸按钮</h2>
+
+<p>进心流模式 → 看 AI 工作台 header(顶部):</p>
+
+<pre><code>┌─ 头部 ────────────────────────────────────────┐
+│ 💬 &lt;当前会话名&gt; ▾ · N           (主操作区)    │
+│   ↑ 你点的就是它                                  │
+└──────────────────────────────────────────────┘</code></pre>
+
+<p>这颗药丸就是会话切换器。点开它 → 一个下拉面板:</p>
+
+<ul>
+  <li>顶部:会话列表(当前会话前面有 ✓)</li>
+  <li>列表底部:「+ 新建对话」按钮</li>
+  <li>每个会话条目:右边有一个 ✕ 关闭按钮(当前会话不能关)</li>
+</ul>
+
+<h2 id="new">2. 新建会话</h2>
+
+<p>下拉面板里点「+ 新建对话」:</p>
+
+<ol>
+  <li>左栏<strong>立刻开新会话</strong>(无 prompt 先就空着)</li>
+  <li>输入框清空、Ready 状态显示</li>
+  <li>下拉面板列表多一条新的「自由对话」(M1 限定:只能以 skill 名开头的会话或自由对话 — 你也可以从前置 skill 直接开)</li>
+</ol>
+
+<div class="card callout">
+  <div class="card-title">"自由对话" vs "skill 会话" 两种入口</div>
+  <ul>
+    <li><strong>自由对话</strong> = 你点了「+ 新建对话」开的会话,纯 prompt,不挂 skill</li>
+    <li><strong>skill 会话</strong> = 你从第 4 课 SkillHub 点某张 skill 卡开的会话,标题 = skill 名、UUID 独立</li>
+  </ul>
+  <p>两种会话等价于"独立的草稿纸";管理方式一样,只是入口不同。</p>
+</div>
+
+<h2 id="switch">3. 并行 3 个会话,互不串味</h2>
+
+<p>写作者常态:你有 3 件事并行。</p>
+
+<p>操作:</p>
+
+<ol>
+  <li>开第 1 个会话 — 起名叫「周报草稿」(自动)→ 问 AI 关于本周项目进展</li>
+  <li>点药丸 → 「+ 新建对话」开第 2 个</li>
+  <li>发 prompt 给第 2 个 — 例如「帮我看看 /huawei-style-ppt-skill 用什么场景」(skill 调试)</li>
+  <li>再开第 3 个 — 给同事写一段技术笔记标题</li>
+</ol>
+
+<p>现在:</p>
+
+<ul>
+  <li>药丸右侧出现数字徽章 <strong>3</strong></li>
+  <li>下拉面板里 3 条会话</li>
+  <li>每条会话<strong>独立的 session UUID</strong>(独立 AI 上下文),互不串</li>
+</ul>
+
+<div class="card safe">
+  <div class="card-title">验证"互不串" 的一种方法</div>
+  <p>在会话 A 里说"我是产品经理,正在写一份面向工程师的 PRD",然后切到会话 B 问"我应该用哪种语气";
+    AI 在 B 里<strong>不会</strong>把"产品经理 / PRD"带进来 — 它的 session 状态是干净的。
+    只有切<strong>同一个会话的过往对话</strong>,AI 才会接着说。</p>
+</div>
+
+<h2 id="close">4. 关闭不用的会话</h2>
+
+<p>下拉面板里每行右边有 ✕(会话 1 个的时候,✕ 是禁用的 — 至少保留 1 个):</p>
+
+<ul>
+  <li>点 ✕ → Typola 弹轻确认「关掉后会丢失该会话历史」</li>
+  <li>确认 → 会话消失、列表少一行,药丸落到下一条活跃会话</li>
+  <li><strong>已经发给 AI 的 prompt 还在会话内存里</strong>,闭掉就没了 — 不持久化</li>
+</ul>
+
+<p>关闭 ≠ 删产品。第 7 课会展开"AI 生成的文件去哪了" — 那是 <strong>产物中心</strong>的事,跟会话关闭无关。</p>
+
+<h2 id="forbidden">5. 不做的事(护城河)</h2>
+
+<p>会话下拉里有几个功能<strong>故意不做</strong>:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">不做</th>
+      <th style="text-align:left;padding:8px 12px">原因</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">重命名会话</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">标题已经自动 = skill 名 / 「自由对话」,再让你手动命名 = 在把会话当档案管</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">会话搜索</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">有了搜索你就开始把对话当文档存 — 文档才是产物</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">归档 / 标签</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">同上</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 用量统计</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">让作者更关心"省 token"而不是"写好稿"</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>设计团队 <strong>每加一个对话侧功能</strong>,都要问一句:这服侍文档(成品),还是把对话变资产?
+服务文档的加(产物回流 / 选区注入 / skill 调用);把对话变资产的不加。</p>
+
+<div class="card danger">
+  <div class="card-title">"那我的会话会被永久留底吗?"</div>
+  <p>不会。Typola <strong>只在本机内存里</strong>维护会话,关 Typola = 丢全部会话上下文。
+    你写过的 prompt、给到的反馈、AI 的回答都没了。</p>
+  <p>想要保留 AI 给你的东西 → <strong>产物中心</strong>(第 7 课)才是这条路:
+    AI 写出来的文件(报告、PPT、草稿)会在 <code>.typola-output/&lt;会话&gt;/</code> 落盘,
+    那个文件就是你的"该保留的部分"。</p>
+</div>
+
+<h2 id="lifetime">6. 会话的寿命</h2>
+
+<dl class="shortcut-grid">
+  <dt>运行期内</dt><dd>会话持久在内存 Map 里,跟 Typola 同生命周期</dd>
+  <dt>重启 Typola</dt><dd>所有会话丢失(下节课的产物中心才是真存档地)</dd>
+  <dt>切 Provider</dt><dd>当前会话断开,新会话以新 Provider 起(上一节讲过 — UUID 不跨 provider)</dd>
+  <dt>切 AI 工作目录(Composer 顶部 WorkingDir Picker)</dt><dd>弹确认「会切到新工作目录,旧会话不延续」</dd>
+  <dt>整个 Typola 崩溃/强关</dt><dd>会话丢失,但磁盘上的产物文件(第 7 课)在</dd>
+</dl>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">6 分钟任务:开 3 个会话并行,验证互不串</div>
+  <ol class="check-list">
+    <li>打开任意文档,切心流模式。</li>
+    <li>点药丸 → 「+ 新建对话」开第一个会话,prompt 发"我是一个 PM,正在写 PRD"。</li>
+    <li>打开第二个,prompt 发"我是一个独立开发者,正在做 Web 项目"。</li>
+    <li>打开第三个,prompt 发"我是一个老师,正在准备一节课"。</li>
+    <li>三个都开了之后,分别切回去问"我是做什么的?",看每个会话是不是只记自己的角色,不串。</li>
+    <li>关掉其中 1 个,确认 ✕ 行为符合预期(只剩 2 个,徽章变 2)。</li>
+  </ol>
+  <p>✅ 3 个会话并行 + 互不串 + 关闭正常 = 进入<a href="./0007-artifact-center.html">第 7 课:产物中心</a>。
+    你会学到 AI 生成的文件落到哪、怎么在编辑器打开、怎么归档到工作区、怎么撤销覆盖 — 这是 Typola 最"实际"的一节。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>药丸按钮不见了</strong> — 你在阅读模式或检视模式。切到心流模式(<kbd>Shift</kbd> + <kbd>A</kbd> 或顶栏控件)。</li>
+  <li><strong>关掉最后一个会话又被自动新建</strong> — Typola 不允许 0 个会话,所以最后一个不可关(✕ 禁用或变成"+ 新建对话"占位)。</li>
+  <li><strong>同一会话上下文"串味"</strong> — <strong>这是设计,不是 bug</strong>。同一会话的过往对话 AI 都能看到,这是 Claude / OpenCode 的原生行为。</li>
+  <li><strong>重启 Typola 会话全没了</strong> — 持久化属 M3+ 路线图,没排到。你可以靠 <strong>产物中心</strong>(第 7 课)保存 AI 实际生成的内容。</li>
+  <li><strong>不同会话切回去发现"内容跟上一次不太一样"</strong> — 因为多个会话间有独立的 session UUID,切回去读的是那次会话的最新状态,而不是全局同步。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 7 课:<a href="./0007-artifact-center.html"><strong>产物中心:AI 写的东西回到你的文件</strong></a>。
+这是 Typola 整个产品哲学落地的最后一公里:AI 用工具(Write/Edit)创建的文件由 Typola 监听并以 chip 形式呈现,点开在<strong>中间编辑器</strong>而非右栏预览 — 因为产物就是你的文档,文档归文档位。</p>
+
+<blockquote>
+  <p>切片重启 Typola 想恢复上下文 / 想了解"内存 Map 持久化的下一步" / 想给会话加 tag?直接问 AI。</p>
+</blockquote>
+
+</body>
+</html>

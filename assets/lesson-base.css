@@ -1,0 +1,284 @@
+/* Typola 教程共享样式 —— 所有 lessons/*.html 引用这份 */
+:root {
+  --ink: #2a2720;
+  --paper: #fbf8f0;
+  --paper-tint: #f5efe0;
+  --line: #c9bfa6;
+  --line-soft: #ddd3ba;
+  --accent: #b8651e; /* 暖橙,跟 Typola 现有色板一致 */
+  --accent-soft: #f0d9bc;
+  --safe: #5a7a3d;
+  --warn: #b86a2a;
+  --danger: #a8442b;
+  --code-bg: #2b2820;
+  --code-ink: #f5efe0;
+  --shadow: 0 2px 0 rgba(0, 0, 0, 0.04), 0 6px 18px rgba(60, 40, 12, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    serif;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+body {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(180deg, transparent 47px, rgba(122, 90, 30, 0.05) 48px, transparent 49px);
+  background-size: 100% 48px;
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: 32px;
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+
+h1 + .subtitle {
+  color: #6a5a3a;
+  font-style: italic;
+  margin: 0 0 32px;
+}
+
+h2 {
+  font-size: 22px;
+  margin: 40px 0 12px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line-soft);
+}
+
+h3 {
+  font-size: 17px;
+  margin: 24px 0 8px;
+}
+
+p, ul, ol { margin: 0 0 16px; }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+
+a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+a:hover { text-decoration-thickness: 2px; }
+
+code, kbd {
+  font-family: "JetBrains Mono", "Cascadia Code", Menlo, Consolas,
+    "Noto Sans Mono CJK SC", monospace;
+  font-size: 0.92em;
+}
+
+code {
+  background: var(--paper-tint);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--ink);
+}
+
+kbd {
+  display: inline-block;
+  background: #fdfaf2;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 0.84em;
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+}
+
+pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 6px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  border-left: 3px solid var(--accent);
+}
+pre code {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0;
+}
+
+blockquote {
+  margin: 16px 0;
+  padding: 8px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--paper-tint);
+  color: #5a4a2a;
+  border-radius: 0 4px 4px 0;
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+.card {
+  background: #fffaf0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 18px 20px;
+  margin: 16px 0;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+.card.callout {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.card.danger {
+  background: #f7e3d8;
+  border-color: var(--danger);
+}
+.card.safe {
+  background: #e3ecd5;
+  border-color: var(--safe);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  margin: 40px 0;
+}
+
+nav.toc {
+  background: #fffaf0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 12px 18px;
+  margin: 24px 0 32px;
+  font-size: 0.95em;
+}
+nav.toc strong { color: var(--accent); }
+
+.lesson-tag {
+  display: inline-block;
+  font-size: 12px;
+  background: var(--accent);
+  color: var(--paper);
+  padding: 2px 10px;
+  border-radius: 12px;
+  vertical-align: middle;
+  margin-right: 8px;
+  letter-spacing: 0.04em;
+}
+
+.check-list li {
+  padding-left: 4px;
+  list-style: none;
+  position: relative;
+}
+.check-list li::before {
+  content: "✓";
+  position: absolute;
+  left: -18px;
+  color: var(--safe);
+  font-weight: 700;
+}
+
+.trap-list li {
+  padding-left: 4px;
+  list-style: none;
+  position: relative;
+}
+.trap-list li::before {
+  content: "⚠";
+  position: absolute;
+  left: -18px;
+  color: var(--warn);
+}
+
+.toc-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  margin: 4px 6px 4px 0;
+  background: var(--paper-tint);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.toc-pill:hover { background: var(--accent-soft); }
+
+.feature-frame {
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  padding: 18px 22px 14px;
+  margin: 24px 0 32px;
+  box-shadow: var(--shadow);
+}
+.feature-frame h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.feature-frame dl {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px 14px;
+  margin: 0;
+  font-size: 15px;
+}
+.feature-frame dt {
+  font-weight: 600;
+  color: #6a4a20;
+}
+.feature-frame dd {
+  margin: 0;
+  color: var(--ink);
+}
+.feature-frame dd p:first-child { margin-top: 0; }
+.feature-frame dd p:last-child { margin-bottom: 0; }
+@media (max-width: 640px) {
+  .feature-frame dl { grid-template-columns: 1fr; gap: 4px 0; }
+  .feature-frame dt { padding-top: 6px; }
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+.shortcut-grid dt { font-weight: 600; color: var(--accent); }
+.shortcut-grid dd { margin: 0; color: #4a3a1a; }
+
+@media (max-width: 640px) {
+  body { padding: 24px 16px 64px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; }
+  .shortcut-grid { grid-template-columns: 1fr; gap: 4px 0; }
+}

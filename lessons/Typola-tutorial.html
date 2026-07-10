@@ -1,0 +1,2421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typola 终极教程</title>
+<style>/* Typola 教程共享样式 —— 所有 lessons/*.html 引用这份 */
+:root {
+  --ink: #2a2720;
+  --paper: #fbf8f0;
+  --paper-tint: #f5efe0;
+  --line: #c9bfa6;
+  --line-soft: #ddd3ba;
+  --accent: #b8651e; /* 暖橙,跟 Typola 现有色板一致 */
+  --accent-soft: #f0d9bc;
+  --safe: #5a7a3d;
+  --warn: #b86a2a;
+  --danger: #a8442b;
+  --code-bg: #2b2820;
+  --code-ink: #f5efe0;
+  --shadow: 0 2px 0 rgba(0, 0, 0, 0.04), 0 6px 18px rgba(60, 40, 12, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    serif;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+body {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(180deg, transparent 47px, rgba(122, 90, 30, 0.05) 48px, transparent 49px);
+  background-size: 100% 48px;
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: 32px;
+  margin: 0 0 8px;
+  line-height: 1.25;
+}
+
+h1 + .subtitle {
+  color: #6a5a3a;
+  font-style: italic;
+  margin: 0 0 32px;
+}
+
+h2 {
+  font-size: 22px;
+  margin: 40px 0 12px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line-soft);
+}
+
+h3 {
+  font-size: 17px;
+  margin: 24px 0 8px;
+}
+
+p, ul, ol { margin: 0 0 16px; }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+
+a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+a:hover { text-decoration-thickness: 2px; }
+
+code, kbd {
+  font-family: "JetBrains Mono", "Cascadia Code", Menlo, Consolas,
+    "Noto Sans Mono CJK SC", monospace;
+  font-size: 0.92em;
+}
+
+code {
+  background: var(--paper-tint);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--ink);
+}
+
+kbd {
+  display: inline-block;
+  background: #fdfaf2;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 0.84em;
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+}
+
+pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 6px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  border-left: 3px solid var(--accent);
+}
+pre code {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0;
+}
+
+blockquote {
+  margin: 16px 0;
+  padding: 8px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--paper-tint);
+  color: #5a4a2a;
+  border-radius: 0 4px 4px 0;
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+.card {
+  background: #fffaf0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 18px 20px;
+  margin: 16px 0;
+  box-shadow: var(--shadow);
+}
+.card-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+.card.callout {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.card.danger {
+  background: #f7e3d8;
+  border-color: var(--danger);
+}
+.card.safe {
+  background: #e3ecd5;
+  border-color: var(--safe);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  margin: 40px 0;
+}
+
+nav.toc {
+  background: #fffaf0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 12px 18px;
+  margin: 24px 0 32px;
+  font-size: 0.95em;
+}
+nav.toc strong { color: var(--accent); }
+
+.lesson-tag {
+  display: inline-block;
+  font-size: 12px;
+  background: var(--accent);
+  color: var(--paper);
+  padding: 2px 10px;
+  border-radius: 12px;
+  vertical-align: middle;
+  margin-right: 8px;
+  letter-spacing: 0.04em;
+}
+
+.check-list li {
+  padding-left: 4px;
+  list-style: none;
+  position: relative;
+}
+.check-list li::before {
+  content: "✓";
+  position: absolute;
+  left: -18px;
+  color: var(--safe);
+  font-weight: 700;
+}
+
+.trap-list li {
+  padding-left: 4px;
+  list-style: none;
+  position: relative;
+}
+.trap-list li::before {
+  content: "⚠";
+  position: absolute;
+  left: -18px;
+  color: var(--warn);
+}
+
+.toc-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  margin: 4px 6px 4px 0;
+  background: var(--paper-tint);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.toc-pill:hover { background: var(--accent-soft); }
+
+.feature-frame {
+  background: #fffaf0;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  padding: 18px 22px 14px;
+  margin: 24px 0 32px;
+  box-shadow: var(--shadow);
+}
+.feature-frame h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.feature-frame dl {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px 14px;
+  margin: 0;
+  font-size: 15px;
+}
+.feature-frame dt {
+  font-weight: 600;
+  color: #6a4a20;
+}
+.feature-frame dd {
+  margin: 0;
+  color: var(--ink);
+}
+.feature-frame dd p:first-child { margin-top: 0; }
+.feature-frame dd p:last-child { margin-bottom: 0; }
+@media (max-width: 640px) {
+  .feature-frame dl { grid-template-columns: 1fr; gap: 4px 0; }
+  .feature-frame dt { padding-top: 6px; }
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+.shortcut-grid dt { font-weight: 600; color: var(--accent); }
+.shortcut-grid dd { margin: 0; color: #4a3a1a; }
+
+@media (max-width: 640px) {
+  body { padding: 24px 16px 64px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; }
+  .shortcut-grid { grid-template-columns: 1fr; gap: 4px 0; }
+}
+</style>
+</head>
+<body>
+<nav id="doc-toc"><div class="wrap"><span class="label">教程导航</span><a href="#intro">课程索引</a><a href="#lesson-0">第 0 课</a><a href="#lesson-1">第 1 课</a><a href="#lesson-2">第 2 课</a><a href="#lesson-3">第 3 课</a><a href="#lesson-4">第 4 课</a><a href="#lesson-5">第 5 课</a><a href="#lesson-6">第 6 课</a><a href="#lesson-7">第 7 课</a><a href="#lesson-8">第 8 课</a><a href="#cheatsheet">速查表</a></div></nav>
+<main>
+<section id="intro"><h1 style="border:none;margin-bottom:0">Typola 终极教程</h1>
+<p class="subtitle" style="margin-bottom:32px">9 节课 · 覆盖核心能力 ... 贯穿全课程 4 句口诀:<br>
+· <b>Tab 管文件,Pill 管对话。</b>
+· <b>左栏是草稿,中栏是成品。</b>
+· <b>AI 改稿先 diff,采纳再回写。</b>
+· <b>降级不离本地,产物总回文件。</b>
+</p>
+<div class="feature-frame"><h2>课程地图</h2>
+<dl>
+<dt>第 0 课</dt><dd>Typola 第一天:装好就能写</dd>
+<dt>第 1 课</dt><dd>用浮条让 AI 在你眼皮底下改稿</dd>
+<dt>第 2 课</dt><dd>AI 工作台开箱:Shift+A 与多轮对话</dd>
+<dt>第 3 课</dt><dd>上下文芯片:让 AI 看见你要的素材</dd>
+<dt>第 4 课</dt><dd>Skill 场景:报告 / PPT / HTML 的固定套路</dd>
+<dt>第 5 课</dt><dd>检视模式 + 内联审阅:逐处采纳 AI 改稿</dd>
+<dt>第 6 课</dt><dd>运行期多会话:Pill 管对话,Tab 管文件</dd>
+<dt>第 7 课</dt><dd>产物中心:AI 写的东西回到你的文件</dd>
+<dt>第 8 课</dt><dd>交付 + 离线降级</dd>
+</dl></div>
+</section>
+
+<section id="lesson-0" class="lesson">
+<span class="lesson-tag">第 0 课</span>
+<h1 style="border:none">Typola 第一天:装好就能写</h1>
+<p class="subtitle">5 分钟。装好、打开一份文档、写一段字、保存。所有后面的课都建立在这节。</p>
+<span class="lesson-tag">第 0 课</span>
+<h1>Typola 第一天:装好就能写</h1>
+<p class="subtitle">5 分钟。装好、打开一份文档、写一段字、保存。所有后面的课都建立在这节。</p>
+
+<aside class="feature-frame">
+  <h2>这 9 节课会带你看懂的 5 大能力</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>写作者每天的 4 个真痛点:(1) 写一段话要润色,**但不想离开文档去 ChatGPT 复制粘贴**;(2) 想让 AI 帮生成报告 / PPT,但结果困在聊天记录里,不能落到文件;(3) 整篇改稿时怕 AI 一次覆盖丢原文;(4) 同事让你 review,你不知道意见给到哪段、最后怎么合并回正文。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>所有 AI 调用都在文档内或文档旁发生;AI 写的东西落到本地文件而不是云端 chat;改稿前先给你逐处对比再合并;检视意见是叠加的一层,导出前不污染原文。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Typora 不带 AI;Notion AI 是云文档,产物在云上你看不见本地 Markdown;<strong>Typola 把"AI 是工序,文档是产物"</strong>这件事死守住 — 所以左栏是草稿(A 对话),中栏是成品(C 文档),从不把对话变档案库。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="install">1. 装哪一版</h2>
+
+<p>Typola 目前只在 Windows 上发布。从 GitHub Releases 拿,两种包二选一:</p>
+
+<div class="card">
+  <div class="card-title">安装版 <code>Typola_*_x64-setup.exe</code></div>
+  <p>装在用户目录,自动关联 <code>.md / .markdown / .html / .docx</code>。日常使用选这个。
+  注意:Typola 也提供 <code>.msi</code> 格式;装到 Program Files 会弹管理员权限,大部分人不必用 msi。</p>
+</div>
+
+<div class="card">
+  <div class="card-title">免安装版 <code>Typola_*_windows-x64_portable.zip</code></div>
+  <p>解压后双击 <code>Typola.exe</code>。适合临时测试、不想留安装痕迹、需要 U 盘带走的场景。
+  第一次启动会自动跑 WebView2 bootstrapper — 缺 WebView2 时会先装,无网就报错。</p>
+</div>
+
+<p>装好后第一次启动会做一次 <strong>WebView2 Runtime 预检</strong>。失败会弹窗告诉你去哪里装 — 跟着链接点过去装一次就好,以后不再弹。</p>
+
+<div class="card callout">
+  <div class="card-title">快捷入门 4 步</div>
+  <ol>
+    <li>装好 Typola</li>
+    <li>打开一份 <code>.md</code> 文档(后面第 3 步会教你方式)</li>
+    <li>默认就是<strong>阅读模式</strong>(所见即所得),不需要切</li>
+    <li>写完按 <kbd>Ctrl</kbd> + <kbd>S</kbd> 保存</li>
+  </ol>
+</div>
+
+<h2 id="cli">2. AI 命令行要不要先装</h2>
+
+<p>看完第 0 节你就能写、就能保存。<strong>AI 那一大块要等本机有 Claude Code 或 OpenCode 之后</strong>才用得起来 — 后面的课都会用到。</p>
+
+<p>如果你已经装了其中任一个,在 PowerShell 里跑一下确认:</p>
+
+<pre><code>claude --version
+opencode --version</code></pre>
+
+<p>输出类似 <code>claude 1.x.x</code> 之类就行,装到具体哪个版本不重要。<strong>没装不影响第 0 课</strong>,但第 1 课开始就要至少一个能用了。</p>
+
+<h2 id="open">3. 打开你的第一份文档</h2>
+
+<p>四种打开方式,挑顺手的:</p>
+
+<ol>
+  <li><strong>键盘</strong> <kbd>Ctrl</kbd> + <kbd>O</kbd> → 选文件</li>
+  <li><strong>拖拽</strong>:把 <code>.md</code> 文件从资源管理器拖到 Typola 窗口任意空白区</li>
+  <li><strong>文件关联</strong>:装好 Typola 之后,双击 <code>.md</code> 默认就是它打开</li>
+  <li><strong>命令行定位</strong>:Typola 启动时会读取最近的打开记录,直接出现在标题</li>
+</ol>
+
+<p>几个常见文件类型都支持:</p>
+<ul>
+  <li><code>.md</code> / <code>.markdown</code> / <code>.mdx</code> — Markdown</li>
+  <li><code>.html</code> / <code>.htm</code> — 进入阅读/编辑链路</li>
+  <li><code>.docx</code> — <strong>只读预览</strong>(不要在 Typola 里改 Word,改完另存为 .md)</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">找不到合适的文档?</div>
+  <p>Typola 启动界面右侧的"快速打开"(<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>)会列出最近打开过的文件和当前常用工作目录,任选一个往下做。</p>
+</div>
+
+<h2 id="write">4. 写一段再保存</h2>
+
+<p>默认就是阅读模式(WYSIWYG),你看到什么就是最终阅读的样子。可以直接:</p>
+
+<ul>
+  <li>输入一段普通文字</li>
+  <li>用 <code>#</code> 起标题、<code>-</code> 起列表、<code>```</code> 起代码块 — 输完空格就立刻渲染</li>
+  <li>图片可以<strong>直接粘贴剪贴板截图</strong>,Typola 会在文档同目录的 <code>assets/</code> 下保存一份,并自动插入引用</li>
+</ul>
+
+<p>第一次写完一定要按 <kbd>Ctrl</kbd> + <kbd>S</kbd> 保存。标签栏的文件名旁边会出现小圆点表示脏改,保存后小圆点消失。</p>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>保存到当前文件</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></dt><dd>另存为(可换目录、改后缀)</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd>在当前文档里查找</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>H</kbd></dt><dd>查找并替换</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></dt><dd>快速打开(文件 + 最近记录)</dd>
+</dl>
+
+<div class="card danger">
+  <div class="card-title">关于"自动保存"</div>
+  <p>Typola <strong>默认关闭自动保存</strong>(这是经过考虑的选择,不是 bug)。要打开去 <code>设置</code>;但前几课建议就用 <kbd>Ctrl</kbd> + <kbd>S</kbd> 手动保存,养成"改一段就存一段"的肌肉记忆,后面跟 AI 协作时才不会因为意外覆盖丢原稿。</p>
+</div>
+
+<h2 id="modes">5. 认识三种文档模式</h2>
+
+<p>Typola 同一篇文档,可以在三种模式之间切换 — 顶部那条三段控件就是切换器:</p>
+
+<div class="card">
+  <div class="card-title">阅读模式(默认,WYSIWYG)</div>
+  <p>边写边看到接近终稿的排版。适合 90% 的写作时间。<strong>第一周你只用这一种就好。</strong></p>
+</div>
+
+<div class="card">
+  <div class="card-title">心流模式</div>
+  <p>左侧栏让位给 AI 工作台;你可以一边编辑一边让 AI 帮忙。第 2 课展开。</p>
+</div>
+
+<div class="card">
+  <div class="card-title">检视模式</div>
+  <p>进入"给文章提意见"的节奏,不在原文写脏字,而是叠加一层意见;最后导成 <code>review.md</code> 给协作者看,或一键让 AI 按意见改稿。第 5 课展开。</p>
+</div>
+
+<p>三者的键盘切换:</p>
+<dl class="shortcut-grid">
+  <dt><kbd>Shift</kbd> + <kbd>A</kbd></dt><dd>心流 ↔ 阅读来回切</dd>
+  <dt>顶栏三段控件</dt><dd>任意两个模式之间点选</dd>
+</dl>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">5 分钟任务:写一份简单的笔记</div>
+  <ol class="check-list">
+    <li>按 <kbd>Ctrl</kbd> + <kbd>O</kbd> 新建一个文件,命名为 <code>my-first-note.md</code>,放在桌面。</li>
+    <li>写一段不超过 200 字的自我介绍,加一个 <code># 标题</code> 和 一个 <code>-</code> 列表。</li>
+    <li>在文档里粘一张图(随便截图都行),按 <kbd>Ctrl</kbd> + <kbd>S</kbd> 保存。</li>
+    <li>打开桌面上的 <code>my-first-note</code> 同目录,确认有 <code>assets/</code> 文件夹,里面就是刚才那张图。</li>
+  </ol>
+  <p>✅ 全部通过 = 你可以进入<strong>第 1 课:用浮条让 AI 在你眼皮底下改稿</strong>。</p>
+  <p>❌ 第 3 步图片没出现 / 文件没保存 / 找不到 <code>assets/</code>:去 <a href="#traps">陷阱区</a>对照一下。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>文件是 .docx 直接在 Typola 里改</strong> — Typola 把它当只读预览,改了等于丢。开 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> 另存为 <code>.md</code>,改 <code>.md</code> 才安全。</li>
+  <li><strong>"自动保存开着怎么还是不存"</strong> — 默认就是关的。先去 <code>设置</code> 里勾上。</li>
+  <li><strong>Ctrl + S 没反应</strong> — 文档是从 Typola 之外"刚刚拖进来"的状态,会被当成未命名 — 看标题栏有没有 <code>*</code> 或文件名是不是 <code>未命名</code>。</li>
+  <li><strong>WebView2 启动报错</strong> — 跟着弹窗提示去 <code>microsoft.com/webview2</code> 装;装完重启 Typola。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 1 课:<a href="./0001-floating-bar.html"><strong>用浮条让 AI 在你眼皮底下改稿</strong></a>。
+你会亲手用浮条让 AI 改一段话。<strong>前提</strong>:装好 <code>claude</code> 或 <code>opencode</code>(任一);以及确保 Typola <code>设置 → AI 执行</code> 检测通过。</p>
+
+<blockquote>
+  <p>这节有不明白的?直接问 AI — 不只 Typola,任何操作层面的问题都欢迎打断。</p>
+</blockquote>
+</section>
+
+<section id="lesson-1" class="lesson">
+<span class="lesson-tag">第 1 课</span>
+<h1 style="border:none">用浮条让 AI 在你眼皮底下改稿</h1>
+<p class="subtitle">5 分钟。第一次让 Typola 里的 AI 改一段话 — 选 → 浮条 → 原地对比 → 采纳。</p>
+<span class="lesson-tag">第 1 课</span>
+<h1>用浮条让 AI 在你眼皮底下改稿</h1>
+<p class="subtitle">5 分钟。第一次让 Typola 里的 AI 改一段话 — 选 → 浮条 → 原地对比 → 采纳。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>"这段写得不好,但我懒得去 ChatGPT 复制粘贴" — 写一段就被打断一次的痛。
+    Typola 把 AI 改稿压成一条浮在选区上方的横排工具条,<strong>不离文档、不开新窗口</strong>。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>选中文字后延迟 160ms 自动出现的 <code>SelectionFloatingBar</code>。点动作 → 起一个隐藏的 AI 会话(只为了拿替换文本)→ 把"原文 vs 新版"叠回选区下方一张结果卡 → 你点 <kbd>采纳替换</kbd> 才真的写回正文。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>VS Code Copilot 是字符级补全(改你还没写的字);Notion AI 是整页 AI 改稿(一键覆盖,不可拒)。
+    Typola 走"选段级 + 原地对比 + 逐处采纳"<strong>比 Copilot 改得多,比 Notion 改得可控</strong>。
+    右键菜单 <kbd>Ctrl</kbd> + <kbd>K</kbd> 还有 4 个动作(缩写/扩写/校对/自定义)不在浮条里 — 浮条只挑了最常用的 3 个。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>Typola 已装,且<strong>至少一个</strong> <code>claude</code> / <code>opencode</code> 可用</li>
+  <li><code>设置 → AI 执行</code> 里能看到 CLI 检测通过(版本号不是空的)</li>
+  <li>编辑器里有一份写了一半的文档(自己随便写一段就好,不需要写得好)</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">CLI 没检测到?</div>
+  <p>常见原因:PowerShell 的 ExecutionPolicy 挡了 npm 的 <code>.ps1</code>,或装到了用户目录但 PATH 里没有。
+  最简单的兜底:在 <code>设置 → AI 执行 → 可执行路径</code> 里手动指定完整路径(例如 <code>C:\Users\你\.npm-global\claude.cmd</code>)。
+  改完点一下"检测",看到版本号就 OK。</p>
+</div>
+
+<h2 id="polish">1. 浮条润色 — 3 步让 AI 改完并采纳</h2>
+
+<p>这是最常用的动作,适合大部分"这段能更好"的场景。</p>
+
+<dl class="shortcut-grid">
+  <dt>步骤 1</dt><dd>在文档里<strong>选中一段中文/英文文本</strong>(鼠标拖选 3-5 句话,空段落、整段都行)</dd>
+  <dt>步骤 2</dt><dd>松开鼠标 ~160ms 后,选区上方会出现一条小工具条:「润色 / 解释术语 / 加检视意见」</dd>
+  <dt>步骤 3</dt><dd>点「<strong>润色</strong>」→ 选区下方贴出一张对比卡「原文 vs 新版本」+ <strong>采纳替换</strong> / 取消</dd>
+</dl>
+
+<p>点 <strong>采纳替换</strong>:原文被精确替换,自动加进撤销栈(<kbd>Ctrl</kbd> + <kbd>Z</kbd> 能撤回)。
+点 <strong>取消</strong>:什么都没发生,文本还是你的。</p>
+
+<div class="card safe">
+  <div class="card-title">采纳的底线逻辑</div>
+  <p>浮条不偷你文字。原文永远在<strong>磁盘的当前文档</strong>和<strong>撤销栈</strong>里 — 哪怕点了「采纳替换」,<kbd>Ctrl</kbd> + <kbd>Z</kbd> 也能一步步回退。
+  对比卡是叠加的,采纳前你看得到「会变成什么」。</p>
+</div>
+
+<h2 id="ctrlk">2. 浮条只有 3 个动作?右键还有 4 个</h2>
+
+<p>浮条故意只挑了最高频的 3 个(<strong>润色 / 解释术语 / 加检视意见</strong>)。
+其余的 4 个 — <strong>缩写、扩写、校对、自定义</strong> — 都在 <strong>右键菜单 / <kbd>Ctrl</kbd> + <kbd>K</kbd></strong> 里:</p>
+
+<ol>
+  <li>选中一段文字</li>
+  <li>按 <kbd>Ctrl</kbd> + <kbd>K</kbd> 或右键 → AI 动作</li>
+  <li>在列表里选「缩写 / 扩写 / 校对 / 自定义」</li>
+  <li>弹出的输入卡里可以填具体要求(如"改得更口语","目标长度 80 字"),<kbd>Ctrl</kbd> + <kbd>Enter</kbd> 发送</li>
+  <li>同样回一张「原文 vs 新版本」对比卡,采纳替换或取消</li>
+</ol>
+
+<div class="card">
+  <div class="card-title">什么时候用哪个?</div>
+  <p><strong>润色</strong> — 文字通顺但不够精炼,要打磨。<br>
+  <strong>缩写</strong> — 长了,要砍一半。<br>
+  <strong>扩写</strong> — 太干,要补论据/例子。<br>
+  <strong>校对</strong> — 怀疑有错别字/语法/标点问题,只想扫一遍不改写。<br>
+  <strong>解释术语</strong> — 选了一个词/概念想加一段人话注解(<strong>不替换,只展示</strong>),你可以复制走。<br>
+  <strong>自定义</strong> — 上面的都不合适,自己写要求(例如"翻成英文,保留技术名词")。</p>
+</div>
+
+<h2 id="explain">3. 解释术语 — 这是唯一一个"不替换"的动作</h2>
+
+<p>「解释术语」的特殊之处在于:<strong>结果不打算替换你选中的词</strong>,只是解释一下给你看。
+所以它的结果卡显示成<strong>单文本块 + 复制按钮</strong>,没有"采纳替换":</p>
+
+<p>典型用法:文档里有个专业术语,你写作时需要看一眼定义但<strong>不想让文档里多出这段解释</strong>。
+点解释 → 复制走 → 关卡 → 文档不变。</p>
+
+<div class="card danger">
+  <div class="card-title">浮条只有 3 个 — 加检视意见要等第 5 课</div>
+  <p>浮条第 3 个按钮「加检视意见」是给检视模式铺路的:它不会调 AI,只是给选中段落记一条意见。
+  真正发 AI 改稿的入口在 <strong>右侧检视面板</strong>,要切到检视模式才出现。第 5 课再展开。
+  这一课先只用「润色 + 解释术语」。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">10 分钟任务:让 AI 改 3 段</div>
+  <ol class="check-list">
+    <li>在自己的笔记文档里选一段长句子(超过 50 字),点浮条「润色」,看新版本,采纳。</li>
+    <li>再选一段,按 <kbd>Ctrl</kbd> + <kbd>K</kbd> 在右键菜单里选「缩写」,写要求"砍到一半长度",采纳。</li>
+    <li>选一个你不熟的术语,点浮条「解释术语」,看结果,点「复制」,粘贴到文档里随手位置,再撤销粘贴(练一下 <kbd>Ctrl</kbd> + <kbd>Z</kbd>)。</li>
+    <li>最后按 <kbd>Ctrl</kbd> + <kbd>Z</kbd> 几次回到最原始的版本 — 确认所有 AI 改动都能回退。</li>
+  </ol>
+  <p>✅ 4 步全过 = 进入<a href="./0002-workbench-open.html">第 2 课:AI 工作台开箱</a>。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>浮条不出现</strong> — 最常见是文档在"源码模式"(不是阅读模式),或你刚松开鼠标在拖选过程中。
+  等半秒别动鼠标,或在阅读模式(WYSIWYG)里选。</li>
+  <li><strong>浮条出现但点不动按钮</strong> — 鼠标落在了按钮之间的空隙上。点按钮中央的图标或文字。</li>
+  <li><strong>点了「润色」卡在 loading 转圈</strong> — CLI 进程没起来,或网络/鉴权问题。
+  等 8 秒还没结果会自动跳到错误卡,点「重试」,再不行查 <code>设置 → AI 执行</code> 的检测。</li>
+  <li><strong>采纳替换后文本看起来没变</strong> — 通常是 AI 的"新版本"几乎等同原文(就是只换了几个字)。
+  退回看对比卡前后对比。</li>
+  <li><strong>Ctrl+Z 不能回退 AI 改动</strong> — 在阅读模式下是支持的。如果不行,先切到阅读模式再试。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 2 课:<a href="./0002-workbench-open.html"><strong>AI 工作台开箱:Shift+A 与多轮对话</strong></a>。
+你会打开 <strong>左栏</strong> AI 工作台,真正跟 Claude / OpenCode 来回对话 — 这是 Typola 的"心流模式"主入口。</p>
+
+<blockquote>
+  <p>卡在 loading / 鉴权失败 / 想问"为什么浮条不能调 skill"?直接问 AI。</p>
+</blockquote>
+</section>
+
+<section id="lesson-2" class="lesson">
+<span class="lesson-tag">第 2 课</span>
+<h1 style="border:none">AI 工作台开箱:Shift+A 与多轮对话</h1>
+<p class="subtitle">8 分钟。把 AI 从「选段级改稿」升级到「围绕整篇文档来回问答」。</p>
+<span class="lesson-tag">第 2 课</span>
+<h1>AI 工作台开箱:Shift+A 与多轮对话</h1>
+<p class="subtitle">8 分钟。把 AI 从"选段级改稿"升级到"围绕整篇文档来回问答"。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>整篇稿子写一半,你想问 AI"这一段论据够不够"、"开头能不能更吸引人"、"有没有逻辑漏洞" — 这些不能靠浮条的选段动作解决,因为你要把上下文作为整体拿出去。<strong>需要一个能围绕当前文档来回对话的工作区</strong>。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>左侧栏在"文件树"和"AI 工作台"之间<strong>切换</strong>(不并存)— 选了 AI 工作台,文件树收起让位,编辑器保持全高不被挤压。
+    Typola 用本机 CLI 跑 headless 流式协议(Claude Code 走 stream-json,OpenCode 走 JSON),所有工具调用、思考、正文、应用内卡片化展示 — 你不用开终端、不用手动回车。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Claude Desktop / ChatGPT / Cursor 是"对话为中心",文档是附加品;Typola 反过来 — <strong>文档是 C 位,对话是草稿</strong>。
+    所以 Typola 不做"会话存档库",不做"AI 用量统计",不做"跨会话搜索";只做"围绕当前稿子 + 当前文档附件"的少量并行任务。这也是为什么用 <strong>Pill</strong> 而不是 Tab 管对话(下节课展开)。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>你已装好 <code>claude</code> 或 <code>opencode</code>,Typola <code>设置 → AI 执行</code> 检测通过</li>
+  <li>已经完成第 1 课(浮条能正常工作)</li>
+  <li>至少有一份<strong>写了一半</strong>的文档在打开</li>
+</ul>
+
+<h2 id="open">1. 唤出 AI 工作台</h2>
+
+<p>两种方式 — 任选:</p>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Shift</kbd> + <kbd>A</kbd></dt><dd>心流模式 ↔ 阅读模式来回切</dd>
+  <dt>顶栏三段控件</dt><dd>手动点"心流模式"</dd>
+</dl>
+
+<p>唤起后你会看到三件事同时发生:</p>
+<ol>
+  <li><strong>左侧栏</strong>:文件树收起,弹出 AI 工作台(对话流 + 输入框)</li>
+  <li><strong>编辑器</strong>:<strong>高度不变</strong>,继续全高展示当前文档(不被对话框挤)</li>
+  <li><strong>右栏</strong>:SkillHub 出现(第 4 课展开)</li>
+</ol>
+
+<p>再按一次 <kbd>Shift</kbd> + <kbd>A</kbd> 或点回"阅读模式",就回到只有文件树 + 编辑器的常态。</p>
+
+<div class="card callout">
+  <div class="card-title">"心流模式"这个名字的意思</div>
+  <p>心流 = flow = 沉浸写作状态。Typola 不想让你被对话框的常驻存在打断,所以左栏只在需要时让出来;
+它跟"AI 工作台"是同一区域,只是更强调"这是写作者的沉浸写作位"。
+看到"心流模式"四个字,脑子里就是"左栏切到 AI 工作台"。</p>
+</div>
+
+<h2 id="send">2. 发第一条消息</h2>
+
+<p>左栏底部输入框(Composer)就是入口。</p>
+
+<ol>
+  <li>在输入框写一句问题(例如「<code>帮我找出这篇文章里论据最弱的 3 段</code>」)</li>
+  <li>(可选)勾上你想让 AI 看见的<strong>上下文芯片</strong>:<code>当前文档</code> 默认就在</li>
+  <li>点 <kbd>发送</kbd> 或 <kbd>Ctrl</kbd> + <kbd>Enter</kbd></li>
+  <li>等 AI 流式输出 — 看到下方出现卡片就开始收到回应</li>
+</ol>
+
+<p>发送后输入框下方会出现一条<strong>取消按钮</strong>,任何时候想中止 AI 当前输出就点它,等同于"放下笔"。</p>
+
+<h2 id="cards">3. 读懂 5 种流式卡片</h2>
+
+<p>AI 输出不是一坨文本滚下来,而是按内容类型分卡片出现 — 你得能识别:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">卡片</th>
+      <th style="text-align:left;padding:8px 12px">它是什么</th>
+      <th style="text-align:left;padding:8px 12px">你该怎么做</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>思考卡</strong>(Thought)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 在真正打字前的内部推理。默认折叠,点开看灰色的文字流。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">通常<strong>不用读</strong>,遇到 AI 输出诡异再看。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>正文卡</strong>(Markdown)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 给你的回答本身(打字机式逐字出现)。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">读它。打字机滚动时还能左右滑或停止发送。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>工具卡</strong>(Tool)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 调用了 Read / Edit / Bash / Glob 之类工具。低关注度工具默认折叠。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">折叠着就好;AI 在<strong>读你的文档</strong>是正常的。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>Done 状态栏</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">一轮结束时的<strong>耗时 · 输出 token · 估算花费</strong>。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">看一眼知道这轮成本。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>错误诊断卡</strong></td>
+      <td style="padding:8px 12px">AI 卡死 / 鉴权失败 / 模型无权限 — Typola 把 CLI 的退出码翻译成人话。</td>
+      <td style="padding:8px 12px">看诊断文本 → <strong>Retry</strong> 或按它给的指引修。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card safe">
+  <div class="card-title">怎么识别"AI 现在还在想" vs "AI 已经放弃"</div>
+  <p>正常等待 → 流式卡片在追加(打字机还在滚)。
+  <strong>诊断卡</strong> 出现 → AI 已经停了,在告诉你为什么失败。
+  <strong>空白</strong>超过 8 秒 → 多半 CLI 卡死,可以按取消,再 Retry。</p>
+</div>
+
+<h2 id="provider">4. 切换 Provider(Claude Code ↔ OpenCode)</h2>
+
+<p>Typola 支持两个 provider,Composer 底部有一个<strong>小药丸按钮组</strong>(不是设置里的):
+点 <code>Claude</code> 就切 Claude Code,点 <code>OpenCode</code> 就切 OpenCode。</p>
+
+<div class="card danger">
+  <div class="card-title">切 Provider = 新会话</div>
+  <p>这是重要规则:<strong>切换 Provider 会弹确认「会开始新对话,旧会话上下文不会跨 provider 延续」</strong>。
+  为什么:Claude 的内部状态格式跟 OpenCode 不一样,跨 provider 续传只会让 AI 一脸懵。
+  想保留上下文就别切 Provider;想试不同模型,在<strong>同一个 Provider 下</strong>用它的 CLI 自带切换机制(例如 Claude Code 的 <code>--model</code> 参数)。</p>
+</div>
+
+<p>切完 Provider 之后,输入框、Done 栏、错误诊断卡的视觉风格也会跟着换 — Claude 用它原生 stream-json,OpenCode 用 JSON 协议,UI 形态相同。</p>
+
+<h2 id="turn">5. 多轮对话 — 上下文延续</h2>
+
+<p>发第一轮后,继续在输入框打字再发第二轮,**Claude 会记得你上一轮说了什么**(它的 session UUID 由 Typola 内存维护)。</p>
+
+<p>这是写作者最常用的模式 — 同一稿子来回迭代:</p>
+
+<pre><code>👤 : 我写了篇关于 X 的稿子,帮我看开头能不能更吸引人
+🤖 : (输出建议)
+👤 : 那段能不能换成更克制的语气?
+🤖 : (在上一轮建议的基础上改)
+👤 : 改完了,我整篇都在这,最后整体顺一遍
+🤖 : (通读)</code></pre>
+
+<div class="card">
+  <div class="card-title">多轮的边界</div>
+  <p><strong>同一运行期内</strong>:会话上下文保留(每轮发请求时 Typola 把 session UUID 给 CLI 续传)。<br>
+  <strong>重启 Typola</strong>:会话丢失(内存 Map 不持久化)。后者是已知限制,跨重启的持久化在路线图里(M3+)。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">8 分钟任务:跟 AI 来回三轮</div>
+  <ol class="check-list">
+    <li>按 <kbd>Shift</kbd> + <kbd>A</kbd> 唤出 AI 工作台。</li>
+    <li>把你正写的文档主题贴在 Composer,问「<code>请用 5 个 bullet 给我列一下,普通读者可能误解的 5 处</code>」。</li>
+    <li>等 AI 输出。等过程里<strong>不要点取消</strong>,看流式卡片是怎么分步出现的。</li>
+    <li>第二轮发:「<code>挑一个最严重的展开讲讲,顺便给我一个修复方向</code>」 — 验证 AI 真的记住了你第一轮问的稿子。</li>
+    <li>看 Done 状态栏的耗时和 token 数,估算下你这轮大概花了多少钱。</li>
+  </ol>
+  <p>✅ 全部完成 = 进入<a href="./0003-context-chips.html">第 3 课:上下文芯片</a> — 让 AI 看见附件 / MCP / Plugin。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>AI 一直"在想"不输出</strong> — CLI 没起来或鉴权错。等 8-10 秒,如果还没出来基本是诊断卡的问题。</li>
+  <li><strong>左栏唤出后编辑器变窄</strong> — 这不是 bug,是误判。Typola 的左栏切换是<strong>替换</strong>不是叠加;编辑器是全高的,只是左栏占了原本文件树的位置。</li>
+  <li><strong>切完 Provider 旧对话消失</strong> — 正常的。每次切 Provider 重开会话。</li>
+  <li><strong>Done 栏写着 0 token 但确实输出了一大段</strong> — 流式 parser 在最后一次 <code>step_finish</code> 之前就关了。</li>
+  <li><strong>Composer 打字特别卡</strong> — 高频 text_delta 压力下,前端 rAF 节流应该够;真卡就在 <code>设置 → AI 执行</code> 里换 Provider 试。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 3 课:<a href="./0003-context-chips.html"><strong>上下文芯片:让 AI 看见你要的素材</strong></a>。
+当前文档 + 附件 + <code>.mcp.json</code> + Plugin 目录 都会作为 prompt 的一部分喂给 AI。装好了,你就能让 AI 同时看你的稿子和参考资料一起改。</p>
+
+<blockquote>
+  <p>切片鉴权报错 / 想了解 stream-json vs JSON 协议差异 / 想问"为什么 Typola 不做会话存档"?直接问 AI。</p>
+</blockquote>
+</section>
+
+<section id="lesson-3" class="lesson">
+<span class="lesson-tag">第 3 课</span>
+<h1 style="border:none">上下文芯片:让 AI 看见你要的素材</h1>
+<p class="subtitle">8 分钟。把当前文档、附件、参考资料、MCP、Plugin 拼成 AI 能看见的 prompt 上下文。</p>
+<span class="lesson-tag">第 3 课</span>
+<h1>上下文芯片:让 AI 看见你要的素材</h1>
+<p class="subtitle">8 分钟。把当前文档、附件、参考资料、MCP、Plugin 拼成 AI 能看见的 prompt 上下文。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>让 AI 改稿、问问题,光凭当前文档不够 — 你要把参考资料、调研稿、风格指南、上周的周报一并喂给 AI;
+    或者你想让 AI 知道某个 MCP 工具能用、某个 Plugin 目录里有哪些 skill。
+    <strong>这种"把哪些东西带入这一轮对话"的精细控制</strong>,是普通 chatbox 做不到的。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>Composer 上方有一条<strong>上下文芯片</strong>(ContextChipStrip)— 每行是一个 chip:<code>📄 当前文档</code>、<code>📎 附件 1</code>、<code>📎 附件 2</code>、<code>🔌 MCP 文件</code>、<code>🧩 Plugin 目录</code>。
+    每个 chip 可以单独去除(比如不要当前文档),也可以通过 Composer <code>+</code> 菜单加新附件。
+    这些 chip 会转成 CLI 的<strong>路径参数 + prompt 文本</strong>喂给 AI;AI 真正去看这些文件再回答。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Cursor / Copilot 把"项目索引"全局化(扫整棵树给你做检索),但写作者不需要;
+    Notion AI 把"上下文"做成页面链接注入,但写作者的素材不在 Notion 里。
+    Typola 走"显式芯片",你每轮要什么给什么 — <strong>不偷偷自动加文件、不做大文档 RAG 索引</strong>。
+    想让 AI 看什么,就加 chip;想去掉当前文档,直接点 chip 上的 ✕。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2 课(AI 工作台能开能发消息)</li>
+  <li>有一份打开的文档</li>
+  <li>(可选)准备一份 markdown 或 txt 的"参考资料"在本地 — 比如风格指南、调研稿、上周周报</li>
+</ul>
+
+<h2 id="strip">1. 认识芯片行</h2>
+
+<p>唤出 AI 工作台(<kbd>Shift</kbd> + <kbd>A</kbd>)后,看 Composer 输入框<strong>上方</strong>那条横向小标签:</p>
+
+<pre><code>[📄 当前文档 note.md] [📎 style-guide.md] [+ 添加附件] [+ .mcp.json] [+ Plugin]</code></pre>
+
+<p>每个 chip 是一行精炼信息:<strong>图标 + 文件名 + 移除 ✕</strong>。
+这条线就是这一轮 AI<strong>能看见的全部文件清单</strong>。默认情况下:</p>
+
+<ul>
+  <li><strong>当前文档</strong> — 始终在场(除非你主动点 ✕)</li>
+  <li><strong>附件</strong> — 你按需加,无默认</li>
+  <li><strong>MCP 文件</strong> — Composer <code>+</code> 菜单开,默认无</li>
+  <li><strong>Plugin 目录</strong> — <code>设置</code> 里配置后才出现</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">芯片的真实作用</div>
+  <p>每个 chip 都会被 Typola 转成 CLI 调用参数:</p>
+  <ul>
+    <li><strong>Claude Code</strong>:文件路径作 <code>--add-dir</code> + prompt 文本里写「参考以下文件」</li>
+    <li><strong>OpenCode</strong>:每次发送都重复 <code>--file &lt;path&gt;</code>,prompt 文本也带参考文件 block</li>
+  </ul>
+  <p>AI 收到 prompt 后会调用 Read/Edit 工具去读这些文件;不是 Typola 提前把整文件内容塞 prompt。</p>
+</div>
+
+<h2 id="add-file">2. 加附件文件</h2>
+
+<ol>
+  <li>点 Composer 左下角的 <code>+</code> 按钮(在输入框外/底部,不是 chip 上的)</li>
+  <li>弹菜单里选「<strong>附件文件</strong>」</li>
+  <li>文件选择对话框打开,选一个或多个 markdown / txt / html</li>
+  <li>选择完毕,Composer 上方多出 <code>📎 文件名</code> chip</li>
+</ol>
+
+<p>加完即用。下一次发送时 AI 就能读它。</p>
+
+<div class="card">
+  <div class="card-title">用附件的常见 3 个场景</div>
+  <ul>
+    <li><strong>风格指南</strong>:让 AI 改稿时按指南(术语用词 / 句式长短 / 标题层级)</li>
+    <li><strong>参考资料</strong>:让 AI 把对话里"我引用某论文"的那种话术填到引用文件的具体出处</li>
+    <li><strong>上周周报</strong>:让 AI 写本周周报时,自动知道上周期项目进展、人员分配</li>
+  </ul>
+</div>
+
+<h2 id="drop">3. 去掉某个芯片</h2>
+
+<p>暂时不想要某个 chip 的引用?点 chip 上的 <strong>✕</strong> 就消失:</p>
+<ul>
+  <li>点当前文档的 ✕ → 这一轮 AI 看不到你这篇稿子(只看你直接发的 prompt 内容)</li>
+  <li>点附件的 ✕ → 这一轮不再喂这份附件(文件还在磁盘上,下次想用再加回来即可)</li>
+</ul>
+
+<p>常见场景:你在写一段说明 A 的小段,AI 没必要读整篇稿子。这一轮就把当前文档 ✕ 掉。</p>
+
+<div class="card danger">
+  <div class="card-title">关掉当前文档 ≠ 重置全局</div>
+  <p>很多人担心「关掉当前文档后,下一轮是不是还得加回来」。
+    不是的:你切回阅读模式之前,<strong>关 chip 的状态保留</strong>;切回阅读模式 / 退出心流模式也保留。
+    <strong>真正清芯片的是切文件(tab)</strong> — 切到下一篇文档时,旧芯片整批清空,新文档的当前文档 chip 顶上。</p>
+</div>
+
+<h2 id="mcp">4. 加 MCP 配置(MCP 文件)</h2>
+
+<p>如果你的工作目录里有 <code>.mcp.json</code>(Claude Code 或一些 MCP 配置格式),想在这一轮让 AI 用 MCP 工具,不用单独配置,只要在 Composer 的 <code>+</code> 菜单选「<strong>.mcp.json</strong>」就加进去。</p>
+
+<p>它会以 chip 的形式出现,告诉 CLI 这一轮要用哪份 MCP 配置(然后 CLI 自己解析)。</p>
+
+<div class="card callout">
+  <div class="card-title">MCP 配置的常见位置</div>
+  <p>用户级:<code>~/.claude.json</code> 或 <code>~/.opencode/mcp.json</code><br>
+  项目级:当前工作目录的 <code>.mcp.json</code>(Composer <code>+</code> 菜单的工作目录 = 你当前 Composer 上看到的 cwd)</p>
+</div>
+
+<h2 id="plugin">5. 加 Plugin 目录</h2>
+
+<p>Claude Code 的 <code>--plugin-dir</code> 参数让你告诉 CLI 你的 skill / 命令面板加载哪个目录。
+Typola 在 Composer <code>+</code> 菜单里提供「<strong>Plugin 目录</strong>」— 选择后这路径每次发请求都会被附加为 <code>--plugin-dir &lt;path&gt;</code>。</p>
+
+<ol>
+  <li>Composer <code>+</code> 菜单 → 「Plugin 目录」</li>
+  <li>选一个包含 <code>commands/</code> 或 <code>skills/</code> 的目录</li>
+  <li>之后发请求 AI 就能调那个目录里的命令</li>
+</ol>
+
+<div class="card">
+  <div class="card-title">Plugin 目录 = Skill 目录?</div>
+  <p>接近。Typola 内部有一个固定的 <strong>SkillHub</strong> 让你用卡片选(第 4 课展开),那走系统推荐。
+    <strong>Plugin 目录</strong> 是更底层的"告诉 CLI 这个路径下有我的东西" — 适合临时加一个本地 skill 仓库。</p>
+</div>
+
+<h2 id="switch">6. 切文档 = 整体重置芯片</h2>
+
+<p>写作者的常态:边写稿边开 AI 工作台,但 AI 工作区不一定只用一篇稿子。
+Typola 的设计:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">动作</th>
+      <th style="text-align:left;padding:8px 12px">芯片会怎么变</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">编辑器里切换文档 tab</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">旧文档的当前文档 chip 被新文档的当前文档 chip 顶替;附件芯片全部保留(它们是给当前 session 用的,跨文档仍生效)</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">切 Provider(Claude ↔ OpenCode)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">芯片清空,新 Provider 会话重新建立</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">开新会话(Pill 第 6 课展开)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">芯片按新会话需要重新加;不会从旧会话迁移</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">10 分钟任务:用风格指南 + 调研稿同时改稿</div>
+  <p>需要准备:一份<strong>风格指南</strong>(或随便 5 条用词规则 + 一句话品牌语)+ 一份<strong>调研稿</strong>(引用 + 数据)。</p>
+  <ol class="check-list">
+    <li>在工作目录下创建 <code>style-guide.md</code>(自己随便写 5 条规范,例如「用『用户』不用『客户』」、「段首不空两格」)。</li>
+    <li>创建 <code>research-notes.md</code>,塞进 3 条"摘自某地的引用"。</li>
+    <li>打开你的正稿,Composer <code>+</code> → 附件文件 → 选这两份。</li>
+    <li>Prompt 写:「<code>请用 style-guide.md 的规范改我的稿子,需要数据引用时从 research-notes.md 里取</code>」。</li>
+    <li>看 AI 输出是否符合 style-guide 规范、是否用了 research-notes 里的内容。</li>
+    <li>把当前文档芯片 ✕ 掉,再发同样的 prompt,看 AI 输出是否有差异(去掉当前文档意味着 AI 看不到你的稿子,自然"无米下锅")。</li>
+  </ol>
+  <p>✅ AI 用了规范且引用了数据 = 进入<a href="./0004-skillhub-scenes.html">第 4 课:Skill 场景</a>。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>加了附件 AI 说"看不到"</strong> — 多半是路径不对(Typola 传的是绝对路径)。
+    检查 Composer <code>+</code> 时选的文件是不是你预期的(Composer 不一定跟编辑器同目录)。</li>
+  <li><strong>AI 不读 MCP 文件</strong> — MCP 是你自己的 <code>.mcp.json</code> 格式要正确;Typola 只传路径,不在前端预先解析。</li>
+  <li><strong>Plugin 目录加了没生效</strong> — 重启 Typola 或重新发一轮,CLI 偶尔需要新一轮才挂新 Plugin。</li>
+  <li><strong>切文档后附件还在</strong> — <strong>这是设计,不是 bug</strong>。芯片生命周期不等于文档生命周期;你想清除就手动 ✕。</li>
+  <li><strong>+ 菜单里看不到 MCP 文件</strong> — 因为当前 Composer 工作目录还没确定(Picker 还没选)。先在 Composer 顶部 WorkingDir Picker 里选一个工作目录。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 4 课:<a href="./0004-skillhub-scenes.html"><strong>Skill 场景:报告 / PPT / HTML 的固定套路</strong></a>。
+右栏 SkillHub 让你用<strong>场景卡</strong>选一类任务(报告生成、PPT 制作、HTML 制作),每个场景预置了几个本机能用的 skill;点一下就开新会话。</p>
+
+<blockquote>
+  <p>切片权限报错 / 想问"为什么不自动传整目录" / 想给特定 skill 加权限?直接问 AI。</p>
+</blockquote>
+</section>
+
+<section id="lesson-4" class="lesson">
+<span class="lesson-tag">第 4 课</span>
+<h1 style="border:none">Skill 场景:报告 / PPT / HTML 的固定套路</h1>
+<p class="subtitle">10 分钟。把「调 skill」从手敲命令变成点选 — 三个场景、十几个预置。</p>
+<span class="lesson-tag">第 4 课</span>
+<h1>Skill 场景:报告 / PPT / HTML 的固定套路</h1>
+<p class="subtitle">10 分钟。把"调 skill"从手敲命令变成点选 — 三个场景、十几个预置。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>你装了 <code>claude --version</code> 能跑、能调 skill,但手敲 <code>/huawei-style-ppt-skill</code> 这种命令很别扭 —
+    还得记每个 skill 的名字、出处、能干啥。
+    Typola 把本机装的所有 skill <strong>按"你会用它做什么任务"分类</strong>,你只管选场景、选 skill。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>右栏 <strong>SkillHub</strong> 是一组"场景卡"(首批三个场景:报告生成 / PPT 制作 / HTML 制作)。
+    每个场景下挂着<strong>系统推荐 skill + 你手动加进来的 skill</strong>。
+    点已安装的 skill → 开一个独立会话(标题= skill 名,输入框预填 <code>/&lt;skill-name&gt; </code>,独立 session UUID)。
+    <strong>每个 skill 一个独立上下文</strong> — 这是 Typola 的护城河。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Cursor / Claude Desktop 让你手敲 <code>/</code> 调命令(命令面板),Coze / Dify 给你通用 marketplace。
+    Typola 不做 marketplace(那是产品错位),也不做"全量本机 skill 列表"展示 — 它只<strong>按场景</strong>把高频用法浮上来,
+    想看全部或加新 skill 走 <code>+ 添加 skill</code> 弹窗。本机 skill 不是 Typola 的资产,是 Claude/OpenCode 的 —
+    Typola 只"引用",不"拥有"。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2、3 课</li>
+  <li>本机至少装了 <code>claude</code> 或 <code>opencode</code></li>
+  <li>(可选)<code>~/.claude/skills/</code> 下有 1-2 个 skill 文件夹(没装也没关系,会演示"未装时让 Claude 装"的流程)</li>
+</ul>
+
+<h2 id="hub">1. 认识右栏 SkillHub</h2>
+
+<p>唤出心流模式后(<kbd>Shift</kbd> + <kbd>A</kbd>),看<strong>右侧栏</strong>。
+上半段是 SkillHub(场景卡),下半段会留给产物中心(第 7 课展开)。</p>
+
+<p>SkillHub 默认是<strong>一级视图</strong>:</p>
+
+<pre><code>┌─ SkillHub ──────────────────┐
+│  报告生成     PPT 制作      │
+│  HTML 制作                   │
+└──────────────────────────────┘</code></pre>
+
+<p>3 张场景卡(报告生成 / PPT 制作 / HTML 制作)。系统内置首批。</p>
+
+<div class="card callout">
+  <div class="card-title">为什么只有 3 个场景?</div>
+  <p>首批覆盖<strong>写作者最常要 AI 干的"出物"任务</strong>。其它(写周报 / 写 PRD / 写书评)暂时归到"报告生成"里扩展 —
+    不要让"全量场景"代替你思考,场景卡是<strong>预置的、克制的</strong>。</p>
+</div>
+
+<h2 id="scenes">2. 三个场景分别预置了什么</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">场景</th>
+      <th style="text-align:left;padding:8px 12px">预置 skill(本机已装时显示卡片,未装置灰)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>报告生成</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">首版空模板 + 你手动加进本场景的 skill。第 0 版故意空着,等你 "用出来" 才好推荐。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>PPT 制作</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">huawei-style-ppt-skill、guizang-ppt-skill、huashu-slides、baoyu-slide-deck</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>HTML 制作</strong></td>
+      <td style="padding:8px 12px">frontend-slides</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="installed">3. 点已装 skill 开新会话</h2>
+
+<p>点一下场景卡(例如「PPT 制作」)→ 进入二级视图,看到 PPT 场景里挂的 4 张 skill 卡。
+点已装的那张(卡片非灰色)→ 发生 4 件事:</p>
+
+<ol>
+  <li>左栏 <strong>新会话</strong>建立(标题等于 skill 名,例如「<code>huawei-style-ppt-skill</code>」)</li>
+  <li>输入框<strong>预填</strong> <code>/huawei-style-ppt-skill </code>(光标在末尾,你打 prompt)</li>
+  <li><strong>独立 session UUID</strong>生成 — 这个 skill 的多轮上下文跟其他会话<strong>完全隔离</strong></li>
+  <li>Composer 底部出现 Provider pill(默认沿用当前 Provider,Claude → Claude)</li>
+</ol>
+
+<p>直接在预填后面写任务:</p>
+
+<pre><code>/huawei-style-ppt-skill 基于我的本周总结生成一份 8 页汇报 PPT</code></pre>
+
+<p>发出去,AI 加载 skill 并按其内部流程生成 PPT(产物会落 <code>.typola-output/&lt;会话&gt;/</code>,第 7 课展开)。</p>
+
+<div class="card safe">
+  <div class="card-title">为什么"每个 skill 一个独立会话"?</div>
+  <p>护城河。写过周报 + 改文档的人都有过这种惨痛:
+    用同一个 AI 会话跨任务,AI 把上一次的"项目背景"擅自带了进来,导致周报开头多了"我们"这种
+    没必要的语境。
+    Typola <strong>强制每个 skill 一个新 session UUID</strong>,从根上切断泄漏 —
+    你的周报 skill、PPT skill、技术笔记 skill 永远不会串味。</p>
+</div>
+
+<h2 id="missing">4. 未装 skill → 让 Claude 装</h2>
+
+<p>PPT 场景里有 4 张预置卡,但你本机可能一个都没装。
+这时候卡片<strong>置灰</strong>但仍然保留 — 你能看到"它能干什么"(系统推荐摘要),从而判断要不要装。</p>
+
+<p>点未装的卡片:</p>
+
+<ol>
+  <li>Typola <strong>不直接动文件系统</strong>(设计红线 — Typola 不替你安装,以免装错/装到错位置)</li>
+  <li>而是把一条<strong>安装指令 prompt</strong> 发到当前 AI 工作台会话</li>
+  <li>指令格式大约是:<code>请帮我安装 Claude skill:huawei-style-ppt-skill。用途:&lt;系统推荐摘要&gt;。来源:&lt;系统配置里的安装路径,或"未提供来源"&gt;。安装后请确认该 skill 可以通过 /huawei-style-ppt-skill 调用。</code></li>
+  <li>AI 用 CLI 原生的能力去装它(比如 mkdir + 克隆 git repo + 写 SKILL.md)</li>
+  <li>装完你回 SkillHub <strong>刷一下</strong>(右上角 ↻),卡片就显示"已装",可以用了</li>
+</ol>
+
+<div class="card callout">
+  <div class="card-title">为什么不让 Typola 直接装?</div>
+  <p>原因 1:<strong>安全</strong> — 让第三方编辑器写用户目录外的文件系统 = 不可控的攻击面。
+  原因 2:<strong>溯源</strong> — 你从对话里能看到 AI 是用哪条指令装的,以后想自己改路径也不用"猜 Typola 怎么装的"。
+  让 AI 用它原生能力干活,Typola 只"派活",这是「我司不替你装软件」的克制。</p>
+</div>
+
+<h2 id="add">5. 添加本机已装的 skill 到场景</h2>
+
+<p>你可能自己装了几个 skill 不在系统推荐里,想加到「报告生成」或「HTML 制作」场景:<br>
+二级视图右上角有 <code>+ 添加 skill</code> 按钮。</p>
+
+<ol>
+  <li>点「+ 添加 skill」</li>
+  <li>弹窗列出当前 CLI <strong>本机已经认识的全部 skill</strong>(不只是 Typola 系统推荐的)<br>
+      — 你可以<strong>搜索关键字</strong>过滤</li>
+  <li>勾选你想要的那条 → 确认</li>
+  <li>返回该场景二级视图,看到多了你刚加的卡片(图标 <strong>可识别为"用户加"标签</strong>)</li>
+  <li><strong>系统预置不可删</strong>(避免误删),<strong>用户加的可删</strong>(小卡片上有 ✕)</li>
+</ol>
+
+<div class="card">
+  <div class="card-title">"添加"和"安装"是两回事</div>
+  <ul>
+    <li><strong>安装</strong> = 文件系统上多了一个 skill 目录(Typola 不做这个)</li>
+    <li><strong>添加</strong> = 本机已有 skill,告诉 Typola "我想在报告生成这个场景里看到它"(只是 <code>skill-hub.json</code> 多一条用户配置)</li>
+  </ul>
+  <p>Typola 的 <code>skill-hub.json</code> v2 只存用户数据,绝不复制 skill 内容进系统模板。
+  升级 Typola 也不会丢你的用户配置。</p>
+</div>
+
+<h2 id="provider-split">6. Claude 与 OpenCode 在 SkillHub 上有什么不同</h2>
+
+<p>同一个 SkillHub 卡片在两个 Provider 下<strong>默认都显示</strong>,但实际调用方式完全不同:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">Provider</th>
+      <th style="text-align:left;padding:8px 12px">skill 怎么调用</th>
+      <th style="text-align:left;padding:8px 12px">扫描什么</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>Claude Code</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">prompt 里写 <code>/skill-name ...</code> 给 CLI,触发原生 slash 命令</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>~/.claude/skills/</code> 下的所有 skill</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>OpenCode</strong></td>
+      <td style="padding:8px 12px">CLI 参数 <code>--command &lt;name&gt;</code>;prompt 文本作为 <code>opencode run</code> 的位置参数追加</td>
+      <td style="padding:8px 12px"><code>~/.opencode/commands/</code> + <code>~/.opencode/command/</code> + <code>opencode.jsonc</code> 里的 command 条目</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card danger">
+  <div class="card-title">"装了但两个 Provider 都看不到" — Provider 隔离读得懂</div>
+  <p>Claude 的 skill 和 OpenCode 的 command <strong>不互通</strong> — 它们存在不同的目录,定义格式也不一样。
+    你装了 Claude 的 <code>~/.claude/skills/foo</code>,那它只在 Claude Provider 下能用;
+    OpenCode 看到的是 <code>~/.opencode/commands/foo.md</code>。
+    想两边都能用,各装各的。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">12 分钟任务:第一次用 Skill 完整跑通</div>
+  <ol class="check-list">
+    <li>唤出心流模式,看右栏 SkillHub,确认「PPT 制作」场景里至少有 1 张卡是已装的(显示非灰色)。</li>
+    <li>点「HTML 制作」场景 → 点 <code>frontend-slides</code>(假设你装了)→ 看左栏是否新开会话 + 标题 = skill 名 + 输入框预填 <code>/frontend-slides </code>。</li>
+    <li>在预填后面写「<code>基于我的 note.md(本课)做一份 6 页 HTML slides</code>」,发送。</li>
+    <li>等 AI 输出完。AI 会写一堆 html/css/js 出来,落到 <code>.typola-output/&lt;会话&gt;/</code>,右下会出现 chip — 这是第 7 课内容,但你可以先看一眼 chip 长啥样。</li>
+    <li>关掉这个会话,在「报告生成」场景点「+ 添加 skill」,在弹窗里随便加 1 个本机已有的 skill,看返回后卡片多了一条。</li>
+  </ol>
+  <p>✅ 全部完成 = 进入<a href="./0005-review-diff.html">第 5 课:检视 + 内联审阅</a>。
+    这一课是真"长稿利器" — 你会用一节课把"先攒意见,再让 AI 改"完整闭环跑一次。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>卡片都置灰</strong> — 你装了 skill 但 Typola 读不到。常见:skill 装在了 <code>~/.opencode/commands/</code>,当前 Provider 是 Claude(只读 <code>~/.claude/skills/</code>)。换 Provider 或装到正确路径。</li>
+  <li><strong>点场景卡跳到 AI 工作台但没新开会话</strong> — 多半是对应的 Provider 没工作。先在 <code>设置 → AI 执行</code> 测一下当前 Provider 的 CLI 检测。</li>
+  <li><strong>预填的 <code>/skill-name </code> 我不想用</strong> — 删掉就好。预填只是方便,不强求。</li>
+  <li><strong>添加的 skill 没消失</strong> — 用户加的应该可删。点卡片 ✕ 一下。</li>
+  <li><strong>想加"未装"的 skill 到场景</strong> — Typola <strong>不允许</strong>。先装再加(走第 4 节"未装 → 让 Claude 装"流程)。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 5 课:<a href="./0005-review-diff.html"><strong>检视模式 + 内联审阅:逐处采纳 AI 改稿</strong></a>。
+这是真实写作者最常用的一节 — 切到 <strong>检视模式</strong>,给一篇长稿攒意见,一键让 AI 按意见改,然后在<strong>中间编辑器</strong>逐处采纳/拒绝(Y/N/⏎),全程不离开原文。</p>
+
+<blockquote>
+  <p>切片装失败 / 想问"为什么不让 AI 直接覆盖原文" / 想了解"每个 skill 独立 UUID 的细节"?直接问 AI。</p>
+</blockquote>
+</section>
+
+<section id="lesson-5" class="lesson">
+<span class="lesson-tag">第 5 课</span>
+<h1 style="border:none">检视模式 + 内联审阅:逐处采纳 AI 改稿</h1>
+<p class="subtitle">15 分钟。写作者最常用的套路:切到检视模式 → 给长稿攒意见 → 一键让 AI 按意见改 → 中间编辑器逐处采纳/拒绝。</p>
+<span class="lesson-tag">第 5 课</span>
+<h1>检视模式 + 内联审阅:逐处采纳 AI 改稿</h1>
+<p class="subtitle">15 分钟。写作者最常用的套路:切到检视模式 → 给长稿攒意见 → 一键让 AI 按意见改 → 中间编辑器逐处采纳/拒绝。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>"我花了 3 小时写一篇稿子,现在想找同事给我提点意见" — 同事可能没空实时讲,你也不想改坏原文。
+    另一个真痛点:"AI 帮我按意见改了整篇,但我不知道改了哪里,怎么办?"
+    Typola 用<strong>两层</strong>结构解决:<br>
+    (1) <strong>检视意见层</strong> = 叠加在文档上的<strong>一层标记</strong>,不污染原文,导出前保持原稿干净。<br>
+    (2) <strong>内联审阅态</strong> = AI 改完稿之后,中间编辑器<strong>切到只读</strong>,逐处对比,采纳/拒绝,完了再合并回原文。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>检视模式(<code>DocumentModeSwitcher</code> 第 3 段)进入后,选中段落仍能用第 1 课的浮条 — 这次「加检视意见」按钮有效了。
+    意见以「<strong>每段后展开的卡</strong>」+ 高亮被批注的文字 + <strong>右栏汇总列表</strong>显示。
+    点右栏「AI 改稿」→ 发请求 → Typola 把全文+意见拼成 prompt → AI 改完产物落到 <code>.typola-output/&lt;会话&gt;/xxx.ai改{N}.md</code> →
+    <strong>中间编辑器整体切到内联审阅态</strong>(用自渲染只读 DOM,<strong>不被 live Vditor 擦写</strong>),显示「原文 vs 新版本」分段 diff
+    + 顶部计数器 + 上/下一处 + Y/N/⏎ 键盘 + 右侧改动地图。
+    点「应用」→ 合并结果写回当前文档,退出审阅态,文档标脏。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Notion 让你直接在别人的文档边输入"评论气泡";Google Docs 让你 reply 意见 —<strong>都乱入原文 DOM</strong>。
+    Typola 的检视意见是<strong>叠加层</strong>,导不导出 review.md 完全可控 —
+    <strong>原文从未污染</strong>。AI 改稿也不用 3-way merge、不用 fork UI,<strong>审阅是只读的一层</strong>,应用时一次写回 —
+    这避免了"实时在线编辑冲突"这个最难啃的坑。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 1 课、第 2 课、第 4 课</li>
+  <li>有一份至少 <strong>10 段以上的草稿</strong>(过短没法演示段落 diff)。</li>
+  <li>装好 CLI,Typola 检测通过</li>
+</ul>
+
+<h2 id="enter">1. 进入检视模式</h2>
+
+<p>顶栏三段控件点「<strong>检视模式</strong>」,或在阅读模式下按几次 <kbd>Shift</kbd> + <kbd>A</kbd> 配合选择。</p>
+
+<p>进入后你会看到:</p>
+<ul>
+  <li>编辑器保持当前文档不变(你没污染原文)</li>
+  <li><strong>右侧栏</strong>出现「<strong>检视意见</strong>」面板(header: 检视意见 + 数量 + 脏标记)</li>
+  <li>暂时右边还要 SkillHub(可关) — 不冲突</li>
+</ul>
+
+<div class="card">
+  <div class="card-title">检视模式 ≠ 检视面板常驻</div>
+  <p>检视模式是<strong>文档状态</strong>;"右栏出现检视意见"是<strong>UI 表现</strong>。关掉右栏(✕)再次打开,它还会出现 — 直到你切回阅读模式或心流模式。</p>
+</div>
+
+<h2 id="add">2. 加意见 — 用浮条「加检视意见」</h2>
+
+<p>选中任意一段(或跨段选 3-5 行)→ 等浮条出现(第 1 课)→ 点「<strong>加检视意见</strong>」:</p>
+
+<ol>
+  <li>弹出<strong>检视意见编辑器浮卡</strong>(贴选区下方)</li>
+  <li>输入意见内容,例如「<code>这段论据太单一,引用研究数据会更有说服力</code>」</li>
+  <li>回车或点确认 → 意见入库</li>
+</ol>
+
+<p>页面变化:</p>
+<ul>
+  <li>被批注的段落<strong>整段高亮</strong>(主题色淡背景,不是 AR 涂红)</li>
+  <li><strong>段后展开</strong>一张意见卡:blockquote 风格 + 「<code>**检视意见,请处理**:&lt;你写的&gt;</code>」</li>
+  <li>右栏「<strong>检视意见</strong>」数量 + 1</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">段后意见卡的格式为什么这么写</div>
+  <p>Typola 不用 emoji + 不用自定义数据属性,直接用 <code>&gt; **检视意见,请处理**:&lt;意见&gt;</code> 这种 md blockquote 形式 —
+    这样导出的 review.md <strong>本身就是干净的 Markdown</strong>,人类可读、AI 可懂。
+    等于一份"喂给 AI 的 prompt 格式" + 一份"给同事看的可读版"。</p>
+</div>
+
+<p>写 3-5 条意见,不同段落,每条意见文字不同。</p>
+
+<h2 id="side">3. 右栏汇总列表</h2>
+
+<p>右栏每个意见一条 row:</p>
+
+<ul>
+  <li><strong>上下文:</strong>被批注那段的截断文本(50 字左右)+ 「...」</li>
+  <li><strong>意见:</strong>你写的原话</li>
+  <li><strong>时间:</strong>相对时间(几分钟前 / 刚刚 / 直接日期)</li>
+  <li><strong>操作:</strong>跳转(▶) · 编辑(铅笔) · 删除(🗑)</li>
+</ul>
+
+<p>右栏顶部还有两个全局按钮:</p>
+<dl class="shortcut-grid">
+  <dt><strong>导出检视版</strong></dt><dd>把意见合成进每段后,另存为 <code>*.review.md</code>(或指定后缀)</dd>
+  <dt><strong>AI 改稿</strong></dt><dd>切到 AI 改稿视图,审稿视图收起</dd>
+</dl>
+
+<h2 id="export">4. 导出 review.md — 给协作者看</h2>
+
+<p>如果你今天就想把稿子丢给同事:<br>
+右栏 <strong>导出检视版</strong> → 选保存目录 → 一份 <code>&lt;原文件名&gt;.review.md</code> 落盘。</p>
+
+<p>这份文件长这样(简化):</p>
+
+<pre><code># 你的原文章节
+&gt; **检视意见,请处理**:这段论据太单一...
+段落原文
+
+# 下一段
+&gt; **检视意见,请处理**:开头弱,缺钩子
+段落原文
+...</code></pre>
+
+<p>发出去,同事直接看到"哪儿有问题" — <strong>不需要再装 Typola、不需要装 skill、不需要任何工具</strong>。</p>
+
+<div class="card safe">
+  <div class="card-title">导出 review.md 后续能再打开吗?</div>
+  <p>可以,但<strong>Typola 不会再把意见解析回原文档</strong>(这是 round-trip 红线 — 在你做导出时已经走到文件,导出的 review.md 是单向快照,不是双向 sync)。
+    这让 review.md 永远干净,你可以心安理得把它丢给任何工具(微信、Notion、邮件都接得住)。</p>
+</div>
+
+<h2 id="send-ai">5. 「AI 改稿」发请求</h2>
+
+<p>右栏切到 <strong>AI 改稿</strong> 视图(顶部「AI 改稿」按钮)→ 你会看到:</p>
+
+<ul>
+  <li>顶部「<strong>发 AI 修改</strong>」主按钮</li>
+  <li>下方是「<code>{stem}.ai改{N}.md</code>」文件列表 — 这是 AI 历次改稿产物</li>
+</ul>
+
+<p>点「发 AI 修改」:</p>
+
+<ol>
+  <li>Typola 拼 prompt = 当前文档全文 + 所有意见(按段后格式附加)</li>
+  <li>AI 工作台会话<strong>新开一个回合</strong>(不打断你现有对话)</li>
+  <li>AI 改完后产物落 <code>&lt;工作区&gt;/.typola-output/&lt;会话&gt;/&lt;stem&gt;.ai改1.md</code></li>
+  <li>中间编辑器<strong>整体</strong>切到内联审阅态(原文档隐藏,审阅 UI 接管)</li>
+</ol>
+
+<h2 id="diff">6. 内联审阅态 — Y / N / ⏎ 鼠标级键盘</h2>
+
+<p>这是 Typola 真功夫。<strong>中间编辑器不是右栏铺开,而是直接接管</strong>。你能看到:</p>
+
+<ul>
+  <li><strong>顶部条</strong>「<strong>审阅 AI 改稿 · 第 N/总数 处 ▲▼ 全部采纳 / 全部拒绝 / 应用 ✕</strong>」</li>
+  <li><strong>左侧</strong>(占主要区域):分段后的混合视图<br>
+    → unchanged 段:<strong>直接渲染</strong><br>
+    → modified 段:<strong>原文删除线 + 新版高亮</strong> + 该段下方贴 ✓/✗ 按钮<br>
+    → added 段:绿色高亮 + ✓/✗<br>
+    → removed 段:删除线 + ✓(采纳删除) / ✗(保留)</li>
+  <li><strong>右侧滚动条</strong>:改动地图 — 每处一个小标记,当前处放大高亮,点就跳</li>
+</ul>
+
+<p>键盘流(进入审阅后全程不用鼠标):</p>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Y</kbd></dt><dd>采纳当前 hunk,自动跳到下一处</dd>
+  <dt><kbd>N</kbd></dt><dd>拒绝当前 hunk,自动跳到下一处</dd>
+  <dt><kbd>Enter</kbd> / <kbd>↓</kbd></dt><dd>跳到下一处</dd>
+  <dt><kbd>Shift</kbd> + <kbd>Enter</kbd> / <kbd>↑</kbd></dt><dd>跳到上一处</dd>
+  <dt><kbd>Esc</kbd></dt><dd>退出审阅态(若你动过 hunk 会有轻确认 "放弃本次 AI 审阅?")</dd>
+</dl>
+
+<div class="card callout">
+  <div class="card-title">每处默认状态 = 采纳</div>
+  <p>这是产品决策:用户最常的意图是"AI 改得还行就用",所以每处 diff <strong>默认就是接受状态</strong>。
+    用户只需<strong>对不想要的改点 ✗</strong>,而不是对每处都去点击 "采纳"。
+    想反向操作(默认拒绝)就开 <strong>全部拒绝</strong>。</p>
+</div>
+
+<h2 id="apply">7. 点「应用」合并回原文</h2>
+
+<p>所有处过完一遍,点「<strong>应用</strong>」→ Typola 把当前各处状态合并成完整文本,调编辑器 <code>setValue</code> 写回当前文档 → 退出审阅态 → <strong>文档此刻变脏</strong>(因为它已经被改了)。</p>
+
+<p>写回是<strong>一次原子操作</strong>:一次 <kbd>Ctrl</kbd> + <kbd>Z</kbd> 能完整回到改稿前的原文(不是逐步)。</p>
+
+<div class="card danger">
+  <div class="card-title">审阅态 ≠ 文档脏</div>
+  <p>审阅过程中<strong>原文磁盘文件一直没变</strong>;合并写回才让文档变脏。
+    所以关掉审阅态(放弃)、切文档、突然关窗口 — 原文始终在磁盘上,产物也始终在 <code>.typola-output/</code>,你不会丢。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">15 分钟任务:完整的"检视 → AI 改 → 逐处审 → 应用"一圈</div>
+  <ol class="check-list">
+    <li>打开你的一份长稿(>10 段),切到检视模式。</li>
+    <li>选 3 段不同段落,分别用浮条「加检视意见」添 3 条意见 — 文字要明显不同(论据弱 / 标题要改 / 多一句开场)。</li>
+    <li>右栏切到「AI 改稿」,点「发 AI 修改」,等 AI 改完产物落出来。</li>
+    <li>中间编辑器切到内联审阅态,先按 <kbd>Y</kbd> 走过前 2 个 hunk,然后第 3 个 hunk <kbd>N</kbd> 拒绝。</li>
+    <li>用顶部 ▲▼ 或键盘 <kbd>Enter</kbd> 验证跳转,看改动地图(右侧滚动条)是否同步高亮当前位置。</li>
+    <li>点「应用」,文档改回,看是否变脏(标题栏小圆点出现),<kbd>Ctrl</kbd> + <kbd>S</kbd> 保存。</li>
+    <li><kbd>Ctrl</kbd> + <kbd>Z</kbd> 一步回到改稿前 — 验证原子撤销。</li>
+  </ol>
+  <p>✅ 全部完成 = 进入<a href="./0006-pill-conversations.html">第 6 课:多会话 Pill</a>。
+    你会学到为什么 Typola 用"药丸 + 下拉"管多个 AI 会话,而不是 Tab。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>点「加检视意见」卡打不开</strong> — 当前段落没选够文字,或选区跨越多个段落被 Typola 强制重选。重新选 1 段。</li>
+  <li><strong>右栏意见不显示</strong> — 你切到心流模式或阅读模式了。切回检视模式(顶栏三段控件)。</li>
+  <li><strong>「AI 改稿」产物始终空</strong> — 看左栏 AI 工作台是否有错误诊断卡。多半是 CLI 鉴权过期或模型无权限,看卡上人话指引修。</li>
+  <li><strong>审阅态里点不动 ✓/✗ 按钮</strong> — 鼠标点的就是按钮,只是有时候焦点态不太明显。用键盘 Y/N 一样的。</li>
+  <li><strong>应用写回后内容乱</strong> — 极少见,通常是产物文本身有 markdown 头/尾噪声。先在产物上 <kbd>Ctrl</kbd> + <kbd>O</kbd> 看一眼,确认产物是干净的全文。</li>
+  <li><strong>想看 AI 改了哪但中间不切</strong> — <strong>没有这种模式</strong>。Typola 的设计就是:走审阅态要么全采要么全拒要么跳着选,不提供"看着原文也看着 diff"双栏。理由:Vditor 正在编辑的 DOM 会被 outerHTML 重写擦掉所有"叠加的"修改提示 — 必须把视图让给只读 DOM 才能保证准确性。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 6 课:<a href="./0006-pill-conversations.html"><strong>运行期多会话:Pill 管对话,Tab 管文件</strong></a>。
+Typola 用<strong>药丸(Pill)</strong>而不是<strong>Tab</strong>管多个 AI 会话 — 这一节课会讲清这个设计的来源和取舍,以及如何同时并行 2-3 件事不串味。</p>
+
+<blockquote>
+  <p>切片 AI 产物不落地 / 想问"为什么不提供 3-way merge" / 想了解"段后意见卡 AI 如何解读"?直接问 AI。</p>
+</blockquote>
+</section>
+
+<section id="lesson-6" class="lesson">
+<span class="lesson-tag">第 6 课</span>
+<h1 style="border:none">运行期多会话:Pill 管对话,Tab 管文件</h1>
+<p class="subtitle">6 分钟。把「AI 会话管理」这件事跟「文件管理」分开 — 一个是药丸(Pill),一个是 Tab。</p>
+<span class="lesson-tag">第 6 课</span>
+<h1>运行期多会话:Pill 管对话,Tab 管文件</h1>
+<p class="subtitle">6 分钟。把"AI 会话管理"这件事跟"文件管理"分开 — 一个是药丸(Pill),一个是 Tab。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>写作者常并行 2-3 件事:周报的草稿需要 AI 帮润色;另有一条 skill 调研跟同事相关;还有一份技术笔记在等 AI 帮你校对。
+      <strong>3 件事 = 3 个 AI 会话 = 互相不能串上下文</strong>(否则 AI 把"用户的语境"带到不相关的事里)。
+      普通 chatbox 只给你一个会话,要并行就需要你自己来回切。Typola 让这件事变简单。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>AI 工作台 header 有一个<strong>药丸按钮</strong>(<code>💬 &lt;当前会话名&gt; ▾ &lt;数量徽章&gt;</code>)。
+      点开 → 下拉菜单:列出会话列表 + 「新建」按钮 + 每条会话的「关闭」按钮。
+      药丸不像 Tab 占一整行,只是 header 里一颗圆角按钮,<strong>形态区别于编辑器顶部的文件 Tab</strong> — 一眼区分"文档是 Tab,会话是 Pill"。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Claude Desktop 用 Tab、Coze 用大列表、Notion AI 用对话侧栏 — 都太重。
+      Typola 学的是 <strong>OpenDesign</strong> 的 "Workspace tabs bar + Conversations pill" 双管分工,克制到极致:
+      <strong>下拉只做切换/新建/关闭,不做重命名/搜索/归档</strong>(那是"把对话变档案库",会引向 Claude Desktop 的聊天工作台,Typola 不干这事)。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2 课(知道 AI 工作台在哪)</li>
+  <li>装好 CLI,检测通过</li>
+</ul>
+
+<h2 id="pill">1. 看药丸按钮</h2>
+
+<p>进心流模式 → 看 AI 工作台 header(顶部):</p>
+
+<pre><code>┌─ 头部 ────────────────────────────────────────┐
+│ 💬 &lt;当前会话名&gt; ▾ · N           (主操作区)    │
+│   ↑ 你点的就是它                                  │
+└──────────────────────────────────────────────┘</code></pre>
+
+<p>这颗药丸就是会话切换器。点开它 → 一个下拉面板:</p>
+
+<ul>
+  <li>顶部:会话列表(当前会话前面有 ✓)</li>
+  <li>列表底部:「+ 新建对话」按钮</li>
+  <li>每个会话条目:右边有一个 ✕ 关闭按钮(当前会话不能关)</li>
+</ul>
+
+<h2 id="new">2. 新建会话</h2>
+
+<p>下拉面板里点「+ 新建对话」:</p>
+
+<ol>
+  <li>左栏<strong>立刻开新会话</strong>(无 prompt 先就空着)</li>
+  <li>输入框清空、Ready 状态显示</li>
+  <li>下拉面板列表多一条新的「自由对话」(M1 限定:只能以 skill 名开头的会话或自由对话 — 你也可以从前置 skill 直接开)</li>
+</ol>
+
+<div class="card callout">
+  <div class="card-title">"自由对话" vs "skill 会话" 两种入口</div>
+  <ul>
+    <li><strong>自由对话</strong> = 你点了「+ 新建对话」开的会话,纯 prompt,不挂 skill</li>
+    <li><strong>skill 会话</strong> = 你从第 4 课 SkillHub 点某张 skill 卡开的会话,标题 = skill 名、UUID 独立</li>
+  </ul>
+  <p>两种会话等价于"独立的草稿纸";管理方式一样,只是入口不同。</p>
+</div>
+
+<h2 id="switch">3. 并行 3 个会话,互不串味</h2>
+
+<p>写作者常态:你有 3 件事并行。</p>
+
+<p>操作:</p>
+
+<ol>
+  <li>开第 1 个会话 — 起名叫「周报草稿」(自动)→ 问 AI 关于本周项目进展</li>
+  <li>点药丸 → 「+ 新建对话」开第 2 个</li>
+  <li>发 prompt 给第 2 个 — 例如「帮我看看 /huawei-style-ppt-skill 用什么场景」(skill 调试)</li>
+  <li>再开第 3 个 — 给同事写一段技术笔记标题</li>
+</ol>
+
+<p>现在:</p>
+
+<ul>
+  <li>药丸右侧出现数字徽章 <strong>3</strong></li>
+  <li>下拉面板里 3 条会话</li>
+  <li>每条会话<strong>独立的 session UUID</strong>(独立 AI 上下文),互不串</li>
+</ul>
+
+<div class="card safe">
+  <div class="card-title">验证"互不串" 的一种方法</div>
+  <p>在会话 A 里说"我是产品经理,正在写一份面向工程师的 PRD",然后切到会话 B 问"我应该用哪种语气";
+    AI 在 B 里<strong>不会</strong>把"产品经理 / PRD"带进来 — 它的 session 状态是干净的。
+    只有切<strong>同一个会话的过往对话</strong>,AI 才会接着说。</p>
+</div>
+
+<h2 id="close">4. 关闭不用的会话</h2>
+
+<p>下拉面板里每行右边有 ✕(会话 1 个的时候,✕ 是禁用的 — 至少保留 1 个):</p>
+
+<ul>
+  <li>点 ✕ → Typola 弹轻确认「关掉后会丢失该会话历史」</li>
+  <li>确认 → 会话消失、列表少一行,药丸落到下一条活跃会话</li>
+  <li><strong>已经发给 AI 的 prompt 还在会话内存里</strong>,闭掉就没了 — 不持久化</li>
+</ul>
+
+<p>关闭 ≠ 删产品。第 7 课会展开"AI 生成的文件去哪了" — 那是 <strong>产物中心</strong>的事,跟会话关闭无关。</p>
+
+<h2 id="forbidden">5. 不做的事(护城河)</h2>
+
+<p>会话下拉里有几个功能<strong>故意不做</strong>:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">不做</th>
+      <th style="text-align:left;padding:8px 12px">原因</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">重命名会话</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">标题已经自动 = skill 名 / 「自由对话」,再让你手动命名 = 在把会话当档案管</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">会话搜索</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">有了搜索你就开始把对话当文档存 — 文档才是产物</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">归档 / 标签</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">同上</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 用量统计</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">让作者更关心"省 token"而不是"写好稿"</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>设计团队 <strong>每加一个对话侧功能</strong>,都要问一句:这服侍文档(成品),还是把对话变资产?
+服务文档的加(产物回流 / 选区注入 / skill 调用);把对话变资产的不加。</p>
+
+<div class="card danger">
+  <div class="card-title">"那我的会话会被永久留底吗?"</div>
+  <p>不会。Typola <strong>只在本机内存里</strong>维护会话,关 Typola = 丢全部会话上下文。
+    你写过的 prompt、给到的反馈、AI 的回答都没了。</p>
+  <p>想要保留 AI 给你的东西 → <strong>产物中心</strong>(第 7 课)才是这条路:
+    AI 写出来的文件(报告、PPT、草稿)会在 <code>.typola-output/&lt;会话&gt;/</code> 落盘,
+    那个文件就是你的"该保留的部分"。</p>
+</div>
+
+<h2 id="lifetime">6. 会话的寿命</h2>
+
+<dl class="shortcut-grid">
+  <dt>运行期内</dt><dd>会话持久在内存 Map 里,跟 Typola 同生命周期</dd>
+  <dt>重启 Typola</dt><dd>所有会话丢失(下节课的产物中心才是真存档地)</dd>
+  <dt>切 Provider</dt><dd>当前会话断开,新会话以新 Provider 起(上一节讲过 — UUID 不跨 provider)</dd>
+  <dt>切 AI 工作目录(Composer 顶部 WorkingDir Picker)</dt><dd>弹确认「会切到新工作目录,旧会话不延续」</dd>
+  <dt>整个 Typola 崩溃/强关</dt><dd>会话丢失,但磁盘上的产物文件(第 7 课)在</dd>
+</dl>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">6 分钟任务:开 3 个会话并行,验证互不串</div>
+  <ol class="check-list">
+    <li>打开任意文档,切心流模式。</li>
+    <li>点药丸 → 「+ 新建对话」开第一个会话,prompt 发"我是一个 PM,正在写 PRD"。</li>
+    <li>打开第二个,prompt 发"我是一个独立开发者,正在做 Web 项目"。</li>
+    <li>打开第三个,prompt 发"我是一个老师,正在准备一节课"。</li>
+    <li>三个都开了之后,分别切回去问"我是做什么的?",看每个会话是不是只记自己的角色,不串。</li>
+    <li>关掉其中 1 个,确认 ✕ 行为符合预期(只剩 2 个,徽章变 2)。</li>
+  </ol>
+  <p>✅ 3 个会话并行 + 互不串 + 关闭正常 = 进入<a href="./0007-artifact-center.html">第 7 课:产物中心</a>。
+    你会学到 AI 生成的文件落到哪、怎么在编辑器打开、怎么归档到工作区、怎么撤销覆盖 — 这是 Typola 最"实际"的一节。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>药丸按钮不见了</strong> — 你在阅读模式或检视模式。切到心流模式(<kbd>Shift</kbd> + <kbd>A</kbd> 或顶栏控件)。</li>
+  <li><strong>关掉最后一个会话又被自动新建</strong> — Typola 不允许 0 个会话,所以最后一个不可关(✕ 禁用或变成"+ 新建对话"占位)。</li>
+  <li><strong>同一会话上下文"串味"</strong> — <strong>这是设计,不是 bug</strong>。同一会话的过往对话 AI 都能看到,这是 Claude / OpenCode 的原生行为。</li>
+  <li><strong>重启 Typola 会话全没了</strong> — 持久化属 M3+ 路线图,没排到。你可以靠 <strong>产物中心</strong>(第 7 课)保存 AI 实际生成的内容。</li>
+  <li><strong>不同会话切回去发现"内容跟上一次不太一样"</strong> — 因为多个会话间有独立的 session UUID,切回去读的是那次会话的最新状态,而不是全局同步。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 7 课:<a href="./0007-artifact-center.html"><strong>产物中心:AI 写的东西回到你的文件</strong></a>。
+这是 Typola 整个产品哲学落地的最后一公里:AI 用工具(Write/Edit)创建的文件由 Typola 监听并以 chip 形式呈现,点开在<strong>中间编辑器</strong>而非右栏预览 — 因为产物就是你的文档,文档归文档位。</p>
+
+<blockquote>
+  <p>切片重启 Typola 想恢复上下文 / 想了解"内存 Map 持久化的下一步" / 想给会话加 tag?直接问 AI。</p>
+</blockquote>
+</section>
+
+<section id="lesson-7" class="lesson">
+<span class="lesson-tag">第 7 课</span>
+<h1 style="border:none">产物中心:AI 写的东西回到你的文件</h1>
+<p class="subtitle">10 分钟。Typola 护城河落地的最后一公里:AI 用工具写出来的文件,回来在我的中间编辑器里打开。</p>
+<span class="lesson-tag">第 7 课</span>
+<h1>产物中心:AI 写的东西回到你的文件</h1>
+<p class="subtitle">10 分钟。Typola 护城河落地的最后一公里:AI 用工具写出来的文件,回来在我的中间编辑器里打开。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>"AI 帮我写了一份报告,但它困在对话框,我得复制粘贴才出来" —
+      真正让你能用 AI 高质量产出的最后一步是<strong>产物落地</strong>:
+      AI 用工具(Write/Edit)创建的文件要能进我的文件结构,我能在编辑器里像打开任何 .md 一样编辑它,
+      而不是只能看预览。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>AI 的工作目录被焊死在 <code>&lt;工作区根&gt;/.typola-output/&lt;会话 ID&gt;/</code>。
+      Typola 不光监听这个目录(顺便用 watcher 兜底),还解析 Claude 的 Write/Edit tool_use 拿到<strong>精确路径 + 内容</strong>。
+      右下角出现<strong>文件名 chip</strong>;点 chip 在<strong>中间编辑器</strong>打开(.md → WYSIWYG,.html → 阅读模式预览),
+      不在右栏铺。
+      文件想长期留可以「保存到工作区」(自动改名避免冲突);想覆盖当前文档就点「合并到当前文档」(走第 5 课的内联审阅)。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Claude Desktop 把产物叫 "artifacts",挂在对话侧,让你在对话里看;<strong>那是把对话当档案库的设计</strong>。
+      Cursor 把产物叫 "code changes",塞到右栏 diff 里;<strong>那是把文档当代码的设计</strong>。
+      Typola 既不把对话当档案,也不把产物塞边栏 — <strong>产物 = 文档,进编辑器</strong>,这就是为什么 Typola 把"产物"放在
+      <strong>中间</strong>位置而不是右栏。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2、4 课</li>
+  <li>AI 工作台能跑(CLI 检测通过)</li>
+  <li>当前 Composer 工作目录已设置(初次启动让你选过,可以在 Picker 里改)</li>
+</ul>
+
+<h2 id="where">1. 产物落到哪:固定目录,不污染工作区</h2>
+
+<p>Typola 强制 AI 的<strong>生成类会话</strong>(点 skill 开的、改整文档的)的 cwd 在:</p>
+
+<pre><code>&lt;AI 工作目录&gt;/.typola-output/&lt;会话 ID&gt;/</code></pre>
+
+<p>看 AI 工作目录:Composer 顶部的 <strong>WorkingDir 标签</strong>。点它能换。默认是 Typola 第一启动让你选的那个目录。</p>
+
+<div class="card callout">
+  <div class="card-title">"为什么 cwd 焊这么深"</div>
+  <p>两层理由:</p>
+  <ul>
+    <li><strong>AI 写"运行时产物"</strong>(报告、PPT)→ 应该只在 <code>.typola-output/</code> 出现,不会污染你原本干净的
+      工作目录(<code>docs/</code>、<code>posts/</code> 等不该被随便写)</li>
+    <li><strong>保护工作目录里现有的文件</strong> → AI 不会因为路径写错就改你仓库里的文件</li>
+  </ul>
+  <p>想"留"某个产物 → 用「保存到工作区」(本节下面会讲);不想留 → 关 Typola / 一段时间后自动清理。</p>
+</div>
+
+<div class="card danger">
+  <div class="card-title"><code>.typola-output</code> 应该加进 <code>.gitignore</code></div>
+  <p>这是临时产物,不是要入库的代码。把这一行加进你工作目录里的 <code>.gitignore</code>:
+    <code>.typola-output/</code></p>
+  <p>Typola 在常见工作目录里有 hint,显式不强制。</p>
+</div>
+
+<h2 id="chip">2. 右下角 chip 是产物的入口</h2>
+
+<p>AI 用 Write/Edit 工具写完一个文件后:</p>
+
+<ol>
+  <li>Typola 立刻解析 tool_use 的 <code>file_path</code> + <code>content</code></li>
+  <li>编辑区右下角弹一个<strong>浮层</strong>(ArtifactToast)<br>
+    <code>📄 新产物 weekly-report.md · 打开 | 关闭</code></li>
+  <li>watcher 兜底监听(防止 AI 走其他路径写的文件被漏掉)</li>
+  <li>同时把这个产物加到产物中心的当前会话列表</li>
+</ol>
+
+<p>点 chip 的「打开」→ 在中间编辑器开新 tab + 加载文件。</p>
+
+<div class="card">
+  <div class="card-title">不同类型的产物 chip 图标</div>
+  <ul>
+    <li><code>📄</code> Markdown(在最右栏补 <strong>产物</strong> 表标签)</li>
+    <li><code>📊</code> PPT(HTML 形式)</li>
+    <li><code>&lt;/&gt;</code> HTML / HTM</li>
+    <li><code>📑</code> 检视版(从 review 导出的 md)</li>
+    <li><code>📝</code> AI 改稿(第 5 课产物)</li>
+    <li><code>🎨</code> 公众号(富文本复制产物)</li>
+  </ul>
+</div>
+
+<h2 id="center">3. 产物中心面板</h2>
+
+<p>想看全部 / 历史产物,右栏有「<strong>AI 产物</strong>」面板:</p>
+
+<ul>
+  <li>顶部 tab:
+    <ul>
+      <li><strong>当前会话</strong>(默认)— 这个会话产出的所有文件</li>
+      <li><strong>全部产物</strong>— 当前工作目录下<strong>所有会话</strong>的产物(列表按时间排序)</li>
+    </ul>
+  </li>
+  <li>搜索框 + 类型筛选(markdown / html / review / ppt / 公众号 / 数据)</li>
+  <li>每条 row 显示:文件名 · 类型 · 生成时间 · 操作(打开 / 比较 / 归档 / 删 / 覆盖 / 撤销覆盖)</li>
+</ul>
+
+<h2 id="open">4. 在中间编辑器打开 — 不在右栏铺预览</h2>
+
+<p>关键设计决策,重读三遍:</p>
+
+<div class="card safe">
+  <div class="card-title">产物 = 文档。文档归文档位。</div>
+  <p>点开 chip → <strong>中间编辑器开新 tab</strong>(像你打开任何 .md 一样):
+    <ul>
+      <li><code>.md</code> → WYSIWYG 阅读模式,可编辑</li>
+      <li><code>.html</code> → 走 HtmlPreviewPane <strong>阅读模式</strong>(只读、不在中间编辑,渲染之后可点"在浏览器打开")</li>
+      <li><code>PPT HTML</code> → 同上(只读 HTML,完美套 frontend-slides 等的输出)</li>
+    </ul>
+    <strong>不是右栏预览</strong>。右栏铺预览就是把产物当"附件 / 副产物",那是 chatbox 的设计;Typola 把产物当文档。</p>
+</div>
+
+<p>图示区别:</p>
+
+<pre><code>chipbox / Cursor 模式:  [文档]  |  [产物预览]    ← 文档边栏看产物,产物降级
+Typola 模式:            [文档 tab:weekly-report.md]        ← 中间编辑,正常文档</code></pre>
+
+<h2 id="archive">5. 保存到工作区 — 长期留</h2>
+
+<p>在产物中心 / chip 「菜单」找「<strong>保存到工作区</strong>」:</p>
+
+<ol>
+  <li>弹目标目录选择(默认 <code>&lt;工作区&gt;/</code> 根,可换子目录)</li>
+  <li>Typola 自动<strong>改名避免冲突</strong>:已有 <code>weekly.md</code> → 新名 <code>weekly-2.md</code>(或加时间戳)</li>
+  <li>文件从 <code>.typola-output/&lt;会话&gt;/</code> <strong>搬运</strong>到工作区(不是复制)</li>
+  <li>产物状态从 <code>done</code> → <code>archived</code></li>
+</ol>
+
+<div class="card">
+  <div class="card-title">什么时候该"保存到工作区"</div>
+  <ul>
+    <li>AI 写的报告 / 周报你要拿出来用 — 立刻归档</li>
+    <li>AI 写的草稿你打算改改后当终稿 — 归档后用中间编辑器编辑</li>
+    <li>AI 写的临时素材 / 实验产物 — 不用归档,关 Typola 后自动清理</li>
+  </ul>
+</div>
+
+<h2 id="merge">6. 合并到当前文档(走内联审阅)</h2>
+
+<p>AI 写的产物 = 整篇 .md 内容?那很可能你<strong>想用它替换或合并</strong>当前编辑的草稿。</p>
+
+<p>chip 旁或产物行菜单有「<strong>合并到当前文档</strong>」按钮:</p>
+
+<ol>
+  <li>触发第 5 课的<strong>内联审阅态</strong>(不是粗暴覆盖)</li>
+    <ul>
+      <li><strong>原文</strong> = 当前打开文档的全文</li>
+      <li><strong>新版</strong> = 产物文件全文</li>
+    </ul>
+  <li>进入内联审阅态后,Y/N/⏎ 逐处对比,改动地图同步亮</li>
+  <li>点「应用」→ 合并结果写回当前文档 → 文档变脏</li>
+</ol>
+
+<p>这里的设计选择是 — 即便产物是"AI 已经写完整"的产物,<strong>也不直接覆盖原文</strong>。
+你能控制每一处接受与否,跟第 5 课的产物写回走同一条管线。</p>
+
+<div class="card callout">
+  <div class="card-title">"AI 全文重写"的产物也走内联审阅</div>
+  <p>有 skill <code>output: review_inline</code> 标签(如"全文重写"型 skill)→ 产物到达后<strong>直接进入</strong>审阅态,不必手动点合并。
+    这是 Typola 的 A 类入口(<code>AI_DIFF_PREVIEW_SPEC §2.1</code>)。</p>
+</div>
+
+<h2 id="overwrite">7. 覆盖原文 + 撤销覆盖</h2>
+
+<p>当你确定 AI 写的产物就是终稿、要直接替换当前文档(不想要审阅态),</p>
+
+<p>有两种粒度:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">动作</th>
+      <th style="text-align:left;padding:8px 12px">走法</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>覆盖当前文档</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">产物行点「覆盖」按钮 → 弹确认「原文将被替换,可在 5 分钟内撤销」 → 文档替换 + 产物 manifest 标记"已覆盖"</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>撤销覆盖</strong></td>
+      <td style="padding:8px 12px">同一行点「撤销」按钮 → 文档回到覆盖前状态(产物 manifest 标记撤销)</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card danger">
+  <div class="card-title">覆盖是"少看一眼"模式 — 真要用慎重</div>
+  <p>默认用「合并到当前文档」(走内联审阅);确定完全没必要对比时再走「覆盖」。
+    <strong>撤销有时间窗</strong>(目前是 5 分钟),超时后撤销不可用。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">12 分钟任务:4 种产物处理方式全跑一遍</div>
+  <ol class="check-list">
+    <li>心流模式,在 AI 工作台开新会话,prompt 发"给我写一份本周 mock 报告,标题是 weekly-mock.md,内容 3 段即可"。</li>
+    <li>等 AI 用 Write 工具写完文件,看右下 chip 出现 → 点"打开"在中间编辑器看产物。</li>
+    <li>产物行点「保存到工作区」,选工作区根目录 + 不改名,确认搬运成功(<code>.typola-output/</code> 里文件没了)。</li>
+    <li>开新会话,prompt 发"把上面这份 weekly-mock.md 改写一下,内容大改",等产物写出来。</li>
+    <li>产物行点「合并到当前文档」 → 你编辑器里要选一份打开的稿件 → 进内联审阅态 → Y/N/⏎ 走走 → 应用。</li>
+  </ol>
+  <p>✅ 全部跑通 = 进入<a href="./0008-delivery-offline.html">第 8 课:交付 + 降级</a>。
+    你会学到 4 种导出(PDF / Word / HTML / review.md)、富文本复制到公众号、无网络/无 AI 时的兜底。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>chip 不出现</strong> — AI 没用 Write/Edit 工具,而是直接在前几条消息里把内容贴了出来。这种情况下产物没落地,得手动复制。</li>
+  <li><strong>产物落在奇怪路径下</strong> — AI 自作主张写了绝对路径。Typola 仍然解析并显示,但文件位置不是 <code>.typola-output/</code>。归档时手动选目标。</li>
+  <li><strong>保存到工作区改名逻辑奇怪</strong> — 默认按"产品目录是否存在同名文件"自动追加 <code>-2</code> 之类。改名规则在 <code>services/artifacts/manifest.ts</code> 可以改提示。</li>
+  <li><strong>产物 HTML 想在浏览器里看</strong> — 走 HtmlPreviewPane 右下角「在浏览器打开」按钮,Typola 调用系统默认浏览器。</li>
+  <li><strong>.typola-output 越来越大</strong> — 定期清理;或用产物中心面板顶部的「清理过期」按钮。</li>
+  <li><strong>覆盖错了,撤销不可用</strong> — 检查产物 manifest 状态;过 5 分钟就真没法撤了。要养成"先合并后覆盖"的习惯。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 8 课:<a href="./0008-delivery-offline.html"><strong>交付 + 离线降级</strong></a>。
+这是 9 节课的收官:Typola 不仅能"写",还能"出" — 4 种导出形态各自适合什么场景;以及当你没网、没装 CLI 时,Typola 还能做什么(它还能用)。</p>
+
+<blockquote>
+  <p>切片 chip 不出现 / 想问"为什么产物归中间编辑器不是右栏" / 想了解产物 manifest 持久化的细节?直接问 AI。</p>
+</blockquote>
+</section>
+
+<section id="lesson-8" class="lesson">
+<span class="lesson-tag">第 8 课</span>
+<h1 style="border:none">交付 + 离线降级</h1>
+<p class="subtitle">10 分钟。Typola 能「出」了 — 4 种导出形态各自适合什么场景,以及没网/没 AI 时 Typola 还能做什么。</p>
+<span class="lesson-tag">第 8 课</span>
+<h1>交付 + 离线降级</h1>
+<p class="subtitle">10 分钟。Typola 能"出"了 — 4 种导出形态各自适合什么场景,以及没网/没 AI 时 Typola 还能做什么。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>一篇稿子写好了,接下来要"出" — 给同事、客户、读者、上传公众号…
+    不同受众要不同形态:PDF 给最终交付,Word 给会再编辑的同事,HTML 给网页/邮件,review.md 给协作者或 AI。
+    <strong>形态选错 = 多花两小时再排版</strong>。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>Typola 强制<strong>导出与编辑共享同一个 Markdown 源</strong>(<code>markdownExportRenderer</code> 是 Phase 4 共享桥接)。
+    4 种导出默认会把 Markdown 渲成自己的格式;导出按钮走 Rust 后端,完成后右上角 toast 通知,不打断写作。
+    没了 AI、没了网,Typola 仍然可以作为本地编辑器使用 — 这部分叫<strong>降级</strong>。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>很多编辑器的"导出 PDF"其实是在调用一个云 API,Typola 用本地隐藏 WebView2 + <code>Page.printToPDF</code>,全程离线。
+    富文本复制走 <code>WechatPreviewPane</code>(兼容公众号后台),不需要打开浏览器再复制粘贴。
+    <strong>降级不是 fallback 列表</strong>,而是"你的工作不被网络/AI 绑架"的产品承诺。</p></dd>
+  </dl>
+</aside>
+
+
+
+<h2 id="pdf">1. PDF 导出 — 最终交付</h2>
+
+<p>场景:把这篇文档原样交付 — 不再被修改、直接发出去 / 归档 / 评审。</p>
+
+<ol>
+  <li>打开要导出的文档</li>
+  <li>按 <kbd>Ctrl</kbd> + <kbd>P</kbd> 或菜单 <code>导出 → PDF</code></li>
+  <li>Typola 用一个<strong>隐藏的 WebView2</strong>渲染 Markdown,然后调 <code>Page.printToPDF</code>(<strong>本地</strong>,不上云)</li>
+  <li>保存路径自动从当前文件路径派生,无需开对话框:</li>
+  <ul>
+    <li>当前文档已存 → 同目录 / 同主名加 <code>.pdf</code></li>
+    <li>当前文档未存 → 默认落用户下载目录</li>
+  </ul>
+  <li>右上角 toast:「PDF 导出成功 / 失败」</li>
+</ol>
+
+<div class="card callout">
+  <div class="card-title">PDF 不响应你应用的主题色</div>
+  <p>Typola 的暖米黄/深海/墨韵主题只影响编辑器;<strong>PDF 走自己的导出配色</strong>(预设)。
+    理由:别人读 PDF 时不一定知道你用什么主题。
+    想自定义 PDF 样式 → 「自定义导出预设」(本节最后会展开)。</p>
+</div>
+
+<h2 id="word">2. Word — 给会再编辑的同事</h2>
+
+<p>场景:把稿子给同事,他习惯改 Word — 你<strong>不用</strong>帮他去 Word 里排版。</p>
+
+<ol>
+  <li><code>导出 → Word (.docx)</code></li>
+  <li>可选:先打开<strong>Word 纸张预览</strong>(右栏的 <code>WordPaperPreviewPane</code>)看 Word 视角下的样子</li>
+  <li>确认后导出,产物落 <code>&lt;源&gt;.docx</code></li>
+  <li>同事用 Word 打开可以正常修改</li>
+</ol>
+
+<div class="card safe">
+  <div class="card-title">.docx 不是 round-trip</div>
+  <p>Typola 生成的 .docx 是「导出副本」,<strong>不是你未来再 import 回 Typola 的双向通道</strong>。
+    同事改完 Word 给你,你最好拿回 .md 在 Typola 里继续改 — Word 修改痕迹别强迫 Typola 反向解析。</p>
+</div>
+
+<p>自定义导出预设:Wor在「<code>设置</code>」里有 "<strong>Word 导出预设</strong>" 编辑面板,内置 8 个 slot 默认开启,你可以上传 JSON 自定义版式(字号/页边距/标题字号/字体):</p>
+
+<pre><code>{
+  "name": "团队周报样式",
+  "page": { "margin": "2.5cm", "fontSize": "10.5pt" },
+  "heading": { "h1": "16pt", "h2": "14pt" },
+  "font": { "body": "Microsoft YaHei", "code": "JetBrains Mono" }
+}</code></pre>
+
+<h2 id="html">3. HTML — 网页、邮件、富文本(公众号)</h2>
+
+<p>3 种用法,3 个不同按钮:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">按钮</th>
+      <th style="text-align:left;padding:8px 12px">产物</th>
+      <th style="text-align:left;padding:8px 12px">用途</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>导出 HTML</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>.html</code> 文件</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">放到自己网站 / 内网 wiki / 邮件附件</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>复制富文本 / 公众号样式</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">HTML 片段(放进剪贴板)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">粘贴到 <strong>微信公众号后台 / 知乎 / 掘金</strong>的后台富文本编辑器,样式跟随渲染</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>在浏览器打开 HTML</strong></td>
+      <td style="padding:8px 12px">系统默认浏览器启动</td>
+      <td style="padding:8px 12px">本地预览 / 截图归档 / 给同事看效果</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card callout">
+  <div class="card-title">公众号粘贴小技巧</div>
+  <ol>
+    <li>先打开 <code>WechatPreviewPane</code>(<code>视图 → 公众号预览</code>)— 看样式</li>
+    <li>调整字号、颜色到公众号合规</li>
+    <li>点「<strong>复制富文本</strong>」</li>
+    <li>打开公众号编辑器,粘贴(<kbd>Ctrl</kbd> + <kbd>V</kbd>)</li>
+    <li>微调标题/封面图就发</li>
+  </ol>
+  <p>不再需要 Word + 排版软件多次中转。</p>
+</div>
+
+<h2 id="review-md">4. review.md — 协作者或 AI</h2>
+
+<p>这是第 5 课的输出。两种用法:</p>
+
+<dl class="shortcut-grid">
+  <dt><strong>给人看</strong></dt><dd>同事直接看 review 版 markdown,知道每段问题在哪;不需要装 Typola</dd>
+  <dt><strong>给 AI 改</strong></dt><dd>把 review.md 喂给任意 AI(Claude / GPT / Gemini / 自家 AI),它们看 blockquote 后的「请处理」知道要改什么</dd>
+</dl>
+
+<p>导出路径取决于上下文:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">在哪里导出</th>
+      <th style="text-align:left;padding:8px 12px">文件名</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">检视模式右栏</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>&lt;原文件名&gt;.review.md</code>(带检视版标记,不污染原 .md)</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px">AI 改稿产物</td>
+      <td style="padding:8px 12px"><code>&lt;原 stem&gt;.ai改{N}.md</code>(N = 改了几次)</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card safe">
+  <div class="card-title">导出 review.md 后,原文档彻底不受影响</div>
+  <p>Typola 的检视意见是<strong>叠加在内存里的一层</strong>,导出的 .md 是这一层的快照;
+    关闭 Typola → 那份 .md 还在磁盘(你刚导出的),内存里的意见消失;
+    重新打开 .md → Typola 不会再去把意见<strong>解析回</strong>那份 .md,单向快照设计。</p>
+</div>
+
+<h2 id="offline">5. 离线降级 — 没网、没 CLI 时 Typola 还能干什么</h2>
+
+<p>这是 Typola 的底线承诺:<strong>所有功能必须在断网/无 AI CLI 下退化为可用</strong>。<code>PRODUCT.md</code> 设计原则 #4。</p>
+
+<div class="card safe">
+  <div class="card-title">断网 → 你还有这些</div>
+  <ul class="check-list" style="margin:8px 0">
+    <li>所有 Markdown 写作与编辑功能(阅读/心流/检视 三模式)</li>
+    <li>本地文件操作(打开 / 保存 / 改后缀 / 拖拽)</li>
+    <li>查找替换、文件大纲、文档统计、Find/Replace</li>
+    <li>主题切换(本地样式)</li>
+    <li>图片粘贴保存(本地)</li>
+    <li>WordPaper 预览 + Word/PDF 导出(本地 WebView2)</li>
+    <li>底层终端(可在任意目录跑命令 — 但要 Windows 已装 terminal)</li>
+  </ul>
+</div>
+
+<div class="card danger">
+  <div class="card-title">断网 → 你没有这些</div>
+  <ul style="margin:8px 0">
+    <li>所有 AI 改稿(浮条、检视 → AI、AI 工作台对话)</li>
+    <li>SkillHub 的"未装时让 Claude 装"路径(它依赖 AI 工作)</li>
+    <li>产物落盘以外的 watcher(但不关键 — 文件在磁盘就在)</li>
+  </ul>
+</div>
+
+<h2 id="preset">6. 自定义导出预设</h2>
+
+<p>在「<code>设置 → 导出预设</code>」可以:</p>
+
+<ul>
+  <li>管理 Word 预设(内置 8 个 slot 默认开启)</li>
+  <li>管理 HTML 预设(同样的 slot 机制)</li>
+  <li>PDF 默认走标准预设,但允许改字体</li>
+</ul>
+
+<div class="card">
+  <div class="card-title">预设的形态与限制</div>
+  <ul>
+    <li>是 JSON 文件,不是 LaTeX 模板 — 学起来轻</li>
+    <li>设置面板里直接给实时预览</li>
+    <li>8 个 slot 上限 = 防止"我做了 30 个预设然后忘"</li>
+  </ul>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">15 分钟任务:一稿四产出</div>
+  <ol class="check-list">
+    <li>打开任意写好的文档(无 AI 也能做)。</li>
+    <li>导出 PDF 一次,在 <code>导出物</code> 同目录看到新 .pdf。</li>
+    <li>导出 Word 一次,确认 .docx 可用 Word/WPS 打开。</li>
+    <li>复制富文本,粘贴到一个临时文本文件,看 HTML 片段里有 <code>&lt;h2&gt;</code>/<code>&lt;blockquote&gt;</code> 等干净标签。</li>
+    <li>断网(关 wifi + 关以太网),看 Typola 是否还能写、还能导出 PDF、还能用本地终端。<strong>断网下不要去 AI 改稿,这是预期行为。</strong></li>
+  </ol>
+  <p>✅ 一稿四出 + 知道什么时候没 AI 也能干 = <strong>9 节课全部完成 🎉</strong>。
+    从第 0 节到这里,你已经掌握 Typola 全能力:写、改、检视、交付、外加在哪一节暂停。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>PDF 导出卡死</strong> — 通常是图片路径解析失败,或字体加载超时。Typola 走 fail-open 路径,等 30 秒一定出结果。</li>
+    <li><strong>Word 导出排版乱</strong> — 多半是表格/代码块超长。预设里调字号、改用更紧凑的版式。</li>
+  <li><strong>公众号粘贴后字体不动</strong> — 公众号富文本编辑器会覆盖部分样式。你需要在后台再选一次默认字体。</li>
+  <li><strong>导出后没找到文件</strong> — 看保存路径:<strong>已保存的文档</strong>导出到同目录,<strong>未保存的文档</strong>落到 Downloads。</li>
+  <li><strong>断网后 AI 改稿按钮变灰</strong> — 是正常降级,不是 bug。换到无 AI 的工作流即可。</li>
+</ul>
+
+<hr>
+
+<h2>教程收尾</h2>
+
+<blockquote>
+  <p><strong>4 句口诀,再念一遍:</strong></p>
+  <p>· <strong>Tab 管文件,Pill 管对话。</strong><br>
+  · <strong>左栏是草稿,中栏是成品。</strong><br>
+  · <strong>AI 改稿先 diff,采纳再回写。</strong><br>
+  · <strong>降级不离本地,产物总回文件。</strong></p>
+</blockquote>
+
+<p>你现在可以:</p>
+<ul>
+  <li>看 <a href="../reference/typola-cheatsheet.html"><strong>速查表</strong></a> — 一份 1 页的常用快捷键 + 浮条动作 + Skill 列表</li>
+  <li>回头<strong>精修</strong>任何一节 — 总是可以再练一遍</li>
+  <li>用<strong>任何工具</strong>问 AI 一两个问题 — 你是 Typola 真用户了,剩下的场景你试出来</li>
+</ul>
+
+<p>最后提醒:Typola 是<strong>本地优先、文档为中心</strong>的编辑器。<strong>所有 AI 工作都不应该偷走你的文档</strong>。
+如果你发现某个功能让你心里有点慌(怕被覆盖、怕被清理),那就是 Typola 没做好,直接告诉我们 — 文档是你的。</p>
+</section>
+
+<section id="cheatsheet" class="lesson">
+<span class="lesson-tag">速查表</span>
+<span class="lesson-tag">速查表</span>
+<h1>Typola 速查表</h1>
+<p class="subtitle">1 页全能力速查。复制粘贴到任何地方都不会丢。</p>
+
+<aside class="feature-frame">
+  <h2>4 句口诀(永不忘)</h2>
+  <dl>
+    <dt>Tab vs Pill</dt><dd><strong>Tab 管文件,Pill 管对话。</strong></dd>
+    <dt>左 vs 中</dt><dd><strong>左栏是草稿,中栏是成品。</strong></dd>
+    <dt>改稿顺序</dt><dd><strong>AI 改稿先 diff,采纳再回写。</strong></dd>
+    <dt>兜底</dt><dd><strong>降级不离本地,产物总回文件。</strong></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本速查表目录</strong><br>
+  <a class="toc-pill" href="#shortcut">全局快捷键</a>
+  <a class="toc-pill" href="#bar">浮条动作</a>
+  <a class="toc-pill" href="#card">右键 / Ctrl+K 动作</a>
+  <a class="toc-pill" href="#mode">三段文档模式</a>
+  <a class="toc-pill" href="#workbench">AI 工作台</a>
+  <a class="toc-pill" href="#review">检视 + 内联审阅</a>
+  <a class="toc-pill" href="#skill">SkillHub</a>
+  <a class="toc-pill" href="#artifact">产物中心</a>
+  <a class="toc-pill" href="#export">4 种导出</a>
+  <a class="toc-pill" href="#offline">离线降级</a>
+</nav>
+
+<h2 id="shortcut">全局快捷键</h2>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Ctrl</kbd> + <kbd>O</kbd></dt><dd>打开文件</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>保存</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></dt><dd>另存为</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd>查找</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>H</kbd></dt><dd>查找并替换</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></dt><dd>快速打开(文件 + 最近)</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>K</kbd></dt><dd>对选区打开 AI 动作菜单</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>撤销(含 AI 修改快照)</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>P</kbd></dt><dd>导出 PDF</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd></dt><dd>编辑辅助</dd>
+  <dt><kbd>Shift</kbd> + <kbd>A</kbd></dt><dd>切换心流 ↔ 阅读模式</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>,</kbd></dt><dd>打开设置</dd>
+  <dt><kbd>Esc</kbd></dt><dd>关闭浮卡 / 审阅态</dd>
+</dl>
+
+<h2 id="bar">浮条动作(选区出现 160ms 后)</h2>
+
+<dl class="shortcut-grid">
+  <dt><strong>润色</strong></dt><dd>Wand2 图标 — 流畅度 + 用词精炼</dd>
+  <dt><strong>解释术语</strong></dt><dd>BookOpen 图标 — 1-3 句话注解,<strong>不替换</strong></dd>
+  <dt><strong>加检视意见</strong></dt><dd>MessageSquare 图标 — 给本段加一条意见(不调 AI)</dd>
+</dl>
+
+<h2 id="card">右键 / Ctrl+K 动作</h2>
+
+<p>浮条只有 3 个,以下 4 个走菜单:</p>
+
+<dl class="shortcut-grid">
+  <dt><strong>缩写</strong></dt><dd>砍一半长度,保留核心信息</dd>
+  <dt><strong>扩写</strong></dt><dd>补充论据 / 例证,保持原风格立场</dd>
+  <dt><strong>校对</strong></dt><dd>改错别字、语法、标点</dd>
+  <dt><strong>自定义</strong></dt><dd>空模板,自己写要求(例如"翻成英文,保留技术名词")</dd>
+</dl>
+
+<h2 id="mode">三段文档模式</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">模式</th>
+      <th style="text-align:left;padding:8px 12px">适合</th>
+      <th style="text-align:left;padding:8px 12px">何时进入</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>阅读</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">90% 时间。所见即所得写稿</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">默认</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>心流</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">整稿让 AI 看、跨段问答</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><kbd>Shift</kbd>+<kbd>A</kbd></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>检视</strong></td>
+      <td style="padding:8px 12px">长稿攒意见 + AI 按意见改稿</td>
+      <td style="padding:8px 12px">顶栏三段控件</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="workbench">AI 工作台</h2>
+
+<dl class="shortcut-grid">
+  <dt>唤出</dt><dd><kbd>Shift</kbd> + <kbd>A</kbd> 或顶栏控件</dd>
+  <dt>发送</dt><dd><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dd>
+  <dt>停止生成</dt><dd>Composer 下方取消按钮</dd>
+  <dt>Provider 切换</dt><dd>Composer 底部药丸(Claude / OpenCode)</dd>
+  <dt>多会话管理</dt><dd>AI 工作台 header 的 💬 药丸 → 下拉切换 / 新建 / 关闭</dd>
+</dl>
+
+<div class="card">
+  <div class="card-title">5 种流式卡片</div>
+  <ul>
+    <li><strong>思考卡</strong>(Thought)— 折叠,默认不看</li>
+    <li><strong>正文卡</strong>(Markdown)— 打字机读它</li>
+    <li><strong>工具卡</strong>(Tool)— AI 在读你的文件,正常</li>
+    <li><strong>Done 状态栏</strong>— 耗时·token·估算花费</li>
+    <li><strong>错误诊断卡</strong>— 人话诊断 + Retry</li>
+  </ul>
+</div>
+
+<h2 id="review">检视 + 内联审阅</h2>
+
+<h3>检视图右栏</h3>
+
+<dl class="shortcut-grid">
+  <dt>跳转到意见位置</dt><dd>点右栏意见行 ▶</dd>
+  <dt>编辑意见</dt><dd>点意见行铅笔</dd>
+  <dt>删意见</dt><dd>点意见行 🗑</dd>
+  <dt>导出 review.md</dt><dd>右栏「导出检视版」</dd>
+  <dt>发 AI 改稿</dt><dd>右栏顶「AI 改稿」→ 「发 AI 修改」</dd>
+</dl>
+
+<h3>内联审阅态(中间编辑器接管)</h3>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Y</kbd></dt><dd>采纳当前 hunk,跳下一处</dd>
+  <dt><kbd>N</kbd></dt><dd>拒绝当前 hunk,跳下一处</dd>
+  <dt><kbd>Enter</kbd></dt><dd>下一处</dd>
+  <dt><kbd>Shift</kbd> + <kbd>Enter</kbd></dt><dd>上一处</dd>
+  <dt><kbd>Esc</kbd></dt><dd>退出审阅态(动过 hunk 弹确认)</dd>
+  <dt>右上「应用」</dt><dd>合并写回当前文档(原子,一次 <kbd>Ctrl</kbd>+<kbd>Z</kbd> 全回滚)</dd>
+</dl>
+
+<h2 id="skill">SkillHub</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">场景</th>
+      <th style="text-align:left;padding:8px 12px">预置 skill</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>报告生成</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">空模板(等你手动加)</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>PPT 制作</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">huawei-style-ppt-skill · guizang-ppt-skill · huashu-slides · baoyu-slide-deck</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>HTML 制作</strong></td>
+      <td style="padding:8px 12px">frontend-slides</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card callout">
+  <div class="card-title">SkillHub 规则</div>
+  <ul>
+    <li>系统预置<strong>不可删</strong>,用户添加可删</li>
+    <li>未装的 skill → 卡片置灰 → 点击发"安装指令"给 AI 工作台当前对话</li>
+    <li><strong>每个 skill 一个独立 session UUID</strong>(互不串上下文)</li>
+    <li>Claude / OpenCode 看到的 skill 路径不一样(<code>~/.claude/skills/</code> vs <code>~/.opencode/commands/</code>)</li>
+  </ul>
+</div>
+
+<h2 id="artifact">产物中心</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">动作</th>
+      <th style="text-align:left;padding:8px 12px">去哪</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>落到磁盘</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>&lt;工作区&gt;/.typola-output/&lt;会话&gt;/</code> + 加进 <code>.gitignore</code></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>右下角 chip</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">点「打开」进中间编辑器</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>归档到工作区</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">自动改名去重 + 搬运出 <code>.typola-output</code></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>合并到当前文档</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">走第 5 课内联审阅</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>覆盖当前文档 + 撤销覆盖</strong></td>
+      <td style="padding:8px 12px">慎用,撤销 5 分钟内有效</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="export">4 种导出</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">导出</th>
+      <th style="text-align:left;padding:8px 12px">适合</th>
+      <th style="text-align:left;padding:8px 12px">快捷键</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>PDF</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">最终交付、本地归档</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><kbd>Ctrl</kbd>+<kbd>P</kbd></td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>Word(.docx)</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">会再编辑的同事</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">菜单</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>HTML / 富文本 / 浏览器</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">网站 / 邮件 / 公众号</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">菜单</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>review.md</strong></td>
+      <td style="padding:8px 12px">协作者 / 喂 AI</td>
+      <td style="padding:8px 12px">检视模式右栏「导出检视版」</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="offline">离线降级</h2>
+
+<div class="card safe">
+  <div class="card-title">断网 → 你还有这些</div>
+  <ul class="check-list" style="margin:8px 0">
+    <li>全模式 Markdown 编辑</li>
+    <li>查找替换 / 文档统计 / 大纲</li>
+    <li>Word / PDF 导出 + 本地终端</li>
+    <li>主题切换 + 剪贴板图片</li>
+  </ul>
+</div>
+
+<div class="card danger">
+  <div class="card-title">断网 → 你没有这些</div>
+  <ul style="margin:8px 0">
+    <li>所有 AI 改稿 + AI 工作台对话</li>
+    <li>未装 skill → AI 装 skill(依赖于 AI)</li>
+  </ul>
+</div>
+
+<hr>
+
+<blockquote>
+  <p>教程到此结束。一稿一文,9 节看完,相信你对 Typola 心里有数了。
+    不懂就问 AI — 这是教材上的最后一句,也是真正用户阶段的开始。</p>
+</blockquote>
+</section>
+</main>
+</body>
+</html>

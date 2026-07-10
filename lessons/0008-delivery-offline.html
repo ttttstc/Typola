@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>交付 + 离线降级</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 8 课</span>
+<h1>交付 + 离线降级</h1>
+<p class="subtitle">10 分钟。Typola 能"出"了 — 4 种导出形态各自适合什么场景,以及没网/没 AI 时 Typola 还能做什么。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>一篇稿子写好了,接下来要"出" — 给同事、客户、读者、上传公众号…
+    不同受众要不同形态:PDF 给最终交付,Word 给会再编辑的同事,HTML 给网页/邮件,review.md 给协作者或 AI。
+    <strong>形态选错 = 多花两小时再排版</strong>。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>Typola 强制<strong>导出与编辑共享同一个 Markdown 源</strong>(<code>markdownExportRenderer</code> 是 Phase 4 共享桥接)。
+    4 种导出默认会把 Markdown 渲成自己的格式;导出按钮走 Rust 后端,完成后右上角 toast 通知,不打断写作。
+    没了 AI、没了网,Typola 仍然可以作为本地编辑器使用 — 这部分叫<strong>降级</strong>。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>很多编辑器的"导出 PDF"其实是在调用一个云 API,Typola 用本地隐藏 WebView2 + <code>Page.printToPDF</code>,全程离线。
+    富文本复制走 <code>WechatPreviewPane</code>(兼容公众号后台),不需要打开浏览器再复制粘贴。
+    <strong>降级不是 fallback 列表</strong>,而是"你的工作不被网络/AI 绑架"的产品承诺。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pdf">1. PDF 导出 — 最终交付</a>
+  <a class="toc-pill" href="#word">2. Word — 给会再编辑的同事</a>
+  <a class="toc-pill" href="#html">3. HTML — 网页、邮件、富文本(公众号)</a>
+  <a class="toc-pill" href="#review-md">4. review.md — 协作者或 AI</a>
+  <a class="toc-pill" href="#offline">5. 离线降级:无网、无 CLI 时还能干什么</a>
+  <a class="toc-pill" href="#preset">6. 自定义导出预设</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pdf">1. PDF 导出 — 最终交付</h2>
+
+<p>场景:把这篇文档原样交付 — 不再被修改、直接发出去 / 归档 / 评审。</p>
+
+<ol>
+  <li>打开要导出的文档</li>
+  <li>按 <kbd>Ctrl</kbd> + <kbd>P</kbd> 或菜单 <code>导出 → PDF</code></li>
+  <li>Typola 用一个<strong>隐藏的 WebView2</strong>渲染 Markdown,然后调 <code>Page.printToPDF</code>(<strong>本地</strong>,不上云)</li>
+  <li>保存路径自动从当前文件路径派生,无需开对话框:</li>
+  <ul>
+    <li>当前文档已存 → 同目录 / 同主名加 <code>.pdf</code></li>
+    <li>当前文档未存 → 默认落用户下载目录</li>
+  </ul>
+  <li>右上角 toast:「PDF 导出成功 / 失败」</li>
+</ol>
+
+<div class="card callout">
+  <div class="card-title">PDF 不响应你应用的主题色</div>
+  <p>Typola 的暖米黄/深海/墨韵主题只影响编辑器;<strong>PDF 走自己的导出配色</strong>(预设)。
+    理由:别人读 PDF 时不一定知道你用什么主题。
+    想自定义 PDF 样式 → 「自定义导出预设」(本节最后会展开)。</p>
+</div>
+
+<h2 id="word">2. Word — 给会再编辑的同事</h2>
+
+<p>场景:把稿子给同事,他习惯改 Word — 你<strong>不用</strong>帮他去 Word 里排版。</p>
+
+<ol>
+  <li><code>导出 → Word (.docx)</code></li>
+  <li>可选:先打开<strong>Word 纸张预览</strong>(右栏的 <code>WordPaperPreviewPane</code>)看 Word 视角下的样子</li>
+  <li>确认后导出,产物落 <code>&lt;源&gt;.docx</code></li>
+  <li>同事用 Word 打开可以正常修改</li>
+</ol>
+
+<div class="card safe">
+  <div class="card-title">.docx 不是 round-trip</div>
+  <p>Typola 生成的 .docx 是「导出副本」,<strong>不是你未来再 import 回 Typola 的双向通道</strong>。
+    同事改完 Word 给你,你最好拿回 .md 在 Typola 里继续改 — Word 修改痕迹别强迫 Typola 反向解析。</p>
+</div>
+
+<p>自定义导出预设:Wor在「<code>设置</code>」里有 "<strong>Word 导出预设</strong>" 编辑面板,内置 8 个 slot 默认开启,你可以上传 JSON 自定义版式(字号/页边距/标题字号/字体):</p>
+
+<pre><code>{
+  "name": "团队周报样式",
+  "page": { "margin": "2.5cm", "fontSize": "10.5pt" },
+  "heading": { "h1": "16pt", "h2": "14pt" },
+  "font": { "body": "Microsoft YaHei", "code": "JetBrains Mono" }
+}</code></pre>
+
+<h2 id="html">3. HTML — 网页、邮件、富文本(公众号)</h2>
+
+<p>3 种用法,3 个不同按钮:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">按钮</th>
+      <th style="text-align:left;padding:8px 12px">产物</th>
+      <th style="text-align:left;padding:8px 12px">用途</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>导出 HTML</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>.html</code> 文件</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">放到自己网站 / 内网 wiki / 邮件附件</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>复制富文本 / 公众号样式</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">HTML 片段(放进剪贴板)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">粘贴到 <strong>微信公众号后台 / 知乎 / 掘金</strong>的后台富文本编辑器,样式跟随渲染</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>在浏览器打开 HTML</strong></td>
+      <td style="padding:8px 12px">系统默认浏览器启动</td>
+      <td style="padding:8px 12px">本地预览 / 截图归档 / 给同事看效果</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card callout">
+  <div class="card-title">公众号粘贴小技巧</div>
+  <ol>
+    <li>先打开 <code>WechatPreviewPane</code>(<code>视图 → 公众号预览</code>)— 看样式</li>
+    <li>调整字号、颜色到公众号合规</li>
+    <li>点「<strong>复制富文本</strong>」</li>
+    <li>打开公众号编辑器,粘贴(<kbd>Ctrl</kbd> + <kbd>V</kbd>)</li>
+    <li>微调标题/封面图就发</li>
+  </ol>
+  <p>不再需要 Word + 排版软件多次中转。</p>
+</div>
+
+<h2 id="review-md">4. review.md — 协作者或 AI</h2>
+
+<p>这是第 5 课的输出。两种用法:</p>
+
+<dl class="shortcut-grid">
+  <dt><strong>给人看</strong></dt><dd>同事直接看 review 版 markdown,知道每段问题在哪;不需要装 Typola</dd>
+  <dt><strong>给 AI 改</strong></dt><dd>把 review.md 喂给任意 AI(Claude / GPT / Gemini / 自家 AI),它们看 blockquote 后的「请处理」知道要改什么</dd>
+</dl>
+
+<p>导出路径取决于上下文:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">在哪里导出</th>
+      <th style="text-align:left;padding:8px 12px">文件名</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">检视模式右栏</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>&lt;原文件名&gt;.review.md</code>(带检视版标记,不污染原 .md)</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px">AI 改稿产物</td>
+      <td style="padding:8px 12px"><code>&lt;原 stem&gt;.ai改{N}.md</code>(N = 改了几次)</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card safe">
+  <div class="card-title">导出 review.md 后,原文档彻底不受影响</div>
+  <p>Typola 的检视意见是<strong>叠加在内存里的一层</strong>,导出的 .md 是这一层的快照;
+    关闭 Typola → 那份 .md 还在磁盘(你刚导出的),内存里的意见消失;
+    重新打开 .md → Typola 不会再去把意见<strong>解析回</strong>那份 .md,单向快照设计。</p>
+</div>
+
+<h2 id="offline">5. 离线降级 — 没网、没 CLI 时 Typola 还能干什么</h2>
+
+<p>这是 Typola 的底线承诺:<strong>所有功能必须在断网/无 AI CLI 下退化为可用</strong>。<code>PRODUCT.md</code> 设计原则 #4。</p>
+
+<div class="card safe">
+  <div class="card-title">断网 → 你还有这些</div>
+  <ul class="check-list" style="margin:8px 0">
+    <li>所有 Markdown 写作与编辑功能(阅读/心流/检视 三模式)</li>
+    <li>本地文件操作(打开 / 保存 / 改后缀 / 拖拽)</li>
+    <li>查找替换、文件大纲、文档统计、Find/Replace</li>
+    <li>主题切换(本地样式)</li>
+    <li>图片粘贴保存(本地)</li>
+    <li>WordPaper 预览 + Word/PDF 导出(本地 WebView2)</li>
+    <li>底层终端(可在任意目录跑命令 — 但要 Windows 已装 terminal)</li>
+  </ul>
+</div>
+
+<div class="card danger">
+  <div class="card-title">断网 → 你没有这些</div>
+  <ul style="margin:8px 0">
+    <li>所有 AI 改稿(浮条、检视 → AI、AI 工作台对话)</li>
+    <li>SkillHub 的"未装时让 Claude 装"路径(它依赖 AI 工作)</li>
+    <li>产物落盘以外的 watcher(但不关键 — 文件在磁盘就在)</li>
+  </ul>
+</div>
+
+<h2 id="preset">6. 自定义导出预设</h2>
+
+<p>在「<code>设置 → 导出预设</code>」可以:</p>
+
+<ul>
+  <li>管理 Word 预设(内置 8 个 slot 默认开启)</li>
+  <li>管理 HTML 预设(同样的 slot 机制)</li>
+  <li>PDF 默认走标准预设,但允许改字体</li>
+</ul>
+
+<div class="card">
+  <div class="card-title">预设的形态与限制</div>
+  <ul>
+    <li>是 JSON 文件,不是 LaTeX 模板 — 学起来轻</li>
+    <li>设置面板里直接给实时预览</li>
+    <li>8 个 slot 上限 = 防止"我做了 30 个预设然后忘"</li>
+  </ul>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">15 分钟任务:一稿四产出</div>
+  <ol class="check-list">
+    <li>打开任意写好的文档(无 AI 也能做)。</li>
+    <li>导出 PDF 一次,在 <code>导出物</code> 同目录看到新 .pdf。</li>
+    <li>导出 Word 一次,确认 .docx 可用 Word/WPS 打开。</li>
+    <li>复制富文本,粘贴到一个临时文本文件,看 HTML 片段里有 <code>&lt;h2&gt;</code>/<code>&lt;blockquote&gt;</code> 等干净标签。</li>
+    <li>断网(关 wifi + 关以太网),看 Typola 是否还能写、还能导出 PDF、还能用本地终端。<strong>断网下不要去 AI 改稿,这是预期行为。</strong></li>
+  </ol>
+  <p>✅ 一稿四出 + 知道什么时候没 AI 也能干 = <strong>9 节课全部完成 🎉</strong>。
+    从第 0 节到这里,你已经掌握 Typola 全能力:写、改、检视、交付、外加在哪一节暂停。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>PDF 导出卡死</strong> — 通常是图片路径解析失败,或字体加载超时。Typola 走 fail-open 路径,等 30 秒一定出结果。</li>
+    <li><strong>Word 导出排版乱</strong> — 多半是表格/代码块超长。预设里调字号、改用更紧凑的版式。</li>
+  <li><strong>公众号粘贴后字体不动</strong> — 公众号富文本编辑器会覆盖部分样式。你需要在后台再选一次默认字体。</li>
+  <li><strong>导出后没找到文件</strong> — 看保存路径:<strong>已保存的文档</strong>导出到同目录,<strong>未保存的文档</strong>落到 Downloads。</li>
+  <li><strong>断网后 AI 改稿按钮变灰</strong> — 是正常降级,不是 bug。换到无 AI 的工作流即可。</li>
+</ul>
+
+<hr>
+
+<h2>教程收尾</h2>
+
+<blockquote>
+  <p><strong>4 句口诀,再念一遍:</strong></p>
+  <p>· <strong>Tab 管文件,Pill 管对话。</strong><br>
+  · <strong>左栏是草稿,中栏是成品。</strong><br>
+  · <strong>AI 改稿先 diff,采纳再回写。</strong><br>
+  · <strong>降级不离本地,产物总回文件。</strong></p>
+</blockquote>
+
+<p>你现在可以:</p>
+<ul>
+  <li>看 <a href="../reference/typola-cheatsheet.html"><strong>速查表</strong></a> — 一份 1 页的常用快捷键 + 浮条动作 + Skill 列表</li>
+  <li>回头<strong>精修</strong>任何一节 — 总是可以再练一遍</li>
+  <li>用<strong>任何工具</strong>问 AI 一两个问题 — 你是 Typola 真用户了,剩下的场景你试出来</li>
+</ul>
+
+<p>最后提醒:Typola 是<strong>本地优先、文档为中心</strong>的编辑器。<strong>所有 AI 工作都不应该偷走你的文档</strong>。
+如果你发现某个功能让你心里有点慌(怕被覆盖、怕被清理),那就是 Typola 没做好,直接告诉我们 — 文档是你的。</p>
+
+</body>
+</html>
