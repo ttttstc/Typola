@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { TypolaEditorKernel } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import { applyCm6Format } from '../services/editor/cm6FormatService';
@@ -33,7 +33,7 @@ type EditorPaneProps = {
   onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
 };
 
-export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function EditorPane(
+export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(function EditorPane(
   props,
   ref,
 ) {
@@ -368,7 +368,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
       return editor.state.doc.sliceString(from, to) === originalText ? 'valid' : 'stale';
     },
     // Source 模式:from/to 直接是 CodeMirror 文档偏移,不需要 opts.text / query /
-    // searchOptions。保留 opts 签名仅是为了实现 EditorCoreHandle 契约。
+    // searchOptions。保留 opts 签名仅是为了实现 TypolaEditorKernel 契约。
     revealRange(from: number, to: number, opts) {
       if (!editorView) return;
       suppressFloatingBarRef.current = true;
@@ -404,7 +404,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
     },
     setFoldedHeadings(keys: ReadonlySet<string>) {
       if (!editorView) return;
-      // setFoldedHeadings 的 keys 类型来自 EditorCoreHandle 契约(string),
+      // setFoldedHeadings 的 keys 类型来自 TypolaEditorKernel 契约(string),
       // headingFoldExtension 内部仍按 FoldKey(`${level}:${text}`) 处理。
       setFoldedHeadings(editorView, keys as ReadonlySet<never>);
     },

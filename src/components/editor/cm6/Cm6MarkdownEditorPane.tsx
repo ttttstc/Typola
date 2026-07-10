@@ -4,7 +4,7 @@ import 'katex/dist/katex.min.css';
 import { EditorPane, type SourceHeadingScrollRequest } from '../../EditorPane';
 import type { SelectionActionId } from '../../../services/agent/selectionActions';
 import type { SelectionAnchor } from '../../../services/agent/types';
-import type { EditorCoreHandle } from '../../../types/editorCore';
+import type { TypolaEditorKernel } from '../../../types/editorCore';
 import { useSettings } from '../../../hooks/useSettings';
 import { updateSettings } from '../../../services/settingsService';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';
@@ -41,7 +41,7 @@ function zoomPercent(size: number): number {
  * 搜索 reveal、撤销等命令契约不变。Phase 2 再在这里替换为 Typora-like live preview
  * extension 组合。
  */
-export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEditorPaneProps>(
+export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownEditorPaneProps>(
   function Cm6MarkdownEditorPane(props, ref) {
     const {
       mode = 'wysiwyg',
@@ -55,7 +55,7 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
     const [internalFoldedHeadings, setInternalFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
     const foldedHeadings = foldedHeadingsProp ?? internalFoldedHeadings;
     const hideTimerRef = useRef<number | null>(null);
-    const editorRef = useRef<EditorCoreHandle | null>(null);
+    const editorRef = useRef<TypolaEditorKernel | null>(null);
 
     const handleFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
       if (onFoldChange) {
@@ -85,7 +85,7 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
     const handleZoomIndicatorClick = useCallback(() => {
       const editor = editorRef.current;
       if (!editor) return;
-      // 走 EditorCoreHandle.setZoom 触发 wheelZoomExtension 的 reconfigure,
+      // 走 TypolaEditorKernel.setZoom 触发 wheelZoomExtension 的 reconfigure,
       // 避免 React 重挂载 / StateField 不同步。
       editor.setZoom(ZOOM_BASE_PX);
       updateSettings({ editorFontSize: ZOOM_BASE_PX });

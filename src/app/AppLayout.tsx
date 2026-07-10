@@ -57,7 +57,7 @@ import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skil
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { TypolaEditorKernel } from '../types/editorCore';
 import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -146,7 +146,7 @@ export function AppLayout() {
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
-  const editorCommandRef = useRef<EditorCoreHandle | null>(null);
+  const editorCommandRef = useRef<TypolaEditorKernel | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   // 双向同步震荡抑制:任一方向触发后,锁定反向一段时间(防止 editor↔preview 循环)。
