@@ -11,6 +11,7 @@ type UseTocStateOptions = {
   mainContentRef: MutableRefObject<HTMLDivElement | null>;
   resolveTocHeading: (item: TocItem, index: number) => HTMLElement | null;
   setSourceHeadingScrollRequest: Dispatch<SetStateAction<SourceHeadingScrollRequest | undefined>>;
+  trackDomHeadings?: boolean;
 };
 
 type UseTocStateResult = {
@@ -21,6 +22,7 @@ type UseTocStateResult = {
   handleTocNavigate: (item: TocItem, index: number) => void;
   handleTocPinnedChange: (nextPinned: boolean) => void;
   handleTocAlwaysPinnedChange: (nextAlwaysPinned: boolean) => void;
+  handleEditorHeadingChange: (index: number) => void;
 };
 
 /**
@@ -32,6 +34,7 @@ export function useTocState({
   mainContentRef,
   resolveTocHeading,
   setSourceHeadingScrollRequest,
+  trackDomHeadings = true,
 }: UseTocStateOptions): UseTocStateResult {
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
@@ -61,8 +64,12 @@ export function useTocState({
     updateSettings({ tocAlwaysPinned: nextAlwaysPinned });
   }, []);
 
+  const handleEditorHeadingChange = useCallback((index: number) => {
+    if (index >= 0) setActiveTocIndex(index);
+  }, []);
+
   useEffect(() => {
-    if (toc.length === 0) return;
+    if (!trackDomHeadings || toc.length === 0) return;
     if (editorMode === 'source') return;
 
     const updateActiveHeading = () => {
@@ -105,7 +112,7 @@ export function useTocState({
       window.removeEventListener('resize', scheduleUpdate);
       observer.disconnect();
     };
-  }, [editorMode, mainContentRef, resolveTocHeading, toc]);
+  }, [editorMode, mainContentRef, resolveTocHeading, toc, trackDomHeadings]);
 
   return {
     toc,
@@ -115,5 +122,6 @@ export function useTocState({
     handleTocNavigate,
     handleTocPinnedChange,
     handleTocAlwaysPinnedChange,
+    handleEditorHeadingChange,
   };
 }

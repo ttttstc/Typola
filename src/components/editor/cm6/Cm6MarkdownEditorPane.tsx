@@ -10,6 +10,7 @@ import { updateSettings } from '../../../services/settingsService';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';
 import type { PreviewHeadingChange } from './previewSyncExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
+import type { ReviewComment } from '../../../services/review/reviewState';
 
 type Cm6MarkdownEditorPaneProps = {
   mode?: 'source' | 'wysiwyg';
@@ -24,6 +25,7 @@ type Cm6MarkdownEditorPaneProps = {
    *  若不传,组件内部用 useState 自管,行为与之前保持一致。 */
   foldedHeadings?: ReadonlySet<FoldKey>;
   onFoldChange?: (next: ReadonlySet<FoldKey>) => void;
+  reviewComments?: readonly ReviewComment[];
 };
 
 /** 以 atomic-editor 默认 14px 为 100% 参考,滚轮缩放比例都换算到这个基准。 */
@@ -48,6 +50,7 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
       onPreviewHeadingChange,
       foldedHeadings: foldedHeadingsProp,
       onFoldChange,
+      reviewComments,
       ...rest
     } = props;
     const settings = useSettings();
@@ -114,8 +117,10 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
         onZoomChange: handleZoomChange,
         onPreviewHeadingChange,
         onFoldChange: handleFoldChange,
+        reviewComments,
+        filePath: rest.filePath,
       });
-    }, [mode, settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange]);
+    }, [mode, settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange, reviewComments, rest.filePath]);
     return (
       <div className="cm6-markdown-editor-pane">
         <EditorPane

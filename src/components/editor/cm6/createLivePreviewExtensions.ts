@@ -7,6 +7,8 @@ import { wheelZoomExtension } from './wheelZoomExtension';
 import { previewSyncExtension, type PreviewHeadingChange } from './previewSyncExtension';
 import { headingFoldExtension } from './headingFoldExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
+import type { ReviewComment } from '../../../services/review/reviewState';
+import { reviewMarkExtension } from './reviewMarkExtension';
 
 type CreateLivePreviewExtensionsOptions = {
   livePreview?: boolean;
@@ -15,6 +17,8 @@ type CreateLivePreviewExtensionsOptions = {
   onPreviewHeadingChange?: (change: PreviewHeadingChange) => void;
   foldedHeadings?: ReadonlySet<FoldKey>;
   onFoldChange?: (folded: ReadonlySet<FoldKey>) => void;
+  reviewComments?: readonly ReviewComment[];
+  filePath?: string;
 };
 
 export function createLivePreviewExtensions(
@@ -27,11 +31,14 @@ export function createLivePreviewExtensions(
     onPreviewHeadingChange,
     foldedHeadings,
     onFoldChange,
+    reviewComments,
+    filePath,
   } = options;
   const extensions: Extension[] = [
     headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }),
     wheelZoomExtension({ baseSize, onChange: onZoomChange }),
     previewSyncExtension({ onChange: onPreviewHeadingChange }),
+    reviewMarkExtension({ comments: reviewComments, filePath }),
   ];
   if (livePreview) {
     extensions.unshift(

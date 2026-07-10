@@ -157,12 +157,6 @@ export function AppLayout() {
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
     previewScrollRef.current?.scrollToRatio(ratio);
   }, []);
-  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
-    if (Date.now() < syncLockUntilRef.current) return;
-    if (change.index < 0) return;
-    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
-    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
-  }, []);
   const handlePreviewHeadingScroll = useCallback((change: { index: number }) => {
     if (Date.now() < syncLockUntilRef.current) return;
     if (change.index < 0) return;
@@ -219,13 +213,14 @@ export function AppLayout() {
     const root = mainContentRef.current;
     if (!root) return null;
 
-    // 同时兼容 Vditor IR/WYSIWYG 与 CM6 源码模式。
-    // CM6 下 heading 是 .cm-content 里的语义 h1..h6(atomic-editor 用真实标签,
-    // 而非自定义 span),不命中 Vditor selector 会导致 TOC 跳转永远 index 越界。
+    // atomic-editor 标题行是 .cm-line.cm-atomic-hN，而不是语义 hN。
     const headings = root.querySelectorAll<HTMLElement>(
       '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, '
       + '.vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6, '
-      + '.cm-content h1, .cm-content h2, .cm-content h3, .cm-content h4, .cm-content h5, .cm-content h6',
+      + '.cm-content h1, .cm-content h2, .cm-content h3, .cm-content h4, .cm-content h5, .cm-content h6, '
+      + '.cm-content .cm-line.cm-atomic-h1, .cm-content .cm-line.cm-atomic-h2, '
+      + '.cm-content .cm-line.cm-atomic-h3, .cm-content .cm-line.cm-atomic-h4, '
+      + '.cm-content .cm-line.cm-atomic-h5, .cm-content .cm-line.cm-atomic-h6',
     );
     return headings[index] ?? null;
   }, []);
@@ -237,13 +232,22 @@ export function AppLayout() {
     handleTocNavigate,
     handleTocPinnedChange,
     handleTocAlwaysPinnedChange,
+    handleEditorHeadingChange: handleTocEditorHeadingChange,
   } = useTocState({
     editorMode,
     alwaysPinned: settings.tocAlwaysPinned,
     mainContentRef,
     resolveTocHeading,
     setSourceHeadingScrollRequest,
+    // CM6 虚拟化行 DOM，当前标题索引由 previewSyncExtension 提供。
+    trackDomHeadings: false,
   });
+  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
+    handleTocEditorHeadingChange(change.index);
+    if (Date.now() < syncLockUntilRef.current || change.index < 0) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
+    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
+  }, [handleTocEditorHeadingChange]);
   // 模式 ref 解决「getDefaultRightPanelWidth 在 rightPanelMode 声明前定义」的问题。
   const rightPanelModeRef = useRef<RightPanelMode>('none');
   const getDefaultRightPanelWidth = useCallback(() => {
@@ -1528,6 +1532,7 @@ export function AppLayout() {
         onPreviewHeadingChange={handleEditorHeadingChange}
         foldedHeadings={foldedHeadings}
         onFoldChange={handleEditorFoldChange}
+        reviewComments={reviewStateApi.state.comments}
       />
     </Suspense>
   );
