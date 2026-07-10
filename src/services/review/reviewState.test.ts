@@ -172,6 +172,21 @@ describe('buildReviewMarkdown 行号前缀', () => {
     expect(out).toContain('改 orphan');
   });
 
+  it('文末汇总 escape 反引号/井号/星号,避免意见内容破坏 ### N. 标题行渲染', () => {
+    const src = '正文段落。';
+    const evil = addReviewComment(
+      EMPTY_REVIEW_STATE,
+      'a.md',
+      { filePath: 'a.md', from: 0, to: 2, originalText: '伪 ## 标题' },
+      '含 `伪#代码块` 和 *星号*',
+    );
+    const out = buildReviewMarkdown(src, evil.comments);
+    expect(out).toContain('\\`伪\\#代码块\\`');
+    expect(out).toContain('\\*星号\\*');
+    // ### N. 行仍保持完整标题结构,不被井号破坏(## → \#\#)
+    expect(out).toContain('### 1. 第 1 行 · 针对片段「伪 \\#\\# 标题」');
+  });
+
   it('anchor.from 为负 → 文末汇总显示「定位失效」', () => {
     const src = '正常段落。';
     const s = addReviewComment(
