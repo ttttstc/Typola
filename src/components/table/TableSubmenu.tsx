@@ -141,13 +141,18 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated, onChange }: Tabl
         {t('tableMenuDeleteCol')}
       </button>
       <button type="button" role="menuitem" className="typola-table-submenu-item" onClick={() => {
-        // 删除整表:把 table div 从 source 中移除。
-        const data = parseTableFromIr(ctx.tableEl);
-        const tableSource = serializeTable(data);
+        // 删除整表:用 Lute 同源定位消除 deleteTable 与 run 路径的定位偏差(M6 同源修复)。
+        const tableParentHtml = ctx.tableEl.parentElement?.innerHTML ?? ctx.tableEl.innerHTML;
+        const lute = (editor as unknown as { lute?: { VditorIRDOM2Md?: (html: string) => string } }).lute;
+        if (!lute?.VditorIRDOM2Md) {
+          console.warn('[tableSubmenu] deleteTable: lute unavailable; abort');
+          return;
+        }
+        const oldTableMd = lute.VditorIRDOM2Md(tableParentHtml);
         const full = editor.getValue();
-        const idx = full.indexOf(tableSource);
+        const idx = full.indexOf(oldTableMd);
         if (idx >= 0) {
-          commitSource(full.slice(0, idx) + full.slice(idx + tableSource.length));
+          commitSource(full.slice(0, idx) + full.slice(idx + oldTableMd.length));
         } else {
           console.warn('[tableSubmenu] deleteTable: cannot locate table in source; abort');
         }
