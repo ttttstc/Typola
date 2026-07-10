@@ -21,7 +21,7 @@ import { SELECTION_ACTIONS, type SelectionActionId } from '../../services/agent/
 
 // 浮条只暴露 5 个动作:润色 / 名词解释 / 加检视意见 / 本文档不再展示 / 全局隐藏。
 // 自定义 / 扩写 / 缩写 / 校对走右键菜单(场景更完整,不适合塞进浮动窄条)。
-const ACTION_IDS: SelectionActionId[] = ['polish', 'explain', 'review', 'dismiss-session', 'hide-globally'];
+const ACTION_IDS: SelectionActionId[] = ['polish', 'explain', 'review'];
 const SHOW_DEBOUNCE_MS = 160;
 const ESTIMATED_WIDTH = 240;
 const ESTIMATED_HEIGHT = 34;
@@ -176,6 +176,11 @@ export function SelectionFloatingBar({
     // 给结果卡/检视浮卡一个贴近选区下方的锚点。
     onPick(id, { x: rect.selRect.left, y: rect.selRect.bottom + 6 });
   };
+  const actionIds = [
+    ...ACTION_IDS,
+    ...(onDismissSession ? ['dismiss-session' as const] : []),
+    ...(onHideGlobally ? ['hide-globally' as const] : []),
+  ];
 
   return (
     <div
@@ -192,7 +197,7 @@ export function SelectionFloatingBar({
       // 阻止 mousedown 默认行为,免得点浮条按钮时把编辑器选区清掉
       onMouseDown={(event) => event.preventDefault()}
     >
-      {ACTION_IDS.map((id) => {
+      {actionIds.map((id) => {
         const action = SELECTION_ACTIONS[id];
         const Icon = action.icon;
         return (

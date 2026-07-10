@@ -248,17 +248,25 @@ export function useConversationManager({
   const eventQueueRef = useRef(new Map<string, AgentEvent[]>());
   const eventFrameRef = useRef<number | null>(null);
   const silencedRunIdsRef = useRef(new Set<string>());
-  const exitWaitersRef = useRef(new Map<string, Array<() => void>>());
+  const pendingStartTokensRef = useRef(new Map<string, symbol>());
   // 选区注入暂存触发通知：每次 onAgentExit 让 active 从 running 退出且 conv 上有待投递的
   // pendingInjection，bump 一次让 ConversationPanel 显示"已停下"提示。
   const [injectionReadyTick, setInjectionReadyTick] = useState(0);
   // 最近一次投递的 convId（用于面板按 convId 监听）
   const [injectionReadyConvId, setInjectionReadyConvId] = useState<string | null>(null);
 
-  conversationsRef.current = conversations;
-  artifactFileRef.current = onArtifactFile;
-  openCodePathRef.current = openCodePath;
-  openCodeModelRef.current = openCodeModel;
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+  useEffect(() => {
+    artifactFileRef.current = onArtifactFile;
+  }, [onArtifactFile]);
+  useEffect(() => {
+    openCodePathRef.current = openCodePath;
+  }, [openCodePath]);
+  useEffect(() => {
+    openCodeModelRef.current = openCodeModel;
+  }, [openCodeModel]);
 
   useEffect(() => {
     activeConvIdRef.current = activeConvId;
@@ -271,32 +279,6 @@ export function useConversationManager({
     next.set(convId, { ...current, ...patch });
     conversationsRef.current = next;
     setConversations(next);
-  }, []);
-
-  const resolveExitWaiters = useCallback((convId: string) => {
-    const waiters = exitWaitersRef.current.get(convId);
-    if (!waiters) return;
-    exitWaitersRef.current.delete(convId);
-    waiters.forEach((resolve) => resolve());
-  }, []);
-
-  const waitForConversationExit = useCallback((convId: string, timeoutMs = 8000) => {
-    const conv = conversationsRef.current.get(convId);
-    if (!conv || conv.runState !== 'running') return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      let settled = false;
-      let timer = 0;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timer);
-        resolve();
-      };
-      timer = window.setTimeout(finish, timeoutMs);
-      const waiters = exitWaitersRef.current.get(convId) ?? [];
-      waiters.push(finish);
-      exitWaitersRef.current.set(convId, waiters);
-    });
   }, []);
 
   const cwd = useMemo(() => outputCwdForConversation(workspaceRoot, activeConvId), [workspaceRoot, activeConvId]);
@@ -396,6 +378,9 @@ export function useConversationManager({
     void onAgentExit((payload) => {
       const convId = payload.conversationId;
       silencedRunIdsRef.current.delete(payload.runId);
+      const conv = conversationsRef.current.get(convId);
+      // Cancel 后允许立刻重发；旧 run 的退出事件不能清理新 run。
+      if (!conv || conv.runId !== payload.runId) return;
       const handler = handlersRef.current.get(convId);
       handler?.flush();
       if (eventFrameRef.current !== null) {
@@ -404,8 +389,6 @@ export function useConversationManager({
       }
       flushQueuedEvents();
       handlersRef.current.delete(convId);
-      const conv = conversationsRef.current.get(convId);
-      if (!conv) return;
       const wasActive = conv.runState === 'running';
       const wasCancelled = payload.cancelled || conv.cancelRequested;
       const patch: Partial<ConversationData> = {
@@ -437,7 +420,6 @@ export function useConversationManager({
           setInjectionReadyTick((tick) => tick + 1);
         }
       }
-      resolveExitWaiters(convId);
     }).then((unlisten) => {
       if (cancelled) unlisten(); else unlistenExit = unlisten;
     });
@@ -452,12 +434,10 @@ export function useConversationManager({
       }
       eventQueueRef.current.clear();
       silencedRunIdsRef.current.clear();
-      exitWaitersRef.current.forEach((waiters) => waiters.forEach((resolve) => resolve()));
-      exitWaitersRef.current.clear();
       for (const handler of handlersRef.current.values()) handler.flush();
       handlersRef.current.clear();
     };
-  }, [appendAssistantEvent, flushQueuedEvents, queueAssistantEvent, resolveExitWaiters, updateConv]);
+  }, [appendAssistantEvent, flushQueuedEvents, queueAssistantEvent, updateConv]);
 
   // send(prompt, opts?):opts.conversationId 显式指定目标 conv;省略则用当前 active。
   // 用途:刚 createConversation 后立即发送(activeConvIdRef 异步更新会撞 stale)。
@@ -514,12 +494,21 @@ export function useConversationManager({
       promptContextPaths: opts?.referencePaths,
       commandName: provider === 'opencode' ? conv.skillRef : undefined,
     };
+    const startToken = Symbol();
+    pendingStartTokensRef.current.set(convId, startToken);
     try {
       // 首轮 start（Rust 建新 session-id）；后续 resume（Rust 按 conversationId 复用 uuid + --resume），保多轮上下文延续
       const result = conv.sessionStarted
         ? await resumeAgentSession(request)
         : await startAgentSession(request);
-      const latest = conversationsRef.current.get(convId);
+      if (pendingStartTokensRef.current.get(convId) !== startToken) {
+        silencedRunIdsRef.current.add(result.runId);
+        void cancelAgentSession(result.runId).catch((error) => {
+          console.warn('Failed to cancel superseded agent session:', error);
+        });
+        return;
+      }
+      pendingStartTokensRef.current.delete(convId);
       // 同一路径的当前文档不重复注入；切换到新文档后由 Composer 传入新路径并更新这里。
       updateConv(convId, {
         sessionStarted: true,
@@ -527,12 +516,9 @@ export function useConversationManager({
         fileContextInjected: true,
         ...(opts?.currentFileContextPath ? { currentFileContextPath: opts.currentFileContextPath } : {}),
       });
-      if (latest?.cancelRequested) {
-        await cancelAgentSession(result.runId).catch((error) => {
-          console.warn('Failed to cancel pending agent run:', error);
-        });
-      }
     } catch (error) {
+      if (pendingStartTokensRef.current.get(convId) !== startToken) return;
+      pendingStartTokensRef.current.delete(convId);
       const message = String(error);
       const diagnostic = provider === 'opencode'
         ? openCodeFailureDiagnostic({
@@ -549,29 +535,24 @@ export function useConversationManager({
 
   // cancel —— 无条件兜底版。
   // 立刻置 idle + 强制杀进程(taskkill /T /F,由后端 agent_session_cancel 处理),
-  // 不依赖 onAgentExit 汇入。onAgentExit 兜底清理在 waitForConversationExit
-  // 8s 超时后也强制收尾,确保 provider 卡死/流 hang/非法 JSON 都不阻塞 UI。
+  // 不依赖 onAgentExit 汇入；旧 run 退出只做自身清理，不能覆盖后续重发。
   const cancel = useCallback(async () => {
     const convId = activeConvIdRef.current;
     const conv = conversationsRef.current.get(convId);
     if (!conv || (conv.runState !== 'running' && conv.runState !== 'waitingForUser')) return;
-    updateConv(convId, { cancelRequested: true });
+    pendingStartTokensRef.current.delete(convId);
     const handler = handlersRef.current.get(convId);
     handler?.flush();
     handlersRef.current.delete(convId);
     if (conv.runId) silencedRunIdsRef.current.add(conv.runId);
     if (conv.runId) {
-      const exitWait = waitForConversationExit(convId).then(() => {
-        updateConv(convId, { runState: 'idle', cancelRequested: false, lastError: '' });
-      });
       void cancelAgentSession(conv.runId).catch((error) => {
         console.warn('Failed to cancel agent session:', error);
       });
-      // 立刻恢复 UI 输入 —— 不等待 onAgentExit
-      updateConv(convId, { runState: 'idle', cancelRequested: false });
-      await exitWait;
     }
-  }, [updateConv, waitForConversationExit]);
+    // 立刻恢复 UI 输入；清 runId 让旧 exit 不能命中新 run。
+    updateConv(convId, { runState: 'idle', runId: undefined, cancelRequested: false, lastError: '' });
+  }, [updateConv]);
 
   const reset = useCallback(() => {
     const convId = activeConvIdRef.current;
