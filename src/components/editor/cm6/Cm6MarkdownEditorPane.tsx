@@ -50,6 +50,7 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
       onPreviewHeadingChange,
       foldedHeadings: foldedHeadingsProp,
       onFoldChange,
+      reviewComments,
       ...rest
     } = props;
     const settings = useSettings();
@@ -116,8 +117,10 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
         onZoomChange: handleZoomChange,
         onPreviewHeadingChange,
         onFoldChange: handleFoldChange,
+        reviewComments,
+        filePath: rest.filePath,
       });
-    }, [mode, settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange]);
+    }, [mode, settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange, reviewComments, rest.filePath]);
     return (
       <div className="cm6-markdown-editor-pane">
         <EditorPane

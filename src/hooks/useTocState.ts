@@ -9,6 +9,7 @@ type UseTocStateOptions = {
   editorMode: EditorMode;
   alwaysPinned: boolean;
   setSourceHeadingScrollRequest: Dispatch<SetStateAction<SourceHeadingScrollRequest | undefined>>;
+  trackDomHeadings?: boolean;
 };
 
 type UseTocStateResult = {
@@ -29,6 +30,7 @@ export function useTocState({
   editorMode,
   alwaysPinned,
   setSourceHeadingScrollRequest,
+  trackDomHeadings = true,
 }: UseTocStateOptions): UseTocStateResult {
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocSessionPinned, setTocSessionPinned] = useState(false);
@@ -60,12 +62,54 @@ export function useTocState({
   }, []);
 
   const handleEditorHeadingChange = useCallback((index: number) => {
-    if (pendingNavigationRef.current !== null) {
-      pendingNavigationRef.current = null;
-      return;
-    }
     if (index >= 0) setActiveTocIndex(index);
   }, []);
+
+  useEffect(() => {
+    if (!trackDomHeadings || toc.length === 0) return;
+    if (editorMode === 'source') return;
+
+    const updateActiveHeading = () => {
+      const rootRect = mainContentRef.current?.getBoundingClientRect();
+      const anchorTop = (rootRect?.top ?? 0) + 96;
+      let nextActive = 0;
+
+      toc.forEach((item, index) => {
+        const heading = resolveTocHeading(item, index);
+        if (!heading) return;
+        if (heading.getBoundingClientRect().top <= anchorTop) {
+          nextActive = index;
+        }
+      });
+
+      setActiveTocIndex((current) => current === nextActive ? current : nextActive);
+    };
+
+    const root = mainContentRef.current;
+    let frame: number | null = null;
+    const scheduleUpdate = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        updateActiveHeading();
+      });
+    };
+    const observer = new MutationObserver(scheduleUpdate);
+
+    root?.addEventListener('scroll', scheduleUpdate, { capture: true, passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+    if (root) {
+      observer.observe(root, { childList: true, subtree: true });
+    }
+    scheduleUpdate();
+
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      root?.removeEventListener('scroll', scheduleUpdate, true);
+      window.removeEventListener('resize', scheduleUpdate);
+      observer.disconnect();
+    };
+  }, [editorMode, mainContentRef, resolveTocHeading, toc, trackDomHeadings]);
 
   return {
     toc,
