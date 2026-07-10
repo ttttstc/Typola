@@ -407,6 +407,21 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   const handleMenuClose = useCallback(() => setContextMenu(null), []);
   const handleTableMenuClose = useCallback(() => setTableMenu(null), []);
 
+  // 表格编辑全文提交:用 setValue 重建 IR DOM + 同步受控 state,不用 updateValue(那是插入选区)。
+  const handleTableSourceChange = useCallback((nextSource: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const before = editor.getValue();
+    if (before === nextSource) return;
+    applyingExternalValue.current = true;
+    editor.setValue(nextSource, true);
+    lastEmittedValue.current = nextSource;
+    onChange(nextSource);
+    window.requestAnimationFrame(() => {
+      applyingExternalValue.current = false;
+    });
+  }, [onChange]);
+
   // Host click 统一派发:heading 折叠按钮 + task checkbox。
   // KaTeX reveal 由 renderKatexIn 内部 addEventListener 处理,不上冒到这里。
   const handleHostClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -1090,6 +1105,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
           ctx={tableMenu.ctx}
           editor={editorRef.current!}
           onClose={handleTableMenuClose}
+          onChange={handleTableSourceChange}
         />
       )}
       {onAIAction && settings.selectionFloatingBarEnabled && (

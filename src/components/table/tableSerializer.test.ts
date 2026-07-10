@@ -52,6 +52,17 @@ describe('parseTableFromIr', () => {
     const data = parseTableFromIr(table);
     expect(data.colAligns).toEqual(['center', 'right']);
   });
+
+  it('reads align attribute as align (Vditor IR 实际保存方式)', () => {
+    const table = makeTableDom(
+      '<table>' +
+        '<thead><tr><th align="center">c</th><th align="right">r</th></tr></thead>' +
+        '<tbody><tr><td>x</td><td>y</td></tr></tbody>' +
+        '</table>',
+    );
+    const data = parseTableFromIr(table);
+    expect(data.colAligns).toEqual(['center', 'right']);
+  });
 });
 
 describe('serializeTable', () => {

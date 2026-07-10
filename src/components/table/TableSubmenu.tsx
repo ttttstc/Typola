@@ -3,10 +3,17 @@
 // 拦截点:`WysiwygEditorPane.handleContextMenu` 检测 `event.target.closest('table[data-type="table"]')`,
 // 命中时改走 `handleTableContext`,渲染 `<TableSubmenu>` 替代 `<EditorContextMenu>`。
 
+// 表格编辑的 commit 路径:
+//  - TableSubmenu 不自己调 editor.updateValue(该 API 是插入选区,不是全文替换,会破坏正文)
+//  - 全走上层受控 onChange → setValue + 光标保留 setRange + Vditor IR 渲染
+//  - 由 WysiwygEditorPane 的 EditorCoreHandle 契约里唯一一个 onTableChange 入口桥接
+//  - 这样和既有 heading/task/replaceSelection 等其他文档级编辑路径完全对齐
+//  - 新检视 #177 修复:updateValue 误用 + Lute 同源定位 + align 属性读取
+
 import { useEffect, useState } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import { translate, type I18nKey } from '../../services/i18n';
-import { parseTableFromIr, serializeTable } from './tableSerializer';
+import { computeLuteTableSource, parseTableFromIr, serializeTable } from './tableSerializer';
 import {
   deleteCol,
   deleteRow,
@@ -49,9 +56,11 @@ export interface TableSubmenuProps {
   onClose: () => void;
   /** 操作完成后刷新 IR(可选,默认自动调用 editor.updateValue)。 */
   onUpdated?: () => void;
+  /** 提交全文给上层受控 state(editor 没有"全文替换"API,走 setValue + onChange)。 */
+  onChange?: (nextSource: string) => void;
 }
 
-export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuProps) {
+export function TableSubmenu({ ctx, editor, onClose, onUpdated, onChange }: TableSubmenuProps) {
   const settings = useSettings();
   const t = (key: I18nKey) => translate(settings.locale, key);
   const [visible, setVisible] = useState(true);
@@ -71,26 +80,34 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuPr
 
   if (!visible) return null;
 
+  // 取 table 父 div 的 innerHTML,用于 Lute 同源定位。
+  const tableParentHtml = ctx.tableEl.parentElement?.innerHTML ?? ctx.tableEl.innerHTML;
+
+  const commitSource = (newSource: string) => {
+    // 新检视 #177 修复:不直接调 editor.updateValue(那是插入当前选区),走上层受控 onChange。
+    onChange?.(newSource);
+    setVisible(false);
+    onClose();
+    onUpdated?.();
+  };
+
   const run = (
     mutate: (data: TableData) => TableData,
   ) => {
     const data = parseTableFromIr(ctx.tableEl);
     const next = mutate(data);
     if (next === data) return; // no-op(禁删等)
-    const newSource = computeNewTableSource(editor, ctx.tableEl, next);
+    const newSource = computeLuteTableSource(editor, tableParentHtml, next);
     if (newSource === null) {
-      // 操作被拒绝(退化路径),仍关闭 menu 让 UI 不卡死。
+      // 用 Lute 当前序列化定位失败,拒绝操作避免清空正文(M6 修复)。
       setVisible(false);
       onClose();
       return;
     }
-    editor.updateValue(newSource);
-    setVisible(false);
-    onClose();
-    onUpdated?.();
+    commitSource(newSource);
   };
 
-  // 菜单关闭全靠 item 点击触发 setVisible(false)+onClose();不走 onMouseLeave,
+  // 菜单关闭全靠 item 点击触发 commit/visible(false)+onClose();不走 onMouseLeave,
   // 避免鼠标在 menu 内移动就立刻收 menu 的 PR #174 H2 同款问题。
   // Esc 关闭由 useEffect register。
   const rect = ctx.cellEl.getBoundingClientRect();
@@ -130,13 +147,8 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuPr
         const full = editor.getValue();
         const idx = full.indexOf(tableSource);
         if (idx >= 0) {
-          const next = full.slice(0, idx) + full.slice(idx + tableSource.length);
-          editor.updateValue(next);
-          setVisible(false);
-          onClose();
-          onUpdated?.();
+          commitSource(full.slice(0, idx) + full.slice(idx + tableSource.length));
         } else {
-          // 找不到原文,拒绝操作避免清空正文(M6 同源修复)。
           console.warn('[tableSubmenu] deleteTable: cannot locate table in source; abort');
         }
       }}>
@@ -154,20 +166,4 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated }: TableSubmenuPr
       </button>
     </div>
   );
-}
-
-/** 把 IR 中 tableEl 对应的 markdown source 替换为 serializeTable(next) 后的新 source。
- *  - 多 table 场景下 indexOf 会错:退化路径拒绝 update,返回原文,不让"清空正文"发生。 */
-function computeNewTableSource(editor: Vditor, tableEl: HTMLTableElement, next: TableData): string | null {
-  const data = parseTableFromIr(tableEl);
-  const oldSource = serializeTable(data);
-  const newSource = serializeTable(next);
-  const full = editor.getValue();
-  const idx = full.indexOf(oldSource);
-  if (idx < 0) {
-    // 退化:找不到原文位置 → 拒绝操作而不是清空正文(M6 修复)。
-    console.warn('[tableSubmenu] cannot locate table in source; abort to avoid data loss');
-    return null;
-  }
-  return full.slice(0, idx) + newSource + full.slice(idx + oldSource.length);
 }
