@@ -31,8 +31,6 @@ export function createLivePreviewExtensions(
     onPreviewHeadingChange,
     foldedHeadings,
     onFoldChange,
-    reviewComments,
-    filePath,
   } = options;
   const extensions: Extension[] = [
     headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }),
