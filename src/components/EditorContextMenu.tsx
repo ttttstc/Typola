@@ -3,13 +3,17 @@ import { SELECTION_ACTIONS, type SelectionActionId } from '../services/agent/sel
 
 export type HeadingLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+export type TableAlign = 'left' | 'center' | 'right';
+
 export type FormatAction =
   | { type: 'heading'; level: HeadingLevel }
   | { type: 'bold' | 'italic' | 'strike' | 'inline-code' }
   | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' }
   | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
   | { type: 'link-edit' }
-  | { type: 'cut' | 'copy' | 'paste' | 'select-all' };
+  | { type: 'cut' | 'copy' | 'paste' | 'select-all' }
+  | { type: 'table-insert'; rows: number; cols: number }
+  | { type: 'table-align'; align: TableAlign; colIndex?: number };
 
 type Props = {
   open: boolean;
