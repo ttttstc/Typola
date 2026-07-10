@@ -33,39 +33,39 @@ export function findTableAt(view: EditorView, pos: number): TableRange | null {
   const text = view.state.doc.toString();
   const lines = text.split('\n');
 
-  // 跳过 fenced code block 内容(`` ```lang ... ``` `` 行):这些行虽然可能形如 |...|,但不算 GFM 表。
-  const inFence = (lineNo: number): boolean => {
-    let open = false;
-    const fenceRe = /^\s*(```|~~~)/;
-    for (let n = 0; n <= lineNo; n += 1) {
-      if (fenceRe.test(lines[n])) open = !open;
-    }
-    return open;
-  };
+  // 单 pass 计算每行是否在 fenced code block 内(```/~~~ 行切换 open)。
+  // inFence[i] = true 表示 lines[i] 处于 fence 内,不是 GFM 表的一部分。
+  const fenceOpen: boolean[] = new Array(lines.length).fill(false);
+  let open = false;
+  const fenceRe = /^\s*(```|~~~)/;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (fenceRe.test(lines[i])) open = !open;
+    fenceOpen[i] = open;
+  }
 
   const cursorLine = doc.lineAt(pos).number - 1;
 
   // 向上优先找 sep;落到 cell 内也能命中。
   let sepIdx = cursorLine;
-  while (sepIdx >= 0 && (inFence(sepIdx) || !SEP_LINE.test(lines[sepIdx]))) sepIdx -= 1;
+  while (sepIdx >= 0 && (fenceOpen[sepIdx] || !SEP_LINE.test(lines[sepIdx]))) sepIdx -= 1;
   // 光标在表内(sep 行上方)时,向下兜底找一次。
   if (sepIdx < 0) {
     let down = cursorLine + 1;
-    while (down < lines.length && (inFence(down) || !SEP_LINE.test(lines[down]))) down += 1;
-    if (down >= lines.length || inFence(down)) return null;
+    while (down < lines.length && (fenceOpen[down] || !SEP_LINE.test(lines[down]))) down += 1;
+    if (down >= lines.length || fenceOpen[down]) return null;
     sepIdx = down;
-  } else if (inFence(sepIdx)) {
+  } else if (fenceOpen[sepIdx]) {
     return null;
   }
 
   const headerLine = sepIdx - 1;
-  if (headerLine < 0 || inFence(headerLine) || !PIPE_LINE.test(lines[headerLine])) return null;
+  if (headerLine < 0 || fenceOpen[headerLine] || !PIPE_LINE.test(lines[headerLine])) return null;
   const sepCols = pipeCount(lines[sepIdx]);
   const headerCols = pipeCount(lines[headerLine]);
   if (sepCols !== headerCols) return null;
 
   let endLine = sepIdx + 1;
-  while (endLine < lines.length && !inFence(endLine) && PIPE_LINE.test(lines[endLine])) {
+  while (endLine < lines.length && !fenceOpen[endLine] && PIPE_LINE.test(lines[endLine])) {
     if (pipeCount(lines[endLine]) !== sepCols) {
       endLine -= 1;
       break;
