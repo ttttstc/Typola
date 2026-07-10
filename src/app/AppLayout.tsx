@@ -56,7 +56,7 @@ import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skil
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { TypolaEditorKernel } from '../types/editorCore';
 import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
