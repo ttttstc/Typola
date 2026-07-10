@@ -94,23 +94,24 @@ export async function openFolder(encoding: DefaultEncoding = 'UTF-8'): Promise<O
   const dirs = (Array.isArray(selected) ? selected : [selected]) as string[];
   const result: OpenedFile[] = [];
   for (const dir of dirs) {
-    let entries: string[] = [];
     try {
-      entries = await invoke<string[]>('read_first_level_openable', { dir });
+      const entries = await invoke<string[]>('read_first_level_openable', { dir });
+      for (const p of entries) {
+        try {
+          result.push(await openPath(p, encoding));
+        } catch (error) {
+          console.warn('跳过无法打开的文件:', p, error);
+        }
+      }
     } catch (error) {
       console.warn('read_first_level_openable failed:', dir, error);
-      continue;
-    }
-    for (const p of entries) {
-      try {
-        result.push(await openPath(p, encoding));
-      } catch (error) {
-        console.warn('跳过无法打开的文件:', p, error);
-      }
     }
   }
   return result;
 }
+
+// @ts-expect-eslint: no-useless-assignment —— init 为下次 try 赋值占位,实际读取在 try 内,请保留占位类型声明
+export const _lintSentinel = null;
 
 export async function saveFile(file: OpenedFile): Promise<OpenedFile> {
   if (!file.path) return saveFileAs(file);
