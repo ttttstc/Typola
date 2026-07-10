@@ -214,6 +214,7 @@ export function AppLayout() {
     handleTocAlwaysPinnedChange,
     handleEditorHeadingChange: handleTocEditorHeadingChange,
   } = useTocState({
+    editorMode,
     alwaysPinned: settings.tocAlwaysPinned,
     setSourceHeadingScrollRequest,
   });
@@ -759,7 +760,8 @@ export function AppLayout() {
     // 用 MarkdownAnalysisService 找覆盖 match 位置的 heading section,
     // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
     if (editorMode === 'source') {
-      const sections = analyzeMarkdown(file.content).foldSections;
+      const sections = collectHeadingSections(file.content);
+      const matchStartLine = lineIndexAtOffset(file.content, match.index);
       const coveringKeys: FoldKey[] = [];
       for (const section of sections) {
         if (section.from <= match.index && match.index < section.to) {
@@ -1513,7 +1515,6 @@ export function AppLayout() {
         onPreviewHeadingChange={handleEditorHeadingChange}
         foldedHeadings={foldedHeadings}
         onFoldChange={handleEditorFoldChange}
-        reviewComments={reviewStateApi.state.comments}
       />
     </Suspense>
   );
