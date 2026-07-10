@@ -110,8 +110,8 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
     // editorRef.current?.setFoldedHeadings?.(...) 命令式推送(见上面的 useEffect),
     // 这样 livePreviewExtensions 不依赖 foldedHeadings,折叠切换不再触发整组扩展重建。
     const livePreviewExtensions = useMemo(() => {
-      if (mode === 'source') return [];
       return createLivePreviewExtensions({
+        livePreview: mode !== 'source',
         baseSize: settings.editorFontSize,
         onZoomChange: handleZoomChange,
         onPreviewHeadingChange,
