@@ -1630,6 +1630,12 @@ html[data-color-scheme='dark'] .export-menu {
   font-style: italic;
 }
 
+/* 宽 GFM 表保持编辑器横向滚动，不把内容区撑出窗口。 */
+.cm6-markdown-editor-pane [class*="atomic-table"] {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .cm6-markdown-editor-pane .typola-cm6-math-inline {
   padding: 0 2px;
 }

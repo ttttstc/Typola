@@ -86,6 +86,12 @@ export function applyCm6Format(view: EditorView, action: FormatAction): void {
         colIndex: action.colIndex,
       });
       return;
+    case 'table-row-insert':
+    case 'table-row-delete':
+    case 'table-column-insert':
+    case 'table-column-delete':
+      applyTableFormat(view, action);
+      return;
   }
 }
 
