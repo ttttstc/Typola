@@ -3,6 +3,7 @@ import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { createMarkdownExtensions } from './createMarkdownExtensions';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';
+import { reviewMarkExtension } from './reviewMarkExtension';
 
 vi.mock('mermaid', () => ({
   default: {
@@ -133,5 +134,29 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelector('.typola-cm6-mermaid')).not.toBeNull();
     await waitForElement('[data-testid="mermaid-svg"]');
     expect(view.contentDOM.querySelector('.typola-cm6-mermaid script')).toBeNull();
+  });
+
+  it('marks the CM6 lines containing active review anchors', () => {
+    const doc = '# 标题\n\n需要检视的正文\n\n结尾';
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        extensions: [reviewMarkExtension({
+          filePath: '/tmp/review.md',
+          comments: [{
+            id: 'review-1',
+            filePath: '/tmp/review.md',
+            anchor: { filePath: '/tmp/review.md', from: 4, to: 10, originalText: '需要检视的正文' },
+            text: '请补充来源',
+            createdAt: 0,
+          }],
+        })],
+      }),
+      parent,
+    });
+
+    expect(view.contentDOM.querySelector('.cm-line.typola-cm-review-mark')?.textContent).toContain('需要检视的正文');
   });
 });

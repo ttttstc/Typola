@@ -16,7 +16,7 @@ import {
   findClickedTaskIndex,
   toggleTaskLine,
 } from '../services/taskListClickHandler';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { TypolaEditorKernel } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { TableSubmenu, getTableContext } from './table/TableSubmenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
@@ -215,7 +215,7 @@ type WindowWithFind = Window & {
 // 选区浮条抑制时长 —— 见 revealRange 内注释。
 const FLOATING_BAR_SETTLE_MS = 250;
 
-export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneProps>(function WysiwygEditorPane(
+export const WysiwygEditorPane = forwardRef<TypolaEditorKernel, WysiwygEditorPaneProps>(function WysiwygEditorPane(
   { source, onChange, filePath, onScrollRatio, onAIAction, reviewComments },
   ref,
 ) {
@@ -958,6 +958,14 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       lastEmittedValue.current = next;
       onChange(next);
       return true;
+    },
+    replaceRanges(_changes) {
+      // Vditor 已不在写作主链路，批量 transaction 仅由 CM6 实现。
+      return false;
+    },
+    format(action) {
+      const editor = editorRef.current;
+      if (editor) void applyVditorFormat(editor, action);
     },
     validateAnchor(anchorFilePath: string, _from: number, _to: number, originalText: string, prefixHint?: string) {
       if (!filePath || filePath !== anchorFilePath) return 'wrong-file';

@@ -2266,6 +2266,17 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
   box-shadow: inset 3px 0 0 var(--theme-review-mark-border);
 }
 
+.cm-line.typola-cm-review-mark {
+  border-left: 3px solid var(--theme-review-mark-border);
+  padding-left: 8px;
+  background: var(--theme-review-mark-bg);
+}
+
+.cm-line.typola-cm-review-mark:hover,
+html[data-doc-mode='review'][data-review-enhance-marks='true'] .cm-line.typola-cm-review-mark {
+  background: var(--theme-review-mark-bg-strong);
+}
+
 .wysiwyg-editor-pane .typola-locked-table * {
   user-select: none;
 }

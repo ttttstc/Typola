@@ -104,7 +104,9 @@ class FoldToggleWidget extends WidgetType {
     return span;
   }
   ignoreEvent(event: Event) {
-    return event.type === 'mousedown' || event.type === 'click' || event.type === 'keydown';
+    // click/keydown 必须交给 foldClickHandler 产生 CM6 transaction；只屏蔽
+    // mousedown 的编辑器选区副作用。
+    return event.type === 'mousedown';
   }
 }
 

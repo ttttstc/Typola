@@ -43,6 +43,7 @@ const dialogServiceMock = vi.hoisted(() => ({
 const editorPaneMock = vi.hoisted(() => ({
   source: '',
   renderCount: 0,
+  modes: [] as string[],
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
@@ -71,8 +72,13 @@ vi.mock('../components/EditorPane', () => ({
   },
 }));
 
-vi.mock('../components/WysiwygEditorPane', () => ({
-  WysiwygEditorPane: () => null,
+vi.mock('../components/editor/cm6/Cm6MarkdownEditorPane', () => ({
+  Cm6MarkdownEditorPane: ({ source, mode }: { source: string; mode?: string }) => {
+    editorPaneMock.source = source;
+    editorPaneMock.renderCount += 1;
+    editorPaneMock.modes.push(mode ?? 'wysiwyg');
+    return null;
+  },
 }));
 
 vi.mock('../components/SettingsPage', () => ({
@@ -130,6 +136,7 @@ describe('AppLayout update flow', () => {
     }));
     editorPaneMock.source = '';
     editorPaneMock.renderCount = 0;
+    editorPaneMock.modes = [];
   });
 
   afterEach(() => {
@@ -222,6 +229,7 @@ describe('AppLayout update flow', () => {
 
     expect(editorPaneMock.renderCount).toBeGreaterThan(0);
     expect(editorPaneMock.source).toBe(source);
+    expect(editorPaneMock.modes).toContain('source');
   });
 
   it('explicitly destroys the window after an allowed native close request', async () => {

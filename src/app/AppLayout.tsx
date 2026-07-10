@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { TocItem } from '../types/document';
 import {
   getExportPresetConfig,
   clearLastOpenedPath,
@@ -57,7 +56,8 @@ import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skil
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { TypolaEditorKernel } from '../types/editorCore';
+import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
@@ -98,14 +98,6 @@ import {
   SettingsPageFallback,
 } from './settingsPageLoader';
 
-const EditorPane = lazy(() =>
-  import('../components/EditorPane').then((module) => ({ default: module.EditorPane })),
-);
-
-const WysiwygEditorPane = lazy(() =>
-  import('../components/WysiwygEditorPane').then((module) => ({ default: module.WysiwygEditorPane })),
-);
-
 const Cm6MarkdownEditorPane = lazy(() =>
   import('../components/editor/cm6/Cm6MarkdownEditorPane').then((module) => ({ default: module.Cm6MarkdownEditorPane })),
 );
@@ -145,11 +137,6 @@ type UpdateInstallState =
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
-function readEditorEngine(): 'vditor' | 'cm6' {
-  if (typeof window === 'undefined') return 'cm6';
-  return window.localStorage.getItem('typola.editorEngine') === 'vditor' ? 'vditor' : 'cm6';
-}
-
 export function AppLayout() {
   const settings = useSettings();
   const isTauriRuntime = '__TAURI_INTERNALS__' in window;
@@ -158,7 +145,7 @@ export function AppLayout() {
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
-  const editorCommandRef = useRef<EditorCoreHandle | null>(null);
+  const editorCommandRef = useRef<TypolaEditorKernel | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   // 双向同步震荡抑制:任一方向触发后,锁定反向一段时间(防止 editor↔preview 循环)。
@@ -168,12 +155,6 @@ export function AppLayout() {
     if (Date.now() < syncLockUntilRef.current) return;
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
     previewScrollRef.current?.scrollToRatio(ratio);
-  }, []);
-  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
-    if (Date.now() < syncLockUntilRef.current) return;
-    if (change.index < 0) return;
-    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
-    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
   }, []);
   const handlePreviewHeadingScroll = useCallback((change: { index: number }) => {
     if (Date.now() < syncLockUntilRef.current) return;
@@ -200,7 +181,6 @@ export function AppLayout() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
-  const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   // 折叠集合:由 AppLayout 拥有,用于"搜索命中自动展开"等命令式扩展。
   // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
@@ -225,23 +205,6 @@ export function AppLayout() {
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
   const [transientMessage, setTransientMessage] = useState('');
-  const resolveTocHeading = useCallback((item: TocItem, index: number): HTMLElement | null => {
-    const byId = document.getElementById(item.id);
-    if (byId instanceof HTMLElement) return byId;
-
-    const root = mainContentRef.current;
-    if (!root) return null;
-
-    // 同时兼容 Vditor IR/WYSIWYG 与 CM6 源码模式。
-    // CM6 下 heading 是 .cm-content 里的语义 h1..h6(atomic-editor 用真实标签,
-    // 而非自定义 span),不命中 Vditor selector 会导致 TOC 跳转永远 index 越界。
-    const headings = root.querySelectorAll<HTMLElement>(
-      '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, '
-      + '.vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6, '
-      + '.cm-content h1, .cm-content h2, .cm-content h3, .cm-content h4, .cm-content h5, .cm-content h6',
-    );
-    return headings[index] ?? null;
-  }, []);
   const {
     toc,
     setToc,
@@ -250,14 +213,17 @@ export function AppLayout() {
     handleTocNavigate,
     handleTocPinnedChange,
     handleTocAlwaysPinnedChange,
+    handleEditorHeadingChange: handleTocEditorHeadingChange,
   } = useTocState({
-    editorMode,
-    editorEngine,
     alwaysPinned: settings.tocAlwaysPinned,
-    mainContentRef,
-    resolveTocHeading,
     setSourceHeadingScrollRequest,
   });
+  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
+    handleTocEditorHeadingChange(change.index);
+    if (Date.now() < syncLockUntilRef.current || change.index < 0) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
+    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
+  }, [handleTocEditorHeadingChange]);
   // 模式 ref 解决「getDefaultRightPanelWidth 在 rightPanelMode 声明前定义」的问题。
   const rightPanelModeRef = useRef<RightPanelMode>('none');
   const getDefaultRightPanelWidth = useCallback(() => {
@@ -715,9 +681,17 @@ export function AppLayout() {
     editorCommandRef.current?.focus();
   }, [handleContentChange]);
 
-  const replaceFromFindPanel = useCallback((value: string) => {
-    handleContentChange(value);
-  }, [handleContentChange]);
+  const handleEditorFormat = useCallback((action: FormatAction) => {
+    editorCommandRef.current?.format(action);
+  }, []);
+
+  const replaceFromFindPanel = useCallback((matches: readonly SearchMatch[], replacement: string) => {
+    editorCommandRef.current?.replaceRanges(matches.map((match) => ({
+      from: match.index,
+      to: match.index + match.length,
+      insert: replacement,
+    })));
+  }, []);
 
   // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档:
   // P0-2 走编辑器的 commitAIReplacement,把整篇合并作为一条原子操作压入 AI 撤销栈,
@@ -779,7 +753,7 @@ export function AppLayout() {
     // PR5:折叠区域内命中时先自动展开 — 否则命中位置不可视,scrollIntoView 也无意义。
     // 用 collectHeadingSections 找覆盖 match 位置的最深 heading section,
     // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
-    if (editorEngine === 'cm6' && editorMode === 'source') {
+    if (editorMode === 'source') {
       const sections = collectHeadingSections(file.content);
       const matchStartLine = lineIndexAtOffset(file.content, match.index);
       const coveringKeys: FoldKey[] = [];
@@ -804,7 +778,7 @@ export function AppLayout() {
       query,
       searchOptions,
     });
-  }, [editorEngine, editorMode, file.content, foldedHeadings]);
+  }, [editorMode, file.content, foldedHeadings]);
 
   // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
   const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {
@@ -1512,18 +1486,6 @@ export function AppLayout() {
     <div className="editor-pane readonly-pane">
       <span>Word 文件为只读</span>
     </div>
-  ) : editorMode === 'source' ? (
-    <Suspense fallback={<div className="editor-pane lazy-pane"><span>源码编辑器加载中</span></div>}>
-      <EditorPane
-        ref={editorCommandRef}
-        source={file.content}
-        onChange={handleContentChange}
-        headingScrollRequest={sourceHeadingScrollRequest}
-        onScrollRatio={handleEditorScrollRatio}
-        filePath={file.path}
-        onAIAction={handleEditorAIAction}
-      />
-    </Suspense>
   ) : shouldShowHtmlPresentation ? (
     <Suspense fallback={<div className="html-presentation-pane lazy-pane" aria-label={t('htmlPresentationAria')} />}>
       <HtmlPresentationPane
@@ -1532,10 +1494,11 @@ export function AppLayout() {
         onOpenInBrowser={() => { void handleOpenHtmlInBrowser(file.path); }}
       />
     </Suspense>
-  ) : editorEngine === 'cm6' ? (
+  ) : (
     <Suspense fallback={<div className="cm6-markdown-editor-pane lazy-pane"><span>CM6 编辑器加载中</span></div>}>
       <Cm6MarkdownEditorPane
         ref={editorCommandRef}
+        mode={editorMode}
         source={file.content}
         onChange={handleContentChange}
         headingScrollRequest={sourceHeadingScrollRequest}
@@ -1545,17 +1508,6 @@ export function AppLayout() {
         onPreviewHeadingChange={handleEditorHeadingChange}
         foldedHeadings={foldedHeadings}
         onFoldChange={handleEditorFoldChange}
-      />
-    </Suspense>
-  ) : (
-    <Suspense fallback={<div className="wysiwyg-editor-pane lazy-pane"><span>所见即所得编辑器加载中</span></div>}>
-      <WysiwygEditorPane
-        ref={editorCommandRef}
-        source={file.content}
-        onChange={handleContentChange}
-        filePath={file.path}
-        onScrollRatio={handleEditorScrollRatio}
-        onAIAction={handleEditorAIAction}
         reviewComments={reviewStateApi.state.comments}
       />
     </Suspense>
@@ -1692,6 +1644,7 @@ export function AppLayout() {
           editingDisabled: isDocx,
           docMode,
           onToggleEditorMode: handleToggleEditorMode,
+          onFormat: handleEditorFormat,
           onToggleWorkspacePanel: handleToggleWorkspacePanel,
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
@@ -1841,7 +1794,7 @@ export function AppLayout() {
         source={file.content}
         readOnly={isDocx}
         onCloseFind={() => setFindVisible(false)}
-        onReplaceSource={replaceFromFindPanel}
+        onReplace={replaceFromFindPanel}
         onNavigate={handleSearchNavigate}
         quickOpenVisible={quickOpenVisible}
         recentFiles={recentFiles}

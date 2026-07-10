@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   findSearchMatches,
-  replaceAllSearchMatches,
-  replaceSearchMatch,
   type SearchMatch,
   type SearchOptions,
 } from '../services/documentSearchService';
@@ -14,7 +12,7 @@ type FindReplacePanelProps = {
   source: string;
   readOnly: boolean;
   onClose: () => void;
-  onReplaceSource: (source: string) => void;
+  onReplace: (matches: readonly SearchMatch[], replacement: string) => void;
   onNavigate: (match: SearchMatch, query: string, options: SearchOptions, backwards?: boolean) => void;
 };
 
@@ -34,7 +32,7 @@ export function FindReplacePanel({
   source,
   readOnly,
   onClose,
-  onReplaceSource,
+  onReplace,
   onNavigate,
 }: FindReplacePanelProps) {
   const findInputRef = useRef<HTMLInputElement>(null);
@@ -131,8 +129,7 @@ export function FindReplacePanel({
     const liveMatches = findSearchMatches(source, query, options);
     const match = liveMatches[Math.min(activeIndex, liveMatches.length - 1)];
     if (!match || readOnly) return;
-    const next = replaceSearchMatch(source, match, replacement);
-    onReplaceSource(next);
+    onReplace([match], replacement);
     setActiveIndex(Math.min(activeIndex, Math.max(0, liveMatches.length - 2)));
     window.requestAnimationFrame(() => {
       const input = expanded ? replaceInputRef.current : findInputRef.current;
@@ -143,7 +140,7 @@ export function FindReplacePanel({
   const replaceAll = () => {
     const liveMatches = findSearchMatches(source, query, options);
     if (liveMatches.length === 0 || readOnly) return;
-    onReplaceSource(replaceAllSearchMatches(source, liveMatches, replacement));
+    onReplace(liveMatches, replacement);
     setActiveIndex(0);
     window.requestAnimationFrame(() => {
       const input = expanded ? replaceInputRef.current : findInputRef.current;

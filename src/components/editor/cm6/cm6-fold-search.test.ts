@@ -129,6 +129,19 @@ describe('cm6 PR5 — 折叠 key 区分 + 搜索展开契约', () => {
   });
 
   describe('CM6 headingFoldExtension 与新 key 格式', () => {
+    it('fold toggle responds to Enter and Space', () => {
+      view = createView('## Notes\n第一段文字\n', true);
+      const toggle = view.contentDOM.querySelector<HTMLElement>('[data-typola-fold-level="2"]');
+      expect(toggle).not.toBeNull();
+
+      toggle!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(view.contentDOM.querySelector(`.${FOLDED_LINE_CLASS}`)?.textContent).toContain('第一段文字');
+
+      const expandedToggle = view.contentDOM.querySelector<HTMLElement>('[data-typola-fold-level="2"]');
+      expandedToggle!.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      expect(view.contentDOM.querySelector(`.${FOLDED_LINE_CLASS}`)).toBeNull();
+    });
+
     it('同名 H2 折叠 sectionIndex=0 时只折叠第一个', () => {
       const doc = '## Notes\n第一段文字\n\n## Notes\n第二段文字\n';
       view = createView(doc, true);

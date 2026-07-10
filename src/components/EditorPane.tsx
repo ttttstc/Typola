@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { TypolaEditorKernel } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import { applyCm6Format } from '../services/editor/cm6FormatService';
@@ -33,7 +33,7 @@ type EditorPaneProps = {
   onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
 };
 
-export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function EditorPane(
+export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(function EditorPane(
   props,
   ref,
 ) {
@@ -201,6 +201,12 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
         setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true });
         return true;
       },
+      onFormat: (action) => {
+        const view = editorViewRef.current;
+        if (!view) return false;
+        applyCm6Format(view, action);
+        return true;
+      },
     });
   }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
 
@@ -231,7 +237,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
     } else {
       suppressFloatingBarRef.current = true;
       editorView.dispatch({
-        effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 24 }),
+        effects: EditorView.scrollIntoView(from, { y: 'start' }),
         selection: { anchor: from },
       });
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
@@ -330,6 +336,29 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
       editorView.focus();
       return true;
     },
+    replaceRanges(changes) {
+      if (!editorView || changes.length === 0) return false;
+      const docLen = editorView.state.doc.length;
+      const safeChanges = changes.map(({ from, to, insert }) => ({
+        from: Math.max(0, Math.min(from, docLen)),
+        to: Math.max(0, Math.min(to, docLen)),
+        insert,
+      }));
+      if (safeChanges.some((change) => change.to < change.from)) return false;
+      const ordered = [...safeChanges].sort((a, b) => a.from - b.from || a.to - b.to);
+      if (ordered.some((change, index) => index > 0 && change.from < ordered[index - 1]!.to)) return false;
+      try {
+        editorView.dispatch({ changes: ordered });
+        editorView.focus();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    format(action) {
+      if (!editorView) return;
+      applyCm6Format(editorView, action);
+    },
     validateAnchor(anchorFilePath: string, from: number, to: number, originalText: string, _prefixHint?: string) {
       const editor = editorView;
       if (!editor) return 'wrong-file';
@@ -341,7 +370,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
       return editor.state.doc.sliceString(from, to) === originalText ? 'valid' : 'stale';
     },
     // Source 模式:from/to 直接是 CodeMirror 文档偏移,不需要 opts.text / query /
-    // searchOptions。保留 opts 签名仅是为了实现 EditorCoreHandle 契约。
+    // searchOptions。保留 opts 签名仅是为了实现 TypolaEditorKernel 契约。
     revealRange(from: number, to: number, opts) {
       if (!editorView) return;
       suppressFloatingBarRef.current = true;
@@ -377,7 +406,7 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
     },
     setFoldedHeadings(keys: ReadonlySet<string>) {
       if (!editorView) return;
-      // setFoldedHeadings 的 keys 类型来自 EditorCoreHandle 契约(string),
+      // setFoldedHeadings 的 keys 类型来自 TypolaEditorKernel 契约(string),
       // headingFoldExtension 内部仍按 FoldKey(`${level}:${text}`) 处理。
       setFoldedHeadings(editorView, keys as ReadonlySet<never>);
     },

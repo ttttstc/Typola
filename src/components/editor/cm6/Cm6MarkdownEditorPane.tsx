@@ -4,14 +4,16 @@ import 'katex/dist/katex.min.css';
 import { EditorPane, type SourceHeadingScrollRequest } from '../../EditorPane';
 import type { SelectionActionId } from '../../../services/agent/selectionActions';
 import type { SelectionAnchor } from '../../../services/agent/types';
-import type { EditorCoreHandle } from '../../../types/editorCore';
+import type { TypolaEditorKernel } from '../../../types/editorCore';
 import { useSettings } from '../../../hooks/useSettings';
 import { updateSettings } from '../../../services/settingsService';
 import { createLivePreviewExtensions } from './createLivePreviewExtensions';
 import type { PreviewHeadingChange } from './previewSyncExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
+import type { ReviewComment } from '../../../services/review/reviewState';
 
 type Cm6MarkdownEditorPaneProps = {
+  mode?: 'source' | 'wysiwyg';
   source: string;
   onChange: (value: string) => void;
   headingScrollRequest?: SourceHeadingScrollRequest;
@@ -23,6 +25,7 @@ type Cm6MarkdownEditorPaneProps = {
    *  若不传,组件内部用 useState 自管,行为与之前保持一致。 */
   foldedHeadings?: ReadonlySet<FoldKey>;
   onFoldChange?: (next: ReadonlySet<FoldKey>) => void;
+  reviewComments?: readonly ReviewComment[];
 };
 
 /** 以 atomic-editor 默认 14px 为 100% 参考,滚轮缩放比例都换算到这个基准。 */
@@ -40,15 +43,22 @@ function zoomPercent(size: number): number {
  * 搜索 reveal、撤销等命令契约不变。Phase 2 再在这里替换为 Typora-like live preview
  * extension 组合。
  */
-export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEditorPaneProps>(
+export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownEditorPaneProps>(
   function Cm6MarkdownEditorPane(props, ref) {
-    const { onPreviewHeadingChange, foldedHeadings: foldedHeadingsProp, onFoldChange, ...rest } = props;
+    const {
+      mode = 'wysiwyg',
+      onPreviewHeadingChange,
+      foldedHeadings: foldedHeadingsProp,
+      onFoldChange,
+      reviewComments,
+      ...rest
+    } = props;
     const settings = useSettings();
     const [zoomIndicator, setZoomIndicator] = useState<{ percent: number; restored: boolean } | null>(null);
     const [internalFoldedHeadings, setInternalFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
     const foldedHeadings = foldedHeadingsProp ?? internalFoldedHeadings;
     const hideTimerRef = useRef<number | null>(null);
-    const editorRef = useRef<EditorCoreHandle | null>(null);
+    const editorRef = useRef<TypolaEditorKernel | null>(null);
 
     const handleFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
       if (onFoldChange) {
@@ -78,7 +88,7 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
     const handleZoomIndicatorClick = useCallback(() => {
       const editor = editorRef.current;
       if (!editor) return;
-      // 走 EditorCoreHandle.setZoom 触发 wheelZoomExtension 的 reconfigure,
+      // 走 TypolaEditorKernel.setZoom 触发 wheelZoomExtension 的 reconfigure,
       // 避免 React 重挂载 / StateField 不同步。
       editor.setZoom(ZOOM_BASE_PX);
       updateSettings({ editorFontSize: ZOOM_BASE_PX });
@@ -100,15 +110,17 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
     // headingFoldExtension 始终传空 initial 集合 — React → editor 的同步走
     // editorRef.current?.setFoldedHeadings?.(...) 命令式推送(见上面的 useEffect),
     // 这样 livePreviewExtensions 不依赖 foldedHeadings,折叠切换不再触发整组扩展重建。
-    const livePreviewExtensions = useMemo(
-      () => createLivePreviewExtensions({
+    const livePreviewExtensions = useMemo(() => {
+      return createLivePreviewExtensions({
+        livePreview: mode !== 'source',
         baseSize: settings.editorFontSize,
         onZoomChange: handleZoomChange,
         onPreviewHeadingChange,
         onFoldChange: handleFoldChange,
-      }),
-      [settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange],
-    );
+        reviewComments,
+        filePath: rest.filePath,
+      });
+    }, [mode, settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange, reviewComments, rest.filePath]);
     return (
       <div className="cm6-markdown-editor-pane">
         <EditorPane

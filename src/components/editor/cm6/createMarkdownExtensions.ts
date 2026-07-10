@@ -2,6 +2,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { recordCm6InputToPaint } from '../../../perf/index';
+import type { FormatAction } from '../../EditorContextMenu';
 
 type CreateMarkdownExtensionsOptions = {
   fontFamily: string;
@@ -10,6 +11,7 @@ type CreateMarkdownExtensionsOptions = {
   wordWrap: boolean;
   extraExtensions?: Extension[];
   onModK?: () => boolean;
+  onFormat?: (action: FormatAction) => boolean;
 };
 
 export function createMarkdownExtensions(options: CreateMarkdownExtensionsOptions): Extension[] {
@@ -33,6 +35,15 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
       preventDefault: true,
       run: options.onModK,
     }]));
+  }
+
+  if (options.onFormat) {
+    extensions.push(keymap.of([
+      { key: 'Mod-b', preventDefault: true, run: () => options.onFormat?.({ type: 'bold' }) ?? false },
+      { key: 'Mod-i', preventDefault: true, run: () => options.onFormat?.({ type: 'italic' }) ?? false },
+      { key: 'Mod-Shift-7', preventDefault: true, run: () => options.onFormat?.({ type: 'ol' }) ?? false },
+      { key: 'Mod-Shift-8', preventDefault: true, run: () => options.onFormat?.({ type: 'ul' }) ?? false },
+    ]));
   }
 
   extensions.push(
