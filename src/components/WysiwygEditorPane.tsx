@@ -959,6 +959,14 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
       onChange(next);
       return true;
     },
+    replaceRanges(_changes) {
+      // Vditor 已不在写作主链路，批量 transaction 仅由 CM6 实现。
+      return false;
+    },
+    format(action) {
+      const editor = editorRef.current;
+      if (editor) void applyVditorFormat(editor, action);
+    },
     validateAnchor(anchorFilePath: string, _from: number, _to: number, originalText: string, prefixHint?: string) {
       if (!filePath || filePath !== anchorFilePath) return 'wrong-file';
       const editor = editorRef.current;

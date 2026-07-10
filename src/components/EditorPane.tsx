@@ -201,6 +201,12 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
         setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true });
         return true;
       },
+      onFormat: (action) => {
+        const view = editorViewRef.current;
+        if (!view) return false;
+        applyCm6Format(view, action);
+        return true;
+      },
     });
   }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
 
@@ -329,6 +335,27 @@ export const EditorPane = forwardRef<EditorCoreHandle, EditorPaneProps>(function
       });
       editorView.focus();
       return true;
+    },
+    replaceRanges(changes) {
+      if (!editorView || changes.length === 0) return false;
+      const docLen = editorView.state.doc.length;
+      const safeChanges = changes.map(({ from, to, insert }) => ({
+        from: Math.max(0, Math.min(from, docLen)),
+        to: Math.max(0, Math.min(to, docLen)),
+        insert,
+      }));
+      if (safeChanges.some((change) => change.to < change.from)) return false;
+      try {
+        editorView.dispatch({ changes: safeChanges });
+        editorView.focus();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    format(action) {
+      if (!editorView) return;
+      applyCm6Format(editorView, action);
     },
     validateAnchor(anchorFilePath: string, from: number, to: number, originalText: string, _prefixHint?: string) {
       const editor = editorView;

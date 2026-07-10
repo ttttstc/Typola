@@ -58,6 +58,7 @@ import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 import type { EditorCoreHandle } from '../types/editorCore';
+import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calculateDocumentStats } from '../services/documentStatsService';
@@ -700,9 +701,17 @@ export function AppLayout() {
     editorCommandRef.current?.focus();
   }, [handleContentChange]);
 
-  const replaceFromFindPanel = useCallback((value: string) => {
-    handleContentChange(value);
-  }, [handleContentChange]);
+  const handleEditorFormat = useCallback((action: FormatAction) => {
+    editorCommandRef.current?.format(action);
+  }, []);
+
+  const replaceFromFindPanel = useCallback((matches: readonly SearchMatch[], replacement: string) => {
+    editorCommandRef.current?.replaceRanges(matches.map((match) => ({
+      from: match.index,
+      to: match.index + match.length,
+      insert: replacement,
+    })));
+  }, []);
 
   // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档:
   // P0-2 走编辑器的 commitAIReplacement,把整篇合并作为一条原子操作压入 AI 撤销栈,
@@ -1654,6 +1663,7 @@ export function AppLayout() {
           editingDisabled: isDocx,
           docMode,
           onToggleEditorMode: handleToggleEditorMode,
+          onFormat: handleEditorFormat,
           onToggleWorkspacePanel: handleToggleWorkspacePanel,
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
@@ -1803,7 +1813,7 @@ export function AppLayout() {
         source={file.content}
         readOnly={isDocx}
         onCloseFind={() => setFindVisible(false)}
-        onReplaceSource={replaceFromFindPanel}
+        onReplace={replaceFromFindPanel}
         onNavigate={handleSearchNavigate}
         quickOpenVisible={quickOpenVisible}
         recentFiles={recentFiles}

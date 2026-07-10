@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 继续只用于既有预览与导出渲染链路。
+- 查找替换改为通过 `TypolaEditorKernel.replaceRanges` 提交 CM6 transaction；单个和全部替换都会进入同一 history，支持一次 `Ctrl/Cmd+Z` 撤销。
+- 工具栏、`Ctrl/Cmd+B` / `I` / `Shift+7` / `Shift+8` 快捷键和右键菜单统一调用 CM6 格式命令；补齐引用层级、编辑链接、清除格式与代码块语言编辑的 transaction 实现。
 
 ### Added
 

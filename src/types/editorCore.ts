@@ -1,6 +1,8 @@
 import type { AnchorStatus } from '../services/agent/types';
+import type { FormatAction } from '../components/EditorContextMenu';
 
 export type EditorSelection = { text: string; from: number; to: number };
+export type EditorTextChange = { from: number; to: number; insert: string };
 
 /**
  * 写作模块对外的稳定编辑器内核契约。
@@ -20,6 +22,9 @@ export type TypolaEditorKernel = {
   replaceSelection: (text: string) => void;
   /** 按 Markdown source 坐标替换；Vditor 过渡期可退化为文本定位。 */
   replaceRange: (from: number, to: number, text: string) => boolean;
+  /** 将一组不重叠的 source 替换作为同一笔 CM6 history transaction 提交。 */
+  replaceRanges: (changes: readonly EditorTextChange[]) => boolean;
+  format: (action: FormatAction) => void;
   /** 校验 AI anchor 是否仍可安全替换。 */
   validateAnchor: (filePath: string, from: number, to: number, originalText: string, prefixHint?: string) => AnchorStatus;
   /** 滚动并选中范围；搜索导航应传 preserveFocus，避免焦点被抢回编辑器。 */

@@ -53,7 +53,7 @@ describe('FindReplacePanel', () => {
           readOnly={false}
           onClose={onClose}
           onNavigate={onNavigate}
-          onReplaceSource={() => undefined}
+          onReplace={() => undefined}
         />,
       );
     });
@@ -66,8 +66,8 @@ describe('FindReplacePanel', () => {
           readOnly={false}
           onClose={onClose}
           onNavigate={onNavigate}
-          onReplaceSource={(next) => {
-            source = next;
+          onReplace={(matches, replacement) => {
+            source = `${source.slice(0, matches[0].index)}${replacement}${source.slice(matches[0].index + matches[0].length)}`;
             root.render(
               <FindReplacePanel
                 visible
@@ -76,7 +76,7 @@ describe('FindReplacePanel', () => {
                 readOnly={false}
                 onClose={onClose}
                 onNavigate={onNavigate}
-                onReplaceSource={() => undefined}
+                onReplace={() => undefined}
               />,
             );
           }}
@@ -132,8 +132,11 @@ describe('FindReplacePanel', () => {
           readOnly={false}
           onClose={onClose}
           onNavigate={onNavigate}
-          onReplaceSource={(next) => {
-            source = next;
+          onReplace={(matches, replacement) => {
+            source = matches.reduceRight(
+              (next, match) => `${next.slice(0, match.index)}${replacement}${next.slice(match.index + match.length)}`,
+              source,
+            );
           }}
         />,
       );

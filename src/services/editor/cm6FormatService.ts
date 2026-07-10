@@ -44,6 +44,21 @@ export function applyCm6Format(view: EditorView, action: FormatAction): void {
     case 'hr':
       insertHorizontalRule(view);
       return;
+    case 'quote-up':
+      changeQuoteLevel(view, true);
+      return;
+    case 'quote-down':
+      changeQuoteLevel(view, false);
+      return;
+    case 'link-edit':
+      editLink(view);
+      return;
+    case 'clear-format':
+      clearFormat(view);
+      return;
+    case 'codeblock-lang':
+      editCodeBlockLanguage(view);
+      return;
     case 'cut':
       document.execCommand('cut');
       return;
@@ -216,6 +231,70 @@ function insertHorizontalRule(view: EditorView): void {
   view.dispatch({
     changes: { from: sel.from, insert },
     selection: { anchor: sel.from + insert.length },
+  });
+  view.focus();
+}
+
+function changeQuoteLevel(view: EditorView, upgrade: boolean): void {
+  const selection = view.state.selection.main;
+  const line = view.state.doc.lineAt(selection.from);
+  const text = view.state.sliceDoc(line.from, line.to);
+  const indent = text.match(/^[ \t]*/)?.[0] ?? '';
+  const rest = text.slice(indent.length);
+  const match = rest.match(/^(?:> ?)+/);
+  const depth = match ? (match[0].match(/>/g)?.length ?? 0) : 0;
+  const body = rest.slice(match?.[0].length ?? 0);
+  const nextDepth = upgrade ? depth + 1 : Math.max(0, depth - 1);
+  const next = nextDepth === 0 ? `${indent}${body}` : `${indent}${'>'.repeat(nextDepth)} ${body}`;
+  view.dispatch({ changes: { from: line.from, to: line.to, insert: next } });
+  view.focus();
+}
+
+function editLink(view: EditorView): void {
+  const selection = view.state.selection.main;
+  const text = view.state.sliceDoc(selection.from, selection.to);
+  const match = text.match(/^\[([^\]]*)\]\(([^)]*)\)$/);
+  if (!match) return;
+  const url = window.prompt('链接网址', match[2]);
+  if (url === null) return;
+  const next = `[${match[1]}](${url})`;
+  view.dispatch({
+    changes: { from: selection.from, to: selection.to, insert: next },
+    selection: { anchor: selection.from, head: selection.from + next.length },
+  });
+  view.focus();
+}
+
+function clearFormat(view: EditorView): void {
+  const selection = view.state.selection.main;
+  if (selection.empty) return;
+  const text = view.state.sliceDoc(selection.from, selection.to);
+  const next = text
+    .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
+    .replace(/_{1,3}([^_]+)_{1,3}/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^(\s{0,3}>\s+)(?=\S)/gm, '')
+    .replace(/^\s{0,3}(?:[-*+]|\d+\.)\s+(?=\S)/gm, '');
+  if (next === text) return;
+  view.dispatch({
+    changes: { from: selection.from, to: selection.to, insert: next },
+    selection: { anchor: selection.from, head: selection.from + next.length },
+  });
+  view.focus();
+}
+
+function editCodeBlockLanguage(view: EditorView): void {
+  const selection = view.state.selection.main;
+  const text = view.state.sliceDoc(selection.from, selection.to);
+  const match = text.match(/^```([^\n]*)\n([\s\S]*?)\n```$/);
+  if (!match) return;
+  const language = window.prompt('代码语言', match[1]);
+  if (language === null) return;
+  const next = `\`\`\`${language}\n${match[2]}\n\`\`\``;
+  view.dispatch({
+    changes: { from: selection.from, to: selection.to, insert: next },
+    selection: { anchor: selection.from, head: selection.from + next.length },
   });
   view.focus();
 }

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   ChevronDown,
+  Bold,
   Code2,
   FileDown,
   FilePlus,
@@ -9,6 +10,11 @@ import {
   FolderOpen,
   PackageOpen,
   ImagePlus,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
+  ListTodo,
   Newspaper,
   PanelLeft,
   RefreshCw,
@@ -16,6 +22,7 @@ import {
   SaveAll,
   SlidersHorizontal,
   Terminal,
+  Quote,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -35,6 +42,7 @@ import { handleTitlebarMouseDown } from '../services/titlebarDrag';
 import { DocumentModeSwitcher } from './DocumentModeSwitcher';
 import { Tooltip } from './ui/Tooltip';
 import type { DocMode } from '../hooks/useDocumentMode';
+import type { FormatAction } from './EditorContextMenu';
 
 export type EditorMode = 'wysiwyg' | 'source';
 
@@ -56,6 +64,7 @@ type ToolbarProps = {
   docMode: DocMode;
   reviewDirty?: boolean;
   onToggleEditorMode: () => void;
+  onFormat?: (action: FormatAction) => void;
   onToggleWorkspacePanel: () => void;
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
@@ -83,7 +92,7 @@ export function Toolbar({
   dirty, fileName,
   editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
   terminalVisible, editingDisabled, docMode, reviewDirty,
-  onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
+  onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
   onToggleTerminal, onSetDocMode,
   onNew, onOpen, onOpenFolder, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
@@ -239,6 +248,17 @@ export function Toolbar({
             </div>
           )}
         </div>
+        {onFormat && (
+          <div className="toolbar-group toolbar-format-actions" aria-label="Markdown 格式">
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip="加粗 (Ctrl+B)" aria-label="加粗"><Bold size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip="斜体 (Ctrl+I)" aria-label="斜体"><Italic size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip="链接" aria-label="链接"><Link size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip="引用块" aria-label="引用块"><Quote size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip="无序列表" aria-label="无序列表"><List size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip="有序列表" aria-label="有序列表"><ListOrdered size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip="任务列表" aria-label="任务列表"><ListTodo size={iconSize} strokeWidth={strokeWidth} /></button>
+          </div>
+        )}
       </div>
       <div className="toolbar-title" data-tauri-drag-region aria-label={t('currentFileLabel')}>
         <span className={`file-name ${hasOpenedFile || dirty ? 'visible' : ''}`}>
