@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>产物中心:AI 写的东西回到你的文件</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 7 课</span>
+<h1>产物中心:AI 写的东西回到你的文件</h1>
+<p class="subtitle">10 分钟。Typola 护城河落地的最后一公里:AI 用工具写出来的文件,回来在我的中间编辑器里打开。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>"AI 帮我写了一份报告,但它困在对话框,我得复制粘贴才出来" —
+      真正让你能用 AI 高质量产出的最后一步是<strong>产物落地</strong>:
+      AI 用工具(Write/Edit)创建的文件要能进我的文件结构,我能在编辑器里像打开任何 .md 一样编辑它,
+      而不是只能看预览。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>AI 的工作目录被焊死在 <code>&lt;工作区根&gt;/.typola-output/&lt;会话 ID&gt;/</code>。
+      Typola 不光监听这个目录(顺便用 watcher 兜底),还解析 Claude 的 Write/Edit tool_use 拿到<strong>精确路径 + 内容</strong>。
+      右下角出现<strong>文件名 chip</strong>;点 chip 在<strong>中间编辑器</strong>打开(.md → WYSIWYG,.html → 阅读模式预览),
+      不在右栏铺。
+      文件想长期留可以「保存到工作区」(自动改名避免冲突);想覆盖当前文档就点「合并到当前文档」(走第 5 课的内联审阅)。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Claude Desktop 把产物叫 "artifacts",挂在对话侧,让你在对话里看;<strong>那是把对话当档案库的设计</strong>。
+      Cursor 把产物叫 "code changes",塞到右栏 diff 里;<strong>那是把文档当代码的设计</strong>。
+      Typola 既不把对话当档案,也不把产物塞边栏 — <strong>产物 = 文档,进编辑器</strong>,这就是为什么 Typola 把"产物"放在
+      <strong>中间</strong>位置而不是右栏。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pre">前置</a>
+  <a class="toc-pill" href="#where">产物落到哪</a>
+  <a class="toc-pill" href="#chip">右下角 chip</a>
+  <a class="toc-pill" href="#center">产物中心面板</a>
+  <a class="toc-pill" href="#open">在中间编辑器打开</a>
+  <a class="toc-pill" href="#archive">保存到工作区</a>
+  <a class="toc-pill" href="#merge">合并到当前文档(走审阅)</a>
+  <a class="toc-pill" href="#overwrite">覆盖原文 + 撤销覆盖</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2、4 课</li>
+  <li>AI 工作台能跑(CLI 检测通过)</li>
+  <li>当前 Composer 工作目录已设置(初次启动让你选过,可以在 Picker 里改)</li>
+</ul>
+
+<h2 id="where">1. 产物落到哪:固定目录,不污染工作区</h2>
+
+<p>Typola 强制 AI 的<strong>生成类会话</strong>(点 skill 开的、改整文档的)的 cwd 在:</p>
+
+<pre><code>&lt;AI 工作目录&gt;/.typola-output/&lt;会话 ID&gt;/</code></pre>
+
+<p>看 AI 工作目录:Composer 顶部的 <strong>WorkingDir 标签</strong>。点它能换。默认是 Typola 第一启动让你选的那个目录。</p>
+
+<div class="card callout">
+  <div class="card-title">"为什么 cwd 焊这么深"</div>
+  <p>两层理由:</p>
+  <ul>
+    <li><strong>AI 写"运行时产物"</strong>(报告、PPT)→ 应该只在 <code>.typola-output/</code> 出现,不会污染你原本干净的
+      工作目录(<code>docs/</code>、<code>posts/</code> 等不该被随便写)</li>
+    <li><strong>保护工作目录里现有的文件</strong> → AI 不会因为路径写错就改你仓库里的文件</li>
+  </ul>
+  <p>想"留"某个产物 → 用「保存到工作区」(本节下面会讲);不想留 → 关 Typola / 一段时间后自动清理。</p>
+</div>
+
+<div class="card danger">
+  <div class="card-title"><code>.typola-output</code> 应该加进 <code>.gitignore</code></div>
+  <p>这是临时产物,不是要入库的代码。把这一行加进你工作目录里的 <code>.gitignore</code>:
+    <code>.typola-output/</code></p>
+  <p>Typola 在常见工作目录里有 hint,显式不强制。</p>
+</div>
+
+<h2 id="chip">2. 右下角 chip 是产物的入口</h2>
+
+<p>AI 用 Write/Edit 工具写完一个文件后:</p>
+
+<ol>
+  <li>Typola 立刻解析 tool_use 的 <code>file_path</code> + <code>content</code></li>
+  <li>编辑区右下角弹一个<strong>浮层</strong>(ArtifactToast)<br>
+    <code>📄 新产物 weekly-report.md · 打开 | 关闭</code></li>
+  <li>watcher 兜底监听(防止 AI 走其他路径写的文件被漏掉)</li>
+  <li>同时把这个产物加到产物中心的当前会话列表</li>
+</ol>
+
+<p>点 chip 的「打开」→ 在中间编辑器开新 tab + 加载文件。</p>
+
+<div class="card">
+  <div class="card-title">不同类型的产物 chip 图标</div>
+  <ul>
+    <li><code>📄</code> Markdown(在最右栏补 <strong>产物</strong> 表标签)</li>
+    <li><code>📊</code> PPT(HTML 形式)</li>
+    <li><code>&lt;/&gt;</code> HTML / HTM</li>
+    <li><code>📑</code> 检视版(从 review 导出的 md)</li>
+    <li><code>📝</code> AI 改稿(第 5 课产物)</li>
+    <li><code>🎨</code> 公众号(富文本复制产物)</li>
+  </ul>
+</div>
+
+<h2 id="center">3. 产物中心面板</h2>
+
+<p>想看全部 / 历史产物,右栏有「<strong>AI 产物</strong>」面板:</p>
+
+<ul>
+  <li>顶部 tab:
+    <ul>
+      <li><strong>当前会话</strong>(默认)— 这个会话产出的所有文件</li>
+      <li><strong>全部产物</strong>— 当前工作目录下<strong>所有会话</strong>的产物(列表按时间排序)</li>
+    </ul>
+  </li>
+  <li>搜索框 + 类型筛选(markdown / html / review / ppt / 公众号 / 数据)</li>
+  <li>每条 row 显示:文件名 · 类型 · 生成时间 · 操作(打开 / 比较 / 归档 / 删 / 覆盖 / 撤销覆盖)</li>
+</ul>
+
+<h2 id="open">4. 在中间编辑器打开 — 不在右栏铺预览</h2>
+
+<p>关键设计决策,重读三遍:</p>
+
+<div class="card safe">
+  <div class="card-title">产物 = 文档。文档归文档位。</div>
+  <p>点开 chip → <strong>中间编辑器开新 tab</strong>(像你打开任何 .md 一样):
+    <ul>
+      <li><code>.md</code> → WYSIWYG 阅读模式,可编辑</li>
+      <li><code>.html</code> → 走 HtmlPreviewPane <strong>阅读模式</strong>(只读、不在中间编辑,渲染之后可点"在浏览器打开")</li>
+      <li><code>PPT HTML</code> → 同上(只读 HTML,完美套 frontend-slides 等的输出)</li>
+    </ul>
+    <strong>不是右栏预览</strong>。右栏铺预览就是把产物当"附件 / 副产物",那是 chatbox 的设计;Typola 把产物当文档。</p>
+</div>
+
+<p>图示区别:</p>
+
+<pre><code>chipbox / Cursor 模式:  [文档]  |  [产物预览]    ← 文档边栏看产物,产物降级
+Typola 模式:            [文档 tab:weekly-report.md]        ← 中间编辑,正常文档</code></pre>
+
+<h2 id="archive">5. 保存到工作区 — 长期留</h2>
+
+<p>在产物中心 / chip 「菜单」找「<strong>保存到工作区</strong>」:</p>
+
+<ol>
+  <li>弹目标目录选择(默认 <code>&lt;工作区&gt;/</code> 根,可换子目录)</li>
+  <li>Typola 自动<strong>改名避免冲突</strong>:已有 <code>weekly.md</code> → 新名 <code>weekly-2.md</code>(或加时间戳)</li>
+  <li>文件从 <code>.typola-output/&lt;会话&gt;/</code> <strong>搬运</strong>到工作区(不是复制)</li>
+  <li>产物状态从 <code>done</code> → <code>archived</code></li>
+</ol>
+
+<div class="card">
+  <div class="card-title">什么时候该"保存到工作区"</div>
+  <ul>
+    <li>AI 写的报告 / 周报你要拿出来用 — 立刻归档</li>
+    <li>AI 写的草稿你打算改改后当终稿 — 归档后用中间编辑器编辑</li>
+    <li>AI 写的临时素材 / 实验产物 — 不用归档,关 Typola 后自动清理</li>
+  </ul>
+</div>
+
+<h2 id="merge">6. 合并到当前文档(走内联审阅)</h2>
+
+<p>AI 写的产物 = 整篇 .md 内容?那很可能你<strong>想用它替换或合并</strong>当前编辑的草稿。</p>
+
+<p>chip 旁或产物行菜单有「<strong>合并到当前文档</strong>」按钮:</p>
+
+<ol>
+  <li>触发第 5 课的<strong>内联审阅态</strong>(不是粗暴覆盖)</li>
+    <ul>
+      <li><strong>原文</strong> = 当前打开文档的全文</li>
+      <li><strong>新版</strong> = 产物文件全文</li>
+    </ul>
+  <li>进入内联审阅态后,Y/N/⏎ 逐处对比,改动地图同步亮</li>
+  <li>点「应用」→ 合并结果写回当前文档 → 文档变脏</li>
+</ol>
+
+<p>这里的设计选择是 — 即便产物是"AI 已经写完整"的产物,<strong>也不直接覆盖原文</strong>。
+你能控制每一处接受与否,跟第 5 课的产物写回走同一条管线。</p>
+
+<div class="card callout">
+  <div class="card-title">"AI 全文重写"的产物也走内联审阅</div>
+  <p>有 skill <code>output: review_inline</code> 标签(如"全文重写"型 skill)→ 产物到达后<strong>直接进入</strong>审阅态,不必手动点合并。
+    这是 Typola 的 A 类入口(<code>AI_DIFF_PREVIEW_SPEC §2.1</code>)。</p>
+</div>
+
+<h2 id="overwrite">7. 覆盖原文 + 撤销覆盖</h2>
+
+<p>当你确定 AI 写的产物就是终稿、要直接替换当前文档(不想要审阅态),</p>
+
+<p>有两种粒度:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">动作</th>
+      <th style="text-align:left;padding:8px 12px">走法</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>覆盖当前文档</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">产物行点「覆盖」按钮 → 弹确认「原文将被替换,可在 5 分钟内撤销」 → 文档替换 + 产物 manifest 标记"已覆盖"</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>撤销覆盖</strong></td>
+      <td style="padding:8px 12px">同一行点「撤销」按钮 → 文档回到覆盖前状态(产物 manifest 标记撤销)</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card danger">
+  <div class="card-title">覆盖是"少看一眼"模式 — 真要用慎重</div>
+  <p>默认用「合并到当前文档」(走内联审阅);确定完全没必要对比时再走「覆盖」。
+    <strong>撤销有时间窗</strong>(目前是 5 分钟),超时后撤销不可用。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">12 分钟任务:4 种产物处理方式全跑一遍</div>
+  <ol class="check-list">
+    <li>心流模式,在 AI 工作台开新会话,prompt 发"给我写一份本周 mock 报告,标题是 weekly-mock.md,内容 3 段即可"。</li>
+    <li>等 AI 用 Write 工具写完文件,看右下 chip 出现 → 点"打开"在中间编辑器看产物。</li>
+    <li>产物行点「保存到工作区」,选工作区根目录 + 不改名,确认搬运成功(<code>.typola-output/</code> 里文件没了)。</li>
+    <li>开新会话,prompt 发"把上面这份 weekly-mock.md 改写一下,内容大改",等产物写出来。</li>
+    <li>产物行点「合并到当前文档」 → 你编辑器里要选一份打开的稿件 → 进内联审阅态 → Y/N/⏎ 走走 → 应用。</li>
+  </ol>
+  <p>✅ 全部跑通 = 进入<a href="./0008-delivery-offline.html">第 8 课:交付 + 降级</a>。
+    你会学到 4 种导出(PDF / Word / HTML / review.md)、富文本复制到公众号、无网络/无 AI 时的兜底。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>chip 不出现</strong> — AI 没用 Write/Edit 工具,而是直接在前几条消息里把内容贴了出来。这种情况下产物没落地,得手动复制。</li>
+  <li><strong>产物落在奇怪路径下</strong> — AI 自作主张写了绝对路径。Typola 仍然解析并显示,但文件位置不是 <code>.typola-output/</code>。归档时手动选目标。</li>
+  <li><strong>保存到工作区改名逻辑奇怪</strong> — 默认按"产品目录是否存在同名文件"自动追加 <code>-2</code> 之类。改名规则在 <code>services/artifacts/manifest.ts</code> 可以改提示。</li>
+  <li><strong>产物 HTML 想在浏览器里看</strong> — 走 HtmlPreviewPane 右下角「在浏览器打开」按钮,Typola 调用系统默认浏览器。</li>
+  <li><strong>.typola-output 越来越大</strong> — 定期清理;或用产物中心面板顶部的「清理过期」按钮。</li>
+  <li><strong>覆盖错了,撤销不可用</strong> — 检查产物 manifest 状态;过 5 分钟就真没法撤了。要养成"先合并后覆盖"的习惯。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 8 课:<a href="./0008-delivery-offline.html"><strong>交付 + 离线降级</strong></a>。
+这是 9 节课的收官:Typola 不仅能"写",还能"出" — 4 种导出形态各自适合什么场景;以及当你没网、没装 CLI 时,Typola 还能做什么(它还能用)。</p>
+
+<blockquote>
+  <p>切片 chip 不出现 / 想问"为什么产物归中间编辑器不是右栏" / 想了解产物 manifest 持久化的细节?直接问 AI。</p>
+</blockquote>
+
+</body>
+</html>

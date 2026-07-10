@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>检视模式 + 内联审阅:逐处采纳 AI 改稿</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 5 课</span>
+<h1>检视模式 + 内联审阅:逐处采纳 AI 改稿</h1>
+<p class="subtitle">15 分钟。写作者最常用的套路:切到检视模式 → 给长稿攒意见 → 一键让 AI 按意见改 → 中间编辑器逐处采纳/拒绝。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>"我花了 3 小时写一篇稿子,现在想找同事给我提点意见" — 同事可能没空实时讲,你也不想改坏原文。
+    另一个真痛点:"AI 帮我按意见改了整篇,但我不知道改了哪里,怎么办?"
+    Typola 用<strong>两层</strong>结构解决:<br>
+    (1) <strong>检视意见层</strong> = 叠加在文档上的<strong>一层标记</strong>,不污染原文,导出前保持原稿干净。<br>
+    (2) <strong>内联审阅态</strong> = AI 改完稿之后,中间编辑器<strong>切到只读</strong>,逐处对比,采纳/拒绝,完了再合并回原文。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>检视模式(<code>DocumentModeSwitcher</code> 第 3 段)进入后,选中段落仍能用第 1 课的浮条 — 这次「加检视意见」按钮有效了。
+    意见以「<strong>每段后展开的卡</strong>」+ 高亮被批注的文字 + <strong>右栏汇总列表</strong>显示。
+    点右栏「AI 改稿」→ 发请求 → Typola 把全文+意见拼成 prompt → AI 改完产物落到 <code>.typola-output/&lt;会话&gt;/xxx.ai改{N}.md</code> →
+    <strong>中间编辑器整体切到内联审阅态</strong>(用自渲染只读 DOM,<strong>不被 live Vditor 擦写</strong>),显示「原文 vs 新版本」分段 diff
+    + 顶部计数器 + 上/下一处 + Y/N/⏎ 键盘 + 右侧改动地图。
+    点「应用」→ 合并结果写回当前文档,退出审阅态,文档标脏。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Notion 让你直接在别人的文档边输入"评论气泡";Google Docs 让你 reply 意见 —<strong>都乱入原文 DOM</strong>。
+    Typola 的检视意见是<strong>叠加层</strong>,导不导出 review.md 完全可控 —
+    <strong>原文从未污染</strong>。AI 改稿也不用 3-way merge、不用 fork UI,<strong>审阅是只读的一层</strong>,应用时一次写回 —
+    这避免了"实时在线编辑冲突"这个最难啃的坑。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pre">前置</a>
+  <a class="toc-pill" href="#enter">进入检视模式</a>
+  <a class="toc-pill" href="#add">加意见(浮条「加检视意见」)</a>
+  <a class="toc-pill" href="#side">右栏汇总列表</a>
+  <a class="toc-pill" href="#export">导出 review.md 给协作者</a>
+  <a class="toc-pill" href="#send-ai">「AI 改稿」发请求</a>
+  <a class="toc-pill" href="#diff">内联审阅态:Y/N/⏎ + 改动地图</a>
+  <a class="toc-pill" href="#apply">点「应用」合并回原文</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 1 课、第 2 课、第 4 课</li>
+  <li>有一份至少 <strong>10 段以上的草稿</strong>(过短没法演示段落 diff)。</li>
+  <li>装好 CLI,Typola 检测通过</li>
+</ul>
+
+<h2 id="enter">1. 进入检视模式</h2>
+
+<p>顶栏三段控件点「<strong>检视模式</strong>」,或在阅读模式下按几次 <kbd>Shift</kbd> + <kbd>A</kbd> 配合选择。</p>
+
+<p>进入后你会看到:</p>
+<ul>
+  <li>编辑器保持当前文档不变(你没污染原文)</li>
+  <li><strong>右侧栏</strong>出现「<strong>检视意见</strong>」面板(header: 检视意见 + 数量 + 脏标记)</li>
+  <li>暂时右边还要 SkillHub(可关) — 不冲突</li>
+</ul>
+
+<div class="card">
+  <div class="card-title">检视模式 ≠ 检视面板常驻</div>
+  <p>检视模式是<strong>文档状态</strong>;"右栏出现检视意见"是<strong>UI 表现</strong>。关掉右栏(✕)再次打开,它还会出现 — 直到你切回阅读模式或心流模式。</p>
+</div>
+
+<h2 id="add">2. 加意见 — 用浮条「加检视意见」</h2>
+
+<p>选中任意一段(或跨段选 3-5 行)→ 等浮条出现(第 1 课)→ 点「<strong>加检视意见</strong>」:</p>
+
+<ol>
+  <li>弹出<strong>检视意见编辑器浮卡</strong>(贴选区下方)</li>
+  <li>输入意见内容,例如「<code>这段论据太单一,引用研究数据会更有说服力</code>」</li>
+  <li>回车或点确认 → 意见入库</li>
+</ol>
+
+<p>页面变化:</p>
+<ul>
+  <li>被批注的段落<strong>整段高亮</strong>(主题色淡背景,不是 AR 涂红)</li>
+  <li><strong>段后展开</strong>一张意见卡:blockquote 风格 + 「<code>**检视意见,请处理**:&lt;你写的&gt;</code>」</li>
+  <li>右栏「<strong>检视意见</strong>」数量 + 1</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">段后意见卡的格式为什么这么写</div>
+  <p>Typola 不用 emoji + 不用自定义数据属性,直接用 <code>&gt; **检视意见,请处理**:&lt;意见&gt;</code> 这种 md blockquote 形式 —
+    这样导出的 review.md <strong>本身就是干净的 Markdown</strong>,人类可读、AI 可懂。
+    等于一份"喂给 AI 的 prompt 格式" + 一份"给同事看的可读版"。</p>
+</div>
+
+<p>写 3-5 条意见,不同段落,每条意见文字不同。</p>
+
+<h2 id="side">3. 右栏汇总列表</h2>
+
+<p>右栏每个意见一条 row:</p>
+
+<ul>
+  <li><strong>上下文:</strong>被批注那段的截断文本(50 字左右)+ 「...」</li>
+  <li><strong>意见:</strong>你写的原话</li>
+  <li><strong>时间:</strong>相对时间(几分钟前 / 刚刚 / 直接日期)</li>
+  <li><strong>操作:</strong>跳转(▶) · 编辑(铅笔) · 删除(🗑)</li>
+</ul>
+
+<p>右栏顶部还有两个全局按钮:</p>
+<dl class="shortcut-grid">
+  <dt><strong>导出检视版</strong></dt><dd>把意见合成进每段后,另存为 <code>*.review.md</code>(或指定后缀)</dd>
+  <dt><strong>AI 改稿</strong></dt><dd>切到 AI 改稿视图,审稿视图收起</dd>
+</dl>
+
+<h2 id="export">4. 导出 review.md — 给协作者看</h2>
+
+<p>如果你今天就想把稿子丢给同事:<br>
+右栏 <strong>导出检视版</strong> → 选保存目录 → 一份 <code>&lt;原文件名&gt;.review.md</code> 落盘。</p>
+
+<p>这份文件长这样(简化):</p>
+
+<pre><code># 你的原文章节
+&gt; **检视意见,请处理**:这段论据太单一...
+段落原文
+
+# 下一段
+&gt; **检视意见,请处理**:开头弱,缺钩子
+段落原文
+...</code></pre>
+
+<p>发出去,同事直接看到"哪儿有问题" — <strong>不需要再装 Typola、不需要装 skill、不需要任何工具</strong>。</p>
+
+<div class="card safe">
+  <div class="card-title">导出 review.md 后续能再打开吗?</div>
+  <p>可以,但<strong>Typola 不会再把意见解析回原文档</strong>(这是 round-trip 红线 — 在你做导出时已经走到文件,导出的 review.md 是单向快照,不是双向 sync)。
+    这让 review.md 永远干净,你可以心安理得把它丢给任何工具(微信、Notion、邮件都接得住)。</p>
+</div>
+
+<h2 id="send-ai">5. 「AI 改稿」发请求</h2>
+
+<p>右栏切到 <strong>AI 改稿</strong> 视图(顶部「AI 改稿」按钮)→ 你会看到:</p>
+
+<ul>
+  <li>顶部「<strong>发 AI 修改</strong>」主按钮</li>
+  <li>下方是「<code>{stem}.ai改{N}.md</code>」文件列表 — 这是 AI 历次改稿产物</li>
+</ul>
+
+<p>点「发 AI 修改」:</p>
+
+<ol>
+  <li>Typola 拼 prompt = 当前文档全文 + 所有意见(按段后格式附加)</li>
+  <li>AI 工作台会话<strong>新开一个回合</strong>(不打断你现有对话)</li>
+  <li>AI 改完后产物落 <code>&lt;工作区&gt;/.typola-output/&lt;会话&gt;/&lt;stem&gt;.ai改1.md</code></li>
+  <li>中间编辑器<strong>整体</strong>切到内联审阅态(原文档隐藏,审阅 UI 接管)</li>
+</ol>
+
+<h2 id="diff">6. 内联审阅态 — Y / N / ⏎ 鼠标级键盘</h2>
+
+<p>这是 Typola 真功夫。<strong>中间编辑器不是右栏铺开,而是直接接管</strong>。你能看到:</p>
+
+<ul>
+  <li><strong>顶部条</strong>「<strong>审阅 AI 改稿 · 第 N/总数 处 ▲▼ 全部采纳 / 全部拒绝 / 应用 ✕</strong>」</li>
+  <li><strong>左侧</strong>(占主要区域):分段后的混合视图<br>
+    → unchanged 段:<strong>直接渲染</strong><br>
+    → modified 段:<strong>原文删除线 + 新版高亮</strong> + 该段下方贴 ✓/✗ 按钮<br>
+    → added 段:绿色高亮 + ✓/✗<br>
+    → removed 段:删除线 + ✓(采纳删除) / ✗(保留)</li>
+  <li><strong>右侧滚动条</strong>:改动地图 — 每处一个小标记,当前处放大高亮,点就跳</li>
+</ul>
+
+<p>键盘流(进入审阅后全程不用鼠标):</p>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Y</kbd></dt><dd>采纳当前 hunk,自动跳到下一处</dd>
+  <dt><kbd>N</kbd></dt><dd>拒绝当前 hunk,自动跳到下一处</dd>
+  <dt><kbd>Enter</kbd> / <kbd>↓</kbd></dt><dd>跳到下一处</dd>
+  <dt><kbd>Shift</kbd> + <kbd>Enter</kbd> / <kbd>↑</kbd></dt><dd>跳到上一处</dd>
+  <dt><kbd>Esc</kbd></dt><dd>退出审阅态(若你动过 hunk 会有轻确认 "放弃本次 AI 审阅?")</dd>
+</dl>
+
+<div class="card callout">
+  <div class="card-title">每处默认状态 = 采纳</div>
+  <p>这是产品决策:用户最常的意图是"AI 改得还行就用",所以每处 diff <strong>默认就是接受状态</strong>。
+    用户只需<strong>对不想要的改点 ✗</strong>,而不是对每处都去点击 "采纳"。
+    想反向操作(默认拒绝)就开 <strong>全部拒绝</strong>。</p>
+</div>
+
+<h2 id="apply">7. 点「应用」合并回原文</h2>
+
+<p>所有处过完一遍,点「<strong>应用</strong>」→ Typola 把当前各处状态合并成完整文本,调编辑器 <code>setValue</code> 写回当前文档 → 退出审阅态 → <strong>文档此刻变脏</strong>(因为它已经被改了)。</p>
+
+<p>写回是<strong>一次原子操作</strong>:一次 <kbd>Ctrl</kbd> + <kbd>Z</kbd> 能完整回到改稿前的原文(不是逐步)。</p>
+
+<div class="card danger">
+  <div class="card-title">审阅态 ≠ 文档脏</div>
+  <p>审阅过程中<strong>原文磁盘文件一直没变</strong>;合并写回才让文档变脏。
+    所以关掉审阅态(放弃)、切文档、突然关窗口 — 原文始终在磁盘上,产物也始终在 <code>.typola-output/</code>,你不会丢。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">15 分钟任务:完整的"检视 → AI 改 → 逐处审 → 应用"一圈</div>
+  <ol class="check-list">
+    <li>打开你的一份长稿(>10 段),切到检视模式。</li>
+    <li>选 3 段不同段落,分别用浮条「加检视意见」添 3 条意见 — 文字要明显不同(论据弱 / 标题要改 / 多一句开场)。</li>
+    <li>右栏切到「AI 改稿」,点「发 AI 修改」,等 AI 改完产物落出来。</li>
+    <li>中间编辑器切到内联审阅态,先按 <kbd>Y</kbd> 走过前 2 个 hunk,然后第 3 个 hunk <kbd>N</kbd> 拒绝。</li>
+    <li>用顶部 ▲▼ 或键盘 <kbd>Enter</kbd> 验证跳转,看改动地图(右侧滚动条)是否同步高亮当前位置。</li>
+    <li>点「应用」,文档改回,看是否变脏(标题栏小圆点出现),<kbd>Ctrl</kbd> + <kbd>S</kbd> 保存。</li>
+    <li><kbd>Ctrl</kbd> + <kbd>Z</kbd> 一步回到改稿前 — 验证原子撤销。</li>
+  </ol>
+  <p>✅ 全部完成 = 进入<a href="./0006-pill-conversations.html">第 6 课:多会话 Pill</a>。
+    你会学到为什么 Typola 用"药丸 + 下拉"管多个 AI 会话,而不是 Tab。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>点「加检视意见」卡打不开</strong> — 当前段落没选够文字,或选区跨越多个段落被 Typola 强制重选。重新选 1 段。</li>
+  <li><strong>右栏意见不显示</strong> — 你切到心流模式或阅读模式了。切回检视模式(顶栏三段控件)。</li>
+  <li><strong>「AI 改稿」产物始终空</strong> — 看左栏 AI 工作台是否有错误诊断卡。多半是 CLI 鉴权过期或模型无权限,看卡上人话指引修。</li>
+  <li><strong>审阅态里点不动 ✓/✗ 按钮</strong> — 鼠标点的就是按钮,只是有时候焦点态不太明显。用键盘 Y/N 一样的。</li>
+  <li><strong>应用写回后内容乱</strong> — 极少见,通常是产物文本身有 markdown 头/尾噪声。先在产物上 <kbd>Ctrl</kbd> + <kbd>O</kbd> 看一眼,确认产物是干净的全文。</li>
+  <li><strong>想看 AI 改了哪但中间不切</strong> — <strong>没有这种模式</strong>。Typola 的设计就是:走审阅态要么全采要么全拒要么跳着选,不提供"看着原文也看着 diff"双栏。理由:Vditor 正在编辑的 DOM 会被 outerHTML 重写擦掉所有"叠加的"修改提示 — 必须把视图让给只读 DOM 才能保证准确性。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 6 课:<a href="./0006-pill-conversations.html"><strong>运行期多会话:Pill 管对话,Tab 管文件</strong></a>。
+Typola 用<strong>药丸(Pill)</strong>而不是<strong>Tab</strong>管多个 AI 会话 — 这一节课会讲清这个设计的来源和取舍,以及如何同时并行 2-3 件事不串味。</p>
+
+<blockquote>
+  <p>切片 AI 产物不落地 / 想问"为什么不提供 3-way merge" / 想了解"段后意见卡 AI 如何解读"?直接问 AI。</p>
+</blockquote>
+
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>用浮条让 AI 在你眼皮底下改稿</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 1 课</span>
+<h1>用浮条让 AI 在你眼皮底下改稿</h1>
+<p class="subtitle">5 分钟。第一次让 Typola 里的 AI 改一段话 — 选 → 浮条 → 原地对比 → 采纳。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>"这段写得不好,但我懒得去 ChatGPT 复制粘贴" — 写一段就被打断一次的痛。
+    Typola 把 AI 改稿压成一条浮在选区上方的横排工具条,<strong>不离文档、不开新窗口</strong>。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>选中文字后延迟 160ms 自动出现的 <code>SelectionFloatingBar</code>。点动作 → 起一个隐藏的 AI 会话(只为了拿替换文本)→ 把"原文 vs 新版"叠回选区下方一张结果卡 → 你点 <kbd>采纳替换</kbd> 才真的写回正文。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>VS Code Copilot 是字符级补全(改你还没写的字);Notion AI 是整页 AI 改稿(一键覆盖,不可拒)。
+    Typola 走"选段级 + 原地对比 + 逐处采纳"<strong>比 Copilot 改得多,比 Notion 改得可控</strong>。
+    右键菜单 <kbd>Ctrl</kbd> + <kbd>K</kbd> 还有 4 个动作(缩写/扩写/校对/自定义)不在浮条里 — 浮条只挑了最常用的 3 个。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pre">前置</a>
+  <a class="toc-pill" href="#polish">浮条润色</a>
+  <a class="toc-pill" href="#ctrlk">右键全套动作</a>
+  <a class="toc-pill" href="#explain">解释术语(不替换)</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>Typola 已装,且<strong>至少一个</strong> <code>claude</code> / <code>opencode</code> 可用</li>
+  <li><code>设置 → AI 执行</code> 里能看到 CLI 检测通过(版本号不是空的)</li>
+  <li>编辑器里有一份写了一半的文档(自己随便写一段就好,不需要写得好)</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">CLI 没检测到?</div>
+  <p>常见原因:PowerShell 的 ExecutionPolicy 挡了 npm 的 <code>.ps1</code>,或装到了用户目录但 PATH 里没有。
+  最简单的兜底:在 <code>设置 → AI 执行 → 可执行路径</code> 里手动指定完整路径(例如 <code>C:\Users\你\.npm-global\claude.cmd</code>)。
+  改完点一下"检测",看到版本号就 OK。</p>
+</div>
+
+<h2 id="polish">1. 浮条润色 — 3 步让 AI 改完并采纳</h2>
+
+<p>这是最常用的动作,适合大部分"这段能更好"的场景。</p>
+
+<dl class="shortcut-grid">
+  <dt>步骤 1</dt><dd>在文档里<strong>选中一段中文/英文文本</strong>(鼠标拖选 3-5 句话,空段落、整段都行)</dd>
+  <dt>步骤 2</dt><dd>松开鼠标 ~160ms 后,选区上方会出现一条小工具条:「润色 / 解释术语 / 加检视意见」</dd>
+  <dt>步骤 3</dt><dd>点「<strong>润色</strong>」→ 选区下方贴出一张对比卡「原文 vs 新版本」+ <strong>采纳替换</strong> / 取消</dd>
+</dl>
+
+<p>点 <strong>采纳替换</strong>:原文被精确替换,自动加进撤销栈(<kbd>Ctrl</kbd> + <kbd>Z</kbd> 能撤回)。
+点 <strong>取消</strong>:什么都没发生,文本还是你的。</p>
+
+<div class="card safe">
+  <div class="card-title">采纳的底线逻辑</div>
+  <p>浮条不偷你文字。原文永远在<strong>磁盘的当前文档</strong>和<strong>撤销栈</strong>里 — 哪怕点了「采纳替换」,<kbd>Ctrl</kbd> + <kbd>Z</kbd> 也能一步步回退。
+  对比卡是叠加的,采纳前你看得到「会变成什么」。</p>
+</div>
+
+<h2 id="ctrlk">2. 浮条只有 3 个动作?右键还有 4 个</h2>
+
+<p>浮条故意只挑了最高频的 3 个(<strong>润色 / 解释术语 / 加检视意见</strong>)。
+其余的 4 个 — <strong>缩写、扩写、校对、自定义</strong> — 都在 <strong>右键菜单 / <kbd>Ctrl</kbd> + <kbd>K</kbd></strong> 里:</p>
+
+<ol>
+  <li>选中一段文字</li>
+  <li>按 <kbd>Ctrl</kbd> + <kbd>K</kbd> 或右键 → AI 动作</li>
+  <li>在列表里选「缩写 / 扩写 / 校对 / 自定义」</li>
+  <li>弹出的输入卡里可以填具体要求(如"改得更口语","目标长度 80 字"),<kbd>Ctrl</kbd> + <kbd>Enter</kbd> 发送</li>
+  <li>同样回一张「原文 vs 新版本」对比卡,采纳替换或取消</li>
+</ol>
+
+<div class="card">
+  <div class="card-title">什么时候用哪个?</div>
+  <p><strong>润色</strong> — 文字通顺但不够精炼,要打磨。<br>
+  <strong>缩写</strong> — 长了,要砍一半。<br>
+  <strong>扩写</strong> — 太干,要补论据/例子。<br>
+  <strong>校对</strong> — 怀疑有错别字/语法/标点问题,只想扫一遍不改写。<br>
+  <strong>解释术语</strong> — 选了一个词/概念想加一段人话注解(<strong>不替换,只展示</strong>),你可以复制走。<br>
+  <strong>自定义</strong> — 上面的都不合适,自己写要求(例如"翻成英文,保留技术名词")。</p>
+</div>
+
+<h2 id="explain">3. 解释术语 — 这是唯一一个"不替换"的动作</h2>
+
+<p>「解释术语」的特殊之处在于:<strong>结果不打算替换你选中的词</strong>,只是解释一下给你看。
+所以它的结果卡显示成<strong>单文本块 + 复制按钮</strong>,没有"采纳替换":</p>
+
+<p>典型用法:文档里有个专业术语,你写作时需要看一眼定义但<strong>不想让文档里多出这段解释</strong>。
+点解释 → 复制走 → 关卡 → 文档不变。</p>
+
+<div class="card danger">
+  <div class="card-title">浮条只有 3 个 — 加检视意见要等第 5 课</div>
+  <p>浮条第 3 个按钮「加检视意见」是给检视模式铺路的:它不会调 AI,只是给选中段落记一条意见。
+  真正发 AI 改稿的入口在 <strong>右侧检视面板</strong>,要切到检视模式才出现。第 5 课再展开。
+  这一课先只用「润色 + 解释术语」。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">10 分钟任务:让 AI 改 3 段</div>
+  <ol class="check-list">
+    <li>在自己的笔记文档里选一段长句子(超过 50 字),点浮条「润色」,看新版本,采纳。</li>
+    <li>再选一段,按 <kbd>Ctrl</kbd> + <kbd>K</kbd> 在右键菜单里选「缩写」,写要求"砍到一半长度",采纳。</li>
+    <li>选一个你不熟的术语,点浮条「解释术语」,看结果,点「复制」,粘贴到文档里随手位置,再撤销粘贴(练一下 <kbd>Ctrl</kbd> + <kbd>Z</kbd>)。</li>
+    <li>最后按 <kbd>Ctrl</kbd> + <kbd>Z</kbd> 几次回到最原始的版本 — 确认所有 AI 改动都能回退。</li>
+  </ol>
+  <p>✅ 4 步全过 = 进入<a href="./0002-workbench-open.html">第 2 课:AI 工作台开箱</a>。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>浮条不出现</strong> — 最常见是文档在"源码模式"(不是阅读模式),或你刚松开鼠标在拖选过程中。
+  等半秒别动鼠标,或在阅读模式(WYSIWYG)里选。</li>
+  <li><strong>浮条出现但点不动按钮</strong> — 鼠标落在了按钮之间的空隙上。点按钮中央的图标或文字。</li>
+  <li><strong>点了「润色」卡在 loading 转圈</strong> — CLI 进程没起来,或网络/鉴权问题。
+  等 8 秒还没结果会自动跳到错误卡,点「重试」,再不行查 <code>设置 → AI 执行</code> 的检测。</li>
+  <li><strong>采纳替换后文本看起来没变</strong> — 通常是 AI 的"新版本"几乎等同原文(就是只换了几个字)。
+  退回看对比卡前后对比。</li>
+  <li><strong>Ctrl+Z 不能回退 AI 改动</strong> — 在阅读模式下是支持的。如果不行,先切到阅读模式再试。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 2 课:<a href="./0002-workbench-open.html"><strong>AI 工作台开箱:Shift+A 与多轮对话</strong></a>。
+你会打开 <strong>左栏</strong> AI 工作台,真正跟 Claude / OpenCode 来回对话 — 这是 Typola 的"心流模式"主入口。</p>
+
+<blockquote>
+  <p>卡在 loading / 鉴权失败 / 想问"为什么浮条不能调 skill"?直接问 AI。</p>
+</blockquote>
+
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>AI 工作台开箱:Shift+A 与多轮对话</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 2 课</span>
+<h1>AI 工作台开箱:Shift+A 与多轮对话</h1>
+<p class="subtitle">8 分钟。把 AI 从"选段级改稿"升级到"围绕整篇文档来回问答"。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>整篇稿子写一半,你想问 AI"这一段论据够不够"、"开头能不能更吸引人"、"有没有逻辑漏洞" — 这些不能靠浮条的选段动作解决,因为你要把上下文作为整体拿出去。<strong>需要一个能围绕当前文档来回对话的工作区</strong>。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>左侧栏在"文件树"和"AI 工作台"之间<strong>切换</strong>(不并存)— 选了 AI 工作台,文件树收起让位,编辑器保持全高不被挤压。
+    Typola 用本机 CLI 跑 headless 流式协议(Claude Code 走 stream-json,OpenCode 走 JSON),所有工具调用、思考、正文、应用内卡片化展示 — 你不用开终端、不用手动回车。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Claude Desktop / ChatGPT / Cursor 是"对话为中心",文档是附加品;Typola 反过来 — <strong>文档是 C 位,对话是草稿</strong>。
+    所以 Typola 不做"会话存档库",不做"AI 用量统计",不做"跨会话搜索";只做"围绕当前稿子 + 当前文档附件"的少量并行任务。这也是为什么用 <strong>Pill</strong> 而不是 Tab 管对话(下节课展开)。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pre">前置</a>
+  <a class="toc-pill" href="#open">唤出 AI 工作台</a>
+  <a class="toc-pill" href="#send">发第一条消息</a>
+  <a class="toc-pill" href="#cards">读懂 5 种流式卡片</a>
+  <a class="toc-pill" href="#provider">切换 Provider</a>
+  <a class="toc-pill" href="#turn">多轮对话</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>你已装好 <code>claude</code> 或 <code>opencode</code>,Typola <code>设置 → AI 执行</code> 检测通过</li>
+  <li>已经完成第 1 课(浮条能正常工作)</li>
+  <li>至少有一份<strong>写了一半</strong>的文档在打开</li>
+</ul>
+
+<h2 id="open">1. 唤出 AI 工作台</h2>
+
+<p>两种方式 — 任选:</p>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Shift</kbd> + <kbd>A</kbd></dt><dd>心流模式 ↔ 阅读模式来回切</dd>
+  <dt>顶栏三段控件</dt><dd>手动点"心流模式"</dd>
+</dl>
+
+<p>唤起后你会看到三件事同时发生:</p>
+<ol>
+  <li><strong>左侧栏</strong>:文件树收起,弹出 AI 工作台(对话流 + 输入框)</li>
+  <li><strong>编辑器</strong>:<strong>高度不变</strong>,继续全高展示当前文档(不被对话框挤)</li>
+  <li><strong>右栏</strong>:SkillHub 出现(第 4 课展开)</li>
+</ol>
+
+<p>再按一次 <kbd>Shift</kbd> + <kbd>A</kbd> 或点回"阅读模式",就回到只有文件树 + 编辑器的常态。</p>
+
+<div class="card callout">
+  <div class="card-title">"心流模式"这个名字的意思</div>
+  <p>心流 = flow = 沉浸写作状态。Typola 不想让你被对话框的常驻存在打断,所以左栏只在需要时让出来;
+它跟"AI 工作台"是同一区域,只是更强调"这是写作者的沉浸写作位"。
+看到"心流模式"四个字,脑子里就是"左栏切到 AI 工作台"。</p>
+</div>
+
+<h2 id="send">2. 发第一条消息</h2>
+
+<p>左栏底部输入框(Composer)就是入口。</p>
+
+<ol>
+  <li>在输入框写一句问题(例如「<code>帮我找出这篇文章里论据最弱的 3 段</code>」)</li>
+  <li>(可选)勾上你想让 AI 看见的<strong>上下文芯片</strong>:<code>当前文档</code> 默认就在</li>
+  <li>点 <kbd>发送</kbd> 或 <kbd>Ctrl</kbd> + <kbd>Enter</kbd></li>
+  <li>等 AI 流式输出 — 看到下方出现卡片就开始收到回应</li>
+</ol>
+
+<p>发送后输入框下方会出现一条<strong>取消按钮</strong>,任何时候想中止 AI 当前输出就点它,等同于"放下笔"。</p>
+
+<h2 id="cards">3. 读懂 5 种流式卡片</h2>
+
+<p>AI 输出不是一坨文本滚下来,而是按内容类型分卡片出现 — 你得能识别:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">卡片</th>
+      <th style="text-align:left;padding:8px 12px">它是什么</th>
+      <th style="text-align:left;padding:8px 12px">你该怎么做</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>思考卡</strong>(Thought)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 在真正打字前的内部推理。默认折叠,点开看灰色的文字流。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">通常<strong>不用读</strong>,遇到 AI 输出诡异再看。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>正文卡</strong>(Markdown)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 给你的回答本身(打字机式逐字出现)。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">读它。打字机滚动时还能左右滑或停止发送。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>工具卡</strong>(Tool)</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">AI 调用了 Read / Edit / Bash / Glob 之类工具。低关注度工具默认折叠。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">折叠着就好;AI 在<strong>读你的文档</strong>是正常的。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>Done 状态栏</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">一轮结束时的<strong>耗时 · 输出 token · 估算花费</strong>。</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">看一眼知道这轮成本。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>错误诊断卡</strong></td>
+      <td style="padding:8px 12px">AI 卡死 / 鉴权失败 / 模型无权限 — Typola 把 CLI 的退出码翻译成人话。</td>
+      <td style="padding:8px 12px">看诊断文本 → <strong>Retry</strong> 或按它给的指引修。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card safe">
+  <div class="card-title">怎么识别"AI 现在还在想" vs "AI 已经放弃"</div>
+  <p>正常等待 → 流式卡片在追加(打字机还在滚)。
+  <strong>诊断卡</strong> 出现 → AI 已经停了,在告诉你为什么失败。
+  <strong>空白</strong>超过 8 秒 → 多半 CLI 卡死,可以按取消,再 Retry。</p>
+</div>
+
+<h2 id="provider">4. 切换 Provider(Claude Code ↔ OpenCode)</h2>
+
+<p>Typola 支持两个 provider,Composer 底部有一个<strong>小药丸按钮组</strong>(不是设置里的):
+点 <code>Claude</code> 就切 Claude Code,点 <code>OpenCode</code> 就切 OpenCode。</p>
+
+<div class="card danger">
+  <div class="card-title">切 Provider = 新会话</div>
+  <p>这是重要规则:<strong>切换 Provider 会弹确认「会开始新对话,旧会话上下文不会跨 provider 延续」</strong>。
+  为什么:Claude 的内部状态格式跟 OpenCode 不一样,跨 provider 续传只会让 AI 一脸懵。
+  想保留上下文就别切 Provider;想试不同模型,在<strong>同一个 Provider 下</strong>用它的 CLI 自带切换机制(例如 Claude Code 的 <code>--model</code> 参数)。</p>
+</div>
+
+<p>切完 Provider 之后,输入框、Done 栏、错误诊断卡的视觉风格也会跟着换 — Claude 用它原生 stream-json,OpenCode 用 JSON 协议,UI 形态相同。</p>
+
+<h2 id="turn">5. 多轮对话 — 上下文延续</h2>
+
+<p>发第一轮后,继续在输入框打字再发第二轮,**Claude 会记得你上一轮说了什么**(它的 session UUID 由 Typola 内存维护)。</p>
+
+<p>这是写作者最常用的模式 — 同一稿子来回迭代:</p>
+
+<pre><code>👤 : 我写了篇关于 X 的稿子,帮我看开头能不能更吸引人
+🤖 : (输出建议)
+👤 : 那段能不能换成更克制的语气?
+🤖 : (在上一轮建议的基础上改)
+👤 : 改完了,我整篇都在这,最后整体顺一遍
+🤖 : (通读)</code></pre>
+
+<div class="card">
+  <div class="card-title">多轮的边界</div>
+  <p><strong>同一运行期内</strong>:会话上下文保留(每轮发请求时 Typola 把 session UUID 给 CLI 续传)。<br>
+  <strong>重启 Typola</strong>:会话丢失(内存 Map 不持久化)。后者是已知限制,跨重启的持久化在路线图里(M3+)。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">8 分钟任务:跟 AI 来回三轮</div>
+  <ol class="check-list">
+    <li>按 <kbd>Shift</kbd> + <kbd>A</kbd> 唤出 AI 工作台。</li>
+    <li>把你正写的文档主题贴在 Composer,问「<code>请用 5 个 bullet 给我列一下,普通读者可能误解的 5 处</code>」。</li>
+    <li>等 AI 输出。等过程里<strong>不要点取消</strong>,看流式卡片是怎么分步出现的。</li>
+    <li>第二轮发:「<code>挑一个最严重的展开讲讲,顺便给我一个修复方向</code>」 — 验证 AI 真的记住了你第一轮问的稿子。</li>
+    <li>看 Done 状态栏的耗时和 token 数,估算下你这轮大概花了多少钱。</li>
+  </ol>
+  <p>✅ 全部完成 = 进入<a href="./0003-context-chips.html">第 3 课:上下文芯片</a> — 让 AI 看见附件 / MCP / Plugin。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>AI 一直"在想"不输出</strong> — CLI 没起来或鉴权错。等 8-10 秒,如果还没出来基本是诊断卡的问题。</li>
+  <li><strong>左栏唤出后编辑器变窄</strong> — 这不是 bug,是误判。Typola 的左栏切换是<strong>替换</strong>不是叠加;编辑器是全高的,只是左栏占了原本文件树的位置。</li>
+  <li><strong>切完 Provider 旧对话消失</strong> — 正常的。每次切 Provider 重开会话。</li>
+  <li><strong>Done 栏写着 0 token 但确实输出了一大段</strong> — 流式 parser 在最后一次 <code>step_finish</code> 之前就关了。</li>
+  <li><strong>Composer 打字特别卡</strong> — 高频 text_delta 压力下,前端 rAF 节流应该够;真卡就在 <code>设置 → AI 执行</code> 里换 Provider 试。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 3 课:<a href="./0003-context-chips.html"><strong>上下文芯片:让 AI 看见你要的素材</strong></a>。
+当前文档 + 附件 + <code>.mcp.json</code> + Plugin 目录 都会作为 prompt 的一部分喂给 AI。装好了,你就能让 AI 同时看你的稿子和参考资料一起改。</p>
+
+<blockquote>
+  <p>切片鉴权报错 / 想了解 stream-json vs JSON 协议差异 / 想问"为什么 Typola 不做会话存档"?直接问 AI。</p>
+</blockquote>
+
+</body>
+</html>

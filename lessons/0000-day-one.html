@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Typola 第一天:装好就能写</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 0 课</span>
+<h1>Typola 第一天:装好就能写</h1>
+<p class="subtitle">5 分钟。装好、打开一份文档、写一段字、保存。所有后面的课都建立在这节。</p>
+
+<aside class="feature-frame">
+  <h2>这 9 节课会带你看懂的 5 大能力</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>写作者每天的 4 个真痛点:(1) 写一段话要润色,**但不想离开文档去 ChatGPT 复制粘贴**;(2) 想让 AI 帮生成报告 / PPT,但结果困在聊天记录里,不能落到文件;(3) 整篇改稿时怕 AI 一次覆盖丢原文;(4) 同事让你 review,你不知道意见给到哪段、最后怎么合并回正文。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>所有 AI 调用都在文档内或文档旁发生;AI 写的东西落到本地文件而不是云端 chat;改稿前先给你逐处对比再合并;检视意见是叠加的一层,导出前不污染原文。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Typora 不带 AI;Notion AI 是云文档,产物在云上你看不见本地 Markdown;<strong>Typola 把"AI 是工序,文档是产物"</strong>这件事死守住 — 所以左栏是草稿(A 对话),中栏是成品(C 文档),从不把对话变档案库。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#install">1. 装哪一版</a>
+  <a class="toc-pill" href="#cli">2. AI 命令行要不要先装</a>
+  <a class="toc-pill" href="#open">3. 打开你的第一份文档</a>
+  <a class="toc-pill" href="#write">4. 写一段再保存</a>
+  <a class="toc-pill" href="#modes">5. 认识三种文档模式</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="install">1. 装哪一版</h2>
+
+<p>Typola 目前只在 Windows 上发布。从 GitHub Releases 拿,两种包二选一:</p>
+
+<div class="card">
+  <div class="card-title">安装版 <code>Typola_*_x64-setup.exe</code></div>
+  <p>装在用户目录,自动关联 <code>.md / .markdown / .html / .docx</code>。日常使用选这个。
+  注意:Typola 也提供 <code>.msi</code> 格式;装到 Program Files 会弹管理员权限,大部分人不必用 msi。</p>
+</div>
+
+<div class="card">
+  <div class="card-title">免安装版 <code>Typola_*_windows-x64_portable.zip</code></div>
+  <p>解压后双击 <code>Typola.exe</code>。适合临时测试、不想留安装痕迹、需要 U 盘带走的场景。
+  第一次启动会自动跑 WebView2 bootstrapper — 缺 WebView2 时会先装,无网就报错。</p>
+</div>
+
+<p>装好后第一次启动会做一次 <strong>WebView2 Runtime 预检</strong>。失败会弹窗告诉你去哪里装 — 跟着链接点过去装一次就好,以后不再弹。</p>
+
+<div class="card callout">
+  <div class="card-title">快捷入门 4 步</div>
+  <ol>
+    <li>装好 Typola</li>
+    <li>打开一份 <code>.md</code> 文档(后面第 3 步会教你方式)</li>
+    <li>默认就是<strong>阅读模式</strong>(所见即所得),不需要切</li>
+    <li>写完按 <kbd>Ctrl</kbd> + <kbd>S</kbd> 保存</li>
+  </ol>
+</div>
+
+<h2 id="cli">2. AI 命令行要不要先装</h2>
+
+<p>看完第 0 节你就能写、就能保存。<strong>AI 那一大块要等本机有 Claude Code 或 OpenCode 之后</strong>才用得起来 — 后面的课都会用到。</p>
+
+<p>如果你已经装了其中任一个,在 PowerShell 里跑一下确认:</p>
+
+<pre><code>claude --version
+opencode --version</code></pre>
+
+<p>输出类似 <code>claude 1.x.x</code> 之类就行,装到具体哪个版本不重要。<strong>没装不影响第 0 课</strong>,但第 1 课开始就要至少一个能用了。</p>
+
+<h2 id="open">3. 打开你的第一份文档</h2>
+
+<p>四种打开方式,挑顺手的:</p>
+
+<ol>
+  <li><strong>键盘</strong> <kbd>Ctrl</kbd> + <kbd>O</kbd> → 选文件</li>
+  <li><strong>拖拽</strong>:把 <code>.md</code> 文件从资源管理器拖到 Typola 窗口任意空白区</li>
+  <li><strong>文件关联</strong>:装好 Typola 之后,双击 <code>.md</code> 默认就是它打开</li>
+  <li><strong>命令行定位</strong>:Typola 启动时会读取最近的打开记录,直接出现在标题</li>
+</ol>
+
+<p>几个常见文件类型都支持:</p>
+<ul>
+  <li><code>.md</code> / <code>.markdown</code> / <code>.mdx</code> — Markdown</li>
+  <li><code>.html</code> / <code>.htm</code> — 进入阅读/编辑链路</li>
+  <li><code>.docx</code> — <strong>只读预览</strong>(不要在 Typola 里改 Word,改完另存为 .md)</li>
+</ul>
+
+<div class="card callout">
+  <div class="card-title">找不到合适的文档?</div>
+  <p>Typola 启动界面右侧的"快速打开"(<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>)会列出最近打开过的文件和当前常用工作目录,任选一个往下做。</p>
+</div>
+
+<h2 id="write">4. 写一段再保存</h2>
+
+<p>默认就是阅读模式(WYSIWYG),你看到什么就是最终阅读的样子。可以直接:</p>
+
+<ul>
+  <li>输入一段普通文字</li>
+  <li>用 <code>#</code> 起标题、<code>-</code> 起列表、<code>```</code> 起代码块 — 输完空格就立刻渲染</li>
+  <li>图片可以<strong>直接粘贴剪贴板截图</strong>,Typola 会在文档同目录的 <code>assets/</code> 下保存一份,并自动插入引用</li>
+</ul>
+
+<p>第一次写完一定要按 <kbd>Ctrl</kbd> + <kbd>S</kbd> 保存。标签栏的文件名旁边会出现小圆点表示脏改,保存后小圆点消失。</p>
+
+<dl class="shortcut-grid">
+  <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>保存到当前文件</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></dt><dd>另存为(可换目录、改后缀)</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd>在当前文档里查找</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>H</kbd></dt><dd>查找并替换</dd>
+  <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></dt><dd>快速打开(文件 + 最近记录)</dd>
+</dl>
+
+<div class="card danger">
+  <div class="card-title">关于"自动保存"</div>
+  <p>Typola <strong>默认关闭自动保存</strong>(这是经过考虑的选择,不是 bug)。要打开去 <code>设置</code>;但前几课建议就用 <kbd>Ctrl</kbd> + <kbd>S</kbd> 手动保存,养成"改一段就存一段"的肌肉记忆,后面跟 AI 协作时才不会因为意外覆盖丢原稿。</p>
+</div>
+
+<h2 id="modes">5. 认识三种文档模式</h2>
+
+<p>Typola 同一篇文档,可以在三种模式之间切换 — 顶部那条三段控件就是切换器:</p>
+
+<div class="card">
+  <div class="card-title">阅读模式(默认,WYSIWYG)</div>
+  <p>边写边看到接近终稿的排版。适合 90% 的写作时间。<strong>第一周你只用这一种就好。</strong></p>
+</div>
+
+<div class="card">
+  <div class="card-title">心流模式</div>
+  <p>左侧栏让位给 AI 工作台;你可以一边编辑一边让 AI 帮忙。第 2 课展开。</p>
+</div>
+
+<div class="card">
+  <div class="card-title">检视模式</div>
+  <p>进入"给文章提意见"的节奏,不在原文写脏字,而是叠加一层意见;最后导成 <code>review.md</code> 给协作者看,或一键让 AI 按意见改稿。第 5 课展开。</p>
+</div>
+
+<p>三者的键盘切换:</p>
+<dl class="shortcut-grid">
+  <dt><kbd>Shift</kbd> + <kbd>A</kbd></dt><dd>心流 ↔ 阅读来回切</dd>
+  <dt>顶栏三段控件</dt><dd>任意两个模式之间点选</dd>
+</dl>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">5 分钟任务:写一份简单的笔记</div>
+  <ol class="check-list">
+    <li>按 <kbd>Ctrl</kbd> + <kbd>O</kbd> 新建一个文件,命名为 <code>my-first-note.md</code>,放在桌面。</li>
+    <li>写一段不超过 200 字的自我介绍,加一个 <code># 标题</code> 和 一个 <code>-</code> 列表。</li>
+    <li>在文档里粘一张图(随便截图都行),按 <kbd>Ctrl</kbd> + <kbd>S</kbd> 保存。</li>
+    <li>打开桌面上的 <code>my-first-note</code> 同目录,确认有 <code>assets/</code> 文件夹,里面就是刚才那张图。</li>
+  </ol>
+  <p>✅ 全部通过 = 你可以进入<strong>第 1 课:用浮条让 AI 在你眼皮底下改稿</strong>。</p>
+  <p>❌ 第 3 步图片没出现 / 文件没保存 / 找不到 <code>assets/</code>:去 <a href="#traps">陷阱区</a>对照一下。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>文件是 .docx 直接在 Typola 里改</strong> — Typola 把它当只读预览,改了等于丢。开 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> 另存为 <code>.md</code>,改 <code>.md</code> 才安全。</li>
+  <li><strong>"自动保存开着怎么还是不存"</strong> — 默认就是关的。先去 <code>设置</code> 里勾上。</li>
+  <li><strong>Ctrl + S 没反应</strong> — 文档是从 Typola 之外"刚刚拖进来"的状态,会被当成未命名 — 看标题栏有没有 <code>*</code> 或文件名是不是 <code>未命名</code>。</li>
+  <li><strong>WebView2 启动报错</strong> — 跟着弹窗提示去 <code>microsoft.com/webview2</code> 装;装完重启 Typola。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 1 课:<a href="./0001-floating-bar.html"><strong>用浮条让 AI 在你眼皮底下改稿</strong></a>。
+你会亲手用浮条让 AI 改一段话。<strong>前提</strong>:装好 <code>claude</code> 或 <code>opencode</code>(任一);以及确保 Typola <code>设置 → AI 执行</code> 检测通过。</p>
+
+<blockquote>
+  <p>这节有不明白的?直接问 AI — 不只 Typola,任何操作层面的问题都欢迎打断。</p>
+</blockquote>
+
+</body>
+</html>

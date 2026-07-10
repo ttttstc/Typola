@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial=1.0">
+  <title>Skill 场景:报告 / PPT / HTML 的固定套路</title>
+  <link rel="stylesheet" href="../assets/lesson-base.css">
+</head>
+<body>
+
+<span class="lesson-tag">第 4 课</span>
+<h1>Skill 场景:报告 / PPT / HTML 的固定套路</h1>
+<p class="subtitle">10 分钟。把"调 skill"从手敲命令变成点选 — 三个场景、十几个预置。</p>
+
+<aside class="feature-frame">
+  <h2>能力定位</h2>
+  <dl>
+    <dt>解决什么</dt>
+    <dd><p>你装了 <code>claude --version</code> 能跑、能调 skill,但手敲 <code>/huawei-style-ppt-skill</code> 这种命令很别扭 —
+    还得记每个 skill 的名字、出处、能干啥。
+    Typola 把本机装的所有 skill <strong>按"你会用它做什么任务"分类</strong>,你只管选场景、选 skill。</p></dd>
+    <dt>Typola 怎么做</dt>
+    <dd><p>右栏 <strong>SkillHub</strong> 是一组"场景卡"(首批三个场景:报告生成 / PPT 制作 / HTML 制作)。
+    每个场景下挂着<strong>系统推荐 skill + 你手动加进来的 skill</strong>。
+    点已安装的 skill → 开一个独立会话(标题= skill 名,输入框预填 <code>/&lt;skill-name&gt; </code>,独立 session UUID)。
+    <strong>每个 skill 一个独立上下文</strong> — 这是 Typola 的护城河。</p></dd>
+    <dt>跟别家不同</dt>
+    <dd><p>Cursor / Claude Desktop 让你手敲 <code>/</code> 调命令(命令面板),Coze / Dify 给你通用 marketplace。
+    Typola 不做 marketplace(那是产品错位),也不做"全量本机 skill 列表"展示 — 它只<strong>按场景</strong>把高频用法浮上来,
+    想看全部或加新 skill 走 <code>+ 添加 skill</code> 弹窗。本机 skill 不是 Typola 的资产,是 Claude/OpenCode 的 —
+    Typola 只"引用",不"拥有"。</p></dd>
+  </dl>
+</aside>
+
+<nav class="toc">
+  <strong>本课目录</strong><br>
+  <a class="toc-pill" href="#pre">前置</a>
+  <a class="toc-pill" href="#hub">认识 SkillHub</a>
+  <a class="toc-pill" href="#scenes">三个场景</a>
+  <a class="toc-pill" href="#installed">点已装 skill 开新会话</a>
+  <a class="toc-pill" href="#missing">未装 skill → 让 Claude 装</a>
+  <a class="toc-pill" href="#add">添加本机 skill 到场景</a>
+  <a class="toc-pill" href="#provider-split">Claude 和 OpenCode 分别怎么调</a>
+  <a class="toc-pill" href="#try">试一试</a>
+  <a class="toc-pill" href="#traps">陷阱</a>
+</nav>
+
+<h2 id="pre">前置</h2>
+
+<ul class="check-list">
+  <li>已完成第 2、3 课</li>
+  <li>本机至少装了 <code>claude</code> 或 <code>opencode</code></li>
+  <li>(可选)<code>~/.claude/skills/</code> 下有 1-2 个 skill 文件夹(没装也没关系,会演示"未装时让 Claude 装"的流程)</li>
+</ul>
+
+<h2 id="hub">1. 认识右栏 SkillHub</h2>
+
+<p>唤出心流模式后(<kbd>Shift</kbd> + <kbd>A</kbd>),看<strong>右侧栏</strong>。
+上半段是 SkillHub(场景卡),下半段会留给产物中心(第 7 课展开)。</p>
+
+<p>SkillHub 默认是<strong>一级视图</strong>:</p>
+
+<pre><code>┌─ SkillHub ──────────────────┐
+│  报告生成     PPT 制作      │
+│  HTML 制作                   │
+└──────────────────────────────┘</code></pre>
+
+<p>3 张场景卡(报告生成 / PPT 制作 / HTML 制作)。系统内置首批。</p>
+
+<div class="card callout">
+  <div class="card-title">为什么只有 3 个场景?</div>
+  <p>首批覆盖<strong>写作者最常要 AI 干的"出物"任务</strong>。其它(写周报 / 写 PRD / 写书评)暂时归到"报告生成"里扩展 —
+    不要让"全量场景"代替你思考,场景卡是<strong>预置的、克制的</strong>。</p>
+</div>
+
+<h2 id="scenes">2. 三个场景分别预置了什么</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">场景</th>
+      <th style="text-align:left;padding:8px 12px">预置 skill(本机已装时显示卡片,未装置灰)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>报告生成</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">首版空模板 + 你手动加进本场景的 skill。第 0 版故意空着,等你 "用出来" 才好推荐。</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>PPT 制作</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">huawei-style-ppt-skill、guizang-ppt-skill、huashu-slides、baoyu-slide-deck</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>HTML 制作</strong></td>
+      <td style="padding:8px 12px">frontend-slides</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="installed">3. 点已装 skill 开新会话</h2>
+
+<p>点一下场景卡(例如「PPT 制作」)→ 进入二级视图,看到 PPT 场景里挂的 4 张 skill 卡。
+点已装的那张(卡片非灰色)→ 发生 4 件事:</p>
+
+<ol>
+  <li>左栏 <strong>新会话</strong>建立(标题等于 skill 名,例如「<code>huawei-style-ppt-skill</code>」)</li>
+  <li>输入框<strong>预填</strong> <code>/huawei-style-ppt-skill </code>(光标在末尾,你打 prompt)</li>
+  <li><strong>独立 session UUID</strong>生成 — 这个 skill 的多轮上下文跟其他会话<strong>完全隔离</strong></li>
+  <li>Composer 底部出现 Provider pill(默认沿用当前 Provider,Claude → Claude)</li>
+</ol>
+
+<p>直接在预填后面写任务:</p>
+
+<pre><code>/huawei-style-ppt-skill 基于我的本周总结生成一份 8 页汇报 PPT</code></pre>
+
+<p>发出去,AI 加载 skill 并按其内部流程生成 PPT(产物会落 <code>.typola-output/&lt;会话&gt;/</code>,第 7 课展开)。</p>
+
+<div class="card safe">
+  <div class="card-title">为什么"每个 skill 一个独立会话"?</div>
+  <p>护城河。写过周报 + 改文档的人都有过这种惨痛:
+    用同一个 AI 会话跨任务,AI 把上一次的"项目背景"擅自带了进来,导致周报开头多了"我们"这种
+    没必要的语境。
+    Typola <strong>强制每个 skill 一个新 session UUID</strong>,从根上切断泄漏 —
+    你的周报 skill、PPT skill、技术笔记 skill 永远不会串味。</p>
+</div>
+
+<h2 id="missing">4. 未装 skill → 让 Claude 装</h2>
+
+<p>PPT 场景里有 4 张预置卡,但你本机可能一个都没装。
+这时候卡片<strong>置灰</strong>但仍然保留 — 你能看到"它能干什么"(系统推荐摘要),从而判断要不要装。</p>
+
+<p>点未装的卡片:</p>
+
+<ol>
+  <li>Typola <strong>不直接动文件系统</strong>(设计红线 — Typola 不替你安装,以免装错/装到错位置)</li>
+  <li>而是把一条<strong>安装指令 prompt</strong> 发到当前 AI 工作台会话</li>
+  <li>指令格式大约是:<code>请帮我安装 Claude skill:huawei-style-ppt-skill。用途:&lt;系统推荐摘要&gt;。来源:&lt;系统配置里的安装路径,或"未提供来源"&gt;。安装后请确认该 skill 可以通过 /huawei-style-ppt-skill 调用。</code></li>
+  <li>AI 用 CLI 原生的能力去装它(比如 mkdir + 克隆 git repo + 写 SKILL.md)</li>
+  <li>装完你回 SkillHub <strong>刷一下</strong>(右上角 ↻),卡片就显示"已装",可以用了</li>
+</ol>
+
+<div class="card callout">
+  <div class="card-title">为什么不让 Typola 直接装?</div>
+  <p>原因 1:<strong>安全</strong> — 让第三方编辑器写用户目录外的文件系统 = 不可控的攻击面。
+  原因 2:<strong>溯源</strong> — 你从对话里能看到 AI 是用哪条指令装的,以后想自己改路径也不用"猜 Typola 怎么装的"。
+  让 AI 用它原生能力干活,Typola 只"派活",这是「我司不替你装软件」的克制。</p>
+</div>
+
+<h2 id="add">5. 添加本机已装的 skill 到场景</h2>
+
+<p>你可能自己装了几个 skill 不在系统推荐里,想加到「报告生成」或「HTML 制作」场景:<br>
+二级视图右上角有 <code>+ 添加 skill</code> 按钮。</p>
+
+<ol>
+  <li>点「+ 添加 skill」</li>
+  <li>弹窗列出当前 CLI <strong>本机已经认识的全部 skill</strong>(不只是 Typola 系统推荐的)<br>
+      — 你可以<strong>搜索关键字</strong>过滤</li>
+  <li>勾选你想要的那条 → 确认</li>
+  <li>返回该场景二级视图,看到多了你刚加的卡片(图标 <strong>可识别为"用户加"标签</strong>)</li>
+  <li><strong>系统预置不可删</strong>(避免误删),<strong>用户加的可删</strong>(小卡片上有 ✕)</li>
+</ol>
+
+<div class="card">
+  <div class="card-title">"添加"和"安装"是两回事</div>
+  <ul>
+    <li><strong>安装</strong> = 文件系统上多了一个 skill 目录(Typola 不做这个)</li>
+    <li><strong>添加</strong> = 本机已有 skill,告诉 Typola "我想在报告生成这个场景里看到它"(只是 <code>skill-hub.json</code> 多一条用户配置)</li>
+  </ul>
+  <p>Typola 的 <code>skill-hub.json</code> v2 只存用户数据,绝不复制 skill 内容进系统模板。
+  升级 Typola 也不会丢你的用户配置。</p>
+</div>
+
+<h2 id="provider-split">6. Claude 与 OpenCode 在 SkillHub 上有什么不同</h2>
+
+<p>同一个 SkillHub 卡片在两个 Provider 下<strong>默认都显示</strong>,但实际调用方式完全不同:</p>
+
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px">
+  <thead>
+    <tr style="background:var(--paper-tint);border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:8px 12px">Provider</th>
+      <th style="text-align:left;padding:8px 12px">skill 怎么调用</th>
+      <th style="text-align:left;padding:8px 12px">扫描什么</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><strong>Claude Code</strong></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)">prompt 里写 <code>/skill-name ...</code> 给 CLI,触发原生 slash 命令</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><code>~/.claude/skills/</code> 下的所有 skill</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px"><strong>OpenCode</strong></td>
+      <td style="padding:8px 12px">CLI 参数 <code>--command &lt;name&gt;</code>;prompt 文本作为 <code>opencode run</code> 的位置参数追加</td>
+      <td style="padding:8px 12px"><code>~/.opencode/commands/</code> + <code>~/.opencode/command/</code> + <code>opencode.jsonc</code> 里的 command 条目</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card danger">
+  <div class="card-title">"装了但两个 Provider 都看不到" — Provider 隔离读得懂</div>
+  <p>Claude 的 skill 和 OpenCode 的 command <strong>不互通</strong> — 它们存在不同的目录,定义格式也不一样。
+    你装了 Claude 的 <code>~/.claude/skills/foo</code>,那它只在 Claude Provider 下能用;
+    OpenCode 看到的是 <code>~/.opencode/commands/foo.md</code>。
+    想两边都能用,各装各的。</p>
+</div>
+
+<h2 id="try">试一试</h2>
+
+<div class="card safe">
+  <div class="card-title">12 分钟任务:第一次用 Skill 完整跑通</div>
+  <ol class="check-list">
+    <li>唤出心流模式,看右栏 SkillHub,确认「PPT 制作」场景里至少有 1 张卡是已装的(显示非灰色)。</li>
+    <li>点「HTML 制作」场景 → 点 <code>frontend-slides</code>(假设你装了)→ 看左栏是否新开会话 + 标题 = skill 名 + 输入框预填 <code>/frontend-slides </code>。</li>
+    <li>在预填后面写「<code>基于我的 note.md(本课)做一份 6 页 HTML slides</code>」,发送。</li>
+    <li>等 AI 输出完。AI 会写一堆 html/css/js 出来,落到 <code>.typola-output/&lt;会话&gt;/</code>,右下会出现 chip — 这是第 7 课内容,但你可以先看一眼 chip 长啥样。</li>
+    <li>关掉这个会话,在「报告生成」场景点「+ 添加 skill」,在弹窗里随便加 1 个本机已有的 skill,看返回后卡片多了一条。</li>
+  </ol>
+  <p>✅ 全部完成 = 进入<a href="./0005-review-diff.html">第 5 课:检视 + 内联审阅</a>。
+    这一课是真"长稿利器" — 你会用一节课把"先攒意见,再让 AI 改"完整闭环跑一次。</p>
+</div>
+
+<h2 id="traps">陷阱</h2>
+
+<ul class="trap-list">
+  <li><strong>卡片都置灰</strong> — 你装了 skill 但 Typola 读不到。常见:skill 装在了 <code>~/.opencode/commands/</code>,当前 Provider 是 Claude(只读 <code>~/.claude/skills/</code>)。换 Provider 或装到正确路径。</li>
+  <li><strong>点场景卡跳到 AI 工作台但没新开会话</strong> — 多半是对应的 Provider 没工作。先在 <code>设置 → AI 执行</code> 测一下当前 Provider 的 CLI 检测。</li>
+  <li><strong>预填的 <code>/skill-name </code> 我不想用</strong> — 删掉就好。预填只是方便,不强求。</li>
+  <li><strong>添加的 skill 没消失</strong> — 用户加的应该可删。点卡片 ✕ 一下。</li>
+  <li><strong>想加"未装"的 skill 到场景</strong> — Typola <strong>不允许</strong>。先装再加(走第 4 节"未装 → 让 Claude 装"流程)。</li>
+</ul>
+
+<hr>
+
+<h2>下一步预告</h2>
+
+<p>第 5 课:<a href="./0005-review-diff.html"><strong>检视模式 + 内联审阅:逐处采纳 AI 改稿</strong></a>。
+这是真实写作者最常用的一节 — 切到 <strong>检视模式</strong>,给一篇长稿攒意见,一键让 AI 按意见改,然后在<strong>中间编辑器</strong>逐处采纳/拒绝(Y/N/⏎),全程不离开原文。</p>
+
+<blockquote>
+  <p>切片装失败 / 想问"为什么不让 AI 直接覆盖原文" / 想了解"每个 skill 独立 UUID 的细节"?直接问 AI。</p>
+</blockquote>
+
+</body>
+</html>
