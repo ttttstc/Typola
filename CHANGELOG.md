@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - 查找替换改为通过 `TypolaEditorKernel.replaceRanges` 提交 CM6 transaction；单个和全部替换都会进入同一 history，支持一次 `Ctrl/Cmd+Z` 撤销。
 - 工具栏、`Ctrl/Cmd+B` / `I` / `Shift+7` / `Shift+8` 快捷键和右键菜单统一调用 CM6 格式命令；补齐引用层级、编辑链接、清除格式与代码块语言编辑的 transaction 实现。
 - 源码模式保留 CM6 标题折叠、缩放和预览同步核心扩展；仅关闭 Markdown live preview widget，搜索命中折叠内容会自动展开。
+- 修复 CM6 写作模式的检视标记与大纲联动：检视意见以 CM6 decoration 标注对应源码行，atomic-editor 标题行可正确驱动悬浮大纲的跳转与当前项。
 
 ### Added
 
