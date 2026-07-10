@@ -76,6 +76,11 @@ export async function applyVditorFormat(editor: Vditor, action: FormatAction): P
       // Vditor 写作路径已废,P0 仅 CM6 支持表格,此处 no-op 兜类型。
       return;
     case 'table-align':
+    case 'table-row-insert':
+    case 'table-row-delete':
+    case 'table-column-insert':
+    case 'table-column-delete':
+      // @deprecated Vditor 写作路径已退出主链路；表格命令仅由 CM6 transaction 实现。
       return;
   }
 }

@@ -13,7 +13,11 @@ export type FormatAction =
   | { type: 'link-edit' }
   | { type: 'cut' | 'copy' | 'paste' | 'select-all' }
   | { type: 'table-insert'; rows: number; cols: number }
-  | { type: 'table-align'; align: TableAlign; colIndex?: number };
+  | { type: 'table-align'; align: TableAlign; colIndex?: number }
+  | { type: 'table-row-insert'; after?: boolean }
+  | { type: 'table-row-delete' }
+  | { type: 'table-column-insert'; after?: boolean }
+  | { type: 'table-column-delete' };
 
 type Props = {
   open: boolean;
