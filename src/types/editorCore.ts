@@ -1,13 +1,12 @@
 import type { AnchorStatus } from '../services/agent/types';
 
-export type EditorEngine = 'vditor' | 'cm6';
 export type EditorSelection = { text: string; from: number; to: number };
 
 /**
- * 编辑器运行时核心接口。
- * CM6 和 Vditor 过渡期都实现这份契约；调用方优先面向 Markdown source。
+ * 写作模块对外的稳定编辑器内核契约。
+ * 调用方只面向 Markdown source 与 transaction 命令，不依赖具体编辑器实现。
  */
-export type EditorCoreHandle = {
+export type TypolaEditorKernel = {
   focus: () => void;
   getMarkdown: () => string;
   setMarkdown: (markdown: string) => void;
@@ -42,3 +41,6 @@ export type EditorCoreHandle = {
   /** CM6 heading 折叠:外部(React state)把折叠集合同步进编辑器。 */
   setFoldedHeadings?: (keys: ReadonlySet<string>) => void;
 };
+
+/** @deprecated 使用 TypolaEditorKernel。 */
+export type EditorCoreHandle = TypolaEditorKernel;

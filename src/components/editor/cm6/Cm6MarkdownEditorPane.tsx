@@ -12,6 +12,7 @@ import type { PreviewHeadingChange } from './previewSyncExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 
 type Cm6MarkdownEditorPaneProps = {
+  mode?: 'source' | 'wysiwyg';
   source: string;
   onChange: (value: string) => void;
   headingScrollRequest?: SourceHeadingScrollRequest;
@@ -42,7 +43,13 @@ function zoomPercent(size: number): number {
  */
 export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEditorPaneProps>(
   function Cm6MarkdownEditorPane(props, ref) {
-    const { onPreviewHeadingChange, foldedHeadings: foldedHeadingsProp, onFoldChange, ...rest } = props;
+    const {
+      mode = 'wysiwyg',
+      onPreviewHeadingChange,
+      foldedHeadings: foldedHeadingsProp,
+      onFoldChange,
+      ...rest
+    } = props;
     const settings = useSettings();
     const [zoomIndicator, setZoomIndicator] = useState<{ percent: number; restored: boolean } | null>(null);
     const [internalFoldedHeadings, setInternalFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
@@ -100,15 +107,15 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
     // headingFoldExtension 始终传空 initial 集合 — React → editor 的同步走
     // editorRef.current?.setFoldedHeadings?.(...) 命令式推送(见上面的 useEffect),
     // 这样 livePreviewExtensions 不依赖 foldedHeadings,折叠切换不再触发整组扩展重建。
-    const livePreviewExtensions = useMemo(
-      () => createLivePreviewExtensions({
+    const livePreviewExtensions = useMemo(() => {
+      if (mode === 'source') return [];
+      return createLivePreviewExtensions({
         baseSize: settings.editorFontSize,
         onZoomChange: handleZoomChange,
         onPreviewHeadingChange,
         onFoldChange: handleFoldChange,
-      }),
-      [settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange],
-    );
+      });
+    }, [mode, settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange]);
     return (
       <div className="cm6-markdown-editor-pane">
         <EditorPane

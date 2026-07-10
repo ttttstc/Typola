@@ -1,14 +1,12 @@
 # Typola Architecture
 
-Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vite 8, Vditor, CodeMirror 6, and a Rust backend.
+Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vite 8, CodeMirror 6, Vditor export/preview rendering, and a Rust backend.
 
 ## Core Shape
 
 - `src/app/AppLayout.tsx` owns the document lifecycle, lightweight opened-file tab state, editor mode, preview panels, update flow, and terminal panel visibility.
 - `src/components/FileTreePanel.tsx` provides the left workspace file tree. It opens a user-selected directory, lazily expands folders, and delegates file reads back to the same controlled open path used by dialogs and OS file association. The workspace file tree is collapsed by default.
-- `src/components/WysiwygEditorPane.tsx` wraps Vditor IR mode for WYSIWYG Markdown editing.
-- `src/components/EditorPane.tsx` provides CodeMirror source editing.
-- `src/components/editor/cm6/Cm6MarkdownEditorPane.tsx` is the default Markdown editor entry. It reuses the proven source-mode CodeMirror command path while `src/components/editor/cm6/createMarkdownExtensions.ts` centralizes CM6 Markdown extension construction. In live-preview mode it enables atomic-editor task list/table/image widgets plus Typola-owned KaTeX and Mermaid widgets; source mode keeps live preview disabled. `src/types/editorCore.ts` defines the shared `EditorCoreHandle` contract used by Vditor and CM6 during the transition, including Markdown source reads/writes, selection, range replacement, anchor validation, and search reveal commands. Vditor WYSIWYG remains available as a temporary local fallback with `typola.editorEngine=vditor`.
+- `src/components/editor/cm6/Cm6MarkdownEditorPane.tsx` is the only Markdown writing entry. `src/components/EditorPane.tsx` provides its CM6 source and transaction bridge, while `src/components/editor/cm6/createMarkdownExtensions.ts` centralizes extension construction. Writing mode enables atomic-editor task list/table/image widgets plus Typola-owned KaTeX and Mermaid widgets; source mode keeps live preview disabled. `src/types/editorCore.ts` defines the stable `TypolaEditorKernel` contract for Markdown source reads/writes, selection, range replacement, anchor validation, and search reveal commands.
 - `src/components/FindReplacePanel.tsx`, `QuickOpenPanel.tsx`, and `EditAssistPanel.tsx` provide on-demand editing utilities. Their matching, recent-file, statistics, and snippet logic lives in small service modules so the main editor path stays light.
 - `src/components/WordPaperPreviewPane.tsx`, `src/services/word/*`, and `src/services/wordExportService.ts` provide Word-style preview and background `.docx` export. Export paths are derived automatically from the current document path, with unsaved documents falling back to the user downloads directory.
 - `src/components/WechatPreviewPane.tsx` is the HTML preview compatibility component. User-facing copy is generic rich HTML export/copy.
@@ -27,7 +25,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - File open paths can come from the native open dialog, drag/drop, OS file association, second-instance forwarding, or reopen-last-file.
 - `read_opened_document` and `write_opened_document` are the controlled Rust read/write path for supported document types. `saveFileAs` uses the same Rust write command in Tauri builds, so unsupported extensions are rejected consistently.
 - `rename_opened_document` renames an already-saved writable document within its current directory. The frontend exposes it from the title/tab rename dialog and syncs the resulting path back into tabs, recent files, and the active document state.
-- Tauri capabilities keep filesystem plugin access scoped to common user document locations and dialog-granted paths. The desktop CSP allows Vditor's required `unsafe-eval`, but does not allow `script-src 'unsafe-inline'`.
+- Tauri capabilities keep filesystem plugin access scoped to common user document locations and dialog-granted paths. The desktop CSP allows Vditor renderer requirements, but does not allow `script-src 'unsafe-inline'`.
 - Opening another document creates or switches to a lightweight file tab instead of replacing the active document. Dirty state is stored per opened tab; dirty tabs and matching file-tree entries show a leading `*`. The active file state is mirrored into refs for close confirmation, so a just-edited tab cannot close before the tab snapshot catches up. Closing a dirty tab uses the same save / discard / cancel decision model as window close; choosing save writes the tab first and aborts the close if saving fails or Save As is cancelled. The Tauri close-request listener is registered once and reads that live dirty ref. Close requests are always intercepted first; dirty sessions ask whether to save before closing, discard changes, or cancel. If the user chooses save, Typola saves every dirty writable tab before closing and aborts if any save fails. After the decision Typola explicitly calls `window.destroy()`, allows repeated close events while destruction is in progress, and falls back to the Rust `force_close_main_window` command if the frontend close API fails. The tab bar is hidden while only one file is open.
 - `list_directory_entries` lists a user-selected workspace directory for the file tree. It includes directories and supported document files, excludes hidden/build-heavy folders such as `.git`, `node_modules`, `dist`, and `target`, and sorts folders before files.
 - The left workspace tree and right preview panel are width-adjustable. The right Word preview can shrink to a compact width and keeps paper pages close to the resizer to reduce dead space.
@@ -41,8 +39,8 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 
 - File search uses `documentSearchService` with debounced panel input. It supports plain text, regex, case-sensitive, and whole-word matching, with a hard match cap to keep very large documents responsive.
 - Document statistics use `documentStatsService` on a debounced copy of the current document, so typing does not synchronously recompute counts.
-- Source mode exposes precise CodeMirror insert and reveal operations through an editor command handle. WYSIWYG mode uses Vditor's insertion API and browser text find as a best-effort navigation path.
-- Mermaid rendering is centralized in `mermaidRenderer`. It lazy-loads the Mermaid library, converts `language-mermaid` code blocks to SVG after Vditor has rendered Markdown, preserves editable source blocks in WYSIWYG mode, and leaves syntax failures as source plus an inline error message. The same renderer feeds Markdown preview, AI/review previews, HTML preview output, and Word preview artifacts.
+- Both writing and source modes expose precise CM6 transaction-backed insert, replace, undo, and reveal operations through `TypolaEditorKernel`.
+- Mermaid rendering is centralized in `mermaidRenderer`. It lazy-loads the Mermaid library, converts `language-mermaid` code blocks to SVG for preview and export renderers, and leaves syntax failures as source plus an inline error message. The same renderer feeds Markdown preview, AI/review previews, HTML preview output, and Word preview artifacts.
 
 ## Terminal
 

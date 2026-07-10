@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 继续只用于既有预览与导出渲染链路。
+
 ### Added
 
 - 选区菜单窄化对齐 Typora/Obsidian(`width: max-content; max-width: 240px`,kbd 间距收紧 16→10px);右键菜单新增 5 个基础编辑能力:升级引用 / 降级引用 / 编辑链接 / 清除格式 / 编辑代码块语言,均走 `applyVditorFormat` 现有分发,Vditor IR 模式直接操作选中/选区 + `updateValue` 重渲染;新增 i18n keys `contextMenuQuoteUp / contextMenuQuoteDown / contextMenuLinkEdit / contextMenuClearFormat / contextMenuCodeblockLang` 中英日三译。

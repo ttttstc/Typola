@@ -98,14 +98,6 @@ import {
   SettingsPageFallback,
 } from './settingsPageLoader';
 
-const EditorPane = lazy(() =>
-  import('../components/EditorPane').then((module) => ({ default: module.EditorPane })),
-);
-
-const WysiwygEditorPane = lazy(() =>
-  import('../components/WysiwygEditorPane').then((module) => ({ default: module.WysiwygEditorPane })),
-);
-
 const Cm6MarkdownEditorPane = lazy(() =>
   import('../components/editor/cm6/Cm6MarkdownEditorPane').then((module) => ({ default: module.Cm6MarkdownEditorPane })),
 );
@@ -144,11 +136,6 @@ type UpdateInstallState =
   | { phase: 'ready'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
-
-function readEditorEngine(): 'vditor' | 'cm6' {
-  if (typeof window === 'undefined') return 'cm6';
-  return window.localStorage.getItem('typola.editorEngine') === 'vditor' ? 'vditor' : 'cm6';
-}
 
 export function AppLayout() {
   const settings = useSettings();
@@ -200,7 +187,6 @@ export function AppLayout() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
-  const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   // 折叠集合:由 AppLayout 拥有,用于"搜索命中自动展开"等命令式扩展。
   // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
@@ -252,7 +238,6 @@ export function AppLayout() {
     handleTocAlwaysPinnedChange,
   } = useTocState({
     editorMode,
-    editorEngine,
     alwaysPinned: settings.tocAlwaysPinned,
     mainContentRef,
     resolveTocHeading,
@@ -779,7 +764,7 @@ export function AppLayout() {
     // PR5:折叠区域内命中时先自动展开 — 否则命中位置不可视,scrollIntoView 也无意义。
     // 用 collectHeadingSections 找覆盖 match 位置的最深 heading section,
     // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
-    if (editorEngine === 'cm6' && editorMode === 'source') {
+    if (editorMode === 'source') {
       const sections = collectHeadingSections(file.content);
       const matchStartLine = lineIndexAtOffset(file.content, match.index);
       const coveringKeys: FoldKey[] = [];
@@ -804,7 +789,7 @@ export function AppLayout() {
       query,
       searchOptions,
     });
-  }, [editorEngine, editorMode, file.content, foldedHeadings]);
+  }, [editorMode, file.content, foldedHeadings]);
 
   // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
   const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {
@@ -1512,18 +1497,6 @@ export function AppLayout() {
     <div className="editor-pane readonly-pane">
       <span>Word 文件为只读</span>
     </div>
-  ) : editorMode === 'source' ? (
-    <Suspense fallback={<div className="editor-pane lazy-pane"><span>源码编辑器加载中</span></div>}>
-      <EditorPane
-        ref={editorCommandRef}
-        source={file.content}
-        onChange={handleContentChange}
-        headingScrollRequest={sourceHeadingScrollRequest}
-        onScrollRatio={handleEditorScrollRatio}
-        filePath={file.path}
-        onAIAction={handleEditorAIAction}
-      />
-    </Suspense>
   ) : shouldShowHtmlPresentation ? (
     <Suspense fallback={<div className="html-presentation-pane lazy-pane" aria-label={t('htmlPresentationAria')} />}>
       <HtmlPresentationPane
@@ -1532,10 +1505,11 @@ export function AppLayout() {
         onOpenInBrowser={() => { void handleOpenHtmlInBrowser(file.path); }}
       />
     </Suspense>
-  ) : editorEngine === 'cm6' ? (
+  ) : (
     <Suspense fallback={<div className="cm6-markdown-editor-pane lazy-pane"><span>CM6 编辑器加载中</span></div>}>
       <Cm6MarkdownEditorPane
         ref={editorCommandRef}
+        mode={editorMode}
         source={file.content}
         onChange={handleContentChange}
         headingScrollRequest={sourceHeadingScrollRequest}
@@ -1545,18 +1519,6 @@ export function AppLayout() {
         onPreviewHeadingChange={handleEditorHeadingChange}
         foldedHeadings={foldedHeadings}
         onFoldChange={handleEditorFoldChange}
-      />
-    </Suspense>
-  ) : (
-    <Suspense fallback={<div className="wysiwyg-editor-pane lazy-pane"><span>所见即所得编辑器加载中</span></div>}>
-      <WysiwygEditorPane
-        ref={editorCommandRef}
-        source={file.content}
-        onChange={handleContentChange}
-        filePath={file.path}
-        onScrollRatio={handleEditorScrollRatio}
-        onAIAction={handleEditorAIAction}
-        reviewComments={reviewStateApi.state.comments}
       />
     </Suspense>
   );
