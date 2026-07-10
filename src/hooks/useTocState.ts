@@ -2,9 +2,11 @@ import { useCallback, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { TocItem } from '../types/document';
 import { updateSettings } from '../services/settingsService';
+import type { EditorMode } from '../components/Toolbar';
 import type { SourceHeadingScrollRequest } from '../components/EditorPane';
 
 type UseTocStateOptions = {
+  editorMode: EditorMode;
   alwaysPinned: boolean;
   setSourceHeadingScrollRequest: Dispatch<SetStateAction<SourceHeadingScrollRequest | undefined>>;
 };
@@ -24,6 +26,7 @@ type UseTocStateResult = {
  * Holds TOC pinning, active heading tracking, and source-mode TOC jumps.
  */
 export function useTocState({
+  editorMode,
   alwaysPinned,
   setSourceHeadingScrollRequest,
 }: UseTocStateOptions): UseTocStateResult {
@@ -35,15 +38,11 @@ export function useTocState({
   const tocPinned = tocSessionPinned || alwaysPinned;
 
   const handleTocNavigate = useCallback((_item: TocItem, index: number) => {
-    pendingNavigationRef.current = index;
     setSourceHeadingScrollRequest((current) => ({
       index,
       requestId: (current?.requestId ?? 0) + 1,
     }));
     setActiveTocIndex(index);
-    window.setTimeout(() => {
-      if (pendingNavigationRef.current === index) pendingNavigationRef.current = null;
-    }, 300);
   }, [setSourceHeadingScrollRequest]);
 
   const handleTocPinnedChange = useCallback((nextPinned: boolean) => {
