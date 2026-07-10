@@ -164,8 +164,8 @@ export function computeLuteTableSource(
   const oldTableMd = lute.VditorIRDOM2Md(tableParentHtml);
   const newTableMd = serializeTable(next);
   const idx = fullMarkdown.indexOf(oldTableMd);
-  if (idx < 0) {
-    console.warn('[tableSubmenu] cannot locate table in source (Lute); abort');
+  if (idx < 0 || fullMarkdown.indexOf(oldTableMd, idx + oldTableMd.length) !== -1) {
+    console.warn('[tableSubmenu] table source is missing or ambiguous (Lute); abort');
     return null;
   }
   return fullMarkdown.slice(0, idx) + newTableMd + fullMarkdown.slice(idx + oldTableMd.length);

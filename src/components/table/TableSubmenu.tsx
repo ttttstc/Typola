@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import { translate, type I18nKey } from '../../services/i18n';
-import { computeLuteTableSource, parseTableFromIr, serializeTable } from './tableSerializer';
+import { computeLuteTableSource, parseTableFromIr } from './tableSerializer';
 import {
   deleteCol,
   deleteRow,
@@ -151,10 +151,10 @@ export function TableSubmenu({ ctx, editor, onClose, onUpdated, onChange }: Tabl
         const oldTableMd = lute.VditorIRDOM2Md(tableParentHtml);
         const full = editor.getValue();
         const idx = full.indexOf(oldTableMd);
-        if (idx >= 0) {
+        if (idx >= 0 && full.indexOf(oldTableMd, idx + oldTableMd.length) === -1) {
           commitSource(full.slice(0, idx) + full.slice(idx + oldTableMd.length));
         } else {
-          console.warn('[tableSubmenu] deleteTable: cannot locate table in source; abort');
+          console.warn('[tableSubmenu] deleteTable: table source is missing or ambiguous; abort');
         }
       }}>
         {t('tableMenuDeleteTable')}

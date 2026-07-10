@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
-import { escapeCell, parseTableFromIr, serializeTable, unescapeCell } from './tableSerializer';
+import { describe, expect, it, vi } from 'vitest';
+import { computeLuteTableSource, escapeCell, parseTableFromIr, serializeTable, unescapeCell } from './tableSerializer';
 
 function makeTableDom(html: string): HTMLTableElement {
   const wrap = document.createElement('div');
@@ -155,5 +155,20 @@ describe('serializeTable', () => {
       '| --- | --- |\n' +
       '|     |     |',
     );
+  });
+});
+
+describe('computeLuteTableSource', () => {
+  it('refuses to edit an ambiguous duplicate table', () => {
+    const tableMd = '| h |\n| - |\n| a |\n';
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const editor = {
+      lute: { VditorIRDOM2Md: (html: string) => html === 'full' ? `${tableMd}${tableMd}` : tableMd },
+      vditor: { ir: { element: { innerHTML: 'full' } } },
+    } as Parameters<typeof computeLuteTableSource>[0];
+
+    expect(computeLuteTableSource(editor, 'table', { cells: [['h'], ['a']], colAligns: ['left'] })).toBeNull();
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
   });
 });
