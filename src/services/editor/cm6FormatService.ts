@@ -1,5 +1,6 @@
 import { EditorView } from '@codemirror/view';
 import type { FormatAction, HeadingLevel } from '../../components/EditorContextMenu';
+import { applyTableFormat } from './tableFormatService';
 
 // 应用一个格式化动作到 CM6 编辑器(走 view.dispatch 改 doc,不依赖 Vditor)。
 // 行内格式(加粗/斜体/删除线/行内代码)走 wrapInline,光标和选区都保留。
@@ -70,6 +71,20 @@ export function applyCm6Format(view: EditorView, action: FormatAction): void {
       return;
     case 'select-all':
       selectAll(view);
+      return;
+    case 'table-insert':
+      applyTableFormat(view, {
+        type: 'table-insert',
+        rows: action.rows,
+        cols: action.cols,
+      });
+      return;
+    case 'table-align':
+      applyTableFormat(view, {
+        type: 'table-align',
+        align: action.align,
+        colIndex: action.colIndex,
+      });
       return;
   }
 }

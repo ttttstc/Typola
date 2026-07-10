@@ -1,0 +1,92 @@
+import type { EditorView } from '@codemirror/view';
+
+export type TableAlign = 'left' | 'center' | 'right';
+
+export type TableAction =
+  | { type: 'table-insert'; rows: number; cols: number }
+  | { type: 'table-align'; align: TableAlign; colIndex?: number };
+
+export type TableRange = {
+  from: number;
+  to: number;
+  sepFrom: number;
+  sepTo: number;
+  headerFrom: number;
+  headerTo: number;
+  colCount: number;
+  lineCount: number;
+};
+
+const SEP_LINE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/;
+const PIPE_LINE = /^\s*\|.*\|\s*$/;
+
+function pipeCount(text: string): number {
+  // GFM 把首个 | 和末尾 | 当作边框; 中间的 | 才是单元格分割。
+  // 用 trim 掉首尾空白+|, 然后再 split('|')。
+  const trimmed = text.replace(/^\s*\|/, '').replace(/\|\s*$/, '');
+  if (!trimmed.includes('|')) return 0;
+  return trimmed.split('|').length;
+}
+
+export function findTableAt(view: EditorView, pos: number): TableRange | null {
+  const doc = view.state.doc;
+  const text = view.state.doc.toString();
+  const lines = text.split('\n');
+
+  // 跳过 fenced code block 内容(`` ```lang ... ``` `` 行):这些行虽然可能形如 |...|,但不算 GFM 表。
+  const inFence = (lineNo: number): boolean => {
+    let open = false;
+    const fenceRe = /^\s*(```|~~~)/;
+    for (let n = 0; n <= lineNo; n += 1) {
+      if (fenceRe.test(lines[n])) open = !open;
+    }
+    return open;
+  };
+
+  const cursorLine = doc.lineAt(pos).number - 1;
+
+  // 向上优先找 sep;落到 cell 内也能命中。
+  let sepIdx = cursorLine;
+  while (sepIdx >= 0 && (inFence(sepIdx) || !SEP_LINE.test(lines[sepIdx]))) sepIdx -= 1;
+  // 光标在表内(sep 行上方)时,向下兜底找一次。
+  if (sepIdx < 0) {
+    let down = cursorLine + 1;
+    while (down < lines.length && (inFence(down) || !SEP_LINE.test(lines[down]))) down += 1;
+    if (down >= lines.length || inFence(down)) return null;
+    sepIdx = down;
+  } else if (inFence(sepIdx)) {
+    return null;
+  }
+
+  const headerLine = sepIdx - 1;
+  if (headerLine < 0 || inFence(headerLine) || !PIPE_LINE.test(lines[headerLine])) return null;
+  const sepCols = pipeCount(lines[sepIdx]);
+  const headerCols = pipeCount(lines[headerLine]);
+  if (sepCols !== headerCols) return null;
+
+  let endLine = sepIdx + 1;
+  while (endLine < lines.length && !inFence(endLine) && PIPE_LINE.test(lines[endLine])) {
+    if (pipeCount(lines[endLine]) !== sepCols) {
+      endLine -= 1;
+      break;
+    }
+    endLine += 1;
+  }
+  endLine -= 1;
+
+  const sepLine = doc.line(sepIdx + 1);
+  const headerLineInfo = doc.line(headerLine + 1);
+  const startLineInfo = doc.line(headerLine + 1);
+  const endLineInfo = doc.line(endLine + 1);
+
+  return {
+    from: startLineInfo.from,
+    to: endLineInfo.to,
+    sepFrom: sepLine.from,
+    sepTo: sepLine.to,
+    headerFrom: headerLineInfo.from,
+    headerTo: headerLineInfo.to,
+    colCount: sepCols,
+    lineCount: endLine - headerLine + 1,
+  };
+}

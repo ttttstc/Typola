@@ -72,6 +72,11 @@ export async function applyVditorFormat(editor: Vditor, action: FormatAction): P
     case 'select-all':
       selectAllInIr(editor);
       return;
+    case 'table-insert':
+      // Vditor 写作路径已废,P0 仅 CM6 支持表格,此处 no-op 兜类型。
+      return;
+    case 'table-align':
+      return;
   }
 }
 
