@@ -170,7 +170,7 @@ function currentLineRange(editor: Vditor): { start: number; end: number; text: s
   // 在 source 里找与 lineText 匹配的行(去掉 markdown 前缀后比对)。
   let offset = 0;
   for (const rawLine of value.split('\n')) {
-    const normalized = rawLine.replace(/^\s{0,3}(#{1,6}\s+|>\s*|[-\*+]\s+|\d+\.\s+)/, '').replace(/\s+/g, ' ').trim();
+    const normalized = rawLine.replace(/^\s{0,3}(#{1,6}\s+|>\s*|[-\\*+]\s+|\d+\.\s+)/, '').replace(/\s+/g, ' ').trim();
     if (normalized === lineText) {
       return { start: offset, end: offset + rawLine.length, text: rawLine };
     }
