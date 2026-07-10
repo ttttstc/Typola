@@ -119,9 +119,12 @@ export function buildReviewMarkdown(source: string, comments: ReviewComment[]): 
 
   // === 文末汇总(无条件,永远不丢)===
   // 即便所有 anchor 都失败、或调用方传错路径,意见仍能从文末完整找回。
+  // 每条意见前面带「第 N 行」便于肉眼定位;anchor.from 越界(原文已改)时显示「定位失效」。
   const summary = comments.map((c, i) => {
     const quote = truncate(c.anchor.originalText.replace(/\n+/g, ' '), 80);
-    return `### ${i + 1}. 针对片段「${quote}」\n\n${c.text}`;
+    const line = lineNumberForAnchor(source, c.anchor.from);
+    const prefix = line === null ? '定位失效 · ' : `第 ${line} 行 · `;
+    return `### ${i + 1}. ${prefix}针对片段「${quote}」\n\n${c.text}`;
   }).join('\n\n');
   result = `${result.replace(/\s+$/u, '')}\n\n---\n\n## 检视意见汇总\n\n${summary}\n`;
 
@@ -144,6 +147,20 @@ function findSegmentEnd(source: string, offset: number): number {
   let end = idx;
   while (end > offset && (source[end - 1] === '\n' || source[end - 1] === '\r' || source[end - 1] === ' ' || source[end - 1] === '\t')) end -= 1;
   return end;
+}
+
+/**
+ * 给定 source 与字符 offset,返回 1-based 行号。
+ * offset < 0 或 offset > source.length 时返回 null(视为失效)。
+ * 行号 = source[0..offset) 中 '\n' 的个数 + 1。
+ */
+export function lineNumberForAnchor(source: string, offset: number): number | null {
+  if (offset < 0 || offset > source.length) return null;
+  let line = 1;
+  for (let i = 0; i < offset; i++) {
+    if (source.charCodeAt(i) === 10) line += 1;
+  }
+  return line;
 }
 
 function truncate(text: string, max: number): string {

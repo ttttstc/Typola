@@ -4,6 +4,7 @@ import {
   addReviewComment,
   buildReviewMarkdown,
   clearReviewState,
+  lineNumberForAnchor,
   markReviewClean,
   removeReviewComment,
   updateReviewComment,
@@ -116,8 +117,8 @@ describe('buildReviewMarkdown', () => {
     expect(out).toContain('> **检视意见，请处理**：改二');
     // 文末汇总(双轨)
     expect(out).toContain('## 检视意见汇总');
-    expect(out).toMatch(/### 1\. 针对片段「一二三段落。」\n\n改一/);
-    expect(out).toMatch(/### 2\. 针对片段「四五六段落。」\n\n改二/);
+    expect(out).toMatch(/### 1\. 第 1 行 · 针对片段「一二三段落。」\n\n改一/);
+    expect(out).toMatch(/### 2\. 第 1 行 · 针对片段「四五六段落。」\n\n改二/);
   });
 
   it('用 prefixHint 区分多处重复 originalText 的歧义', () => {
@@ -134,5 +135,76 @@ describe('buildReviewMarkdown', () => {
     const secondHitIdx = out.indexOf('关键观点。', src.indexOf('再来一段'));
     const reviewIdx = out.indexOf('> **检视意见');
     expect(reviewIdx).toBeGreaterThan(secondHitIdx);
+  });
+});
+
+describe('buildReviewMarkdown 行号前缀', () => {
+  it('anchor.from = 0 → 文末汇总显示「第 1 行」', () => {
+    const src = '第一行内容。\n\n第二行内容。';
+    const s = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('第一行内容。'), '改一');
+    const out = buildReviewMarkdown(src, s.comments);
+    expect(out).toContain('### 1. 第 1 行 · 针对片段「第一行内容。」');
+  });
+
+  it('anchor.from 指向第二段开头 → 文末汇总显示「第 3 行」', () => {
+    const src = '第一行内容。\n\n第二行内容。';
+    // '第一行内容。' 占 6 字符(索引 0..5),\n\n 在 6/7,'第二行内容。' 从索引 8 起
+    const s = addReviewComment(
+      EMPTY_REVIEW_STATE,
+      'a.md',
+      { filePath: 'a.md', from: 8, to: 13, originalText: '第二行内容。' },
+      '改二',
+    );
+    const out = buildReviewMarkdown(src, s.comments);
+    expect(out).toContain('### 1. 第 3 行 · 针对片段「第二行内容。」');
+  });
+
+  it('anchor.from 越界 → 文末汇总显示「定位失效」,意见正文仍保留', () => {
+    const src = '正常段落。\n\n另一段。';
+    const orphan = addReviewComment(
+      EMPTY_REVIEW_STATE,
+      'a.md',
+      { filePath: 'a.md', from: 9999, to: 9999, originalText: '已被改掉的文本' },
+      '改 orphan',
+    );
+    const out = buildReviewMarkdown(src, orphan.comments);
+    expect(out).toContain('### 1. 定位失效 · 针对片段「已被改掉的文本」');
+    expect(out).toContain('改 orphan');
+  });
+
+  it('anchor.from 为负 → 文末汇总显示「定位失效」', () => {
+    const src = '正常段落。';
+    const s = addReviewComment(
+      EMPTY_REVIEW_STATE,
+      'a.md',
+      { filePath: 'a.md', from: -5, to: -5, originalText: '某段' },
+      '改',
+    );
+    const out = buildReviewMarkdown(src, s.comments);
+    expect(out).toContain('### 1. 定位失效 · 针对片段「某段」');
+  });
+});
+
+describe('lineNumberForAnchor', () => {
+  it('offset = 0 返回 1', () => {
+    expect(lineNumberForAnchor('abc', 0)).toBe(1);
+  });
+  it('offset 在第一行内返回 1', () => {
+    expect(lineNumberForAnchor('abc\ndef', 3)).toBe(1);
+  });
+  it('offset 跨过第一个 \\n 返回 2', () => {
+    expect(lineNumberForAnchor('abc\ndef', 4)).toBe(2);
+  });
+  it('多行多 \\n 累加', () => {
+    expect(lineNumberForAnchor('a\nb\nc', 4)).toBe(3);
+  });
+  it('offset 等于 source.length 返回最后一行的行号', () => {
+    expect(lineNumberForAnchor('a\nb\nc', 5)).toBe(3);
+  });
+  it('offset 为负 → null', () => {
+    expect(lineNumberForAnchor('abc', -1)).toBeNull();
+  });
+  it('offset 越界 → null', () => {
+    expect(lineNumberForAnchor('abc', 4)).toBeNull();
   });
 });
