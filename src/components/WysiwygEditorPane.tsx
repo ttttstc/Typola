@@ -18,6 +18,7 @@ import {
 } from '../services/taskListClickHandler';
 import type { EditorCoreHandle } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
+import { TableSubmenu, getTableContext } from './table/TableSubmenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import { findUniqueAnchor } from '../services/agent/selectionActions';
@@ -271,6 +272,10 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
     hasSelection: boolean;
     mermaidTarget: Element | null;
   } | null>(null);
+  // 表格编辑子菜单状态:右键单元格时弹出,替代 EditorContextMenu。
+  const [tableMenu, setTableMenu] = useState<{
+    ctx: import('./table/TableSubmenu').TableContext;
+  } | null>(null);
   // 选区浮条状态:跟着 IR 选区变化重算 rect + hasSelection;由 selectionchange listener 更新。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
@@ -325,6 +330,13 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
     // 仅在 IR 编辑区内的右键才接管;其他区域(toolbar 等)放浏览器默认菜单
     const ir = getIrElement(editorRef.current);
     if (!ir || !(event.target instanceof Node) || !ir.contains(event.target)) return;
+    // 表格单元格右键 → 走 TableSubmenu。
+    const tableCtx = getTableContext(event.target);
+    if (tableCtx) {
+      event.preventDefault();
+      setTableMenu({ ctx: tableCtx });
+      return;
+    }
     event.preventDefault();
     const sel = ir.ownerDocument?.defaultView?.getSelection();
     const hasSelection = !!sel && !sel.isCollapsed && (sel.toString().length > 0);
@@ -392,6 +404,7 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
   }, [contextMenu, triggerAIAction]);
 
   const handleMenuClose = useCallback(() => setContextMenu(null), []);
+  const handleTableMenuClose = useCallback(() => setTableMenu(null), []);
 
   // Host click 统一派发:heading 折叠按钮 + task checkbox。
   // KaTeX reveal 由 renderKatexIn 内部 addEventListener 处理,不上冒到这里。
@@ -1071,6 +1084,13 @@ export const WysiwygEditorPane = forwardRef<EditorCoreHandle, WysiwygEditorPaneP
         onClose={handleMenuClose}
         onPickAI={onAIAction ? handleAIPick : undefined}
       />
+      {tableMenu && (
+        <TableSubmenu
+          ctx={tableMenu.ctx}
+          editor={editorRef.current!}
+          onClose={handleTableMenuClose}
+        />
+      )}
       {onAIAction && settings.selectionFloatingBarEnabled && (
         <SelectionFloatingBar
           rect={floatingRect}
