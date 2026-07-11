@@ -1,5 +1,7 @@
 # Issue #192 Define Edit Theme Color — Resource Manifest
 
+> GitHub Issue: https://github.com/ttttstc/Typola/issues/192
+
 This manifest is the source-of-truth inventory for the Define theme editor replication.
 
 ## Local source root
