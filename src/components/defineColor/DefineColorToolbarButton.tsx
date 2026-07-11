@@ -33,6 +33,7 @@ export function DefineColorToolbarButton({ settings }: { settings: AppSettings }
         type="button"
         data-no-window-drag="true"
         data-tooltip="编辑主题颜色"
+        title="编辑主题颜色"
         aria-label="编辑主题颜色"
         aria-expanded={open}
         className={settings.appearanceColorSystem === 'define-color' ? 'active' : ''}

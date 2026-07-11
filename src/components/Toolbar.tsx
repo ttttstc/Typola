@@ -172,7 +172,7 @@ export function Toolbar({
           </button>
           <DefineColorToolbarButton settings={settings} />
           {onOpenToc && (
-            <button data-no-window-drag="true" onClick={onOpenToc} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
+            <button data-no-window-drag="true" onClick={onOpenToc} title={t('openTocHint')} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
               <ListTree size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}

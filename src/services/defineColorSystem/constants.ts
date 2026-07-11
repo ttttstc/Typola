@@ -60,3 +60,8 @@ export function nextSaturation(value: number): number {
   const current = getSaturationLevel(value);
   return current === 'soft' ? 48 : current === 'balanced' ? 72 : 24;
 }
+
+export function previousSaturation(value: number): number {
+  const current = getSaturationLevel(value);
+  return current === 'soft' ? 72 : current === 'balanced' ? 24 : 48;
+}

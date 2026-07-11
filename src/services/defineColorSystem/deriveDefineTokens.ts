@@ -49,6 +49,8 @@ export function deriveDefineTokens(settings: DefineColorSettings): Record<string
   const saturated = { l: settings.l, c: settings.c * settings.saturation / 100, h: settings.h };
   const palette = derivePalette(saturated);
   const loudAlpha = (50 + .46 * settings.opacity) / 100;
+  const semanticChroma = clamp(Math.max(.11, saturated.c * 1.2), 0, .18);
+  const semantic = (hueOffset: number) => format({ l: .55, c: semanticChroma, h: normalizeHue(saturated.h + hueOffset) });
   const tokens: Record<string, string> = {
     '--dc-base-heavy': format(palette.baseHeavy),
     '--dc-base-heavy-loud': format(palette.baseHeavy, loudAlpha),
@@ -63,6 +65,10 @@ export function deriveDefineTokens(settings: DefineColorSettings): Record<string
     '--dc-neutral-dark-1000': '#000000', '--dc-neutral-light-1000': '#ffffff',
     '--dc-pattern-image': DEFINE_PATTERN_URLS[settings.pattern],
     '--dc-pattern-opacity': String(settings.patternOpacity / 100),
+    '--dc-semantic-danger': semantic(-18),
+    '--dc-semantic-warning': semantic(54),
+    '--dc-semantic-success': semantic(126),
+    '--dc-semantic-info': semantic(210),
   };
   for (const alpha of ALPHAS) {
     tokens[`--dc-neutral-dark-${alpha}`] = format(palette.neutralDark, alpha === 100 ? undefined : alpha / 100);

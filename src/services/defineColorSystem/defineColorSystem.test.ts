@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_DEFINE_COLOR_SETTINGS, getSaturationLevel, HEAVY_SWATCHES, nextSaturation } from './constants';
+import { DEFAULT_DEFINE_COLOR_SETTINGS, getSaturationLevel, HEAVY_SWATCHES, nextSaturation, previousSaturation } from './constants';
 import { applyDefineColorToDocument, clearDefineColorFromDocument } from './applyDefineColorToDocument';
 import { deriveDefineTokens } from './deriveDefineTokens';
 import { normalizeDefineColorSettings } from './normalizeDefineColorSettings';
@@ -49,6 +49,7 @@ describe('Define color system', () => {
     expect(getSaturationLevel(48)).toBe('balanced');
     expect(getSaturationLevel(72)).toBe('vivid');
     expect([nextSaturation(24), nextSaturation(48), nextSaturation(72)]).toEqual([48, 72, 24]);
+    expect([previousSaturation(24), previousSaturation(48), previousSaturation(72)]).toEqual([72, 24, 48]);
   });
 
   it('randomizes all fields within range and avoids nearby presets', () => {
@@ -67,6 +68,7 @@ describe('Define color system', () => {
     expect(tokens['--dc-neutral-dark-100']).toContain('oklch(');
     expect(tokens['--dc-background-light-default']).toBe('var(--dc-neutral-light-40)');
     expect(Object.keys(tokens).every((token) => token.startsWith('--dc-'))).toBe(true);
+    expect(tokens['--dc-semantic-danger']).not.toBe(tokens['--dc-semantic-success']);
   });
 
   it('starts from white and converts OKLCH colors for the native title bar', () => {
