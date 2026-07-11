@@ -13,6 +13,10 @@ export const DEFAULT_DEFINE_COLOR_SETTINGS: DefineColorSettings = {
   currentPresetIndex: null,
 };
 
+export function hasDefineColorSelection(settings: DefineColorSettings): boolean {
+  return settings.currentPresetIndex !== null || settings.c > .001;
+}
+
 export const HEAVY_SWATCHES = [
   { l: .8798, c: .064, h: 16.06 }, { l: .8799, c: .068, h: 44.64 },
   { l: .8799, c: .080, h: 76.32 }, { l: .8806, c: .085, h: 106.56 },

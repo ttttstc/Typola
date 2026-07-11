@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { GRADIENT_OFFSET_DEG, WHEEL_RADIUS } from '../../services/defineColorSystem/constants';
+import { GRADIENT_OFFSET_DEG, hasDefineColorSelection, WHEEL_RADIUS } from '../../services/defineColorSystem/constants';
 import { colorAtHue, pointAtAngle } from '../../services/defineColorSystem/presets';
 import type { DefineColorSettings } from '../../services/defineColorSystem/types';
 import { useHueWheel } from '../../hooks/useHueWheel';
@@ -52,7 +52,7 @@ export function DefineColorWheel({ settings, onPreview, onCommit }: {
     .map((angle) => ({ point: pointAtAngle(angle, WHEEL_RADIUS, center, center), color: colorAtHue(angle) }));
   const current = colorAtHue(displayHue);
   const maskSize = settings.isGradient ? 280 : 232;
-  const showsDefaultPalette = settings.currentPresetIndex === null && settings.c <= .001;
+  const showsDefaultPalette = !hasDefineColorSelection(settings);
   const wheelMask = showsDefaultPalette
     ? 'none'
     : 'radial-gradient(circle, #fff 0, #fff 5%, rgba(255, 255, 255, .48) 25%, transparent 50%)';

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- 修复自定义配色首次打开时调色盘被遮罩隐藏，以及调整后的颜色在关闭应用后未保留的问题。
+- 修复自定义配色首次打开时调色盘被遮罩隐藏；未选颜色时改为使用素笺主题，调整后的颜色在关闭应用后仍会保留。
 
 All notable changes to this project will be documented in this file.
 
