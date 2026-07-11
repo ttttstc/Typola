@@ -97,6 +97,16 @@ docs/issue-192-assets/dots-2.svg
 docs/issue-192-assets/define.svg
 ```
 
+Visual previews:
+
+| Stripe | Liquid | Warp | Noise |
+|---|---|---|---|
+| ![stripe](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/stripe.svg) | ![liquid](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/liquid.svg) | ![warp](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/warp.svg) | ![noise](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/noise.svg) |
+
+| Starlight | Dots | Dots Alt | Define |
+|---|---|---|---|
+| ![starlight](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/starlight.svg) | ![dots](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/dots.svg) | ![dots-2](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/dots-2.svg) | ![define](https://raw.githubusercontent.com/ttttstc/Typola/issue-192-handoff-assets/docs/issue-192-assets/define.svg) |
+
 Checkout command:
 
 ```bash
