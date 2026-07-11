@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- 修复自定义配色首次打开时调色盘被遮罩隐藏，以及调整后的颜色在关闭应用后未保留的问题。
+
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]

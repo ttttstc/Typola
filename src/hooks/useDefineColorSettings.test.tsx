@@ -6,6 +6,9 @@ import { DEFAULT_DEFINE_COLOR_SETTINGS } from '../services/defineColorSystem/con
 import type { DefineColorSettings } from '../services/defineColorSystem/types';
 import { useDefineColorSettings } from './useDefineColorSettings';
 
+vi.mock('../services/settingsService', () => ({ updateSettings: vi.fn() }));
+import { updateSettings } from '../services/settingsService';
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('useDefineColorSettings', () => {
@@ -58,5 +61,17 @@ describe('useDefineColorSettings', () => {
     await act(async () => root.render(<Harness source={{ ...DEFAULT_DEFINE_COLOR_SETTINGS, h: 224, saturation: 100 }} />));
 
     expect(host.textContent).toBe('224');
+  });
+
+  it('persists a preview when the editor is closed before a pointer commit', async () => {
+    await act(async () => root.render(<Harness source={DEFAULT_DEFINE_COLOR_SETTINGS} />));
+
+    act(() => api.preview({ h: 224, c: 0.2 }));
+    act(() => api.flush());
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      appearanceColorSystem: 'define-color',
+      defineColorSettings: expect.objectContaining({ h: 224, c: 0.2 }),
+    });
   });
 });
