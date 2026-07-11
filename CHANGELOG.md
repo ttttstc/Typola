@@ -16,12 +16,19 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- 新增与静态主题完全隔离的 Define 动态配色系统（Issue #192）：工具栏画笔入口打开 1:1 Theme Color Editor，支持固定半径 Hue Wheel、Solid / Gradient、垂直 Saturation、50 个 Preset、9 种 Pattern、Pattern Opacity 与 Surprise me；`--dc-*` Token 从 OKLCH 基色实时推导，拖动仅在 rAF 中预览、释放后持久化，重载恢复且不改变 Markdown 内容或 Word / HTML / PDF 导出外观。
+- 外观设置新增“自定义模式 / 主题模式”切换，默认进入纯白自定义模式；选择圆环颜色后，工具栏、面板、控件、编辑器辅助界面与 Windows 原生标题栏统一跟随动态配色。
 - 选区菜单窄化对齐 Typora/Obsidian(`width: max-content; max-width: 240px`,kbd 间距收紧 16→10px);右键菜单新增 5 个基础编辑能力:升级引用 / 降级引用 / 编辑链接 / 清除格式 / 编辑代码块语言,均走 `applyVditorFormat` 现有分发,Vditor IR 模式直接操作选中/选区 + `updateValue` 重渲染;新增 i18n keys `contextMenuQuoteUp / contextMenuQuoteDown / contextMenuLinkEdit / contextMenuClearFormat / contextMenuCodeblockLang` 中英日三译。
 - 选区浮条右端加 `⋯` 子按钮 + hover tooltip,mini menu 暴露两项:「本页不再展示」(filePath 维度 session suppress,直到切文档)与「全局隐藏」(直接写 `selectionFloatingBarEnabled=false`,与设置页 toggle 同步);新增 keys `floatingBarHideThisPage / floatingBarHideGlobal / floatingBarTooltip` 中英日三译;tooltip 用现有 Tooltip 组件浮显。
 - 工具栏新增「打开文件夹」按钮(Cmd+Shift+O),选夹后走新增 Tauri cmd `read_first_level_openable` 仅列一层 md/html/docx(不递归,跳过隐藏文件与节点_modules/dist/target/.git),批量入 tab(last active),单文件打开失败不阻塞其他(#170);新增 keys `toolbarOpenFolderTitle / toolbarOpenFolderLabel` 中英日三译;fileService 加 `openFolder` 函数,useFileTabs 加 `handleOpenFolder` 回调。
 
 ### Fixed
 
+- 优化 Define 自定义外观：加强正文选区、AI 选区与边框对比；色环渐变的双辅助圆改为与主圆同帧移动；方形图标按钮保持透明底并强化标识；设置侧栏采用最深色阶，Skill 卡片统一颜色与操作列宽度；浮动大纲收为左侧边缘推出式，并新增工具栏大纲入口。
+- 修复 Define 检视问题：语义状态色改由当前基色分出危险／警告／成功／信息色，主题弹层不再硬编码黑白；预设与 Surprise me 会完整覆盖主题组合，饱和度支持反向循环与键盘直选。
+- 修复 Define 色环高频拖动时同步重渲染导致的卡顿：把手与遮罩改为逐帧直接绘制，全局配色 Token 更新限频，拖动保持流畅；重新绘制居中的随机骰子按钮，消除静止首帧偏斜。
+- 修复 Define 外观覆盖不完整、饱和度按钮无效与重启颜色漂移：所有用户可见控件、状态色及面板改接入 `--dc-*` 色板；饱和度改为默认平衡的柔和／平衡／浓郁三档循环并以图标反馈；设置加载后会重新同步上次保存的颜色。
+- 修复 Define AI 工作台底部编辑控件未跟随配色、色环拖动回跳和花纹覆盖不足：侧栏、AI 工作台、场景面板与底部输入栏现在统一染色并渲染花纹，正文编辑区保持无纹理；三档饱和度整体下调并自动迁移既有设置。
 - 修复 AI 会话停止竞态：启动尚未返回 runId 时停止会立即恢复输入；取消后重发不会再被旧进程退出事件中断。
 - 修复源码编辑器选区浮条在缺少隐藏回调时仍展示无效「本文档不再展示／全局隐藏」按钮的问题。
 - 修复 IR 表格编辑在文档包含同内容表格时可能误改第一张表的问题：定位不唯一时拒绝操作；删除整表同步采用同一保护。新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
