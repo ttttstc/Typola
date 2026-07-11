@@ -304,3 +304,121 @@ export function buildInjectionText(action: SelectionActionId, filePath: string, 
   // 明确告诉 AI：这是选区靶向操作，只替换选中部分，输出即替换结果
   return `${header}\n${quote}\n\n${tpl}\n\n请直接输出替换后的文字，我会用它精确替换原文中选中的那一段。\n\n`;
 }
+
+// ============================================================
+// 结构化上下文 / anchor 共享规则（#189）
+// ------------------------------------------------------------
+// 复用 markdownAnalysisService 的 headingPathAt / markdownBlockAt /
+// isRangeWithinSingleMarkdownBlock,避免 AI/Review 走两套恢复逻辑。
+// 只引入纯函数,不动 UI/Provider。
+// ============================================================
+
+import {
+  headingPathAt,
+  isRangeWithinSingleMarkdownBlock,
+  markdownBlockAt,
+} from '../markdownAnalysisService';
+import type { SelectionAnchor } from './types';
+
+const DEFAULT_CONTEXT_BUDGET = 4000;
+
+export type AnchorContext = {
+  /** 选区所在 heading 路径,根标题在外 */
+  headingPath: string[];
+  /** 选区所属最小结构块(kind/from/to) */
+  block: { kind: 'code' | 'table' | 'math' | 'mermaid' | 'section' | 'paragraph'; from: number; to: number };
+  /** 受 budget 限制的最近块截断文本,选区文本始终完整保留 */
+  excerpt: string;
+};
+
+export function buildAnchorContext(source: string, anchor: SelectionAnchor, budget = DEFAULT_CONTEXT_BUDGET): AnchorContext {
+  const headingPath = headingPathAt(source, anchor.from);
+  const block = markdownBlockAt(source, anchor.from, anchor.to);
+  const blockSource = source.slice(block.from, block.to);
+  const allowed = Math.max(0, budget - anchor.originalText.length);
+  const excerpt = blockSource.length <= allowed
+    ? blockSource
+    : `${blockSource.slice(0, Math.max(0, allowed))}…`;
+  return {
+    headingPath,
+    block: { kind: block.kind, from: block.from, to: block.to },
+    excerpt,
+  };
+}
+
+export function formatAnchorContextLines(context: AnchorContext, fileName: string): string {
+  const headingLine = context.headingPath.length ? context.headingPath.join(' / ') : '(无标题)';
+  return [
+    `所在标题:${headingLine}`,
+    `所在结构块:${context.block.kind}`,
+    `文件:${fileName}`,
+  ].join('\n');
+}
+
+// 共享 anchor 校验:沿用 findUniqueAnchor 行为,失败后要求恢复点必须落在同一 block。
+// 返回 { start, length } 或 null 表示无可用 anchor。
+export function recoverAnchorInBlock(
+  source: string,
+  anchor: SelectionAnchor,
+  block?: AnchorContext['block'],
+): UniqueAnchorHit | null {
+  const hit = findUniqueAnchor(source, anchor.originalText, anchor.prefixHint);
+  if (!hit) return null;
+  if (!block) return hit;
+  const recoveredStart = hit.start;
+  const recoveredEnd = hit.start + hit.length;
+  const withinBlock = recoveredStart >= block.from && recoveredEnd <= block.to;
+  // 必须整段在同一 block;跨 block 即视为 stale/ambiguous。
+  return withinBlock ? hit : null;
+}
+
+// 给 useEditorSelectionBridge.acceptResultCard 用:
+// 1) anchor.from/to 与 originalText 完全一致 → valid;
+// 2) findUniqueAnchor 能找到且 recoverAnchorInBlock 不跨块 → valid (新 from/to);
+// 3) 否则 stale/ambiguous。
+export type AnchorValidation = {
+  status: 'valid' | 'stale' | 'wrong-file';
+  recovered?: { from: number; to: number };
+};
+
+export function validateSelectionAnchor(
+  source: string,
+  anchor: SelectionAnchor,
+  options: { fallbackBlock?: AnchorContext['block'] } = {},
+): AnchorValidation {
+  const exactFrom = source.slice(anchor.from, anchor.to) === anchor.originalText;
+  if (exactFrom && isRangeWithinSingleMarkdownBlock(source, anchor.from, anchor.to)) {
+    return { status: 'valid' };
+  }
+  const recovered = recoverAnchorInBlock(source, anchor, options.fallbackBlock ?? anchor.block);
+  if (!recovered) return { status: 'stale' };
+  return {
+    status: 'valid',
+    recovered: { from: recovered.start, to: recovered.start + recovered.length },
+  };
+}
+
+// 把结构上下文拼到 oneshot prompt 头部:仅在 anchor 提供时启用,旧调用点保持不变。
+export function buildStructuredOneshotPrompt(
+  action: SelectionActionId,
+  anchor: SelectionAnchor,
+  options: { source?: string; fileName?: string; budget?: number } = {},
+): string {
+  const base = buildOneshotPrompt(action, anchor.originalText);
+  if (!options.source) return base;
+  const context = buildAnchorContext(options.source, anchor, options.budget);
+  const lines = formatAnchorContextLines(context, options.fileName ?? '');
+  return `${lines}\n\n${base}`;
+}
+
+export function buildStructuredInjectionText(
+  action: SelectionActionId,
+  anchor: SelectionAnchor,
+  options: { source?: string; fileName?: string; budget?: number } = {},
+): string {
+  const base = buildInjectionText(action, anchor.filePath, anchor.originalText);
+  if (!options.source) return base;
+  const context = buildAnchorContext(options.source, anchor, options.budget);
+  const lines = formatAnchorContextLines(context, options.fileName ?? '');
+  return `${lines}\n\n${base}`;
+}

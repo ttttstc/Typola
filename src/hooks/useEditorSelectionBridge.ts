@@ -8,6 +8,7 @@ import {
   extractReplacementText,
   isDisplayOnlyAction,
   isOneshotAction,
+  recoverAnchorInBlock,
   type SelectionActionId,
 } from '../services/agent/selectionActions';
 import type { AnchorStatus, SelectionAnchor } from '../services/agent/types';
@@ -262,18 +263,32 @@ export function useEditorSelectionBridge({
       setResultCard({ ...current, state: 'error', error: `校验选区失败:${message}` });
       return;
     }
-    if (status !== 'valid') {
-      // 诊断:把实际 anchor 内容前 80 字打到 error,方便定位 stale 真因
-      const ot = (current.anchor.originalText ?? '').slice(0, 80);
-      const ph = (current.anchor.prefixHint ?? '').slice(-40);
+    if (status === 'wrong-file') {
       setResultCard({
         ...current,
         state: 'error',
-        error: status === 'wrong-file'
-          ? '原文档已切换,无法替换'
-          : `[stale] anchor 在 source 里定位不到。 originalText="${ot}" prefixHint="${ph}"`,
+        error: '原文档已切换,无法替换',
       });
       return;
+    }
+    // #189: 校验 stale 时,用结构 anchor(heading path / block)作 fallback 探针。
+    // 只有当 recoverAnchorInBlock 仍找不到且 anchor 跨越特殊块时才报 stale。
+    if (status !== 'valid') {
+      const source = editor.getMarkdown();
+      const recovered = recoverAnchorInBlock(source, current.anchor, current.anchor.block);
+      if (!recovered) {
+        const ot = (current.anchor.originalText ?? '').slice(0, 80);
+        const ph = (current.anchor.prefixHint ?? '').slice(-40);
+        setResultCard({
+          ...current,
+          state: 'error',
+          error: `[stale] anchor 在 source 里定位不到,且结构边界不允许回退。 originalText="${ot}" prefixHint="${ph}"`,
+        });
+        return;
+      }
+      // 把替换目标改到恢复到的位置;由 editor.replaceRange 走单笔 dispatch。
+      status = 'valid';
+      current.anchor = { ...current.anchor, from: recovered.start, to: recovered.start + recovered.length };
     }
     try {
       const ok = editor.replaceRange(

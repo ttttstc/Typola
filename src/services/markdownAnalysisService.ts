@@ -301,3 +301,88 @@ function remember(source: string, result: MarkdownAnalysisResult): void {
   const oldest = cache.keys().next().value;
   if (oldest) cache.delete(oldest);
 }
+
+export type MarkdownBlockKind = 'code' | 'table' | 'math' | 'mermaid' | 'section' | 'paragraph';
+
+export type MarkdownBlockBoundary = MarkdownRange & {
+  kind: MarkdownBlockKind;
+  headingPath: string[];
+};
+
+// 结构 helper:为 task/link/AI anchor 等消费者复用同一份解析结果,避免重复扫描。
+// 行为约束:
+// - 命中优先级:fenced code / table / math / mermaid > heading section > paragraph。
+// - 不修改 Markdown source、不依赖编辑器实例,纯函数。
+// - 已通过 MarkdownAnalysisResult 跳过 fenced code 内伪 task/link;这里不再做单独过滤。
+
+export function findMarkdownTaskAt(source: string, offset: number): MarkdownTask | null {
+  if (offset < 0 || offset > source.length) return null;
+  const analysis = analyzeMarkdown(source);
+  return analysis.tasks.find((task) => offset >= task.from && offset <= task.to) ?? null;
+}
+
+export function findMarkdownLinkAt(source: string, offset: number): MarkdownLink | null {
+  if (offset < 0 || offset > source.length) return null;
+  const analysis = analyzeMarkdown(source);
+  return analysis.links.find((link) => offset >= link.from && offset <= link.to) ?? null;
+}
+
+export function headingPathAt(source: string, offset: number): string[] {
+  const analysis = analyzeMarkdown(source);
+  const levels: number[] = [];
+  const path: string[] = [];
+  for (const heading of analysis.headings) {
+    if (heading.from > offset) break;
+    while (levels.length > 0 && levels[levels.length - 1] > heading.level) {
+      levels.pop();
+      path.pop();
+    }
+    if (levels.length === 0 || levels[levels.length - 1] < heading.level) {
+      levels.push(heading.level);
+      path.push(heading.text);
+    }
+  }
+  return path;
+}
+
+function headingSectionFor(analysis: MarkdownAnalysisResult, offset: number): MarkdownFoldSection | null {
+  for (const section of analysis.foldSections) {
+    if (offset >= section.from && offset < section.to) return section;
+  }
+  return null;
+}
+
+export function markdownBlockAt(source: string, from: number, to: number = from): MarkdownBlockBoundary {
+  const analysis = analyzeMarkdown(source);
+  const headingPath = headingPathAt(source, from);
+  const specialMatch = (ranges: MarkdownRange[]): MarkdownRange | null => {
+    for (const range of ranges) {
+      if (from >= range.from && from < range.to && to > range.from && to <= range.to) return range;
+    }
+    return null;
+  };
+  const mermaid = specialMatch(analysis.mermaidBlocks);
+  if (mermaid) return { ...rangeAt(source, mermaid.from, mermaid.to), kind: 'mermaid', headingPath };
+  const math = specialMatch(analysis.mathBlocks);
+  if (math) return { ...rangeAt(source, math.from, math.to), kind: 'math', headingPath };
+  const code = specialMatch(analysis.codeBlocks);
+  if (code) return { ...rangeAt(source, code.from, code.to), kind: 'code', headingPath };
+  const table = specialMatch(analysis.tables);
+  if (table) return { ...rangeAt(source, table.from, table.to), kind: 'table', headingPath };
+  const section = headingSectionFor(analysis, from);
+  if (section) return { ...rangeAt(source, section.from, section.to), kind: 'section', headingPath };
+  return { ...rangeAt(source, 0, source.length), kind: 'paragraph', headingPath };
+}
+
+export function isRangeWithinSingleMarkdownBlock(source: string, from: number, to: number): boolean {
+  if (from > to) return false;
+  const analysis = analyzeMarkdown(source);
+  const boundaries: MarkdownRange[] = [
+    ...analysis.codeBlocks,
+    ...analysis.tables,
+    ...analysis.mathBlocks,
+    ...analysis.mermaidBlocks,
+  ];
+  // 任一边界完全落在 [from, to) 内部(从前面进入且从后面出去),即视为跨块。
+  return !boundaries.some((boundary) => boundary.from >= from && boundary.to <= to);
+}

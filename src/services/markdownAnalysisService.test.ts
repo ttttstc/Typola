@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { analyzeMarkdown, clearMarkdownAnalysisCache, scheduleMarkdownAnalysis } from './markdownAnalysisService';
+import {
+  analyzeMarkdown,
+  clearMarkdownAnalysisCache,
+  findMarkdownLinkAt,
+  findMarkdownTaskAt,
+  headingPathAt,
+  isRangeWithinSingleMarkdownBlock,
+  markdownBlockAt,
+  scheduleMarkdownAnalysis,
+} from './markdownAnalysisService';
 
 const fixture = [
   '# 总览',
@@ -86,5 +95,77 @@ describe('markdownAnalysisService', () => {
 
     expect(result.headings).toHaveLength(100);
     expect(performance.now() - startedAt).toBeLessThan(1_500);
+  });
+});
+
+describe('markdownAnalysisService structure helpers', () => {
+  clearMarkdownAnalysisCache();
+
+  it('finds task and link by offset and ignores fenced pseudo ones', () => {
+    const analysis = analyzeMarkdown(fixture);
+    const firstTask = analysis.tasks[0];
+    expect(firstTask).toBeDefined();
+    const inFirstTask = findMarkdownTaskAt(fixture, firstTask.from + 2);
+    expect(inFirstTask?.text).toBe(firstTask.text);
+
+    // fenced code 内伪 task 不应命中
+    const fencedTask = fixture.indexOf('- [ ] 不是任务');
+    expect(fencedTask).toBeGreaterThan(-1);
+    expect(findMarkdownTaskAt(fixture, fencedTask + 3)).toBeNull();
+
+    const firstLink = analysis.links[0];
+    expect(firstLink).toBeDefined();
+    expect(findMarkdownLinkAt(fixture, firstLink.from + 1)?.url).toBe(firstLink.url);
+
+    // fenced code 内伪 link 不应命中
+    const fencedLink = fixture.indexOf('[不是链接](https://example.com)');
+    expect(fencedLink).toBeGreaterThan(-1);
+    expect(findMarkdownLinkAt(fixture, fencedLink + 1)).toBeNull();
+  });
+
+  it('returns nested heading path at the given offset', () => {
+    // 子节 heading 的 from 即光标所在标题行
+    const analysis = analyzeMarkdown(fixture);
+    const child = analysis.headings.find((h) => h.text === '子节');
+    expect(child).toBeDefined();
+    expect(headingPathAt(fixture, child!.from + 1)).toEqual(['总览', '子节']);
+
+    // 文档开头属于根标题作用域
+    expect(headingPathAt(fixture, 0)).toEqual(['总览']);
+  });
+
+  it('identifies special block kinds with correct heading path', () => {
+    const analysis = analyzeMarkdown(fixture);
+    const code = analysis.codeBlocks.find((b) => b.language === 'math');
+    expect(code).toBeDefined();
+    const block = markdownBlockAt(fixture, code!.from + 2, code!.from + 3);
+    expect(block.kind).toBe('math');
+    expect(block.headingPath).toEqual(['总览']);
+
+    const mermaid = analysis.mermaidBlocks[0];
+    expect(mermaid).toBeDefined();
+    expect(markdownBlockAt(fixture, mermaid.from + 1).kind).toBe('mermaid');
+
+    const table = analysis.tables[0];
+    expect(table).toBeDefined();
+    expect(markdownBlockAt(fixture, table.from + 1).kind).toBe('table');
+
+    const normal = fixture.indexOf('- [ ] 待办');
+    expect(normal).toBeGreaterThan(-1);
+    const blockAtNormal = markdownBlockAt(fixture, normal);
+    expect(['section', 'paragraph']).toContain(blockAtNormal.kind);
+    expect(blockAtNormal.headingPath).toEqual(['总览']);
+  });
+
+  it('rejects range crossing code/table/math/mermaid boundaries', () => {
+    const analysis = analyzeMarkdown(fixture);
+    const code = analysis.codeBlocks[0];
+    const outside = code!.from - 2;
+    expect(isRangeWithinSingleMarkdownBlock(fixture, outside, code!.to)).toBe(false);
+
+    // 普通段落内
+    const todo = fixture.indexOf('- [ ] 待办');
+    const lineEnd = fixture.indexOf('\n', todo);
+    expect(isRangeWithinSingleMarkdownBlock(fixture, todo, lineEnd)).toBe(true);
   });
 });
