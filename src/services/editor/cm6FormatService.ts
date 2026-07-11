@@ -1,6 +1,8 @@
 import { EditorView } from '@codemirror/view';
 import type { FormatAction, HeadingLevel } from '../../components/EditorContextMenu';
 import { applyTableFormat } from './tableFormatService';
+import { findMarkdownLinkAt } from '../markdownAnalysisService';
+import { rewriteLinkAtSelection } from '../../components/editor/cm6/linkInteractionExtension';
 
 // 应用一个格式化动作到 CM6 编辑器(走 view.dispatch 改 doc,不依赖 Vditor)。
 // 行内格式(加粗/斜体/删除线/行内代码)走 wrapInline,光标和选区都保留。
@@ -320,17 +322,37 @@ function changeQuoteLevel(view: EditorView, upgrade: boolean): void {
 }
 
 function editLink(view: EditorView): void {
-  const selection = view.state.selection.main;
-  const text = view.state.sliceDoc(selection.from, selection.to);
-  const match = text.match(/^\[([^\]]*)\]\(([^)]*)\)$/);
-  if (!match) return;
-  const url = window.prompt('链接网址', match[2]);
-  if (url === null) return;
-  const next = `[${match[1]}](${url})`;
-  view.dispatch({
-    changes: { from: selection.from, to: selection.to, insert: next },
-    selection: { anchor: selection.from, head: selection.from + next.length },
-  });
+  const sel = view.state.selection.main;
+  const link = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
+  if (!link) return;
+  const initialLabel = link.label;
+  const initialUrl = link.url;
+  const initialTitle = link.title ?? '';
+  const nextLabel = window.prompt('链接文字', initialLabel);
+  if (nextLabel === null) return;
+  const nextUrl = window.prompt('链接网址', initialUrl);
+  if (nextUrl === null) return;
+  const nextTitle = window.prompt('链接标题（可留空）', initialTitle);
+  if (nextTitle === null) return;
+  const replaced = rewriteLinkAtSelection(view, { getLink: () => ({ label: nextLabel, url: nextUrl, title: nextTitle || undefined }) });
+  if (replaced) {
+    view.focus();
+    return;
+  }
+  // rewriteLinkAtSelection 失败兜底:用更早抓到的 link 范围直接替换。
+  const linkRange = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
+  const nextLink = `[${nextLabel || nextUrl}](${nextUrl}${nextTitle ? ` "${nextTitle}"` : ''})`;
+  if (linkRange) {
+    view.dispatch({
+      changes: { from: linkRange.from, to: linkRange.to, insert: nextLink },
+      selection: { anchor: linkRange.from + nextLink.length },
+    });
+  } else {
+    view.dispatch({
+      changes: { from: sel.from, to: sel.to, insert: nextLink },
+      selection: { anchor: sel.from + nextLink.length },
+    });
+  }
   view.focus();
 }
 

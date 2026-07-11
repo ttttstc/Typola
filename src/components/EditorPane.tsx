@@ -13,8 +13,7 @@ import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions'
 import { headingIndexAt } from './editor/cm6/previewSyncExtension';
 import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
 import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
-import { pasteTableData } from './editor/cm6/table/tableCommands';
-import { findTableAt } from './editor/cm6/table/tableTypes';
+import { markdownBlockAt, headingPathAt } from '../services/markdownAnalysisService';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -42,7 +41,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction } = props;
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
@@ -80,11 +79,19 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     const sel = editor.state.selection.main;
     const text = sel.empty ? '' : editor.state.doc.sliceString(sel.from, sel.to);
     if (!text && action !== 'custom') return;
+    // #189:附带 heading path + block boundary,供 AI 结构化 prompt 使用。
+    // 这里只是元数据,不参与 replaceRange 路径;编辑器 validateAnchor 仍按 originalText。
+    const sourceText = editor.state.doc.toString();
     const anchor: SelectionAnchor = {
       filePath: path,
       from: sel.from,
       to: sel.to,
       originalText: text,
+      headingPath: headingPathAt(sourceText, sel.from),
+      block: (() => {
+        const block = markdownBlockAt(sourceText, sel.from, sel.to);
+        return { kind: block.kind, from: block.from, to: block.to };
+      })(),
     };
     cb(action, anchor, origin);
   }, []);
@@ -174,18 +181,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     if (!target || !editor.contentDOM.contains(target)) return;
     event.preventDefault();
     const sel = editor.state.selection.main;
-    const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
-    setCtxMenu({ x: event.clientX, y: event.clientY, hasSelection: !sel.empty, hasTable: pos !== null && findTableAt(editor, pos) !== null });
+    setCtxMenu({ x: event.clientX, y: event.clientY, hasSelection: !sel.empty });
   }, [editorView]);
-
-  const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
-    const editor = editorViewRef.current;
-    if (!editor) return;
-    const html = event.clipboardData.getData('text/html');
-    const plain = event.clipboardData.getData('text/plain');
-    if (!pasteTableData(editor, plain, html || undefined)) return;
-    event.preventDefault();
-  }, []);
 
   const handleFormatPick = useCallback((action: FormatAction) => {
     const editor = editorViewRef.current;
@@ -210,7 +207,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         if (sel.empty) return false;
         // 用选区首字符的视口位置作为菜单位置;coords 不可用时退化到视口左上
         const coords = view.coordsAtPos(sel.from) ?? { left: 80, top: 80 };
-        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true, hasTable: false });
+        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true });
         return true;
       },
       onFormat: (action) => {
@@ -439,7 +436,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   }), [editorView]);
 
   return (
-    <div className="editor-pane" onContextMenu={handleContextMenu} onPaste={handlePaste}>
+    <div className="editor-pane" onContextMenu={handleContextMenu}>
       <CodeMirror
         value={source}
         height="100%"
@@ -467,7 +464,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         x={ctxMenu?.x ?? 0}
         y={ctxMenu?.y ?? 0}
         hasSelection={ctxMenu?.hasSelection ?? false}
-        hasTable={ctxMenu?.hasTable ?? false}
         onPick={handleFormatPick}
         onClose={() => setCtxMenu(null)}
         onPickAI={onAIAction ? handleAIPick : undefined}

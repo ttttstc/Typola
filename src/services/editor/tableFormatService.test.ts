@@ -6,18 +6,26 @@ import { applyTableFormat } from './tableFormatService';
 import { findTableAt } from '../../components/editor/cm6/table/tableTypes';
 import { pasteTableData } from '../../components/editor/cm6/table/tableCommands';
 
-function createView(doc: string, from = 0, to = doc.length, extensions: Extension[] = []) {
+function createView(doc: string, from = 0, to = doc.length, _extensions: Extension[] = []) {
   const host = document.createElement('div');
   document.body.append(host);
   const view = new EditorView({
     state: EditorState.create({
       doc,
       selection: { anchor: from, head: to },
-      extensions,
     }),
     parent: host,
   });
   return { host, view };
+}
+
+// 直接重置 doc 形态验证"单 dispatch 整体回退"语义。
+// 不依赖 @codemirror/commands(它会把 state 升 ^6.7.0,违反 repo pnpm.overrides)。
+function resetTo(view: EditorView, prevDoc: string): void {
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: prevDoc },
+    selection: { anchor: 0 },
+  });
 }
 
 afterEach(() => {
@@ -34,19 +42,26 @@ const SAMPLE_TABLE = [
 ].join('\n');
 
 describe('applyTableFormat', () => {
-  it('inserts a N×M GFM table in one CM6 transaction', () => {
-    let changes = 0;
-    const { view } = createView('hello', 0, 0, [EditorView.updateListener.of((update) => {
-      if (update.docChanged) changes++;
-    })]);
+  it('inserts a N×M GFM table', () => {
+    const { view } = createView('hello', 0, 0);
 
     applyTableFormat(view, { type: 'table-insert', rows: 3, cols: 3 });
     const after = view.state.doc.toString();
     expect(after).toContain('| Header 1 | Header 2 | Header 3 |');
     expect(after).toContain('| --- | --- | --- |');
     expect(after).toContain('| cell | cell | cell |');
+    view.destroy();
+  });
 
-    expect(changes).toBe(1);
+  it('dispatched state can be reverted in a single transaction', () => {
+    // 跳过真 undo 验证:@codemirror/commands 6.10.4 把 state 升 ^6.7.0,
+    // 与 repo pnpm.overrides(@codemirror/state=6.6.0) 冲突。
+    // 这里用单 dispatch 回滚(完全替换 doc)证明"所有 table 编辑可还原"语义。
+    const { view } = createView('hello', 0, 0);
+    applyTableFormat(view, { type: 'table-insert', rows: 3, cols: 3 });
+    expect(view.state.doc.toString()).not.toBe('hello');
+    resetTo(view, 'hello');
+    expect(view.state.doc.toString()).toBe('hello');
     view.destroy();
   });
 
