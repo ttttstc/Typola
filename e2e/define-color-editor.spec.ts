@@ -29,6 +29,10 @@ test.describe('Define color editor', () => {
     await expect(editor.locator('.dc-wheel-handle.auxiliary')).toHaveCount(2);
     expect(await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--dc-gradient-stop-1'))).toContain('oklch(');
 
+    await page.getByTestId('define-gradient-toggle').click();
+    await expect(editor.locator('.dc-wheel-handle.auxiliary')).toHaveCount(0);
+    expect(await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--dc-gradient-stop-1'))).toBe('');
+
     await page.getByTestId('define-pattern-cycle').click();
     expect(await page.locator('html').evaluate((root) => getComputedStyle(root).getPropertyValue('--dc-pattern-image'))).toContain('stripe');
 
