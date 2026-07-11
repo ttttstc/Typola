@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 完成 #183 / #184：CM6 数学与 Mermaid 块预览改为带 source-hash / theme 缓存的原生 widget，光标进入块即回到 Markdown 源码；渲染仅在块被 CM6 物化到可视区域时发生，异步错误以卡片展示且不改写 source。HTML、PDF、Word 纸张预览与微信预览的 Markdown→HTML 基座改为 remark/rehype，支持 GFM、代码高亮、KaTeX、Mermaid、本地图片解析与 HTML sanitize，不再依赖 Vditor preview renderer；Word `.docx` 保持原有 fallback。
+- PDF 导出改为与 Word 一致的保存对话框：默认 Downloads 路径和 `.pdf` 文件名，用户可选择目标文件夹或取消导出。
 - 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 继续只用于既有预览与导出渲染链路。
 - 查找替换改为通过 `TypolaEditorKernel.replaceRanges` 提交 CM6 transaction；单个和全部替换都会进入同一 history，支持一次 `Ctrl/Cmd+Z` 撤销。
 - 工具栏、`Ctrl/Cmd+B` / `I` / `Shift+7` / `Shift+8` 快捷键和右键菜单统一调用 CM6 格式命令；补齐引用层级、编辑链接、清除格式与代码块语言编辑的 transaction 实现。

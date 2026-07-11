@@ -1,109 +1,95 @@
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
-import {
-  type EditorState,
-  type Extension,
-  Range,
-  StateField,
-} from '@codemirror/state';
-import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  WidgetType,
-} from '@codemirror/view';
+import { type EditorState, type Extension, StateField } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
 import DOMPurify from 'dompurify';
+import { getBlockRender } from './blockRenderCache';
 
-let mermaidApiPromise: Promise<typeof import('mermaid').default> | null = null;
-let fallbackRenderCounter = 0;
+let renderCount = 0;
+let mermaidPromise: Promise<typeof import('mermaid').default> | null = null;
 
-function loadMermaid() {
-  mermaidApiPromise ??= import('mermaid').then((module) => {
-    module.default.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: 'default',
-    });
-    return module.default;
+function loadMermaid(theme: 'default' | 'dark') {
+  mermaidPromise ??= import('mermaid').then((module) => module.default);
+  return mermaidPromise.then((mermaid) => {
+    mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme, flowchart: { useMaxWidth: true } });
+    return mermaid;
   });
-  return mermaidApiPromise;
-}
-
-class MermaidWidget extends WidgetType {
-  private readonly source: string;
-  private readonly renderId: string;
-
-  constructor(source: string) {
-    super();
-    this.source = source;
-    fallbackRenderCounter += 1;
-    this.renderId = `typola-cm6-mermaid-${globalThis.crypto?.randomUUID?.() ?? fallbackRenderCounter}`;
-  }
-
-  eq(other: MermaidWidget): boolean {
-    return other.source === this.source;
-  }
-
-  toDOM(): HTMLElement {
-    const container = document.createElement('div');
-    container.className = 'typola-cm6-mermaid';
-    container.textContent = 'Mermaid 渲染中...';
-
-    loadMermaid()
-      .then((mermaid) => mermaid.render(this.renderId, this.source))
-      .then(({ svg }) => {
-        container.innerHTML = DOMPurify.sanitize(svg, {
-          USE_PROFILES: { svg: true, svgFilters: true },
-        });
-      })
-      .catch((error: unknown) => {
-        container.classList.add('typola-cm6-mermaid-error');
-        container.textContent = `Mermaid 渲染失败：${error instanceof Error ? error.message : String(error)}`;
-      });
-
-    return container;
-  }
 }
 
 function cursorTouches(state: EditorState, from: number, to: number): boolean {
   return state.selection.ranges.some((range) => range.from <= to && range.to >= from);
 }
 
-function buildMermaidDecorations(state: EditorState): DecorationSet {
-  const ranges: Range<Decoration>[] = [];
+class MermaidWidget extends WidgetType {
+  private readonly source: string;
+  private readonly themeId: string;
+  private readonly refresh: () => void;
 
-  const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
-  tree.iterate({
-    enter(node: any) {
-      if (node.name !== 'FencedCode') return;
-      const codeInfo = node.node.getChild('CodeInfo');
-      if (!codeInfo) return;
-      const language = state.doc.sliceString(codeInfo.from, codeInfo.to).trim().toLowerCase();
-      if (language !== 'mermaid') return;
-      const codeText = node.node.getChild('CodeText');
-      const source = codeText ? state.doc.sliceString(codeText.from, codeText.to).trim() : '';
-      if (!source || cursorTouches(state, node.from, node.to)) return;
-      ranges.push(
-        Decoration.replace({ widget: new MermaidWidget(source), block: true }).range(node.from, node.to),
-      );
-    },
-  });
+  constructor(
+    source: string, themeId: string, refresh: () => void,
+  ) {
+    super();
+    this.source = source;
+    this.themeId = themeId;
+    this.refresh = refresh;
+  }
 
-  return Decoration.set(ranges, true);
+  eq(other: MermaidWidget): boolean { return other.source === this.source && other.themeId === this.themeId; }
+
+  toDOM(): HTMLElement {
+    const element = document.createElement('div');
+    element.className = 'typola-cm6-mermaid';
+    this.paint(element);
+    return element;
+  }
+
+  private paint(element: HTMLElement): void {
+    const theme = this.themeId.includes('dark') ? 'dark' : 'default';
+    const result = getBlockRender('mermaid', this.source, this.themeId, async () => {
+      const mermaid = await loadMermaid(theme);
+      const { svg } = await mermaid.render(`typola-cm6-mermaid-${renderCount++}`, this.source);
+      return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
+    }, () => {
+      this.refresh();
+      if (element.isConnected) this.paint(element);
+    });
+    if (result.state === 'ready') element.innerHTML = result.html;
+    else if (result.state === 'error') {
+      element.classList.add('typola-cm6-mermaid-error');
+      element.textContent = `Mermaid 渲染失败：${result.message}`;
+    } else element.textContent = 'Mermaid 渲染中…';
+  }
 }
 
-const mermaidField = StateField.define<DecorationSet>({
-  create(state) {
-    return buildMermaidDecorations(state);
-  },
-  update(decorations, transaction) {
-    if (transaction.docChanged || transaction.selection || transaction.reconfigured) {
-      return buildMermaidDecorations(transaction.state);
-    }
-    return decorations;
-  },
-  provide: (field) => EditorView.decorations.from(field),
-});
+function collectMermaidRanges(state: EditorState): Array<{ from: number; to: number; source: string }> {
+  const ranges: Array<{ from: number; to: number; source: string }> = [];
+  const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
+  tree.iterate({ enter(node: any) {
+    if (node.name !== 'FencedCode') return;
+    const info = node.node.getChild('CodeInfo');
+    const code = node.node.getChild('CodeText');
+    if (!info || state.doc.sliceString(info.from, info.to).trim().toLowerCase() !== 'mermaid') return;
+    const source = code ? state.doc.sliceString(code.from, code.to).trim() : '';
+    if (source && !cursorTouches(state, node.from, node.to)) ranges.push({ from: node.from, to: node.to, source });
+  } });
+  return ranges;
+}
 
-export function mermaidPreviewExtension(): Extension {
+export function mermaidPreviewExtension(themeId = 'light'): Extension {
+  const mermaidField = StateField.define<DecorationSet>({
+    create(state) {
+      return Decoration.set(collectMermaidRanges(state).map(({ from, to, source }) =>
+        Decoration.replace({ widget: new MermaidWidget(source, themeId, () => {}), block: true }).range(from, to),
+      ), true);
+    },
+    update(decorations, transaction) {
+      if (transaction.docChanged || transaction.selection || transaction.reconfigured) {
+        return Decoration.set(collectMermaidRanges(transaction.state).map(({ from, to, source }) =>
+          Decoration.replace({ widget: new MermaidWidget(source, themeId, () => {}), block: true }).range(from, to),
+        ), true);
+      }
+      return decorations;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+  });
   return mermaidField;
 }

@@ -4,6 +4,7 @@
  * 交给 Rust 后端用系统浏览器执行 print-to-pdf。
  */
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
 import { buildPdfHtmlDocument, exportFileName } from './pdfExportStyles';
 import { resolveDefaultExportPath, createExportFileName } from './exportPathService';
 import { markdownToExportHtml } from './markdownExportRenderer';
@@ -39,19 +40,23 @@ async function renderExportHtml(options: PdfExportOptions): Promise<string> {
 }
 
 /**
- * 导出 PDF：渲染 markdown → 自动写入默认导出路径 → 调用系统浏览器导出。
- * 全程不阻塞页面编辑。
+ * 导出 PDF：渲染 markdown 后让用户选择目标文件夹和文件名，再调用系统浏览器导出。
  */
 export async function exportToPdf(options: PdfExportOptions): Promise<string | null> {
   // 1. 渲染 HTML（后台 DOM，不影响用户编辑）
   const html = await renderExportHtml(options);
 
-  // 2. 自动解析导出路径，不弹保存对话框。
-  const targetPath = await resolveDefaultExportPath({
+  // 与 Word 导出保持一致：默认 Downloads，但由用户确认目标文件夹与文件名。
+  const defaultPath = await resolveDefaultExportPath({
     fileName: createExportFileName(options.fileName, 'pdf'),
     filePath: options.filePath,
     extension: 'pdf',
   });
+  const targetPath = await save({
+    defaultPath,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (!targetPath) return null;
 
   // 3. 交给 Rust 后端用系统浏览器导出
   await invoke('export_pdf_file', { path: targetPath, html });
