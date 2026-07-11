@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getBlockRender } from './blockRenderCache';
 
 describe('blockRenderCache', () => {
-  it('deduplicates an in-flight render by type, source hash, and theme', async () => {
+  it('deduplicates an in-flight render by type, exact source, and theme', async () => {
     let resolve!: (value: string) => void;
     const render = vi.fn(() => new Promise<string>((done) => { resolve = done; }));
     const firstSettled = vi.fn();

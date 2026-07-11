@@ -43,10 +43,7 @@ async function renderExportHtml(options: PdfExportOptions): Promise<string> {
  * 导出 PDF：渲染 markdown 后让用户选择目标文件夹和文件名，再调用系统浏览器导出。
  */
 export async function exportToPdf(options: PdfExportOptions): Promise<string | null> {
-  // 1. 渲染 HTML（后台 DOM，不影响用户编辑）
-  const html = await renderExportHtml(options);
-
-  // 与 Word 导出保持一致：默认 Downloads，但由用户确认目标文件夹与文件名。
+  // 先确认目标位置，取消时不做昂贵的 Mermaid/图片渲染。
   const defaultPath = await resolveDefaultExportPath({
     fileName: createExportFileName(options.fileName, 'pdf'),
     filePath: options.filePath,
@@ -58,7 +55,9 @@ export async function exportToPdf(options: PdfExportOptions): Promise<string | n
   });
   if (!targetPath) return null;
 
-  // 3. 交给 Rust 后端用系统浏览器导出
+  const html = await renderExportHtml(options);
+
+  // 交给 Rust 后端用系统浏览器导出。
   await invoke('export_pdf_file', { path: targetPath, html });
   return targetPath;
 }

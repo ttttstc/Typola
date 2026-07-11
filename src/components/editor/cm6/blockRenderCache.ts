@@ -10,17 +10,8 @@ type CacheEntry = { result: BlockRenderResult; listeners: Set<() => void> };
 const MAX_ENTRIES = 256;
 const entries = new Map<string, CacheEntry>();
 
-function sourceHash(source: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
-}
-
 function key(type: BlockRenderType, source: string, themeId: string): string {
-  return `${type}:${themeId}:${sourceHash(source)}`;
+  return `${type}:${themeId}:${source}`;
 }
 
 /** Source + theme keyed cache shared by all CM6 block widgets. */

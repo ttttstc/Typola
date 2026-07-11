@@ -48,9 +48,11 @@ export async function markdownToExportHtml(
   target.classList.add('typola-export-content');
   target.innerHTML = rendered;
 
-  await renderMermaidIn(target, {
-    theme: options.mermaidTheme ?? (options.theme === 'dark' ? 'dark' : 'default'),
-  });
-  await resolveLocalImages(target, options.filePath);
+  await Promise.all([
+    renderMermaidIn(target, {
+      theme: options.mermaidTheme ?? (options.theme === 'dark' ? 'dark' : 'default'),
+    }),
+    resolveLocalImages(target, options.filePath),
+  ]);
   return target.innerHTML;
 }
