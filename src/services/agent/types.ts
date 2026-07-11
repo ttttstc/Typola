@@ -39,6 +39,14 @@ export type SelectionAnchor = {
   // Vditor IR 没有稳定的字符 from/to,用 prefixHint + originalText 在 source 中定位唯一匹配,
   // 避免同文本多处出现时 indexOf 撞到错误位置。
   prefixHint?: string;
+  /** 选区所在标题路径(根标题在外),用于结构化 prompt 拼装。 */
+  headingPath?: string[];
+  /** 选区所在最小 block 边界(kind/from/to),用于限制 replacement 不能跨块。 */
+  block?: {
+    kind: 'code' | 'table' | 'math' | 'mermaid' | 'section' | 'paragraph';
+    from: number;
+    to: number;
+  };
 };
 
 export type AnchorStatus = 'valid' | 'stale' | 'wrong-file';
