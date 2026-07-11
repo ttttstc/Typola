@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- 修复 CM6 任务复选框切换会移除 Markdown 列表标记的问题；新增任务过滤 API；AI 与检视 anchor 现在共享受限的结构化上下文和恢复规则。
 - 修复 AI 会话停止竞态：启动尚未返回 runId 时停止会立即恢复输入；取消后重发不会再被旧进程退出事件中断。
 - 修复源码编辑器选区浮条在缺少隐藏回调时仍展示无效「本文档不再展示／全局隐藏」按钮的问题。
 - 修复 IR 表格编辑在文档包含同内容表格时可能误改第一张表的问题：定位不唯一时拒绝操作；删除整表同步采用同一保护。新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。

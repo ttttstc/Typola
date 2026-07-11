@@ -47,13 +47,17 @@ describe('applyCm6Format', () => {
     view.destroy();
   });
 
-  it('edits selected Markdown links and code block languages', () => {
+  it('edits selected Markdown link label, URL, title and code block languages', () => {
     const link = '[Typola](https://old.example)';
     const { view } = createView(link);
-    vi.spyOn(window, 'prompt').mockReturnValueOnce('https://new.example').mockReturnValueOnce('ts');
+    vi.spyOn(window, 'prompt')
+      .mockReturnValueOnce('Typola 官网')
+      .mockReturnValueOnce('https://new.example')
+      .mockReturnValueOnce('主页')
+      .mockReturnValueOnce('ts');
 
     applyCm6Format(view, { type: 'link-edit' });
-    expect(view.state.doc.toString()).toBe('[Typola](https://new.example)');
+    expect(view.state.doc.toString()).toBe('[Typola 官网](https://new.example "主页")');
 
     const block = '```\nconst x = 1;\n```';
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: block }, selection: { anchor: 0, head: block.length } });

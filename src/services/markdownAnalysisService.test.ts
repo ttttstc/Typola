@@ -6,6 +6,7 @@ import {
   findMarkdownTaskAt,
   headingPathAt,
   isRangeWithinSingleMarkdownBlock,
+  listMarkdownTasks,
   markdownBlockAt,
   scheduleMarkdownAnalysis,
 } from './markdownAnalysisService';
@@ -119,6 +120,10 @@ describe('markdownAnalysisService structure helpers', () => {
     const fencedLink = fixture.indexOf('[不是链接](https://example.com)');
     expect(fencedLink).toBeGreaterThan(-1);
     expect(findMarkdownLinkAt(fixture, fencedLink + 1)).toBeNull();
+  });
+
+  it('filters task navigation results by checked state', () => {
+    expect(listMarkdownTasks(fixture, { checked: false }).map((task) => task.text)).toEqual(['待办']);
   });
 
   it('returns nested heading path at the given offset', () => {

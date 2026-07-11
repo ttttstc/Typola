@@ -227,6 +227,7 @@ describe('selectionActions structural anchor helpers', () => {
     const idx = source.indexOf('请把这段中文');
     const ctx = buildAnchorContext(source, anchor(idx, idx + '请把这段中文'.length, '请把这段中文'), 12);
     expect(ctx.excerpt.endsWith('…')).toBe(true);
+    expect(ctx.excerpt).toContain('请把这段中文');
   });
 
   it('identifies fenced code blocks via block kind', () => {
@@ -264,7 +265,7 @@ describe('selectionActions structural anchor helpers', () => {
       prefixHint: '## 子节\n',
     };
     const codeStart = source.indexOf('```ts');
-    const block = { kind: 'code' as const, from: codeStart, to: codeStart + 10 };
+    const block = { kind: 'section' as const, from: codeStart, to: codeStart + 10 };
     expect(recoverAnchorInBlock(source, a, block)).toBeNull();
   });
 
@@ -288,6 +289,7 @@ describe('selectionActions structural anchor helpers', () => {
     expect(prompt).toContain('总览 / 子节');
     expect(prompt).toContain('section');
     expect(prompt).toContain('请把这段中文');
+    expect(prompt).toContain('上下文（可能已截断）');
   });
 
   it('structured injection text falls back to base behavior when source missing', () => {

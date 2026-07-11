@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   getExportPresetConfig,
   clearLastOpenedPath,
@@ -60,7 +61,7 @@ import type { TypolaEditorKernel } from '../types/editorCore';
 import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { analyzeMarkdown } from '../services/markdownAnalysisService';
+import { analyzeMarkdown, type MarkdownLink } from '../services/markdownAnalysisService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
@@ -1440,6 +1441,48 @@ export function AppLayout() {
     }
   }, []);
 
+  const handleOpenMarkdownLink = useCallback(async (link: MarkdownLink) => {
+    const target = link.url.trim();
+    if (!target) return;
+    if (target.startsWith('#')) {
+      const headingIndex = markdownAnalysis.headings.findIndex((heading) => heading.slug === target.slice(1));
+      if (headingIndex < 0) {
+        await messageDialog(`未找到文档锚点：${target}`, { title: '打开链接失败' });
+        return;
+      }
+      setSourceHeadingScrollRequest({ index: headingIndex, requestId: Date.now() });
+      return;
+    }
+    if (/^(?:https?:|mailto:)/iu.test(target)) {
+      try {
+        await openUrl(target);
+      } catch (error) {
+        await messageDialog(String(error), { title: '打开链接失败' });
+      }
+      return;
+    }
+    if (/^[a-z][a-z0-9+.-]*:/iu.test(target)) {
+      await messageDialog(`不支持的链接协议：${target}`, { title: '打开链接失败' });
+      return;
+    }
+    if (!file.path) {
+      await messageDialog('当前文档尚未保存，无法解析相对路径。', { title: '打开链接失败' });
+      return;
+    }
+    const path = target.split('#', 1)[0]!;
+    const directory = file.path.replace(/[\\/][^\\/]*$/u, '');
+    const resolvedPath = /^(?:[A-Za-z]:[\\/]|[\\/])/u.test(path) ? path : joinLocalPath(directory, path);
+    if (!isOpenableDocumentPath(resolvedPath)) {
+      await messageDialog(`链接不是可打开的文档：${target}`, { title: '打开链接失败' });
+      return;
+    }
+    try {
+      await handleOpenPath(resolvedPath);
+    } catch (error) {
+      await messageDialog(String(error), { title: '打开链接失败' });
+    }
+  }, [file.path, handleOpenPath, markdownAnalysis.headings]);
+
   const handleOpenArtifactExternally = useCallback(async (path: string) => {
     try {
       // 同上,绕开 opener scope。image / 任意本地文件都用 ShellExecuteW 派发。
@@ -1515,6 +1558,7 @@ export function AppLayout() {
         foldedHeadings={foldedHeadings}
         onFoldChange={handleEditorFoldChange}
         reviewComments={reviewStateApi.state.comments}
+        onOpenLink={handleOpenMarkdownLink}
       />
     </Suspense>
   );

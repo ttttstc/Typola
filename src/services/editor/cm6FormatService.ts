@@ -323,29 +323,25 @@ function changeQuoteLevel(view: EditorView, upgrade: boolean): void {
 
 function editLink(view: EditorView): void {
   const sel = view.state.selection.main;
-  const text = view.state.sliceDoc(sel.from, sel.to);
-  const exactMatch = text.match(/^\[([^\]]*)\]\(([^)]*)\)$/u);
-  let initialLabel: string;
-  let initialUrl: string;
-  if (exactMatch) {
-    initialLabel = exactMatch[1];
-    initialUrl = exactMatch[2];
-  } else {
-    const link = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
-    if (!link) return;
-    initialLabel = link.label;
-    initialUrl = link.url;
-  }
+  const link = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
+  if (!link) return;
+  const initialLabel = link.label;
+  const initialUrl = link.url;
+  const initialTitle = link.title ?? '';
+  const nextLabel = window.prompt('链接文字', initialLabel);
+  if (nextLabel === null) return;
   const nextUrl = window.prompt('链接网址', initialUrl);
   if (nextUrl === null) return;
-  const replaced = rewriteLinkAtSelection(view, { getUrl: () => nextUrl });
+  const nextTitle = window.prompt('链接标题（可留空）', initialTitle);
+  if (nextTitle === null) return;
+  const replaced = rewriteLinkAtSelection(view, { getLink: () => ({ label: nextLabel, url: nextUrl, title: nextTitle || undefined }) });
   if (replaced) {
     view.focus();
     return;
   }
   // rewriteLinkAtSelection 失败兜底:用更早抓到的 link 范围直接替换。
-  const linkRange = exactMatch ? null : findMarkdownLinkAt(view.state.doc.toString(), sel.from);
-  const nextLink = `[${initialLabel}](${nextUrl})`;
+  const linkRange = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
+  const nextLink = `[${nextLabel || nextUrl}](${nextUrl}${nextTitle ? ` "${nextTitle}"` : ''})`;
   if (linkRange) {
     view.dispatch({
       changes: { from: linkRange.from, to: linkRange.to, insert: nextLink },
