@@ -13,8 +13,7 @@ import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions'
 import { headingIndexAt } from './editor/cm6/previewSyncExtension';
 import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
 import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
-import { pasteTableData } from './editor/cm6/table/tableCommands';
-import { findTableAt } from './editor/cm6/table/tableTypes';
+import { markdownBlockAt, headingPathAt } from '../services/markdownAnalysisService';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -80,11 +79,19 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     const sel = editor.state.selection.main;
     const text = sel.empty ? '' : editor.state.doc.sliceString(sel.from, sel.to);
     if (!text && action !== 'custom') return;
+    // #189:附带 heading path + block boundary,供 AI 结构化 prompt 使用。
+    // 这里只是元数据,不参与 replaceRange 路径;编辑器 validateAnchor 仍按 originalText。
+    const sourceText = editor.state.doc.toString();
     const anchor: SelectionAnchor = {
       filePath: path,
       from: sel.from,
       to: sel.to,
       originalText: text,
+      headingPath: headingPathAt(sourceText, sel.from),
+      block: (() => {
+        const block = markdownBlockAt(sourceText, sel.from, sel.to);
+        return { kind: block.kind, from: block.from, to: block.to };
+      })(),
     };
     cb(action, anchor, origin);
   }, []);
