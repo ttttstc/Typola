@@ -91,17 +91,17 @@ html[data-color-system='define-color'] .terminal-panel {
 }
 
 html[data-color-system='define-color'] :is(.app-toolbar, .left-rail-shell, .right-rail-shell, .workspace-sidebar, .conversation-panel, .skill-hub-panel, .review-sidebar-panel, .terminal-panel):not(.editor-paper) {
-  background-image: var(--dc-pattern-image);
-  background-size: 384px 384px;
-  background-blend-mode: soft-light;
+  background-image: linear-gradient(var(--dc-pattern-scrim), var(--dc-pattern-scrim)), var(--dc-pattern-image);
+  background-size: cover, 384px 384px;
+  background-blend-mode: normal, soft-light;
 }
 
 html[data-color-system='define-color'] .conversation-composer {
   color: var(--dc-text-strong);
   background-color: var(--dc-base-light-strong);
-  background-image: var(--dc-pattern-image);
-  background-size: 280px 280px;
-  background-blend-mode: soft-light;
+  background-image: linear-gradient(var(--dc-pattern-scrim), var(--dc-pattern-scrim)), var(--dc-pattern-image);
+  background-size: cover, 280px 280px;
+  background-blend-mode: normal, soft-light;
   border-color: var(--dc-border-default);
 }
 
@@ -245,13 +245,18 @@ html[data-color-system='define-color'] .app-toolbar .toolbar-group + .toolbar-gr
   border-left-color: var(--dc-border-default);
 }
 
-html[data-color-system='define-color'] .app-toolbar button:hover,
-html[data-color-system='define-color'] .app-toolbar button.active,
 html[data-color-system='define-color'] .left-rail-tabs button:hover,
 html[data-color-system='define-color'] .right-rail-tabs button:hover {
   color: var(--dc-text-shout);
   background: var(--dc-background-light-default);
   border-color: var(--dc-border-strong);
+}
+
+html[data-color-system='define-color'] .app-toolbar .toolbar-nav-actions > button:first-child,
+html[data-color-system='define-color'] .app-toolbar .toolbar-nav-actions > button:first-child:hover,
+html[data-color-system='define-color'] .app-toolbar .toolbar-nav-actions > button:first-child.active {
+  background: transparent !important;
+  border-color: transparent !important;
 }
 
 html[data-color-system='define-color'] .vditor,

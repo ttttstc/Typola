@@ -67,8 +67,14 @@ describe('Define color system', () => {
     expect(tokens['--dc-base-heavy']).toBe('oklch(100.00% 0.000 0.00)');
     expect(tokens['--dc-neutral-dark-100']).toContain('oklch(');
     expect(tokens['--dc-background-light-default']).toBe('var(--dc-neutral-light-40)');
+    expect(tokens['--dc-pattern-scrim']).toBe('rgb(255 255 255 / 0.00)');
     expect(Object.keys(tokens).every((token) => token.startsWith('--dc-'))).toBe(true);
     expect(tokens['--dc-semantic-danger']).not.toBe(tokens['--dc-semantic-success']);
+  });
+
+  it('derives a visible scrim for lower pattern opacity', () => {
+    const tokens = deriveDefineTokens({ ...DEFAULT_DEFINE_COLOR_SETTINGS, patternOpacity: 25 });
+    expect(tokens['--dc-pattern-scrim']).toBe('rgb(255 255 255 / 0.75)');
   });
 
   it('starts from white and converts OKLCH colors for the native title bar', () => {
