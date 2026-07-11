@@ -24,16 +24,16 @@ export function AppearanceSection() {
   };
 
   const handleThemePick = (themeId: ThemeId) => {
-    if (themeId === settings.themeId) return;
+    if (themeId === settings.themeId && settings.appearanceColorSystem === 'static-theme') return;
     const previous = settings.themeId;
-    const nextSettings = updateSettings({ themeId });
+    const nextSettings = updateSettings({ themeId, appearanceColorSystem: 'static-theme' });
     setSettings(nextSettings);
     setThemeToast({ current: themeId, previous });
   };
 
   const handleUndoTheme = () => {
     if (!themeToast) return;
-    const nextSettings = updateSettings({ themeId: themeToast.previous });
+    const nextSettings = updateSettings({ themeId: themeToast.previous, appearanceColorSystem: 'static-theme' });
     setSettings(nextSettings);
     setThemeToast(null);
   };
@@ -66,16 +66,45 @@ export function AppearanceSection() {
       <h3 className="settings-section-title">外观</h3>
 
       <div className="settings-block">
+        <div className="settings-label">外观模式</div>
+        <div className="appearance-mode-switch" role="radiogroup" aria-label="外观模式">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={settings.appearanceColorSystem === 'define-color'}
+            className={settings.appearanceColorSystem === 'define-color' ? 'active' : ''}
+            onClick={() => handleChange({ appearanceColorSystem: 'define-color' })}
+          >
+            自定义模式
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={settings.appearanceColorSystem === 'static-theme'}
+            className={settings.appearanceColorSystem === 'static-theme' ? 'active' : ''}
+            onClick={() => handleChange({ appearanceColorSystem: 'static-theme' })}
+          >
+            主题模式
+          </button>
+        </div>
+        <div className="settings-hint appearance-mode-hint">
+          {settings.appearanceColorSystem === 'define-color'
+            ? '使用顶部工具栏的颜色按钮，通过圆环选择界面颜色；未选择时使用纯白。'
+            : '从下方选择一套完整主题。'}
+        </div>
+      </div>
+
+      <div className="settings-block">
         <div className="settings-label">主题</div>
         <div className="theme-gallery" role="radiogroup" aria-label="主题" onKeyDown={handleThemeKeyDown}>
           {THEMES.map((theme) => (
             <button
               key={theme.id}
               type="button"
-              className={`theme-card ${settings.themeId === theme.id ? 'active' : ''}`}
+              className={`theme-card ${settings.themeId === theme.id && settings.appearanceColorSystem === 'static-theme' ? 'active' : ''}`}
               data-theme-card={theme.id}
               role="radio"
-              aria-checked={settings.themeId === theme.id}
+              aria-checked={settings.themeId === theme.id && settings.appearanceColorSystem === 'static-theme'}
               tabIndex={settings.themeId === theme.id ? 0 : -1}
               onClick={() => handleThemePick(theme.id)}
               style={themePreviewStyle(theme)}

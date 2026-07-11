@@ -1,0 +1,233 @@
+html[data-color-system='define-color'] {
+  --theme-canvas: var(--dc-base-heavy-loud);
+  --theme-paper: var(--dc-neutral-light-1000);
+  --theme-surface: var(--dc-base-light-loud);
+  --theme-surface-muted: var(--dc-background-light-strong);
+  --theme-text-primary: var(--dc-text-shout);
+  --theme-text-secondary: var(--dc-text-default);
+  --theme-text-muted: var(--dc-text-muted);
+  --theme-border: var(--dc-border-loud);
+  --theme-border-soft: var(--dc-border-default);
+  --theme-border-hover: var(--dc-border-strong);
+  --theme-accent: var(--dc-neutral-dark-100);
+  --theme-accent-soft: var(--dc-background-dark-muted);
+  --theme-accent-muted: var(--dc-neutral-dark-30);
+  --theme-selection: var(--dc-base-heavy-strong);
+  --theme-panel-bg: var(--dc-base-light-loud);
+  --theme-control-bg: var(--dc-background-light-loud);
+  --theme-control-hover-bg: var(--dc-background-light-strong);
+  --theme-control-active-bg: var(--dc-background-light-default);
+  --theme-overlay-bg: var(--dc-neutral-dark-40);
+  --theme-shadow-soft: var(--dc-neutral-dark-20);
+  --theme-paper-shadow: var(--dc-neutral-dark-8);
+  --theme-toc-panel-bg: var(--dc-base-light-strong);
+  --theme-ai-primary: var(--dc-neutral-dark-100);
+  --theme-success: var(--dc-neutral-dark-100);
+  --theme-danger: var(--dc-neutral-dark-100);
+  --theme-warning: var(--dc-neutral-dark-100);
+  --theme-ai-inserted: var(--dc-neutral-dark-100);
+  --theme-ai-deleted: var(--dc-neutral-dark-100);
+  --theme-ai-inserted-bg: var(--dc-background-light-strong);
+  --theme-ai-inserted-text: var(--dc-text-strong);
+  --theme-ai-deleted-bg: var(--dc-background-light-strong);
+  --theme-ai-deleted-text: var(--dc-text-strong);
+  --theme-review-mark: var(--dc-neutral-dark-100);
+  --theme-ai-selection-bg: var(--dc-background-light-strong);
+  --theme-ai-selection-border: var(--dc-neutral-dark-30);
+  --theme-review-mark-bg: var(--dc-background-light-strong);
+  --theme-review-mark-bg-strong: var(--dc-background-light-default);
+  --theme-review-mark-border: var(--dc-neutral-dark-100);
+  --theme-markdown-quote-bg: var(--dc-background-light-strong);
+  --theme-markdown-quote-border: var(--dc-neutral-dark-30);
+  --theme-markdown-code-bg: var(--dc-background-light-loud);
+  --theme-editor-active-line: var(--dc-background-light-default);
+  --theme-editor-gutter-bg: var(--dc-background-light-strong);
+  --theme-editor-gutter-text: var(--dc-text-default);
+  --theme-editor-search-match: var(--dc-base-heavy-strong);
+  --theme-terminal-background: var(--dc-base-light-loud);
+  --theme-terminal-foreground: var(--dc-text-shout);
+  --theme-terminal-cursor: var(--dc-neutral-dark-100);
+}
+
+html[data-color-system='define-color'] body,
+html[data-color-system='define-color'] .app-layout {
+  color: var(--dc-text-strong);
+  background-color: var(--dc-base-heavy-loud);
+  background-image: linear-gradient(135deg, var(--dc-gradient-stop-1, transparent), var(--dc-gradient-stop-2, transparent));
+  background-size: cover;
+}
+
+html[data-color-system='define-color'] .app-layout {
+  position: relative;
+  isolation: isolate;
+}
+
+html[data-color-system='define-color'] .app-layout::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: var(--dc-pattern-image);
+  background-size: 512px 512px;
+  content: '';
+  opacity: var(--dc-pattern-opacity);
+  pointer-events: none;
+}
+
+html[data-color-system='define-color'] .app-layout > * {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-color-system='define-color'] .app-toolbar,
+html[data-color-system='define-color'] .left-rail-shell,
+html[data-color-system='define-color'] .workspace-panel,
+html[data-color-system='define-color'] .flow-panel,
+html[data-color-system='define-color'] .review-sidebar-panel,
+html[data-color-system='define-color'] .right-rail-shell,
+html[data-color-system='define-color'] .terminal-panel {
+  color: var(--dc-text-strong);
+  background-color: var(--dc-base-heavy-default);
+  border-color: var(--dc-border-default);
+}
+
+html[data-color-system='define-color'] :is(.app-toolbar, .left-rail-shell, .right-rail-shell, .workspace-sidebar, .conversation-panel, .skill-hub-panel, .review-sidebar-panel, .terminal-panel):not(.editor-paper) {
+  background-image: var(--dc-pattern-image);
+  background-size: 384px 384px;
+  background-blend-mode: soft-light;
+}
+
+html[data-color-system='define-color'] .conversation-composer {
+  color: var(--dc-text-strong);
+  background-color: var(--dc-base-light-strong);
+  background-image: var(--dc-pattern-image);
+  background-size: 280px 280px;
+  background-blend-mode: soft-light;
+  border-color: var(--dc-border-default);
+}
+
+html[data-color-system='define-color'] .conversation-composer textarea,
+html[data-color-system='define-color'] .conversation-composer :is(button, input, select) {
+  color: var(--dc-text-strong);
+  background-color: var(--dc-background-light-loud);
+  border-color: var(--dc-border-loud);
+}
+
+html[data-color-system='define-color'] #root :is(button, input:not([type='checkbox']):not([type='radio']), select, textarea, [role='button'], [role='menuitem'], [role='option'], [role='tab'], [role='switch'], [role='checkbox'], [role='radio']):not(.dc-editor):not(.dc-editor *) {
+  color: var(--dc-text-strong);
+  border-color: var(--dc-border-loud);
+  background-color: var(--dc-background-light-loud);
+}
+
+html[data-color-system='define-color'] #root :is(button, [role='button'], [role='menuitem'], [role='option'], [role='tab']):not(.dc-editor):not(.dc-editor *):hover {
+  background-color: var(--dc-background-light-strong);
+  border-color: var(--dc-border-strong);
+}
+
+html[data-color-system='define-color'] #root :is([class*='panel'], [class*='card'], [class*='modal'], [class*='dialog'], [class*='popover'], [class*='menu'], [class*='tooltip'], [class*='toast']):not(.dc-editor):not(.dc-editor *):not(.cm-editor):not(.vditor) {
+  color: var(--dc-text-strong);
+  border-color: var(--dc-border-default);
+  background-color: var(--dc-base-light-loud);
+}
+
+html[data-color-system='define-color'] .editor-workbench,
+html[data-color-system='define-color'] .main-content,
+html[data-color-system='define-color'] .right-rail-body {
+  background-color: var(--dc-base-light-strong);
+}
+
+html[data-color-system='define-color'] .editor-tabbar,
+html[data-color-system='define-color'] .left-rail-tabs,
+html[data-color-system='define-color'] .right-rail-tabs,
+html[data-color-system='define-color'] .status-bar {
+  color: var(--dc-text-default);
+  background-color: var(--dc-background-light-muted);
+  border-color: var(--dc-border-default);
+}
+
+html[data-color-system='define-color'] .app-toolbar button,
+html[data-color-system='define-color'] .left-rail-tabs button,
+html[data-color-system='define-color'] .right-rail-tabs button {
+  color: var(--dc-icon-strong);
+}
+
+html[data-color-system='define-color'] .app-toolbar button:hover,
+html[data-color-system='define-color'] .app-toolbar button.active,
+html[data-color-system='define-color'] .left-rail-tabs button:hover,
+html[data-color-system='define-color'] .right-rail-tabs button:hover {
+  color: var(--dc-text-shout);
+  background: var(--dc-background-light-default);
+  border-color: var(--dc-border-strong);
+}
+
+html[data-color-system='define-color'] .vditor,
+html[data-color-system='define-color'] .cm-editor,
+html[data-color-system='define-color'] .editor-paper,
+html[data-color-system='define-color'] .wysiwyg-editor-pane {
+  background: var(--dc-neutral-light-1000);
+  color: var(--dc-neutral-dark-100);
+}
+
+.dc-editor {
+  width: 324px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #fff;
+  color: #0d0d0d;
+  box-shadow: rgba(13, 13, 13, .1) 0 48px 64px -20px, rgba(13, 13, 13, .04) 0 16px 24px -8px, rgba(13, 13, 13, .04) 0 0 0 1px;
+  user-select: none;
+}
+
+.dc-editor-content { position: relative; height: 330px; }
+.dc-wheel-shell { width: 100%; height: 330px; padding: 8px; }
+.dc-wheel-content {
+  width: 100%; height: 100%; overflow: hidden; position: relative;
+  border: 1px solid rgba(13, 13, 13, .04); border-radius: 16px;
+  background: rgba(13, 13, 13, .02) url('../assets/define-color/editor-dots-pattern.png') center / contain no-repeat;
+}
+.dc-wheel {
+  position: absolute; inset: 0; cursor: pointer; touch-action: none; opacity: .92;
+  background: conic-gradient(from 90deg, #ffc4c8 0deg, #ffc7af 30deg, #fdcf94 60deg, #dedc91 90deg, #b4e6a8 120deg, #88ecca 150deg, #65edec 180deg, #90e4ff 210deg, #badaff 240deg, #d7d1ff 270deg, #f6c6fa 300deg, #ffc1df 330deg);
+  mask-image: radial-gradient(circle, #fff 0, #fff 5%, rgba(255,255,255,.48) 25%, transparent 50%);
+  mask-repeat: no-repeat;
+  contain: paint;
+  will-change: mask-position;
+}
+.dc-wheel-handle {
+  position: absolute; z-index: 2; width: 30px; height: 30px; border: 3px solid #fff; border-radius: 50%;
+  transform: translate(-50%, -50%); box-shadow: rgba(13,13,13,.12) 0 4px 8px, rgba(13,13,13,.08) 0 8px 16px;
+  pointer-events: none;
+  will-change: left, top, background;
+}
+.dc-wheel-handle.auxiliary { z-index: 1; width: 22px; height: 22px; border-width: 2px; opacity: .88; }
+.dc-options { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; pointer-events: none; }
+.dc-options-top { display: flex; justify-content: space-between; padding: 10px; }
+.dc-options-bottom { display: flex; justify-content: center; padding-bottom: 10px; }
+.dc-round-control, .dc-dice-button {
+  pointer-events: auto; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 999px;
+  background: rgba(255,255,255,.82); color: #0d0d0d; box-shadow: rgba(13,13,13,.06) 0 4px 8px -2px, rgba(13,13,13,.04) 0 0 0 1px;
+}
+.dc-round-control { width: 40px; height: 40px; }
+.dc-round-control:hover, .dc-dice-button:hover { background: #fff; }
+.dc-saturation { cursor: pointer; }
+.dc-gradient-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(13,13,13,.56); border-radius: 3.5px; overflow: hidden; }
+.dc-gradient-solid { width: 10px; height: 10px; border: 1px solid rgba(13,13,13,.4); border-radius: 1.5px; background: rgba(13,13,13,.2); }
+.dc-gradient-dots { font-size: 10px; line-height: 1; letter-spacing: -1px; color: #777; transform: translateY(-1px); }
+.dc-saturation-icon { display: block; }
+.dc-dice-button { width: 40px; height: 40px; cursor: pointer; }
+.dc-dice { display: block; width: 24px; height: 24px; color: #666; }
+.dc-dice-group { transform-box: fill-box; transform-origin: center; }
+.dc-dice-button:hover .dc-dice-group, .dc-dice-button:focus-visible .dc-dice-group { animation: dc-dice-roll 420ms cubic-bezier(.16, 1, .3, 1); }
+@keyframes dc-dice-roll { 50% { transform: rotate(24deg) scale(.94); } }
+.dc-presets { display: flex; gap: 6px; height: 55px; padding: 10px 16px; overflow-x: auto; scrollbar-width: none; }
+.dc-presets::-webkit-scrollbar { display: none; }
+.dc-preset { flex: 0 0 20px; width: 20px; height: 20px; padding: 0; border: 1px solid rgba(13,13,13,.04); border-radius: 999px; cursor: pointer; }
+.dc-preset:focus-visible { outline: 2px solid rgba(13,13,13,.7); outline-offset: 2px; }
+.dc-controls { height: 72px; padding: 8px; }
+.dc-pattern-slider { position: relative; display: flex; width: 100%; height: 56px; overflow: hidden; padding: 4px; border: 1px solid rgba(13,13,13,.04); border-radius: 16px; background-size: 158px 56px; }
+.dc-pattern-preview { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 16px; background-color: transparent; background-position: center; background-size: cover; cursor: pointer; }
+.dc-pattern-knob { position: absolute; top: 16px; width: 24px; height: 24px; display: flex; gap: 4px; align-items: center; justify-content: center; border-radius: 999px; background: #fff; cursor: grab; touch-action: none; transform: translateX(-50%); box-shadow: rgba(13,13,13,.08) 0 0 28px, rgba(13,13,13,.04) 0 4px 8px -2px, rgba(13,13,13,.04) 0 0 0 1px; }
+.dc-pattern-knob span { width: 1px; height: 8px; border-radius: 1px; background: rgba(13,13,13,.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-editor *, .dc-editor *::before, .dc-editor *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

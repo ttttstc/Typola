@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/app.css'
+import './styles/define-color-system.css'
 import App from './app/App'
 
 if ('__TAURI_INTERNALS__' in window) {

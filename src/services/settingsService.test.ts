@@ -73,6 +73,8 @@ describe('settingsService', () => {
     expect(getSettings().autoUpdateCheck).toBe(true);
     expect(getSettings().wechatCustomCss).toBe('');
     expect(getSettings()).toMatchObject({
+      appearanceColorSystem: 'define-color',
+      defineColorSettings: { l: 1, c: 0, h: 0 },
       previewFontFamily: 'Default',
       previewChineseFontFamily: 'Default',
       previewLatinFontFamily: 'Default',

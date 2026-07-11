@@ -7911,6 +7911,44 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   gap: 10px;
 }
 
+.appearance-mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 10px;
+  background: var(--theme-control-bg);
+}
+
+.appearance-mode-switch button {
+  min-width: 96px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+}
+
+.appearance-mode-switch button:hover {
+  color: var(--theme-text-primary);
+}
+
+.appearance-mode-switch button.active {
+  background: var(--theme-paper);
+  color: var(--theme-text-primary);
+  box-shadow: 0 1px 3px var(--theme-shadow-soft);
+}
+
+.appearance-mode-switch button:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
+}
+
+.appearance-mode-hint {
+  margin-top: 8px;
+}
+
 .theme-card {
   display: grid;
   gap: 8px;
