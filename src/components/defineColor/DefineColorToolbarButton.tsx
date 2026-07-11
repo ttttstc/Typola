@@ -12,12 +12,13 @@ import { DefineColorPopover } from './DefineColorPopover';
 /* eslint-disable react-hooks/refs -- Floating UI's supported API exposes ref-backed context, refs, and styles during render. */
 export function DefineColorToolbarButton({ settings }: { settings: AppSettings }) {
   const [open, setOpen] = useState(false);
-  const { draft, preview, commit } = useDefineColorSettings(settings.defineColorSettings);
+  const { draft, preview, commit, flush } = useDefineColorSettings(settings.defineColorSettings);
   const floating = useFloating({
     open,
     onOpenChange: (next) => {
       setOpen(next);
       if (next) updateSettings({ appearanceColorSystem: 'define-color' });
+      else flush();
     },
     placement: 'bottom-start',
     middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],

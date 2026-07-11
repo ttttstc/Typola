@@ -141,6 +141,20 @@ describe('cm6 PR4 — 长文档性能与折叠同步解耦', () => {
       expect(elapsed).toBeLessThan(PERF_INIT_BUDGET_MS);
     });
 
+    it('100 个 Mermaid 与 100 个公式块不会在初始化时同步渲染整篇文档', () => {
+      const diagrams = Array.from({ length: 100 }, (_, index) =>
+        `\`\`\`mermaid\ngraph TD\n  A${index} --> B${index}\n\`\`\``,
+      );
+      const formulas = Array.from({ length: 100 }, (_, index) => `$$\nx_${index} = ${index}^2\n$$`);
+      const t0 = performance.now();
+      view = createView([...diagrams, ...formulas].join('\n\n'), true);
+      const elapsed = performance.now() - t0;
+
+      expect(view.contentDOM.querySelectorAll('.typola-cm6-mermaid').length).toBeLessThan(100);
+      expect(view.contentDOM.querySelectorAll('.typola-cm6-math-block').length).toBeLessThan(100);
+      expect(elapsed).toBeLessThan(PERF_INIT_BUDGET_MS);
+    });
+
     it('长文档上单次键盘输入 dispatch 在预算内', () => {
       view = createView(buildLongDoc(50_000));
       const len = view.state.doc.length;

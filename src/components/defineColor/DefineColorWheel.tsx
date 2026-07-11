@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { GRADIENT_OFFSET_DEG, WHEEL_RADIUS } from '../../services/defineColorSystem/constants';
+import { GRADIENT_OFFSET_DEG, hasDefineColorSelection, WHEEL_RADIUS } from '../../services/defineColorSystem/constants';
 import { colorAtHue, pointAtAngle } from '../../services/defineColorSystem/presets';
 import type { DefineColorSettings } from '../../services/defineColorSystem/types';
 import { useHueWheel } from '../../hooks/useHueWheel';
@@ -52,13 +52,24 @@ export function DefineColorWheel({ settings, onPreview, onCommit }: {
     .map((angle) => ({ point: pointAtAngle(angle, WHEEL_RADIUS, center, center), color: colorAtHue(angle) }));
   const current = colorAtHue(displayHue);
   const maskSize = settings.isGradient ? 280 : 232;
+  const showsDefaultPalette = !hasDefineColorSelection(settings);
+  const wheelMask = showsDefaultPalette
+    ? 'none'
+    : 'radial-gradient(circle, #fff 0, #fff 5%, rgba(255, 255, 255, .48) 25%, transparent 50%)';
   return (
     <div className="dc-wheel-shell">
       <div className="dc-wheel-content">
         <div
-          className={`dc-wheel ${settings.isGradient ? 'is-gradient' : ''}`}
+          className={`dc-wheel ${settings.isGradient ? 'is-gradient' : ''} ${showsDefaultPalette ? 'is-unselected' : ''}`}
           ref={wheelRef}
-          style={{ maskSize: `${maskSize}px ${maskSize}px`, maskPosition: `${main.x - maskSize / 2}px ${main.y - maskSize / 2}px` }}
+          style={{
+            maskImage: wheelMask,
+            WebkitMaskImage: wheelMask,
+            maskSize: `${maskSize}px ${maskSize}px`,
+            WebkitMaskSize: `${maskSize}px ${maskSize}px`,
+            maskPosition: `${main.x - maskSize / 2}px ${main.y - maskSize / 2}px`,
+            WebkitMaskPosition: `${main.x - maskSize / 2}px ${main.y - maskSize / 2}px`,
+          }}
           {...handlers}
         >
           {settings.isGradient && auxiliary.map(({ point, color }, index) => (
