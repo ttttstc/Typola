@@ -35,7 +35,7 @@ type Harness = {
   itemLabels: () => string[];
 };
 
-async function mountFloatingToc(initialItems: TocItem[], initialActive = 0): Promise<Harness> {
+async function mountFloatingToc(initialItems: TocItem[], initialActive = 0, pinned = true): Promise<Harness> {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
@@ -47,7 +47,7 @@ async function mountFloatingToc(initialItems: TocItem[], initialActive = 0): Pro
     <FloatingToc
       items={currentItems}
       activeIndex={currentActive}
-      pinned
+      pinned={pinned}
       alwaysPinned={false}
       openRequest={openRequest}
       onPinnedChange={vi.fn()}
@@ -168,7 +168,9 @@ describe('FloatingToc — chevron accessibility (reviews #4 and #5)', () => {
 
 describe('FloatingToc — edge drawer trigger', () => {
   it('opens when the toolbar issues an open request without pinning the outline', async () => {
-    const h = await mountFloatingToc(makeItems());
+    const h = await mountFloatingToc(makeItems(), 0, false);
+    expect(h.host.querySelector('.floating-toc-rail')).toBeNull();
+    expect(h.host.querySelector('.floating-toc-edge-trigger')).toBeTruthy();
     expect(h.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(false);
     await h.requestOpen();
     expect(h.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(true);

@@ -221,6 +221,30 @@ html[data-color-system='define-color'] .right-rail-tabs button {
   color: var(--dc-icon-strong);
 }
 
+html[data-color-system='define-color'] .app-toolbar :is(button, .toolbar-export-dropdown > button) {
+  color: var(--dc-icon-shout);
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none;
+}
+
+html[data-color-system='define-color'] .app-toolbar :is(button, .toolbar-export-dropdown > button):hover,
+html[data-color-system='define-color'] .app-toolbar :is(button, .toolbar-export-dropdown > button).active {
+  color: var(--dc-text-shout);
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+html[data-color-system='define-color'] .app-toolbar .toolbar-group {
+  gap: 6px;
+  padding: 0 8px;
+}
+
+html[data-color-system='define-color'] .app-toolbar .toolbar-group + .toolbar-group {
+  margin-left: 4px;
+  border-left-color: var(--dc-border-default);
+}
+
 html[data-color-system='define-color'] .app-toolbar button:hover,
 html[data-color-system='define-color'] .app-toolbar button.active,
 html[data-color-system='define-color'] .left-rail-tabs button:hover,
