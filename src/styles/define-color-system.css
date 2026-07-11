@@ -12,7 +12,7 @@ html[data-color-system='define-color'] {
   --theme-accent: var(--dc-neutral-dark-100);
   --theme-accent-soft: var(--dc-background-dark-muted);
   --theme-accent-muted: var(--dc-neutral-dark-30);
-  --theme-selection: var(--dc-base-heavy-strong);
+  --theme-selection: color-mix(in oklch, var(--dc-neutral-dark-100) 68%, var(--dc-neutral-light-1000));
   --theme-panel-bg: var(--dc-base-light-loud);
   --theme-control-bg: var(--dc-background-light-loud);
   --theme-control-hover-bg: var(--dc-background-light-strong);
@@ -32,8 +32,8 @@ html[data-color-system='define-color'] {
   --theme-ai-deleted-bg: var(--dc-background-light-strong);
   --theme-ai-deleted-text: var(--dc-text-strong);
   --theme-review-mark: var(--dc-neutral-dark-100);
-  --theme-ai-selection-bg: var(--dc-background-light-strong);
-  --theme-ai-selection-border: var(--dc-neutral-dark-30);
+  --theme-ai-selection-bg: var(--dc-background-light-default);
+  --theme-ai-selection-border: var(--dc-neutral-dark-70);
   --theme-review-mark-bg: var(--dc-background-light-strong);
   --theme-review-mark-bg-strong: var(--dc-background-light-default);
   --theme-review-mark-border: var(--dc-neutral-dark-100);
@@ -123,6 +123,18 @@ html[data-color-system='define-color'] #root :is(button, [role='button'], [role=
   border-color: var(--dc-border-strong);
 }
 
+html[data-color-system='define-color'] #root :is(.app-toolbar button, .left-rail-tabs button, .right-rail-tabs button, .settings-icon-button, .floating-toc-action, .floating-toc-chevron) {
+  color: var(--dc-icon-shout);
+  background-color: transparent;
+  border-color: transparent;
+}
+
+html[data-color-system='define-color'] #root :is(.app-toolbar button, .left-rail-tabs button, .right-rail-tabs button, .settings-icon-button, .floating-toc-action, .floating-toc-chevron):hover {
+  color: var(--dc-text-shout);
+  background-color: var(--dc-background-light-default);
+  border-color: var(--dc-border-strong);
+}
+
 html[data-color-system='define-color'] #root :is([class*='panel'], [class*='card'], [class*='modal'], [class*='dialog'], [class*='popover'], [class*='menu'], [class*='tooltip'], [class*='toast']):not(.dc-editor):not(.dc-editor *):not(.cm-editor):not(.vditor) {
   color: var(--dc-text-strong);
   border-color: var(--dc-border-default);
@@ -133,6 +145,65 @@ html[data-color-system='define-color'] .editor-workbench,
 html[data-color-system='define-color'] .main-content,
 html[data-color-system='define-color'] .right-rail-body {
   background-color: var(--dc-base-light-strong);
+}
+
+html[data-color-system='define-color'] .settings-modal {
+  color: var(--dc-neutral-light-1000);
+  background: var(--dc-base-heavy-loud);
+  border-color: var(--dc-border-loud);
+}
+
+html[data-color-system='define-color'] .settings-modal-sidebar {
+  color: var(--dc-neutral-light-1000);
+  background: var(--dc-neutral-dark-100);
+  border-color: var(--dc-neutral-dark-70);
+}
+
+html[data-color-system='define-color'] :is(.settings-title, .settings-nav-item) {
+  color: var(--dc-neutral-light-90);
+}
+
+html[data-color-system='define-color'] .settings-nav-item:hover,
+html[data-color-system='define-color'] .settings-nav-item.active {
+  color: var(--dc-neutral-light-1000);
+  background: var(--dc-neutral-light-20);
+}
+
+html[data-color-system='define-color'] .settings-modal-content,
+html[data-color-system='define-color'] .settings-section {
+  color: var(--dc-text-shout);
+  background: var(--dc-base-heavy-loud);
+}
+
+html[data-color-system='define-color'] :is(.settings-input, .settings-select, .settings-textarea, .settings-row, .settings-block) {
+  color: var(--dc-text-shout);
+  background-color: var(--dc-base-heavy-strong);
+  border-color: var(--dc-border-loud);
+}
+
+html[data-color-system='define-color'] .skill-hub-item {
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 0;
+  background: var(--dc-base-light-loud);
+}
+
+html[data-color-system='define-color'] .skill-hub-item-main,
+html[data-color-system='define-color'] .skill-hub-item-actions {
+  background: transparent;
+}
+
+html[data-color-system='define-color'] .skill-hub-item-actions {
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 8px;
+}
+
+html[data-color-system='define-color'] .skill-hub-item-actions button {
+  min-width: 88px;
+  color: var(--dc-text-shout);
+  background: transparent;
+  border-color: var(--dc-border-loud);
 }
 
 html[data-color-system='define-color'] .editor-tabbar,

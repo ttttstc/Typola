@@ -181,6 +181,7 @@ export function AppLayout() {
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
+  const [tocOpenRequest, setTocOpenRequest] = useState(0);
   // 折叠集合:由 AppLayout 拥有,用于"搜索命中自动展开"等命令式扩展。
   // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
   const [foldedHeadings, setFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
@@ -1655,6 +1656,7 @@ export function AppLayout() {
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
           onToggleTerminal: handleToggleTerminal,
+          onOpenToc: () => setTocOpenRequest((current) => current + 1),
           onSetDocMode: (next) => void setDocMode(next),
           onNew: handleNewFile,
           onOpen: handleOpen,
@@ -1739,6 +1741,7 @@ export function AppLayout() {
           activeIndex: activeTocIndex,
           pinned: tocPinned,
           alwaysPinned: settings.tocAlwaysPinned,
+          openRequest: tocOpenRequest,
           onPinnedChange: handleTocPinnedChange,
           onAlwaysPinnedChange: handleTocAlwaysPinnedChange,
           onNavigate: handleTocNavigate,

@@ -15,6 +15,7 @@ import {
   List,
   ListOrdered,
   ListTodo,
+  ListTree,
   Newspaper,
   PanelLeft,
   RefreshCw,
@@ -71,6 +72,7 @@ type ToolbarProps = {
   onToggleWechatPreview: () => void;
   onToggleArtifacts?: () => void;
   onToggleTerminal: () => void;
+  onOpenToc?: () => void;
   onSetDocMode: (next: DocMode) => void;
   onNew: () => void;
   onOpen: () => void;
@@ -94,7 +96,7 @@ export function Toolbar({
   editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
   terminalVisible, editingDisabled, docMode, reviewDirty,
   onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
-  onToggleTerminal, onSetDocMode,
+  onToggleTerminal, onOpenToc, onSetDocMode,
   onNew, onOpen, onOpenFolder, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
@@ -169,6 +171,11 @@ export function Toolbar({
             <PanelLeft size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <DefineColorToolbarButton settings={settings} />
+          {onOpenToc && (
+            <button data-no-window-drag="true" onClick={onOpenToc} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
+              <ListTree size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
         </div>
         <div className="toolbar-group toolbar-file-actions" aria-label={t('toolbarFileGroup')}>
           <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewLabel')} aria-label={t('toolbarNewLabel')}>

@@ -1076,13 +1076,13 @@ html[data-color-scheme='dark'] .export-menu {
 .floating-toc {
   position: absolute;
   top: 48px;
-  left: 20px;
+  left: 0;
   z-index: 14;
-  width: 20px;
+  width: 8px;
   max-height: calc(100% - 72px);
   overflow: visible;
   color: var(--theme-text-secondary);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 
@@ -1114,9 +1114,9 @@ html[data-color-scheme='dark'] .export-menu {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  width: 18px;
+  width: 8px;
   max-height: calc(100vh - 116px);
-  padding: 8px 10px 8px 0;
+  padding: 8px 0;
   overflow-y: auto;
   scrollbar-width: none;
   border: 0;
@@ -1138,8 +1138,8 @@ html[data-color-scheme='dark'] .export-menu {
   content: '';
   position: absolute;
   top: 0;
-  left: 18px;
-  width: 8px;
+  left: 8px;
+  width: 12px;
   height: 100%;
   pointer-events: none;
 }
@@ -1197,7 +1197,7 @@ html[data-color-scheme='dark'] .export-menu {
 .floating-toc-panel {
   position: absolute;
   top: 0;
-  left: 22px;
+  left: 8px;
   width: min(260px, 32vw);
   max-height: calc(100vh - 116px);
   overflow: hidden;
@@ -7909,6 +7909,10 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.floating-toc:not(.expanded):not(.pinned) .floating-toc-tick {
+  opacity: 0;
 }
 
 .appearance-mode-switch {

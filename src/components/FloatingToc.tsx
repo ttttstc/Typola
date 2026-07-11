@@ -14,6 +14,7 @@ type FloatingTocProps = {
   activeIndex: number;
   pinned: boolean;
   alwaysPinned: boolean;
+  openRequest?: number;
   onPinnedChange: (pinned: boolean) => void;
   onAlwaysPinnedChange: (alwaysPinned: boolean) => void;
   onNavigate: (item: TocItem, index: number) => void;
@@ -24,6 +25,7 @@ export function FloatingToc({
   activeIndex,
   pinned,
   alwaysPinned,
+  openRequest,
   onPinnedChange,
   onAlwaysPinnedChange,
   onNavigate,
@@ -33,6 +35,7 @@ export function FloatingToc({
   const [expanded, setExpanded] = useState(false);
   const railRef = useRef<HTMLButtonElement>(null);
   const suppressRailFocusRef = useRef(false);
+  const lastOpenRequestRef = useRef(openRequest);
   // Collapsed subtree roots, keyed by TocItem.flatIndex. Transient per
   // session: switching files clears the set (effect below) and unmounting
   // the panel drops it on the floor.
@@ -104,6 +107,12 @@ export function FloatingToc({
     setCollapsed(new Set());
   }, [items]);
 
+  useEffect(() => {
+    if (openRequest === undefined || lastOpenRequestRef.current === openRequest) return;
+    lastOpenRequestRef.current = openRequest;
+    setExpanded(true);
+  }, [openRequest]);
+
   if (items.length === 0) return null;
 
   const handleRailFocus = () => {
@@ -158,6 +167,9 @@ export function FloatingToc({
       aria-label={t('floatingTocLabel')}
       onPointerLeave={() => {
         if (!pinned) setExpanded(false);
+      }}
+      onPointerEnter={() => {
+        if (!pinned) setExpanded(true);
       }}
     >
       <button
