@@ -69,7 +69,7 @@ Check first:
 D:\AI\workspace\new\define-clone\patterns
 ```
 
-Target paths:
+Official target paths:
 
 ```text
 src/assets/define-color/patterns/stripe.png
@@ -82,7 +82,7 @@ src/assets/define-color/patterns/dots-2.png
 src/assets/define-color/patterns/define.png
 ```
 
-If official PNGs are absent, use the fallback SVG files in this branch under `docs/issue-192-assets/` or convert them to 256×256 transparent PNGs. Architecture and state must not change when official assets are later substituted.
+If official PNGs are absent, use the fallback SVG files in this branch under `docs/issue-192-assets/`, either directly as CSS background resources or convert them to 256×256 transparent PNGs. Architecture and state must not change when official assets are later substituted.
 
 ## Fallback asset files in this branch
 
@@ -104,6 +104,18 @@ git fetch origin issue-192-handoff-assets
 git checkout origin/issue-192-handoff-assets -- docs/issue-192-assets
 ```
 
+A Windows copy helper is also included:
+
+```text
+docs/issue-192-assets/COPY_FROM_LOCAL.ps1
+```
+
+Run from the repository root after checking out the branch assets:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\docs\issue-192-assets\COPY_FROM_LOCAL.ps1
+```
+
 ## Optional references — not required runtime assets
 
 | Local source | Status |
@@ -117,20 +129,24 @@ git checkout origin/issue-192-handoff-assets -- docs/issue-192-assets
 
 ## Target asset tree
 
+Official-image path:
+
 ```text
 src/assets/define-color/
   editor-dots-pattern.png
   transparent-pattern.png
   patterns/
-    stripe.png|svg
-    liquid.png|svg
-    warp.png|svg
-    noise.png|svg
-    starlight.png|svg
-    dots.png|svg
-    dots-2.png|svg
-    define.png|svg
+    stripe.png
+    liquid.png
+    warp.png
+    noise.png
+    starlight.png
+    dots.png
+    dots-2.png
+    define.png
 ```
+
+Fallback path is the same tree using `.svg` files until official PNGs are recovered.
 
 ## Completion rule
 
