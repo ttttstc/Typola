@@ -540,8 +540,7 @@ export function useFileTabs({
       dirty: value !== prev.lastSavedContent,
     }));
     setSaveVisualState(value !== fileRef.current.lastSavedContent ? 'dirty' : 'idle');
-    setToc(extractToc(value));
-  }, [clearSaveVisualTimer, extractToc, setAutoSaveError, setDiskChangeMessage, setToc, setTransientMessage]);
+  }, [clearSaveVisualTimer, setAutoSaveError, setDiskChangeMessage, setTransientMessage]);
 
   useEffect(() => {
     if (!autoSaveEnabled || !file.path || !file.dirty || file.fileType === 'docx') return;

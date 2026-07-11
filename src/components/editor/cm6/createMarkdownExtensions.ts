@@ -43,6 +43,10 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
       { key: 'Mod-i', preventDefault: true, run: () => options.onFormat?.({ type: 'italic' }) ?? false },
       { key: 'Mod-Shift-7', preventDefault: true, run: () => options.onFormat?.({ type: 'ol' }) ?? false },
       { key: 'Mod-Shift-8', preventDefault: true, run: () => options.onFormat?.({ type: 'ul' }) ?? false },
+      { key: 'Mod-Alt-ArrowDown', preventDefault: true, run: () => options.onFormat?.({ type: 'table-row-insert', after: true }) ?? false },
+      { key: 'Mod-Alt-ArrowRight', preventDefault: true, run: () => options.onFormat?.({ type: 'table-column-insert', after: true }) ?? false },
+      { key: 'Mod-Alt-Shift-ArrowDown', preventDefault: true, run: () => options.onFormat?.({ type: 'table-row-delete' }) ?? false },
+      { key: 'Mod-Alt-Shift-ArrowRight', preventDefault: true, run: () => options.onFormat?.({ type: 'table-column-delete' }) ?? false },
     ]));
   }
 
