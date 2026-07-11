@@ -182,11 +182,11 @@ export function Toolbar({
             <FilePlus size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button data-no-window-drag="true" onClick={onOpen} title={t('toolbarOpenTitle')} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
-            <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
+            <FolderDown size={iconSize} strokeWidth={strokeWidth} />
           </button>
           {onOpenFolder && (
             <button data-no-window-drag="true" onClick={onOpenFolder} data-tooltip={t('toolbarOpenFolderTitle')} aria-label={t('toolbarOpenFolderLabel')}>
-              <FolderDown size={iconSize} strokeWidth={strokeWidth} />
+              <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}
           <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} title={t('toolbarSaveTitle')} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>

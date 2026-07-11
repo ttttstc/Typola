@@ -65,6 +65,7 @@ export function deriveDefineTokens(settings: DefineColorSettings): Record<string
     '--dc-neutral-dark-1000': '#000000', '--dc-neutral-light-1000': '#ffffff',
     '--dc-pattern-image': DEFINE_PATTERN_URLS[settings.pattern],
     '--dc-pattern-opacity': String(settings.patternOpacity / 100),
+    '--dc-pattern-scrim': `rgb(255 255 255 / ${(1 - settings.patternOpacity / 100).toFixed(2)})`,
     '--dc-semantic-danger': semantic(-18),
     '--dc-semantic-warning': semantic(54),
     '--dc-semantic-success': semantic(126),
