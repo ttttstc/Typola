@@ -148,37 +148,89 @@ html[data-color-system='define-color'] .right-rail-body {
 }
 
 html[data-color-system='define-color'] .settings-modal {
-  color: var(--dc-neutral-light-1000);
+  color: var(--dc-text-shout);
   background: var(--dc-base-heavy-loud);
   border-color: var(--dc-border-loud);
 }
 
 html[data-color-system='define-color'] .settings-modal-sidebar {
-  color: var(--dc-neutral-light-1000);
-  background: var(--dc-neutral-dark-100);
-  border-color: var(--dc-neutral-dark-70);
+  color: var(--dc-text-shout);
+  background: var(--dc-base-heavy-strong);
+  border-color: var(--dc-border-default);
 }
 
 html[data-color-system='define-color'] :is(.settings-title, .settings-nav-item) {
-  color: var(--dc-neutral-light-90);
+  color: var(--dc-text-strong);
 }
 
 html[data-color-system='define-color'] .settings-nav-item:hover,
 html[data-color-system='define-color'] .settings-nav-item.active {
-  color: var(--dc-neutral-light-1000);
-  background: var(--dc-neutral-light-20);
+  color: var(--dc-text-shout);
+  background: var(--dc-base-light-default);
 }
 
 html[data-color-system='define-color'] .settings-modal-content,
 html[data-color-system='define-color'] .settings-section {
   color: var(--dc-text-shout);
-  background: var(--dc-base-heavy-loud);
+  background: var(--dc-base-light-loud);
 }
 
 html[data-color-system='define-color'] :is(.settings-input, .settings-select, .settings-textarea, .settings-row, .settings-block) {
   color: var(--dc-text-shout);
-  background-color: var(--dc-base-heavy-strong);
-  border-color: var(--dc-border-loud);
+  background-color: var(--dc-base-light-strong);
+  border-color: var(--dc-border-default);
+}
+
+/* Settings uses deliberate tonal layers. The global control tint is too bright here. */
+html[data-color-system='define-color'] #root .settings-modal :is(.settings-nav-item, .settings-subnav-item, .settings-preset-select-button, .settings-preset-preview-viewport, .settings-icon-button, .settings-action-button) {
+  color: var(--dc-text-strong);
+  background: transparent;
+  border-color: transparent;
+}
+
+html[data-color-system='define-color'] #root .settings-modal .settings-nav-item:hover,
+html[data-color-system='define-color'] #root .settings-modal .settings-nav-item.active {
+  color: var(--dc-text-shout);
+  background: var(--dc-base-light-default);
+  border-inline-start-color: var(--dc-neutral-dark-100);
+}
+
+html[data-color-system='define-color'] .settings-subnav {
+  background: var(--dc-base-heavy-muted);
+  border-color: var(--dc-border-default);
+}
+
+html[data-color-system='define-color'] #root .settings-modal .settings-subnav-item:hover,
+html[data-color-system='define-color'] #root .settings-modal .settings-subnav-item.active {
+  color: var(--dc-text-shout);
+  background: var(--dc-base-light-default);
+  box-shadow: none;
+}
+
+html[data-color-system='define-color'] .settings-preset-item {
+  border-bottom-color: var(--dc-border-default);
+}
+
+html[data-color-system='define-color'] #root .settings-modal .settings-preset-select-button:hover,
+html[data-color-system='define-color'] #root .settings-modal .settings-preset-item.active .settings-preset-select-button {
+  background: var(--dc-base-light-strong);
+}
+
+html[data-color-system='define-color'] #root .settings-modal .settings-preset-preview-viewport {
+  background: var(--dc-base-heavy-muted);
+  border-color: var(--dc-border-default);
+}
+
+html[data-color-system='define-color'] .settings-preset-preview-paper.word-paper,
+html[data-color-system='define-color'] .settings-preset-preview-zoom-paper.word-paper {
+  background: color-mix(in oklch, var(--dc-neutral-light-1000) 82%, var(--dc-base-light));
+}
+
+html[data-color-system='define-color'] .settings-json-example pre,
+html[data-color-system='define-color'] .settings-preset-preview-zoom-shell {
+  color: var(--dc-text-strong);
+  background: var(--dc-base-light-strong);
+  border-color: var(--dc-border-default);
 }
 
 html[data-color-system='define-color'] .skill-hub-item {
