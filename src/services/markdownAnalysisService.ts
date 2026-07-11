@@ -168,6 +168,11 @@ export function findMarkdownTaskAt(source: string, offset: number): MarkdownTask
   return analysis.tasks.find((task) => offset >= task.from && offset <= task.to) ?? null;
 }
 
+/** Task 导航/过滤的最小 API；调用方可按完成状态筛选，再用 range 定位编辑器。 */
+export function listMarkdownTasks(source: string, options: { checked?: boolean } = {}): MarkdownTask[] {
+  return analyzeMarkdown(source).tasks.filter((task) => options.checked === undefined || task.checked === options.checked);
+}
+
 export function findMarkdownLinkAt(source: string, offset: number): MarkdownLink | null {
   if (offset < 0 || offset > source.length) return null;
   const analysis = analyzeMarkdown(source);

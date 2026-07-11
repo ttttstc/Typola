@@ -33,11 +33,12 @@ describe('CM6 link/task interaction helpers', () => {
     expect(earlier?.text).toBe('待办');
   });
 
-  it('toggles task marker text reversibly', () => {
-    const open = analyzeMarkdown('- [ ] a').tasks[0]!;
-    // 喂整段文本,验证 [ ] ↔ [x] 切换。
-    expect(toggleTaskSource({ ...open, text: '[ ] a' })).toBe('[x] a');
-    expect(toggleTaskSource({ ...open, text: '[x] a', checked: true })).toBe('[ ] a');
+  it('toggles only the marker on a real MarkdownTask range', () => {
+    const source = '  - [ ] a';
+    const open = analyzeMarkdown(source).tasks[0]!;
+    const checked = toggleTaskSource(source, open);
+    expect(checked).toBe('  - [x] a');
+    expect(toggleTaskSource(checked, { ...open, checked: true })).toBe('  - [ ] a');
   });
 
   it('rewrites link url under cursor without requiring full selection', () => {
@@ -47,6 +48,17 @@ describe('CM6 link/task interaction helpers', () => {
     const ok = rewriteLinkAtSelection(view, { getUrl: () => 'https://typola.dev/new' });
     expect(ok).toBe(true);
     expect(view.state.doc.toString()).toBe('see [官网](https://typola.dev/new) here');
+    view.destroy();
+  });
+
+  it('preserves or updates label and title in the same transaction', () => {
+    const view = createView('see [官网](https://typola.dev "Typola") here');
+    const linkStart = view.state.doc.toString().indexOf('[官网]');
+    view.dispatch({ selection: { anchor: linkStart + 1 } });
+    expect(rewriteLinkAtSelection(view, {
+      getLink: () => ({ label: '主页', url: 'https://typola.dev/new', title: '新版' }),
+    })).toBe(true);
+    expect(view.state.doc.toString()).toBe('see [主页](https://typola.dev/new "新版") here');
     view.destroy();
   });
 

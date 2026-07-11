@@ -335,10 +335,18 @@ export function buildAnchorContext(source: string, anchor: SelectionAnchor, budg
   const headingPath = headingPathAt(source, anchor.from);
   const block = markdownBlockAt(source, anchor.from, anchor.to);
   const blockSource = source.slice(block.from, block.to);
-  const allowed = Math.max(0, budget - anchor.originalText.length);
-  const excerpt = blockSource.length <= allowed
+  const limit = Math.max(budget, anchor.originalText.length);
+  const selectionStart = Math.max(0, anchor.from - block.from);
+  const selectionEnd = Math.min(blockSource.length, selectionStart + anchor.originalText.length);
+  const selected = blockSource.slice(selectionStart, selectionEnd) || anchor.originalText;
+  const remaining = Math.max(0, limit - selected.length);
+  const beforeLength = Math.min(selectionStart, Math.floor(remaining / 2));
+  const afterLength = Math.min(blockSource.length - selectionEnd, remaining - beforeLength);
+  const omittedBefore = selectionStart > beforeLength;
+  const omittedAfter = selectionEnd + afterLength < blockSource.length;
+  const excerpt = blockSource.length <= limit
     ? blockSource
-    : `${blockSource.slice(0, Math.max(0, allowed))}…`;
+    : `${omittedBefore ? '…' : ''}${blockSource.slice(selectionStart - beforeLength, selectionStart)}${selected}${blockSource.slice(selectionEnd, selectionEnd + afterLength)}${omittedAfter ? '…' : ''}`;
   return {
     headingPath,
     block: { kind: block.kind, from: block.from, to: block.to },
@@ -367,9 +375,11 @@ export function recoverAnchorInBlock(
   if (!block) return hit;
   const recoveredStart = hit.start;
   const recoveredEnd = hit.start + hit.length;
-  const withinBlock = recoveredStart >= block.from && recoveredEnd <= block.to;
-  // 必须整段在同一 block;跨 block 即视为 stale/ambiguous。
-  return withinBlock ? hit : null;
+  const recoveredBlock = markdownBlockAt(source, recoveredStart, recoveredEnd);
+  // 原 offset 会随文档插入而失效；按当前文档重新计算结构块，再比较 block kind/heading path。
+  if (recoveredBlock.kind !== block.kind) return null;
+  if (anchor.headingPath && recoveredBlock.headingPath.join('\u0000') !== anchor.headingPath.join('\u0000')) return null;
+  return hit;
 }
 
 // 给 useEditorSelectionBridge.acceptResultCard 用:
@@ -408,7 +418,7 @@ export function buildStructuredOneshotPrompt(
   if (!options.source) return base;
   const context = buildAnchorContext(options.source, anchor, options.budget);
   const lines = formatAnchorContextLines(context, options.fileName ?? '');
-  return `${lines}\n\n${base}`;
+  return `${lines}\n\n上下文（可能已截断）：\n---\n${context.excerpt}\n---\n\n${base}`;
 }
 
 export function buildStructuredInjectionText(
@@ -420,5 +430,5 @@ export function buildStructuredInjectionText(
   if (!options.source) return base;
   const context = buildAnchorContext(options.source, anchor, options.budget);
   const lines = formatAnchorContextLines(context, options.fileName ?? '');
-  return `${lines}\n\n${base}`;
+  return `${lines}\n\n上下文（可能已截断）：\n---\n${context.excerpt}\n---\n\n${base}`;
 }

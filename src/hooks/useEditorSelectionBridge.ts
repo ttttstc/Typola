@@ -3,8 +3,8 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { TypolaEditorKernel } from '../types/editorCore';
 import {
   SELECTION_ACTIONS,
-  buildInjectionText,
-  buildOneshotPrompt,
+  buildStructuredInjectionText,
+  buildStructuredOneshotPrompt,
   extractReplacementText,
   isDisplayOnlyAction,
   isOneshotAction,
@@ -127,7 +127,11 @@ export function useEditorSelectionBridge({
     const controller = new AbortController();
     oneshotAbortRef.current = controller;
     // 拼 prompt:基础模板 + 可选额外要求
-    const base = buildOneshotPrompt(action, anchor.originalText);
+    const source = editorCommandRef.current?.getMarkdown();
+    const base = buildStructuredOneshotPrompt(action, anchor, {
+      source,
+      fileName: anchor.filePath.split(/[\\/]/).pop(),
+    });
     const prompt = requirements.trim()
       ? `${base}\n\n额外要求：${requirements.trim()}`
       : base;
@@ -222,8 +226,10 @@ export function useEditorSelectionBridge({
       return;
     }
     setLeftRailMode('aiWorkbench');
-    const fileName = anchor.filePath.split(/[\\/]/).pop() || anchor.filePath;
-    const text = buildInjectionText(action, fileName, anchor.originalText);
+    const text = buildStructuredInjectionText(action, anchor, {
+      source: editorCommandRef.current?.getMarkdown(),
+      fileName: anchor.filePath.split(/[\\/]/).pop(),
+    });
     let convId = convManager.activeConvId;
     if (!convManager.conversations.has(convId)) {
       convId = convManager.createConversation('自由对话');
@@ -250,6 +256,7 @@ export function useEditorSelectionBridge({
       return;
     }
     let status: AnchorStatus;
+    let replacementAnchor = current.anchor;
     try {
       status = editor.validateAnchor(
         current.anchor.filePath,
@@ -287,13 +294,12 @@ export function useEditorSelectionBridge({
         return;
       }
       // 把替换目标改到恢复到的位置;由 editor.replaceRange 走单笔 dispatch。
-      status = 'valid';
-      current.anchor = { ...current.anchor, from: recovered.start, to: recovered.start + recovered.length };
+      replacementAnchor = { ...current.anchor, from: recovered.start, to: recovered.start + recovered.length };
     }
     try {
       const ok = editor.replaceRange(
-        current.anchor.from,
-        current.anchor.to,
+        replacementAnchor.from,
+        replacementAnchor.to,
         current.newText,
       );
       if (!ok) {

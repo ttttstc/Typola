@@ -29,11 +29,9 @@ export function findTaskForClick(view: EditorView, source: string, offset: numbe
   return findMarkdownTaskAt(source, line.from);
 }
 
-export function toggleTaskSource(task: MarkdownTask): string {
+export function toggleTaskSource(source: string, task: MarkdownTask): string {
   const nextMarker = task.checked ? ' ' : 'x';
-  const replaced = task.text.replace(/^\[( |x|X)\]/u, `[${nextMarker}]`);
-  if (replaced !== task.text) return replaced;
-  return task.checked ? task.text.replace('[x]', '[ ]') : task.text.replace('[ ]', '[x]');
+  return source.slice(task.from, task.to).replace(/\[([ xX])\]/u, `[${nextMarker}]`);
 }
 
 function nearestEditorOffset(view: EditorView, event: MouseEvent): number | null {
@@ -68,14 +66,21 @@ export function findLinkAtSelection(view: EditorView): MarkdownLink | null {
 
 export function rewriteLinkAtSelection(
   view: EditorView,
-  options: { getUrl: (current: MarkdownLink) => string | null },
+  options: {
+    getUrl?: (current: MarkdownLink) => string | null;
+    getLink?: (current: MarkdownLink) => Pick<MarkdownLink, 'label' | 'url' | 'title'> | null;
+  },
 ): boolean {
   const link = findLinkAtSelection(view);
   if (!link) return false;
-  const nextUrl = options.getUrl(link);
-  if (nextUrl === null) return false;
-  const label = link.label || link.url;
-  const replacement = `[${label}](${nextUrl})`;
+  const next = options.getLink?.(link) ?? (() => {
+    const url = options.getUrl?.(link);
+    return url === null || url === undefined ? null : { label: link.label, url, title: link.title };
+  })();
+  if (!next) return false;
+  const label = next.label || next.url;
+  const title = next.title ? ` "${next.title}"` : '';
+  const replacement = `[${label}](${next.url}${title})`;
   view.dispatch({
     changes: { from: link.from, to: link.to, insert: replacement },
     selection: { anchor: link.from + replacement.length },
@@ -102,7 +107,7 @@ export function taskToggleExtension(options: TaskToggleOptions = {}): Extension[
         const task = findTaskForClick(view, view.state.doc.toString(), offset);
         if (!task) return;
         event.preventDefault();
-        const nextText = toggleTaskSource(task);
+        const nextText = toggleTaskSource(view.state.doc.toString(), task);
         view.dispatch({
           changes: { from: task.from, to: task.to, insert: nextText },
           selection: { anchor: task.from + nextText.length },

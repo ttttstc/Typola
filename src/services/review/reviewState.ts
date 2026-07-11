@@ -7,7 +7,7 @@
 // AppLayout 关闭/切文档时观察 dirty 走 confirmUnsavedChoice(任务 #14)。
 
 import type { SelectionAnchor } from '../agent/types';
-import { findUniqueAnchor } from '../agent/selectionActions';
+import { recoverAnchorInBlock } from '../agent/selectionActions';
 
 export type ReviewComment = {
   id: string;
@@ -102,7 +102,7 @@ export function buildReviewMarkdown(source: string, comments: ReviewComment[]): 
   const hits: Hit[] = [];
 
   comments.forEach((comment) => {
-    const hit = findUniqueAnchor(source, comment.anchor.originalText, comment.anchor.prefixHint);
+    const hit = recoverAnchorInBlock(source, comment.anchor, comment.anchor.block);
     if (!hit) return; // anchor 失效跳过段后插入,文末汇总仍会兜底
     const segmentEnd = findSegmentEnd(source, hit.start + hit.length);
     hits.push({ insertAt: segmentEnd, text: comment.text });
