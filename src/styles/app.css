@@ -3565,8 +3565,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .skill-hub-item.is-disabled {
-  background: color-mix(in oklch, var(--theme-control-bg) 74%, var(--theme-canvas));
-  opacity: 0.78;
+  background: var(--theme-control-bg);
+  opacity: 1;
 }
 
 .skill-hub-item-main {
@@ -3752,14 +3752,31 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  min-width: 128px;
-  padding: 8px 8px 8px 0;
+  min-width: 0;
+  padding: 8px;
 }
 
 .skill-hub-item-actions button {
   min-height: 24px;
   padding: 3px 7px;
   font-size: 11px;
+}
+
+.skill-hub-item-actions .skill-hub-install-action {
+  min-width: 0;
+  padding-inline: 2px;
+  white-space: nowrap;
+  color: var(--theme-accent);
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.skill-hub-item-actions .skill-hub-install-action:hover {
+  color: var(--theme-text-primary);
+  background: transparent;
+  border-color: transparent;
 }
 
 .skill-hub-item-actions:empty::before {

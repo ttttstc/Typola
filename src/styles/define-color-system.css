@@ -182,9 +182,14 @@ html[data-color-system='define-color'] :is(.settings-input, .settings-select, .s
 }
 
 html[data-color-system='define-color'] .skill-hub-item {
-  grid-template-columns: minmax(0, 1fr) 112px;
-  gap: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
   background: var(--dc-base-light-loud);
+}
+
+html[data-color-system='define-color'] .skill-hub-item.is-disabled {
+  background: var(--dc-base-light-loud);
+  opacity: 1;
 }
 
 html[data-color-system='define-color'] .skill-hub-item-main,
@@ -200,10 +205,16 @@ html[data-color-system='define-color'] .skill-hub-item-actions {
 }
 
 html[data-color-system='define-color'] .skill-hub-item-actions button {
-  min-width: 88px;
   color: var(--dc-text-shout);
   background: transparent;
   border-color: var(--dc-border-loud);
+}
+
+html[data-color-system='define-color'] .skill-hub-item-actions .skill-hub-install-action,
+html[data-color-system='define-color'] .skill-hub-item-actions .skill-hub-install-action:hover {
+  color: var(--dc-text-shout);
+  background: transparent;
+  border-color: transparent;
 }
 
 html[data-color-system='define-color'] .editor-tabbar,
