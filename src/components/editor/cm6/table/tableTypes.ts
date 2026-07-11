@@ -37,48 +37,32 @@ export function formatTableRow(cells: string[]): string {
 
 export function findTableAt(view: EditorView, pos: number): TableRange | null {
   const doc = view.state.doc;
-  const text = view.state.doc.toString();
-  const lines = text.split('\n');
-
-  // 单 pass 计算每行是否在 fenced code block 内(```/~~~ 行切换 open)。
-  // inFence[i] = true 表示 lines[i] 处于 fence 内,不是 GFM 表的一部分。
-  const fenceOpen: boolean[] = new Array(lines.length).fill(false);
+  const lines = doc.toString().split('\n');
+  const fenceOpen = lines.map(() => false);
   let open = false;
-  const fenceRe = /^\s*(```|~~~)/;
-  for (let i = 0; i < lines.length; i += 1) {
-    if (fenceRe.test(lines[i])) open = !open;
-    fenceOpen[i] = open;
+  for (let index = 0; index < lines.length; index++) {
+    fenceOpen[index] = open;
+    if (/^\s*(```|~~~)/.test(lines[index])) open = !open;
   }
 
   const cursorLine = doc.lineAt(pos).number - 1;
-
-  // 向上优先找 sep;落到 cell 内也能命中。
-  let sepIdx = cursorLine;
-  while (sepIdx >= 0 && (fenceOpen[sepIdx] || !SEP_LINE.test(lines[sepIdx]))) sepIdx -= 1;
-  // 光标在表内(sep 行上方)时,向下兜底找一次。
-  if (sepIdx < 0) {
-    let down = cursorLine + 1;
-    while (down < lines.length && (fenceOpen[down] || !SEP_LINE.test(lines[down]))) down += 1;
-    if (down >= lines.length || fenceOpen[down]) return null;
-    sepIdx = down;
-  } else if (fenceOpen[sepIdx]) {
-    return null;
+  let sepIndex = cursorLine;
+  while (sepIndex >= 0 && (fenceOpen[sepIndex] || !SEP_LINE.test(lines[sepIndex]))) sepIndex--;
+  if (sepIndex < 0) {
+    sepIndex = cursorLine + 1;
+    while (sepIndex < lines.length && (fenceOpen[sepIndex] || !SEP_LINE.test(lines[sepIndex]))) sepIndex++;
   }
   if (sepIndex >= lines.length || fenceOpen[sepIndex]) return null;
 
-  const headerLine = sepIdx - 1;
-  if (headerLine < 0 || fenceOpen[headerLine] || !PIPE_LINE.test(lines[headerLine])) return null;
-  const sepCols = pipeCount(lines[sepIdx]);
-  const headerCols = pipeCount(lines[headerLine]);
-  if (sepCols !== headerCols) return null;
+  const headerIndex = sepIndex - 1;
+  if (headerIndex < 0 || fenceOpen[headerIndex] || !PIPE_LINE.test(lines[headerIndex])) return null;
+  const colCount = splitTableCells(lines[sepIndex]).length;
+  if (colCount === 0 || splitTableCells(lines[headerIndex]).length !== colCount) return null;
 
-  let endLine = sepIdx + 1;
-  while (endLine < lines.length && !fenceOpen[endLine] && PIPE_LINE.test(lines[endLine])) {
-    if (pipeCount(lines[endLine]) !== sepCols) {
-      endLine -= 1;
-      break;
-    }
-    endLine += 1;
+  let lastBodyLine = sepIndex;
+  for (let index = sepIndex + 1; index < lines.length && !fenceOpen[index] && PIPE_LINE.test(lines[index]); index++) {
+    if (splitTableCells(lines[index]).length !== colCount) break;
+    lastBodyLine = index;
   }
   const start = doc.line(headerIndex + 1);
   const end = doc.line(lastBodyLine + 1);

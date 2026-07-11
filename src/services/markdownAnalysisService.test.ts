@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   analyzeMarkdown,
+  _clearMarkdownAnalysisCacheForTests,
   clearMarkdownAnalysisCache,
   findMarkdownLinkAt,
   findMarkdownTaskAt,
@@ -8,7 +9,6 @@ import {
   isRangeWithinSingleMarkdownBlock,
   listMarkdownTasks,
   markdownBlockAt,
-  scheduleMarkdownAnalysis,
 } from './markdownAnalysisService';
 
 const fixture = [
