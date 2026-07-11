@@ -355,6 +355,7 @@ html[data-color-system='define-color'] .wysiwyg-editor-pane {
   contain: paint;
   will-change: mask-position;
 }
+.dc-wheel.is-unselected { mask-image: none; }
 .dc-wheel-handle {
   position: absolute; z-index: 2; width: 30px; height: 30px; border: 3px solid #fff; border-radius: 50%;
   transform: translate(-50%, -50%); box-shadow: rgba(13,13,13,.12) 0 4px 8px, rgba(13,13,13,.08) 0 8px 16px;

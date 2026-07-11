@@ -417,6 +417,12 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-color: var(--theme-border-hover);
 }
 
+/* 文件树与调色器本身已通过展开面板/色彩系统表达状态，不再使用激活边框。 */
+.app-toolbar .toolbar-nav-actions > button.active {
+  background: transparent;
+  border-color: transparent;
+}
+
 .app-toolbar button.toolbar-update-button {
   width: auto;
   min-width: 0;

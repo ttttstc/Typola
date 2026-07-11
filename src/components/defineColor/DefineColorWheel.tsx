@@ -52,11 +52,12 @@ export function DefineColorWheel({ settings, onPreview, onCommit }: {
     .map((angle) => ({ point: pointAtAngle(angle, WHEEL_RADIUS, center, center), color: colorAtHue(angle) }));
   const current = colorAtHue(displayHue);
   const maskSize = settings.isGradient ? 280 : 232;
+  const showsDefaultPalette = settings.currentPresetIndex === null && settings.c <= .001;
   return (
     <div className="dc-wheel-shell">
       <div className="dc-wheel-content">
         <div
-          className={`dc-wheel ${settings.isGradient ? 'is-gradient' : ''}`}
+          className={`dc-wheel ${settings.isGradient ? 'is-gradient' : ''} ${showsDefaultPalette ? 'is-unselected' : ''}`}
           ref={wheelRef}
           style={{ maskSize: `${maskSize}px ${maskSize}px`, maskPosition: `${main.x - maskSize / 2}px ${main.y - maskSize / 2}px` }}
           {...handlers}
