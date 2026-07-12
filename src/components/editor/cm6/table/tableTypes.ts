@@ -64,25 +64,25 @@ export function findTableAt(view: EditorView, pos: number): TableRange | null {
   } else if (fenceOpen[sepIdx]) {
     return null;
   }
-  if (sepIndex >= lines.length || fenceOpen[sepIndex]) return null;
+  if (sepIdx >= lines.length || fenceOpen[sepIdx]) return null;
 
   const headerLine = sepIdx - 1;
   if (headerLine < 0 || fenceOpen[headerLine] || !PIPE_LINE.test(lines[headerLine])) return null;
-  const sepCols = pipeCount(lines[sepIdx]);
-  const headerCols = pipeCount(lines[headerLine]);
+  const sepCols = pipeCount(lines[sepIdx] ?? '');
+  const headerCols = pipeCount(lines[headerLine] ?? '');
   if (sepCols !== headerCols) return null;
 
-  let endLine = sepIdx + 1;
-  while (endLine < lines.length && !fenceOpen[endLine] && PIPE_LINE.test(lines[endLine])) {
-    if (pipeCount(lines[endLine]) !== sepCols) {
-      endLine -= 1;
+  let lastBodyLine = sepIdx + 1;
+  while (lastBodyLine < lines.length && !fenceOpen[lastBodyLine] && PIPE_LINE.test(lines[lastBodyLine] ?? '')) {
+    if (pipeCount(lines[lastBodyLine] ?? '') !== sepCols) {
+      lastBodyLine -= 1;
       break;
     }
-    endLine += 1;
+    lastBodyLine += 1;
   }
-  const start = doc.line(headerIndex + 1);
+  const start = doc.line(headerLine + 1);
   const end = doc.line(lastBodyLine + 1);
-  const separator = doc.line(sepIndex + 1);
+  const separator = doc.line(sepIdx + 1);
   return {
     from: start.from,
     to: end.to,
@@ -90,9 +90,13 @@ export function findTableAt(view: EditorView, pos: number): TableRange | null {
     sepTo: separator.to,
     headerFrom: start.from,
     headerTo: start.to,
-    firstBodyLine: sepIndex + 1,
+    firstBodyLine: sepIdx + 1,
     lastBodyLine,
-    colCount,
-    lineCount: lastBodyLine - headerIndex + 1,
+    colCount: sepCols,
+    lineCount: lastBodyLine - headerLine + 1,
   };
+}
+
+function pipeCount(line: string): number {
+  return (line.match(/\|/g) ?? []).length;
 }

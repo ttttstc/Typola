@@ -299,7 +299,7 @@ function findTableRangeAt(source: string, offset: number): MarkdownRange | null 
   }
   const startLine = lines[sepIdx - 1]!;
   const endLine = lines[endIdx]!;
-  return rangeAt(source, startLine.from, endLine.to);
+  return rangeAt(source, startLine.from, endLine.from + endLine.text.length);
 }
 
 function lineIndexAtOffset(source: string, offset: number): number {

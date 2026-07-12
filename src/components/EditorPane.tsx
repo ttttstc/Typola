@@ -13,6 +13,8 @@ import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions'
 import { headingIndexAt } from './editor/cm6/previewSyncExtension';
 import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
 import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
+import { findTableAt } from './editor/cm6/table/tableTypes';
+import { pasteTableData } from './editor/cm6/table/tableCommands';
 import {
   findMarkdownImageAt,
   headingPathAt,
@@ -260,12 +262,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         // 用选区首字符的视口位置作为菜单位置;coords 不可用时退化到视口左上
         const coords = view.coordsAtPos(sel.from) ?? { left: 80, top: 80 };
         setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true, hasTable: false, hasImage: false });
-        return true;
-      },
-      onFormat: (action) => {
-        const view = editorViewRef.current;
-        if (!view) return false;
-        applyCm6Format(view, action);
         return true;
       },
       onFormat: (action) => {

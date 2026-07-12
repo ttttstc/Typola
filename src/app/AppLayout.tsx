@@ -760,8 +760,7 @@ export function AppLayout() {
     // 用 MarkdownAnalysisService 找覆盖 match 位置的 heading section,
     // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
     if (editorMode === 'source') {
-      const sections = collectHeadingSections(file.content);
-      const matchStartLine = lineIndexAtOffset(file.content, match.index);
+      const sections = markdownAnalysis.foldSections;
       const coveringKeys: FoldKey[] = [];
       for (const section of sections) {
         if (section.from <= match.index && match.index < section.to) {
@@ -1445,7 +1444,8 @@ export function AppLayout() {
     const target = link.url.trim();
     if (!target) return;
     if (target.startsWith('#')) {
-      const headingIndex = markdownAnalysis.headings.findIndex((heading) => heading.slug === target.slice(1));
+      const anchorText = target.slice(1);
+      const headingIndex = markdownAnalysis.headings.findIndex((heading) => heading.text === anchorText);
       if (headingIndex < 0) {
         await messageDialog(`未找到文档锚点：${target}`, { title: '打开链接失败' });
         return;
