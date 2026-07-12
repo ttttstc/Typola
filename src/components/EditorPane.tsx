@@ -25,6 +25,7 @@ import {
 import { writeText as writeClipboardText } from '../services/clipboardService';
 import { resolveLocalResourcePath } from '../services/htmlPresentationService';
 import { formatImageSrc } from '../services/imageInsert';
+import { findSearchMatches } from '../services/documentSearchService';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -341,6 +342,9 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     },
     getMarkdown() {
       return editorView?.state.doc.toString() ?? source;
+    },
+    findSearchMatches(query, options) {
+      return findSearchMatches(editorView?.state.doc.toString() ?? source, query, options);
     },
     setMarkdown(markdown: string) {
       if (!editorView) return;
