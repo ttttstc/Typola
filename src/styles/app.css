@@ -1,5 +1,13 @@
 @import './themes.css';
 
+@font-face {
+  font-family: 'Source Han Serif SC VF';
+  src: url('/fonts/source-han-serif-sc-vf-subset.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+}
+
 /* ===== CSS Variables (DESIGN.md Design System) ===== */
 
 :root {
@@ -22,17 +30,18 @@
   --motion-ease-pop: cubic-bezier(0.2, 0.9, 0.3, 1.1);
 
   /* Font stacks */
-  --font-display: 'Iowan Old Style', 'Charter', 'Songti SC', 'STSong',
+  --font-display: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
     'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun',
-    Georgia, serif;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI',
-    'PingFang SC', 'Hiragino Sans GB', system-ui, sans-serif;
-  --font-reading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Microsoft YaHei UI',
-    'Noto Sans CJK SC', 'Source Han Sans SC', 'Noto Sans SC', sans-serif;
-  --font-serif-reading: 'Songti SC', 'STSong', 'Noto Serif CJK SC',
-    'Source Han Serif SC', 'Noto Serif SC', 'SimSun', 'Times New Roman', serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono',
+    'Iowan Old Style', 'Charter', Georgia, serif;
+  --font-body: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
+    'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', serif;
+  --font-ui: var(--font-body);
+  --font-reading: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
+    'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun', serif;
+  --font-serif-reading: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
+    'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun', serif;
+  --font-mono: 'SF Mono', ui-monospace, 'Cascadia Mono', 'JetBrains Mono',
     'IBM Plex Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace;
 
   /* Smooth text rendering */
@@ -61,6 +70,13 @@ html[data-theme-transition='true'] .terminal-panel {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 html, body, #root {
@@ -1410,8 +1426,47 @@ html[data-color-scheme='dark'] .export-menu {
   --atomic-editor-measure: 70ch;
 }
 
+.cm6-markdown-editor-pane > .editor-paper-background,
 .cm6-markdown-editor-pane > .editor-pane {
   flex: 1;
+}
+
+.editor-paper-background {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--theme-paper);
+}
+
+.editor-paper-background-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-paper-background-content > .editor-pane {
+  flex: 1;
+  background: transparent;
+}
+
+.editor-paper-background-texture {
+  position: absolute !important;
+  inset: 0;
+  z-index: 0;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.editor-paper-background-texture canvas {
+  z-index: 0 !important;
 }
 
 /* CM6 heading 鎶樺彔:toggle 鎸夐挳 + 鎶樺彔鍚庤闅愯棌 */
@@ -1588,20 +1643,20 @@ html[data-color-scheme='dark'] .export-menu {
   height: 100%;
   min-height: 0;
   width: 100%;
-  font-family: var(--font-mono);
+  font-family: var(--editor-font-family, var(--font-mono));
   font-size: 13px;
   line-height: 1.75;
-  background: var(--theme-canvas);
+  background: transparent;
   color: var(--theme-text-primary);
 }
 
 .editor-pane .cm-scroller {
   overflow: auto;
-  background: var(--theme-canvas);
+  background: transparent;
 }
 
 .editor-pane .cm-editor .cm-content {
-  font-family: var(--font-mono);
+  font-family: var(--editor-font-family, var(--font-mono));
   caret-color: var(--theme-accent);
 }
 
@@ -1635,13 +1690,13 @@ html[data-color-scheme='dark'] .export-menu {
  * 璁╂鏂囩敤 --font-reading锛堢瓑瀹戒氦缁?atomic-editor 鐨?.cm-atomic-fenced-code锛夈€?
  * 浣嶇疆蹇呴』鍦?.editor-pane .cm-editor 瑙勫垯涔嬪悗鎵嶈兘璧㈠悓浼樺厛绾с€?*/
 .cm6-markdown-editor-pane .cm-editor {
-  font-family: var(--font-reading);
+  font-family: var(--editor-font-family, var(--font-reading));
   font-size: 14.5px;
   line-height: 1.7;
 }
 
 .cm6-markdown-editor-pane .cm-editor .cm-content {
-  font-family: var(--font-reading);
+  font-family: var(--editor-font-family, var(--font-reading));
 }
 
 .readonly-pane {
@@ -3244,11 +3299,10 @@ html[data-theme-id='abstract'] .skill-hub-scene-count {
 /* 硬阴影 + 0 圆角 + 1px 纯黑边 + hover translate 位移 + 30px 坐标网格。 */
 
 html[data-theme-id='brutalist'] {
-  /* 字体: 标题用 Noto Serif SC 衬线（无 Outfit 时退化到 system-ui）。
-     不用 Google Fonts，纯系统字体栈。 */
-  --font-display: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', 'STSong', 'Iowan Old Style', 'Charter', serif;
-  --font-body: 'Outfit', -apple-system, 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', ui-monospace, 'Consolas', monospace;
+  /* 粗野主题也使用本地思源宋体；代码继续使用等宽字体。 */
+  --font-display: 'Source Han Serif SC VF', 'Songti SC', 'Source Han Serif SC', 'STSong', 'Iowan Old Style', 'Charter', serif;
+  --font-body: 'Source Han Serif SC VF', 'Songti SC', 'Source Han Serif SC', 'STSong', -apple-system, 'Segoe UI', serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', ui-monospace, 'Consolas', monospace;
 }
 
 /* 30px 坐标网格背景:整页底层(覆盖在 --theme-canvas 之上) */

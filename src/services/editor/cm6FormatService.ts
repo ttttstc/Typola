@@ -77,6 +77,16 @@ export function applyCm6Format(view: EditorView, action: FormatAction, requestEd
     case 'apply-format':
       applyCapturedFormat(view, capturedFormats.get(view));
       return;
+    case 'format-painter': {
+      const captured = capturedFormats.get(view);
+      if (captured) {
+        applyCapturedFormat(view, captured);
+        capturedFormats.delete(view);
+      } else {
+        capturedFormats.set(view, captureFormat(view));
+      }
+      return;
+    }
     case 'clear-format':
       clearFormat(view);
       return;

@@ -17,6 +17,7 @@ import type { PreviewHeadingChange } from './previewSyncExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 import type { ReviewComment } from '../../../services/review/reviewState';
 import type { MarkdownLink, MarkdownTask } from '../../../services/markdownAnalysisService';
+import { EditorPanePaperBackground } from './EditorPanePaperBackground';
 
 type Cm6MarkdownEditorPaneProps = {
   mode?: 'source' | 'wysiwyg';
@@ -194,18 +195,20 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
     }));
     return (
       <div className="cm6-markdown-editor-pane">
-        <EditorPane
-          ref={(instance) => {
-            // 同时支持外部 ref + 内部 editorRef(点击重置需要)
-            if (typeof ref === 'function') ref(instance);
-            else if (ref) ref.current = instance;
-            editorRef.current = instance;
-          }}
-          {...rest}
-          onRequestImageInsert={onRequestImageInsert}
-          onEditorReady={handleEditorReady}
-          extraExtensions={livePreviewExtensions}
-        />
+        <EditorPanePaperBackground>
+          <EditorPane
+            ref={(instance) => {
+              // 同时支持外部 ref + 内部 editorRef(点击重置需要)
+              if (typeof ref === 'function') ref(instance);
+              else if (ref) ref.current = instance;
+              editorRef.current = instance;
+            }}
+            {...rest}
+            onRequestImageInsert={onRequestImageInsert}
+            onEditorReady={handleEditorReady}
+            extraExtensions={livePreviewExtensions}
+          />
+        </EditorPanePaperBackground>
         {zoomIndicator && (
           <button
             type="button"

@@ -11,7 +11,7 @@ export type FormatAction =
   | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' }
   | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
   | { type: 'link-edit' }
-  | { type: 'capture-format' | 'apply-format' }
+  | { type: 'format-painter' | 'capture-format' | 'apply-format' }
   | { type: 'cut' | 'copy' | 'paste' | 'select-all' }
   | { type: 'image-insert' }
   | { type: 'image-replace' }

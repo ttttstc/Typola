@@ -57,7 +57,7 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
     EditorView.theme({
       '&': {
         fontFamily: options.fontFamily,
-        backgroundColor: 'var(--theme-paper)',
+        backgroundColor: 'transparent',
         color: 'var(--theme-text-primary)',
       },
       '.cm-content': {
@@ -66,7 +66,7 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
         caretColor: 'var(--theme-accent)',
       },
       '.cm-scroller': {
-        backgroundColor: 'var(--theme-paper)',
+        backgroundColor: 'transparent',
       },
       '.cm-gutters': {
         fontFamily: options.fontFamily,

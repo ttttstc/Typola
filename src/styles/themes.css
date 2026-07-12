@@ -13,7 +13,7 @@ html[data-theme-id='plain-paper'] {
   --theme-border: #e2dbd0;
   --theme-border-soft: color-mix(in oklch, var(--theme-border) 58%, transparent);
   --theme-border-hover: color-mix(in oklch, var(--theme-border) 70%, var(--theme-text-primary));
-  --theme-accent: #d97757;
+  --theme-accent: #b85a3d;
   --theme-accent-soft: color-mix(in oklch, var(--theme-accent) 10%, transparent);
   --theme-accent-muted: color-mix(in oklch, var(--theme-accent) 42%, var(--theme-border));
   --theme-selection: #dad6c9;
@@ -50,7 +50,7 @@ html[data-theme-id='plain-paper'] {
   --theme-editor-search-match: color-mix(in oklch, var(--theme-warning) 30%, var(--theme-paper));
   --theme-terminal-background: #fbfaf6;
   --theme-terminal-foreground: #2d2924;
-  --theme-terminal-cursor: #d97757;
+  --theme-terminal-cursor: #b85a3d;
   --theme-select-chevron: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236d665d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
 html[data-theme-id='night-current'] {
@@ -175,7 +175,7 @@ html[data-theme-id='abstract'] {
   --theme-selection: #f1dc63;
   --theme-success: #1e5a8a;
   --theme-danger: #c8311b;
-  --theme-warning: #e8b810;
+  --theme-warning: #8a6a00;
   --theme-panel-bg: color-mix(in oklch, var(--theme-surface) 92%, var(--theme-canvas));
   --theme-control-bg: color-mix(in oklch, var(--theme-surface) 86%, var(--theme-canvas));
   --theme-control-hover-bg: color-mix(in oklch, var(--theme-paper) 74%, var(--theme-surface));
@@ -221,13 +221,13 @@ html[data-theme-id='brutalist'] {
   --theme-border: #000000;
   --theme-border-soft: color-mix(in oklch, var(--theme-border) 58%, transparent);
   --theme-border-hover: color-mix(in oklch, var(--theme-border) 70%, var(--theme-text-primary));
-  --theme-accent: #4ECDC4;
+  --theme-accent: #167c75;
   --theme-accent-soft: color-mix(in oklch, var(--theme-accent) 10%, transparent);
   --theme-accent-muted: color-mix(in oklch, var(--theme-accent) 42%, var(--theme-border));
   --theme-selection: #4ECDC4;
-  --theme-success: #4ECDC4;
+  --theme-success: #167c75;
   --theme-danger: #000000;
-  --theme-warning: #4ECDC4;
+  --theme-warning: #806c00;
   --theme-panel-bg: color-mix(in oklch, var(--theme-surface) 92%, var(--theme-canvas));
   --theme-control-bg: color-mix(in oklch, var(--theme-surface) 86%, var(--theme-canvas));
   --theme-control-hover-bg: color-mix(in oklch, var(--theme-paper) 74%, var(--theme-surface));
@@ -258,6 +258,6 @@ html[data-theme-id='brutalist'] {
   --theme-editor-search-match: color-mix(in oklch, var(--theme-warning) 30%, var(--theme-paper));
   --theme-terminal-background: #fafafa;
   --theme-terminal-foreground: #000000;
-  --theme-terminal-cursor: #4ECDC4;
+  --theme-terminal-cursor: #167c75;
   --theme-select-chevron: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }

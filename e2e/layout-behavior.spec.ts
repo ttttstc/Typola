@@ -72,17 +72,19 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);
 });
 
-test('CM6 writing editor uses the same warm page background as the shell', async ({ page }) => {
+test('CM6 writing editor keeps its paper surface transparent over the page background', async ({ page }) => {
   await page.goto('/');
   await expect(liveEditor(page)).toBeVisible();
 
   const colors = {
     editor: await liveEditorSurface(page).evaluate((el) => getComputedStyle(el).backgroundColor),
+    paper: await page.locator('.editor-paper-background').evaluate((el) => getComputedStyle(el).backgroundColor),
     inner: await liveEditorContent(page).evaluate((el) => getComputedStyle(el).backgroundColor),
     body: await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
   };
 
-  expect(colors.editor).toBe(colors.body);
+  expect(colors.editor).toMatch(/rgba?\(0, 0, 0, 0\)|transparent/);
+  expect(colors.paper).not.toBe(colors.body);
   expect(colors.inner).not.toBe('rgb(255, 255, 255)');
 });
 

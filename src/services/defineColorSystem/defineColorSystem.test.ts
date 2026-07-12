@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_DEFINE_COLOR_SETTINGS, getSaturationLevel, HEAVY_SWATCHES, nextSaturation, previousSaturation } from './constants';
+import { DEFAULT_DEFINE_COLOR_SETTINGS, getSaturationLevel, hasDefineColorSelection, HEAVY_SWATCHES, nextSaturation, previousSaturation } from './constants';
 import { applyDefineColorToDocument, clearDefineColorFromDocument } from './applyDefineColorToDocument';
 import { deriveDefineTokens } from './deriveDefineTokens';
 import { normalizeDefineColorSettings } from './normalizeDefineColorSettings';
@@ -115,5 +115,12 @@ describe('Define color system', () => {
     expect(normalizeDefineColorSettings({ version: 1, saturation: 35 }).saturation).toBe(24);
     expect(normalizeDefineColorSettings({ version: 1, saturation: 70 }).saturation).toBe(48);
     expect(normalizeDefineColorSettings({ version: 1, saturation: 100 }).saturation).toBe(72);
+  });
+
+  it('treats any non-zero chroma as a user selection so light color-wheel touches persist on next launch', () => {
+    expect(hasDefineColorSelection(DEFAULT_DEFINE_COLOR_SETTINGS)).toBe(false);
+    expect(hasDefineColorSelection({ ...DEFAULT_DEFINE_COLOR_SETTINGS, c: 0.0005 })).toBe(true);
+    expect(hasDefineColorSelection({ ...DEFAULT_DEFINE_COLOR_SETTINGS, c: 0.01 })).toBe(true);
+    expect(hasDefineColorSelection({ ...DEFAULT_DEFINE_COLOR_SETTINGS, currentPresetIndex: 0 })).toBe(true);
   });
 });

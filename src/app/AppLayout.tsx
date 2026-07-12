@@ -65,7 +65,7 @@ import { analyzeMarkdown, type MarkdownLink } from '../services/markdownAnalysis
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
-import { applyThemeToDocument } from '../services/themeDom';
+import { applyAppearanceToDocument } from '../services/appearanceDom';
 import {
   formatImageSrc,
   isImagePath,
@@ -490,8 +490,8 @@ export function AppLayout() {
   }, []);
 
   useEffect(() => {
-    applyThemeToDocument(document, settings.themeId);
-  }, [settings.themeId]);
+    applyAppearanceToDocument(document, settings);
+  }, [settings]);
 
   useEffect(() => {
     /* Kick off the settings chunk immediately on mount so the modal is fully

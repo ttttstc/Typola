@@ -17,6 +17,7 @@
 // 的 position state 上,否则鸡生蛋死锁(浮条永不显示)。
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { EyeOff, Globe2 } from 'lucide-react';
 import { SELECTION_ACTIONS, type SelectionActionId } from '../../services/agent/selectionActions';
 
 // 浮条只暴露 5 个动作:润色 / 名词解释 / 加检视意见 / 本文档不再展示 / 全局隐藏。
@@ -176,7 +177,7 @@ export function SelectionFloatingBar({
     // 给结果卡/检视浮卡一个贴近选区下方的锚点。
     onPick(id, { x: rect.selRect.left, y: rect.selRect.bottom + 6 });
   };
-  const actionIds = [
+  const actionIds: Array<SelectionActionId | 'dismiss-session' | 'hide-globally'> = [
     ...ACTION_IDS,
     ...(onDismissSession ? ['dismiss-session' as const] : []),
     ...(onHideGlobally ? ['hide-globally' as const] : []),
@@ -198,7 +199,11 @@ export function SelectionFloatingBar({
       onMouseDown={(event) => event.preventDefault()}
     >
       {actionIds.map((id) => {
-        const action = SELECTION_ACTIONS[id];
+        const action = id === 'dismiss-session'
+          ? { label: '本文档隐藏', icon: EyeOff }
+          : id === 'hide-globally'
+            ? { label: '全局隐藏', icon: Globe2 }
+            : SELECTION_ACTIONS[id];
         const Icon = action.icon;
         return (
           <button

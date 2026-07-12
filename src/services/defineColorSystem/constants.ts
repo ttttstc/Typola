@@ -14,7 +14,7 @@ export const DEFAULT_DEFINE_COLOR_SETTINGS: DefineColorSettings = {
 };
 
 export function hasDefineColorSelection(settings: DefineColorSettings): boolean {
-  return settings.currentPresetIndex !== null || settings.c > .001;
+  return settings.currentPresetIndex !== null || settings.c > 0;
 }
 
 export const HEAVY_SWATCHES = [

@@ -85,4 +85,20 @@ describe('AppearanceSection', () => {
 
     expect(getSettings().themeOptions.reviewEnhanceMarks).toBe(false);
   });
+
+  it('persists editor paper texture and disables it for unsupported themes', async () => {
+    await act(async () => {
+      root.render(React.createElement(AppearanceSection));
+    });
+
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="编辑器纸纹"]');
+    expect(toggle?.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => toggle?.click());
+    expect(getSettings().editorPaperBackground).toBe(true);
+
+    const nightCard = host.querySelector<HTMLButtonElement>('[data-theme-card="night-current"]');
+    await act(async () => nightCard?.click());
+    expect(toggle?.disabled).toBe(true);
+  });
 });
