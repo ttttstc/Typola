@@ -1,7 +1,7 @@
 {
   "name": "typola",
   "private": true,
-  "version": "2.0.4",
+  "version": "2.0.5-1",
   "type": "module",
   "scripts": {
     "dev": "vite --config config/vite.config.ts",
@@ -13,7 +13,11 @@
     "test:e2e": "playwright test --config config/playwright.config.ts",
     "preview": "vite preview --config config/vite.config.ts",
     "tauri": "tauri",
-    "tauri:build:local": "tauri build --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":false}}\"",
+    "sync:version": "node scripts/sync-version.mjs",
+    "prebuild": "npm run sync:version",
+    "pretauri:build:local": "npm run sync:version",
+    "pretauri:build:portable": "npm run sync:version",
+    "pretauri:build:update": "npm run sync:version",
     "portable:package": "node scripts/build-portable.mjs",
     "tauri:build:portable": "npm run tauri:build:local && npm run portable:package",
     "tauri:build:update": "tauri build --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":true}}\"",
