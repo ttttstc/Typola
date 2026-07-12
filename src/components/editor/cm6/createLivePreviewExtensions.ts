@@ -9,6 +9,7 @@ import { previewSyncExtension, type PreviewHeadingChange } from './previewSyncEx
 import { headingFoldExtension } from './headingFoldExtension';
 import { frontmatterFoldExtension } from './frontmatterFoldExtension';
 import { footnoteExtension } from './footnoteExtension';
+import { htmlPreviewExtension } from './htmlPreviewExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 import type { ReviewComment } from '../../../services/review/reviewState';
 import { reviewMarkExtension } from './reviewMarkExtension';
@@ -64,6 +65,7 @@ export function createLivePreviewExtensions(
     extensions.unshift(
       frontmatterFoldExtension(),
       footnoteExtension(),
+      htmlPreviewExtension(),
       inlinePreview(),
       tables(),
       imageBlocks(),

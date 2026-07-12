@@ -9071,6 +9071,9 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
 .cm6-edit-popover input { width: 100%; box-sizing: border-box; }
 .cm6-edit-popover-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+.cm6-frontmatter-chip, .cm6-footnote-ref { border: 0; color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 12%, transparent); border-radius: 5px; cursor: pointer; }
+.typola-cm6-html { display: block; max-width: 100%; }
+
 
 /* Table Submenu (Vditor IR table edit) */
 .typola-table-submenu {
