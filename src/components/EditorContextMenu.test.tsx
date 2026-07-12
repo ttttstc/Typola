@@ -121,3 +121,120 @@ describe('EditorContextMenu new actions (quote-up/down, link-edit, clear-format,
     expect(headingBtns).toHaveLength(7);
   });
 });
+
+describe('EditorContextMenu image actions (insert / replace / open / copy-path)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  const clickLabel = (label: string): HTMLButtonElement => {
+    const target = Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((b) => (b.firstChild as HTMLElement)?.textContent === label) as HTMLButtonElement;
+    expect(target).toBeTruthy();
+    return target;
+  };
+
+  it('插入图片 always shown when menu opens', () => {
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} onPick={() => {}} onClose={() => {}} />,
+      );
+    });
+    expect(clickLabel('插入图片')).toBeTruthy();
+  });
+
+  it('替换/打开文件/复制路径 only shown when hasImage', () => {
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          hasImage={false}
+          onPick={() => {}}
+          onClose={() => {}}
+        />,
+      );
+    });
+    for (const label of ['替换图片', '打开文件', '复制路径']) {
+      const found = Array.from(host.querySelectorAll('.editor-ctx-item'))
+        .find((b) => (b.firstChild as HTMLElement)?.textContent === label);
+      expect(found).toBeUndefined();
+    }
+
+    act(() => root.unmount());
+    host.innerHTML = '';
+    root = createRoot(host);
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          hasImage
+          onPick={() => {}}
+          onClose={() => {}}
+        />,
+      );
+    });
+    expect(clickLabel('替换图片')).toBeTruthy();
+    expect(clickLabel('打开文件')).toBeTruthy();
+    expect(clickLabel('复制路径')).toBeTruthy();
+  });
+
+  it('click 插入图片 → onPick({type:"image-insert"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('插入图片').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-insert' });
+  });
+
+  it('click 替换图片 → onPick({type:"image-replace"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} hasImage onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('替换图片').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-replace' });
+  });
+
+  it('click 打开文件 → onPick({type:"image-open"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} hasImage onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('打开文件').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-open' });
+  });
+
+  it('click 复制路径 → onPick({type:"image-copy-path"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} hasImage onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('复制路径').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-copy-path' });
+  });
+});

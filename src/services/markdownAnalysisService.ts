@@ -40,6 +40,12 @@ export type MarkdownLink = MarkdownRange & {
   title?: string;
 };
 
+export type MarkdownImage = MarkdownRange & {
+  alt: string;
+  url: string;
+  title?: string;
+};
+
 export type MarkdownCodeBlock = MarkdownRange & {
   language: string | null;
   contentFrom: number;
@@ -58,6 +64,7 @@ export type MarkdownAnalysisResult = {
   foldSections: MarkdownFoldSection[];
   tasks: MarkdownTask[];
   links: MarkdownLink[];
+  images: MarkdownImage[];
   codeBlocks: MarkdownCodeBlock[];
   mathBlocks: MarkdownMathBlock[];
   mermaidBlocks: MarkdownCodeBlock[];
@@ -97,6 +104,7 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
     foldSections: foldSectionsFromHeadings(source, headings),
     tasks: scanTasks(source, fencedRanges),
     links: scanLinks(source, fencedRanges),
+    images: scanImages(source, fencedRanges),
     codeBlocks,
     mathBlocks,
     mermaidBlocks,
@@ -243,6 +251,22 @@ function scanLinks(source: string, fencedRanges: MarkdownRange[]): MarkdownLink[
   return links;
 }
 
+function scanImages(source: string, fencedRanges: MarkdownRange[]): MarkdownImage[] {
+  const images: MarkdownImage[] = [];
+  for (const match of source.matchAll(LINK_PATTERN)) {
+    if (match[1] !== '!') continue;
+    const from = match.index ?? 0;
+    if (withinRanges(from, fencedRanges)) continue;
+    images.push({
+      ...rangeAt(source, from, from + match[0].length),
+      alt: match[2] ?? '',
+      url: match[3] ?? '',
+      ...(match[4] ? { title: match[4] } : {}),
+    });
+  }
+  return images;
+}
+
 /** Best-effort GFM table range lookup without storing tables in the cache. */
 function findTableRangeAt(source: string, offset: number): MarkdownRange | null {
   const lines = splitLines(source);
@@ -354,6 +378,12 @@ export function findMarkdownLinkAt(source: string, offset: number): MarkdownLink
   if (offset < 0 || offset > source.length) return null;
   const analysis = analyzeMarkdown(source);
   return analysis.links.find((link) => offset >= link.from && offset <= link.to) ?? null;
+}
+
+export function findMarkdownImageAt(source: string, offset: number): MarkdownImage | null {
+  if (offset < 0 || offset > source.length) return null;
+  const analysis = analyzeMarkdown(source);
+  return analysis.images.find((image) => offset >= image.from && offset <= image.to) ?? null;
 }
 
 export function headingPathAt(source: string, offset: number): string[] {

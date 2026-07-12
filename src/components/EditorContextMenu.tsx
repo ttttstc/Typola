@@ -12,6 +12,10 @@ export type FormatAction =
   | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
   | { type: 'link-edit' }
   | { type: 'cut' | 'copy' | 'paste' | 'select-all' }
+  | { type: 'image-insert' }
+  | { type: 'image-replace' }
+  | { type: 'image-open' }
+  | { type: 'image-copy-path' }
   | { type: 'table-insert'; rows: number; cols: number }
   | { type: 'table-align'; align: TableAlign; colIndex?: number }
   | { type: 'table-row-insert'; after?: boolean }
@@ -26,6 +30,7 @@ type Props = {
   hasSelection: boolean;
   hasMermaidSvg?: boolean;
   hasTable?: boolean;
+  hasImage?: boolean;
   onPick: (action: FormatAction) => void;
   onCopyMermaidSvg?: () => void;
   onClose: () => void;
@@ -42,6 +47,7 @@ export function EditorContextMenu({
   hasSelection,
   hasMermaidSvg = false,
   hasTable = false,
+  hasImage = false,
   onPick,
   onCopyMermaidSvg,
   onClose,
@@ -144,6 +150,18 @@ export function EditorContextMenu({
           <MenuItem label="在右侧插入列" onClick={() => pick({ type: 'table-column-insert', after: true })} />
           <MenuItem label="删除当前列" onClick={() => pick({ type: 'table-column-delete' })} />
           <MenuItem label="当前列居中" onClick={() => pick({ type: 'table-align', align: 'center' })} />
+        </>
+      )}
+
+      <div className="editor-ctx-separator" />
+
+      <MenuItem label="插入图片" onClick={() => pick({ type: 'image-insert' })} />
+
+      {hasImage && (
+        <>
+          <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />
+          <MenuItem label="打开文件" onClick={() => pick({ type: 'image-open' })} />
+          <MenuItem label="复制路径" onClick={() => pick({ type: 'image-copy-path' })} />
         </>
       )}
 
