@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@atomic-editor/editor/styles.css';
 import 'katex/dist/katex.min.css';
-import { EditorPane, type SourceHeadingScrollRequest } from '../../EditorPane';
+import { EditorPane, type ImageInsertRequest, type SourceHeadingScrollRequest } from '../../EditorPane';
 import type { SelectionActionId } from '../../../services/agent/selectionActions';
 import type { SelectionAnchor } from '../../../services/agent/types';
 import type { TypolaEditorKernel } from '../../../types/editorCore';
@@ -31,6 +31,7 @@ type Cm6MarkdownEditorPaneProps = {
   onOpenLink?: (link: MarkdownLink) => void;
   /** Task 切换后回调;埋点或外部状态同步用。 */
   onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
+  onRequestImageInsert?: (request?: ImageInsertRequest) => void;
 };
 
 /** 以 atomic-editor 默认 14px 为 100% 参考,滚轮缩放比例都换算到这个基准。 */
@@ -58,6 +59,7 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
       reviewComments,
       onOpenLink,
       onTaskToggle,
+      onRequestImageInsert,
       ...rest
     } = props;
     const settings = useSettings();
@@ -141,6 +143,7 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
             editorRef.current = instance;
           }}
           {...rest}
+          onRequestImageInsert={onRequestImageInsert}
           extraExtensions={livePreviewExtensions}
         />
         {zoomIndicator && (

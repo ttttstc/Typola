@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- 修复 CM6 写作预览中新插入的本地 Markdown 图片未转换为 Tauri asset URL、因而无法显示的问题。
+- 修复 CM6 写作预览中新插入的本地 Markdown 图片未转换为 Tauri asset URL、因而无法显示的问题；右键插入/替换现与工具栏、拖拽、粘贴统一遵循图像设置，外部目录和绝对路径图片可获 asset scope 后显示。
 - 修复自定义配色首次打开时调色盘被遮罩隐藏；未选颜色时改为使用素笺主题，调整后的颜色在关闭应用后仍会保留。
 
 All notable changes to this project will be documented in this file.

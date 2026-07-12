@@ -148,18 +148,6 @@ export function ImageSection() {
 
       <div className="settings-row">
         <div>
-          <div className="settings-label">对网络图片应用上述规则</div>
-          <div className="settings-description">本期仅影响后续扩展的网络图片插入入口。</div>
-        </div>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.imageApplyToOnline ? 'on' : ''}`}
-          onClick={() => handleChange({ imageApplyToOnline: !settings.imageApplyToOnline })}
-        />
-      </div>
-
-      <div className="settings-row">
-        <div>
           <div className="settings-label">允许 YAML 自动上传</div>
           <div className="settings-description">front matter 写 typora-copy-images-to: upload 时启用上传。</div>
         </div>

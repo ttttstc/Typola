@@ -32,6 +32,10 @@ export type SourceHeadingScrollRequest = {
   requestId: number;
 };
 
+export type ImageInsertRequest = {
+  replace?: { from: number; to: number; alt: string; title?: string };
+};
+
 type EditorPaneProps = {
   source: string;
   onChange: (value: string) => void;
@@ -42,13 +46,14 @@ type EditorPaneProps = {
   // 选区 AI 动作回调（由 AppLayout 注入；不传则不渲染 AI 菜单）
   // origin 是触发点的视口坐标(用于「原地闭环」浮卡定位);无 origin 时退化为对话框路径。
   onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
+  onRequestImageInsert?: (request?: ImageInsertRequest) => void;
 };
 
 export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(function EditorPane(
   props,
   ref,
 ) {
-  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction } = props;
+  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction, onRequestImageInsert } = props;
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean; hasImage: boolean } | null>(null);
@@ -220,7 +225,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     const editor = editorViewRef.current;
     if (!editor) return;
     if (action.type === 'image-insert') {
-      void insertImageAtCursor(editor, filePathRef.current);
+      onRequestImageInsert?.();
       return;
     }
     if (action.type === 'image-replace' || action.type === 'image-open' || action.type === 'image-copy-path') {
@@ -233,7 +238,9 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       const image = findMarkdownImageAt(sourceText, pos);
       if (!image) return;
       if (action.type === 'image-replace') {
-        void replaceImageAt(editor, image, filePathRef.current);
+        onRequestImageInsert?.({
+          replace: { from: image.from, to: image.to, alt: image.alt, title: image.title },
+        });
       } else if (action.type === 'image-open') {
         void openImageAt(image, filePathRef.current);
       } else {
@@ -242,7 +249,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       return;
     }
     applyCm6Format(editor, action);
-  }, [ctxMenu]);
+  }, [ctxMenu, onRequestImageInsert]);
 
   const extensions = useMemo(() => {
     return createMarkdownExtensions({
@@ -528,42 +535,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   );
 });
 
-// --- 图片插入/替换/打开/复制：保持 CM6 单一 transaction source ---
-async function pickLocalImageFile(): Promise<string | null> {
-  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return null;
-  try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const result = await open({
-      multiple: false,
-      directory: false,
-      filters: [
-        { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'] },
-      ],
-    });
-    if (typeof result === 'string') return result;
-  } catch (error) {
-    console.warn('pickLocalImageFile failed:', error);
-  }
-  return null;
-}
-
-function buildImageMarkdown(filePath: string, documentPath: string | undefined): string {
-  const settings = {
-    imagePreferRelative: true,
-    imageEnsureDotPrefix: true,
-    imageEscapeUrl: false,
-  };
-  const formattedSrc = formatImageSrc(filePath, documentPath, settings);
-  const baseName = filePath.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? '';
-  const alt = baseName.replace(/\.[^.]+$/u, '');
-  return `![${alt}](${formattedSrc})`;
-}
-
-function imageMarkdownReplacement(image: MarkdownImage, newSrc: string): string {
-  const titlePart = image.title ? ` "${image.title}"` : '';
-  return `![${image.alt}](${newSrc}${titlePart})`;
-}
-
 function resolveSrcForMarkdown(rawSrc: string, documentPath: string | undefined): string {
   if (/^(?:https?:|data:|mailto:|#)/iu.test(rawSrc)) return rawSrc;
   if (typeof documentPath !== 'string' || !documentPath) return rawSrc;
@@ -574,34 +545,6 @@ function resolveSrcForMarkdown(rawSrc: string, documentPath: string | undefined)
     imageEnsureDotPrefix: true,
     imageEscapeUrl: false,
   });
-}
-
-async function insertImageAtCursor(view: import('@codemirror/view').EditorView, documentPath: string | undefined) {
-  const filePath = await pickLocalImageFile();
-  if (!filePath) return;
-  const markdown = buildImageMarkdown(filePath, documentPath);
-  const sel = view.state.selection.main;
-  view.dispatch({
-    changes: { from: sel.from, to: sel.to, insert: markdown },
-    selection: { anchor: sel.from + markdown.length },
-  });
-  view.focus();
-}
-
-async function replaceImageAt(
-  view: import('@codemirror/view').EditorView,
-  image: MarkdownImage,
-  documentPath: string | undefined,
-) {
-  const filePath = await pickLocalImageFile();
-  if (!filePath) return;
-  const newSrc = resolveSrcForMarkdown(filePath, documentPath);
-  const replacement = imageMarkdownReplacement(image, newSrc);
-  view.dispatch({
-    changes: { from: image.from, to: image.to, insert: replacement },
-    selection: { anchor: image.from + replacement.length },
-  });
-  view.focus();
 }
 
 async function openImageAt(image: MarkdownImage, documentPath: string | undefined) {
