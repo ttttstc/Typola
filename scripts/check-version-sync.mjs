@@ -27,6 +27,8 @@ if (unique.size !== 1) {
   for (const [file, version] of Object.entries(versions)) {
     console.error(`  ${file}: ${version}`);
   }
+  console.error('');
+  console.error('Run `npm run sync:version` to align all three from package.json.');
   process.exit(1);
 }
 

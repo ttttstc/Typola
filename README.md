@@ -157,6 +157,69 @@ npm run tauri:build:update     # 带更新签名的发布构建
 - Windows MSI 安装包：`src-tauri/target/release/bundle/msi/`
 - Windows 免安装包：`src-tauri/target/release/bundle/portable/`
 
+### 版本号管理
+
+版本号以 **`package.json`** 为真理源,`Cargo.toml` 和 `tauri.conf.json` 在 build 时**自动同步**,不需要手动三处改:
+
+| 命令 | 作用 |
+|---|---|
+| `npm version patch --no-git-tag-version` | 升级 patch 版本(不改 git tag) |
+| `npm run sync:version` | 把 `package.json` 的版本号同步到 `Cargo.toml` + `tauri.conf.json` |
+| `npm run tauri:build:*` | 所有 build 命令自带 `pre*` 钩子,自动跑 `sync:version` |
+
+> **接手人注意**:
+> - **不要手动同时改三个文件**。改 `package.json` 后跑 `npm run sync:version`,或直接用 `npm run tauri:build:*` 触发自动同步。
+> - CI 用 `node scripts/check-version-sync.mjs` 兜底校验,不一致会 fail 并提示跑 `npm run sync:version`。
+
+### 发布流程
+
+```bash
+# 1. 升级版本(只改 package.json,不建 tag)
+npm version patch --no-git-tag-version   # 或 minor / major
+
+# 2. 修改 CHANGELOG.md 对应章节(同一 commit)
+
+# 3. 提交
+git add -A
+git commit -m "release: vX.X.X"
+
+# 4. 打 tag 触发 CI(签名 + manifest + 自动生成 release notes)
+git tag vX.X.X
+git push origin main --follow-tags
+```
+
+CI `release.yml` 推 `v*` tag 时自动触发:
+
+- 构建安装包 + 安装包签名
+- 生成 `latest.json` manifest(带签名)
+- 校验三处版本号同步
+- GitHub 自动按 PR labels 生成 release notes([`.github/release.yml`](.github/release.yml))
+
+#### 发布维护:签名钥匙
+
+| 项目 | 位置 | 说明 |
+|---|---|---|
+| 私钥文件 | `~/.tauri/typola.key` | 生成一次,**不要进仓**(`.gitignore` 已屏蔽) |
+| 私钥密码 | GitHub Actions Secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | CI 注入 |
+| 私钥内容 | GitHub Actions Secret `TAURI_SIGNING_PRIVATE_KEY` | CI 注入 |
+| 公钥 | `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey` | 公开,客户端验签用 |
+
+> **生成钥匙对(只做一次)**:
+> ```
+> cargo tauri signer generate -w ~/.tauri/typola.key
+> ```
+> 把私钥 base64 + 密码分别进 GitHub Web UI `Settings → Secrets → Actions`,公钥贴到 `tauri.conf.json` 的 `plugins.updater.pubkey`。
+
+恢复钥匙(灾难场景):私钥文件 + 密码缺失会导致所有已发版本无法被客户端验签,必须**立即**:
+
+```bash
+# 1. 删除所有 tag + release
+# 2. 重新生成 keypair(客户端会作废,用户需手动卸载重装)
+# 3. 新的 pubkey 进 tauri.conf.json
+```
+
+建议把 `~/.tauri/typola.key` 备份到加密 U 盘或 1Password。
+
 ## 项目结构
 
 ```text
