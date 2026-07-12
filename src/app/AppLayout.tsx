@@ -205,6 +205,7 @@ export function AppLayout() {
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
   const [transientMessage, setTransientMessage] = useState('');
+  const [tocOpenRequest, setTocOpenRequest] = useState(0);
   const {
     toc,
     setToc,
@@ -1727,6 +1728,7 @@ export function AppLayout() {
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
           onToggleTerminal: handleToggleTerminal,
+          onOpenToc: () => setTocOpenRequest((tick) => tick + 1),
           onSetDocMode: (next) => void setDocMode(next),
           onNew: handleNewFile,
           onOpen: handleOpen,
@@ -1811,6 +1813,7 @@ export function AppLayout() {
           activeIndex: activeTocIndex,
           pinned: tocPinned,
           alwaysPinned: settings.tocAlwaysPinned,
+          openRequest: tocOpenRequest,
           onPinnedChange: handleTocPinnedChange,
           onAlwaysPinnedChange: handleTocAlwaysPinnedChange,
           onNavigate: handleTocNavigate,
