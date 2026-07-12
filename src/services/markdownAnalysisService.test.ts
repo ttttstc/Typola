@@ -9,6 +9,7 @@ import {
   isRangeWithinSingleMarkdownBlock,
   listMarkdownTasks,
   markdownBlockAt,
+  detectFrontmatter,
 } from './markdownAnalysisService';
 
 const fixture = [
@@ -46,6 +47,11 @@ const fixture = [
 ].join('\n');
 
 describe('markdownAnalysisService', () => {
+  it('detects only leading YAML frontmatter and excludes it from headings', () => {
+    const source = '---\ntitle: 草稿\n---\n# 正文';
+    expect(detectFrontmatter(source)).toMatchObject({ from: 0, to: 17 });
+    expect(analyzeMarkdown(source).headings.map((heading) => heading.text)).toEqual(['正文']);
+  });
   it('collects ATX and Setext headings while ignoring fenced examples', () => {
     const result = analyzeMarkdown([
       '# 总览',

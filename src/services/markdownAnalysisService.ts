@@ -79,6 +79,7 @@ export type MarkdownAnalysisResult = {
   tables: MarkdownTable[];
   stats: MarkdownDocumentStats;
   diagnostics: MarkdownDiagnostic[];
+  frontmatter: MarkdownRange | null;
 };
 
 const markdownParser = parser.configure(GFM);
@@ -95,17 +96,18 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
   if (cached?.source === source) return cached.result;
 
   const nodes = collectTreeNodes(source);
+  const frontmatter = detectFrontmatter(source);
   const codeBlocks = nodes
     .filter((node) => node.name === 'FencedCode')
     .map((node) => codeBlockFromRange(source, node.from, node.to));
   const parsedHeadings = nodes
     .map((node, index) => headingFromNode(source, node.name, node.from, node.to, index))
     .filter((heading): heading is MarkdownHeading => heading !== null);
-  const headings = mergeHeadings(source, parsedHeadings);
+  const headings = mergeHeadings(source, parsedHeadings).filter((heading) => !frontmatter || heading.from >= frontmatter.to);
   const tables = nodes
     .filter((node) => node.name === 'Table')
     .map((node) => rangeAt(source, node.from, node.to));
-  const fencedRanges = codeBlocks;
+  const fencedRanges = frontmatter ? [...codeBlocks, frontmatter] : codeBlocks;
   const result: MarkdownAnalysisResult = {
     version: MARKDOWN_ANALYSIS_VERSION,
     sourceHash,
@@ -120,9 +122,22 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
     tables,
     stats: calculateStats(source, fencedRanges),
     diagnostics: [],
+    frontmatter,
   };
   remember(source, result);
   return result;
+}
+
+/** Only a first-document YAML fence counts as frontmatter. */
+export function detectFrontmatter(source: string): MarkdownRange | null {
+  const match = source.match(/^(?:\uFEFF)?---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/u);
+  return match ? rangeAt(source, 0, match[0].length) : null;
+}
+
+export function stripFrontmatter(source: string): string {
+  const frontmatter = detectFrontmatter(source);
+  if (!frontmatter) return source;
+  return source.slice(frontmatter.to).replace(/^\r?\n/u, '');
 }
 
 /** Debounced adapter for React/worker callers. Results remain source-hash cached. */

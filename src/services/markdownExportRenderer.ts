@@ -10,6 +10,7 @@ import remarkRehype from 'remark-rehype';
 import { unified } from 'unified';
 import { resolveLocalImages } from './localImageResolver';
 import { renderMermaidIn } from './mermaidRenderer';
+import { stripFrontmatter } from './markdownAnalysisService';
 
 export type MarkdownExportTheme = 'light' | 'dark';
 
@@ -38,12 +39,13 @@ export async function markdownToExportHtml(
   source: string,
   options: MarkdownToExportHtmlOptions = {},
 ): Promise<string> {
-  if (!source.trim()) {
+  const exportSource = stripFrontmatter(source);
+  if (!exportSource.trim()) {
     options.target?.replaceChildren();
     return '';
   }
 
-  const rendered = String(await exportMarkdownProcessor.process(source));
+  const rendered = String(await exportMarkdownProcessor.process(exportSource));
   const target = options.target ?? document.createElement('div');
   target.classList.add('typola-export-content');
   target.innerHTML = rendered;
