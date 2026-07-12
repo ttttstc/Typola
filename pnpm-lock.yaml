@@ -35,6 +35,9 @@ importers:
       '@lezer/markdown':
         specifier: ^1.4.3
         version: 1.6.4
+      '@paper-design/shaders-react':
+        specifier: ^0.0.77
+        version: 0.0.77(@types/react@19.2.17)(react@19.2.7)
       '@tauri-apps/api':
         specifier: 2.11.0
         version: 2.11.0
@@ -573,6 +576,18 @@ packages:
 
   '@oxc-project/types@0.138.0':
     resolution: {integrity: sha512-1a7ZKmrRTCoN1XMZ4L0PyyqrMnrNlLyPuOkdSX2MZg7IiIGRUyurNhAm73ptDOraoBcIordsIGKNPKUzy3ZmfA==}
+
+  '@paper-design/shaders-react@0.0.77':
+    resolution: {integrity: sha512-VCjhK7k6GT1BMjq7kLsDHMnMy1ryjCTALdhOVIf2Z5b1jh5eEHXqHdQCvMAJ7v6evjiN1twzjM1KUNOg2RoXBw==}
+    peerDependencies:
+      '@types/react': ^18 || ^19
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  '@paper-design/shaders@0.0.77':
+    resolution: {integrity: sha512-y0mR3brBu6qvVgbnvBdXX3zL/hajdamkECLt8NbexaEc1L46W3a+ZIEwxu1NJ2/bqwxAgjJC0o2+4CAii5wp/w==}
 
   '@playwright/test@1.60.0':
     resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
@@ -2970,6 +2985,15 @@ snapshots:
     optional: true
 
   '@oxc-project/types@0.138.0': {}
+
+  '@paper-design/shaders-react@0.0.77(@types/react@19.2.17)(react@19.2.7)':
+    dependencies:
+      '@paper-design/shaders': 0.0.77
+      react: 19.2.7
+    optionalDependencies:
+      '@types/react': 19.2.17
+
+  '@paper-design/shaders@0.0.77': {}
 
   '@playwright/test@1.60.0':
     dependencies:
