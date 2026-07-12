@@ -53,6 +53,7 @@ export type MarkdownMathBlock = MarkdownRange & {
 };
 
 export type MarkdownTable = MarkdownRange;
+export type MarkdownHtmlBlock = MarkdownRange;
 
 export type MarkdownDocumentStats = {
   characters: number;
@@ -78,6 +79,7 @@ export type MarkdownAnalysisResult = {
   mathBlocks: MarkdownMathBlock[];
   mermaidBlocks: MarkdownCodeBlock[];
   tables: MarkdownTable[];
+  htmlBlocks: MarkdownHtmlBlock[];
   stats: MarkdownDocumentStats;
   diagnostics: MarkdownDiagnostic[];
   frontmatter: MarkdownRange | null;
@@ -108,7 +110,8 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
   const tables = nodes
     .filter((node) => node.name === 'Table')
     .map((node) => rangeAt(source, node.from, node.to));
-  const fencedRanges = frontmatter ? [...codeBlocks, frontmatter] : codeBlocks;
+  const htmlBlocks = collectHtmlBlocks(source);
+  const fencedRanges = [...codeBlocks, ...htmlBlocks, ...(frontmatter ? [frontmatter] : [])];
   const result: MarkdownAnalysisResult = {
     version: MARKDOWN_ANALYSIS_VERSION,
     sourceHash,
@@ -121,12 +124,21 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
     mathBlocks: collectMathBlocks(source, fencedRanges, codeBlocks),
     mermaidBlocks: codeBlocks.filter((block) => block.language === 'mermaid'),
     tables,
+    htmlBlocks,
     stats: calculateStats(source, fencedRanges),
     diagnostics: [],
     frontmatter,
   };
   remember(source, result);
   return result;
+}
+
+function collectHtmlBlocks(source: string): MarkdownHtmlBlock[] {
+  const blocks: MarkdownHtmlBlock[] = [];
+  for (const match of source.matchAll(/<(details|div|table|figure|blockquote)\b[^>]*>[\s\S]*?<\/\1>/giu)) {
+    const from = match.index ?? 0; blocks.push(rangeAt(source, from, from + match[0].length));
+  }
+  return blocks;
 }
 
 /** Only a first-document YAML fence counts as frontmatter. */

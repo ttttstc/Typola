@@ -52,6 +52,13 @@ describe('markdownAnalysisService', () => {
     expect(detectFrontmatter(source)).toMatchObject({ from: 0, to: 17 });
     expect(analyzeMarkdown(source).headings.map((heading) => heading.text)).toEqual(['正文']);
   });
+
+  it('isolates raw HTML blocks from Markdown scanners', () => {
+    const source = '<details><summary>x</summary>![not-image](x.png)</details>\n![real](a.png)';
+    const result = analyzeMarkdown(source);
+    expect(result.htmlBlocks).toHaveLength(1);
+    expect(result.images.map((image) => image.url)).toEqual(['a.png']);
+  });
   it('collects ATX and Setext headings while ignoring fenced examples', () => {
     const result = analyzeMarkdown([
       '# 总览',
