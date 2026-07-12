@@ -36,7 +36,7 @@ export type MarkdownLink = MarkdownRange & {
 
 export type MarkdownImage = MarkdownRange & {
   alt: string;
-  src: string;
+  url: string;
   title?: string;
 };
 
@@ -222,7 +222,7 @@ function collectLinkEntries(source: string, fencedRanges: MarkdownRange[], image
     const from = match.index ?? 0;
     if (withinRanges(from, fencedRanges) || (images ? match[1] !== '!' : match[1] === '!')) continue;
     const range = rangeAt(source, from, from + match[0].length);
-    if (images) found.push({ ...range, alt: match[2], src: match[3], ...(match[4] ? { title: match[4] } : {}) });
+    if (images) found.push({ ...range, alt: match[2], url: match[3], ...(match[4] ? { title: match[4] } : {}) });
     else found.push({ ...range, label: match[2], url: match[3], ...(match[4] ? { title: match[4] } : {}) });
   }
   return found;
@@ -372,6 +372,11 @@ export function findMarkdownLinkAt(source: string, offset: number): MarkdownLink
   if (offset < 0 || offset > source.length) return null;
   const analysis = analyzeMarkdown(source);
   return analysis.links.find((link) => offset >= link.from && offset <= link.to) ?? null;
+}
+
+export function findMarkdownImageAt(source: string, offset: number): MarkdownImage | null {
+  if (offset < 0 || offset > source.length) return null;
+  return analyzeMarkdown(source).images.find((image) => offset >= image.from && offset <= image.to) ?? null;
 }
 
 export function headingPathAt(source: string, offset: number): string[] {
