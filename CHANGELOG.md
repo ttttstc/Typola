@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - 选区菜单窄化对齐 Typora/Obsidian(`width: max-content; max-width: 240px`,kbd 间距收紧 16→10px);右键菜单新增 5 个基础编辑能力:升级引用 / 降级引用 / 编辑链接 / 清除格式 / 编辑代码块语言,均走 `applyVditorFormat` 现有分发,Vditor IR 模式直接操作选中/选区 + `updateValue` 重渲染;新增 i18n keys `contextMenuQuoteUp / contextMenuQuoteDown / contextMenuLinkEdit / contextMenuClearFormat / contextMenuCodeblockLang` 中英日三译。
 - 选区浮条右端加 `⋯` 子按钮 + hover tooltip,mini menu 暴露两项:「本页不再展示」(filePath 维度 session suppress,直到切文档)与「全局隐藏」(直接写 `selectionFloatingBarEnabled=false`,与设置页 toggle 同步);新增 keys `floatingBarHideThisPage / floatingBarHideGlobal / floatingBarTooltip` 中英日三译;tooltip 用现有 Tooltip 组件浮显。
 - 工具栏新增「打开文件夹」按钮(Cmd+Shift+O),选夹后走新增 Tauri cmd `read_first_level_openable` 仅列一层 md/html/docx(不递归,跳过隐藏文件与节点_modules/dist/target/.git),批量入 tab(last active),单文件打开失败不阻塞其他(#170);新增 keys `toolbarOpenFolderTitle / toolbarOpenFolderLabel` 中英日三译;fileService 加 `openFolder` 函数,useFileTabs 加 `handleOpenFolder` 回调。
+- 检视意见侧栏点击跳转正文 + 失效角标（issue #180 范围裁剪版）：右侧检视面板点击条目 → `TypolaEditorKernel.revealRange(from, to, {preserveFocus: true})` 跳到锚点；anchor 失效（`stale` / `wrong-file`）时条目显示「位置可能已变」角标，不自动恢复。`EditorPane.revealRange` 内部把越界范围夹回 `[0, docLen]` 避免 `RangeError: Selection points outside of document`，所有调用方（侧栏 / 搜索 / 大纲跳转）均受益。`review.md` 双轨导出行为不变。
 
 ### Fixed
 

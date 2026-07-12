@@ -9989,6 +9989,17 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   font-size: 10.5px;
   font-weight: 600;
   color: var(--theme-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.review-sidebar-item-stale {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-warning, #d97706);
+  opacity: 0.85;
 }
 
 .review-sidebar-item-quote {

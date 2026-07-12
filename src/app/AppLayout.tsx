@@ -1552,15 +1552,29 @@ export function AppLayout() {
         />
       </div>
     </aside>
-  ) : rightPanelMode === 'review' && !isDocx ? (
+  ) : rightPanelMode === 'review' && !isDocx ? (() => {
+    // 列表渲染时一次性计算每条意见的 anchor 状态,失效时给 Sidebar 显示角标。
+    // kernel.validateAnchor 已存在(#179):'valid' / 'stale' / 'wrong-file',后两种都视作"位置可能不准"。
+    const commentsWithStatus = reviewStateApi.state.comments.map((comment) => {
+      const status = editorCommandRef.current?.validateAnchor(
+        comment.anchor.filePath,
+        comment.anchor.from,
+        comment.anchor.to,
+        comment.anchor.originalText,
+        comment.anchor.prefixHint,
+      );
+      return { ...comment, isStale: status === 'stale' || status === 'wrong-file' };
+    });
+    return (
     <ReviewSidebarPanel
-      comments={reviewStateApi.state.comments}
+      comments={commentsWithStatus}
       dirty={reviewStateApi.state.dirty}
       currentFilePath={file.path}
       onJump={(comment: ReviewComment) => {
         // 用 anchor 保存的 from/to 直接定位 — 比 revealText(originalText) 更稳:
         // 1) 不依赖文档未修改;2) 即使原文出现多次也跳到创建时的精确位置。
         // preserveFocus 让检视面板保留焦点,用户可以连续点多个意见。
+        // 即使 anchor 已失效也照样跳(issue #180 #180:不做自动恢复,只是让用户看到上下文)。
         editorCommandRef.current?.revealRange(comment.anchor.from, comment.anchor.to, {
           preserveFocus: true,
         });
@@ -1583,7 +1597,8 @@ export function AppLayout() {
       onRefreshRevisions={refreshRevisions}
       onClose={() => setRightPanelMode('none')}
     />
-  ) : rightPanelMode === 'artifacts' && !isDocx ? (
+    );
+  })() : rightPanelMode === 'artifacts' && !isDocx ? (
     <ArtifactCenterPanel
       records={artifactRecords}
       activeConversationId={convManager.activeConvId}

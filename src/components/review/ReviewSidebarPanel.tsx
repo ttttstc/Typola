@@ -12,15 +12,17 @@
 // 设计原则:保持与原右栏单模态外观一致(无新增 Tab 抽象),通过 header 切换按钮在
 // 两视图间切。
 
-import { Edit3, FileDown, FileText, GitCompare, MessageSquare, RefreshCw, Send, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Edit3, FileDown, FileText, GitCompare, MessageSquare, RefreshCw, Send, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import type { ReviewComment } from '../../services/review/reviewState';
 import type { RevisionEntry } from '../../hooks/useRevisionList';
 
 type View = 'review' | 'aiRevisions';
 
+type ReviewCommentWithStatus = ReviewComment & { isStale?: boolean };
+
 type Props = {
-  comments: ReviewComment[];
+  comments: ReviewCommentWithStatus[];
   dirty: boolean;
   /** 当前文档路径(用于显示 + dirty 判断;无文档时 disabled 所有操作) */
   currentFilePath?: string;
@@ -167,7 +169,7 @@ function ReviewListView({
   onRemove,
   onExport,
 }: {
-  comments: ReviewComment[];
+  comments: ReviewCommentWithStatus[];
   hasComments: boolean;
   canAct: boolean;
   currentFilePath?: string;
@@ -198,9 +200,20 @@ function ReviewListView({
                 type="button"
                 className="review-sidebar-item-main"
                 onClick={() => onJump(comment)}
-                title="跳转到原文片段"
+                title={comment.isStale ? '原文已变,跳转位置可能不准' : '跳转到原文片段'}
               >
-                <span className="review-sidebar-item-index">#{idx + 1}</span>
+                <span className="review-sidebar-item-index">
+                  #{idx + 1}
+                  {comment.isStale && (
+                    <span
+                      className="review-sidebar-item-stale"
+                      title="位置可能已变(原文已改动)"
+                      aria-label="位置可能已变"
+                    >
+                      <AlertTriangle size={10} />
+                    </span>
+                  )}
+                </span>
                 <span className="review-sidebar-item-quote">{truncate(comment.anchor.originalText, 60)}</span>
                 <span className="review-sidebar-item-text">{comment.text}</span>
               </button>

@@ -84,3 +84,44 @@ describe('EditorPane.replaceRanges', () => {
     expect(ref.current!.getMarkdown()).toBe('alpha');
   });
 });
+
+describe('EditorPane.revealRange', () => {
+  it('clamps stale anchor to current document bounds (issue #180 review)', async () => {
+    // 模拟检视意见 anchor 来自更早版本的文档,当前文档已被缩短,from/to 越界。
+    // 期望 revealRange 不抛 RangeError,并把范围夹回 [0, docLen]。
+    const ref = await mountEditor('short');
+    const docLen = ref.current!.getMarkdown().length;
+
+    expect(() => {
+      act(() => {
+        ref.current!.revealRange(50, 200, { preserveFocus: true });
+      });
+    }).not.toThrow();
+
+    // 文档本身不应被 revealRange 修改。
+    expect(ref.current!.getMarkdown()).toBe('short');
+    expect(docLen).toBe(5);
+  });
+
+  it('clamps negative from to 0', async () => {
+    const ref = await mountEditor('short');
+
+    expect(() => {
+      act(() => {
+        ref.current!.revealRange(-10, 3, { preserveFocus: true });
+      });
+    }).not.toThrow();
+    expect(ref.current!.getMarkdown()).toBe('short');
+  });
+
+  it('keeps valid range unchanged', async () => {
+    const ref = await mountEditor('hello world');
+
+    expect(() => {
+      act(() => {
+        ref.current!.revealRange(0, 5, { preserveFocus: true });
+      });
+    }).not.toThrow();
+    expect(ref.current!.getMarkdown()).toBe('hello world');
+  });
+});
