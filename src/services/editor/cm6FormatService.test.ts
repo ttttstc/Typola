@@ -83,4 +83,13 @@ describe('applyCm6Format', () => {
     expect(view.state.doc.toString()).toBe('strong\ncode');
     view.destroy();
   });
+
+  it('captures and applies inline format in one transaction', () => {
+    const { view } = createView('**bold**\nplain', 0, 8);
+    applyCm6Format(view, { type: 'capture-format' });
+    view.dispatch({ selection: { anchor: 9, head: 14 } });
+    applyCm6Format(view, { type: 'apply-format' });
+    expect(view.state.doc.toString()).toBe('**bold**\n**plain**');
+    view.destroy();
+  });
 });

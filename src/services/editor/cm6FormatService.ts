@@ -4,6 +4,9 @@ import { applyTableFormat } from './tableFormatService';
 import { findMarkdownLinkAt } from '../markdownAnalysisService';
 import type { Cm6EditRequest } from '../../components/editor/cm6/Cm6EditPopover';
 
+type CapturedFormat = { bold: boolean; italic: boolean; strike: boolean; code: boolean; prefix: string | null };
+const capturedFormats = new WeakMap<EditorView, CapturedFormat>();
+
 // 应用一个格式化动作到 CM6 编辑器(走 view.dispatch 改 doc,不依赖 Vditor)。
 // 行内格式(加粗/斜体/删除线/行内代码)走 wrapInline,光标和选区都保留。
 // 块格式(引用/列表/任务/代码块/分隔线/链接)走 toggleLinePrefix 或 wrapBlock。
@@ -55,6 +58,12 @@ export function applyCm6Format(view: EditorView, action: FormatAction, requestEd
       return;
     case 'link-edit':
       editLink(view, requestEdit);
+      return;
+    case 'capture-format':
+      capturedFormats.set(view, captureFormat(view));
+      return;
+    case 'apply-format':
+      applyCapturedFormat(view, capturedFormats.get(view));
       return;
     case 'clear-format':
       clearFormat(view);
@@ -327,6 +336,30 @@ function changeQuoteLevel(view: EditorView, upgrade: boolean): void {
     });
   }
   view.dispatch({ changes });
+  view.focus();
+}
+
+function captureFormat(view: EditorView): CapturedFormat {
+  const selection = view.state.selection.main;
+  const line = view.state.doc.lineAt(selection.from);
+  const text = view.state.doc.sliceString(line.from, line.to);
+  const sample = selection.empty ? text : view.state.sliceDoc(selection.from, selection.to);
+  return { bold: /\*\*[^*]+\*\*/u.test(sample), italic: /(^|[^*])\*[^*]+\*(?!\*)/u.test(sample), strike: /~~[^~]+~~/u.test(sample), code: /`[^`]+`/u.test(sample), prefix: text.match(/^(?:#{1,6}\s+|>\s+|[-*]\s(?:\[[ xX]\]\s+)?|\d+\.\s+)/u)?.[0] ?? null };
+}
+
+function applyCapturedFormat(view: EditorView, captured?: CapturedFormat): void {
+  if (!captured) return;
+  const selection = view.state.selection.main;
+  let next = view.state.sliceDoc(selection.from, selection.to) || '文本';
+  if (captured.code) next = `\`${next}\``;
+  if (captured.strike) next = `~~${next}~~`;
+  if (captured.italic) next = `*${next}*`;
+  if (captured.bold) next = `**${next}**`;
+  const line = view.state.doc.lineAt(selection.from);
+  const from = captured.prefix ? line.from : selection.from;
+  const to = captured.prefix ? line.to : selection.to;
+  const insert = captured.prefix ? `${captured.prefix}${next}` : next;
+  view.dispatch({ changes: { from, to, insert }, selection: { anchor: from, head: from + insert.length } });
   view.focus();
 }
 

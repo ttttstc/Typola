@@ -9,6 +9,7 @@ import {
   FolderDown,
   FolderOpen,
   PackageOpen,
+  Paintbrush,
   ImagePlus,
   Italic,
   Link,
@@ -266,6 +267,8 @@ export function Toolbar({
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip="无序列表" aria-label="无序列表"><List size={iconSize} strokeWidth={strokeWidth} /></button>
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip="有序列表" aria-label="有序列表"><ListOrdered size={iconSize} strokeWidth={strokeWidth} /></button>
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip="任务列表" aria-label="任务列表"><ListTodo size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'capture-format' })} data-tooltip="捕获格式" aria-label="捕获格式"><Paintbrush size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'apply-format' })} data-tooltip="应用格式" aria-label="应用格式"><Paintbrush size={iconSize} strokeWidth={strokeWidth} /></button>
           </div>
         )}
       </div>

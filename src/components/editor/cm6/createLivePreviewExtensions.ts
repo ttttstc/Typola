@@ -7,6 +7,8 @@ import { mermaidPreviewExtension } from './mermaidPreviewExtension';
 import { wheelZoomExtension } from './wheelZoomExtension';
 import { previewSyncExtension, type PreviewHeadingChange } from './previewSyncExtension';
 import { headingFoldExtension } from './headingFoldExtension';
+import { frontmatterFoldExtension } from './frontmatterFoldExtension';
+import { footnoteExtension } from './footnoteExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 import type { ReviewComment } from '../../../services/review/reviewState';
 import { reviewMarkExtension } from './reviewMarkExtension';
@@ -60,6 +62,8 @@ export function createLivePreviewExtensions(
   ];
   if (livePreview) {
     extensions.unshift(
+      frontmatterFoldExtension(),
+      footnoteExtension(),
       inlinePreview(),
       tables(),
       imageBlocks(),
