@@ -4,6 +4,7 @@ import { listThemeDefinitions, type ThemeDefinition, type ThemeId } from '../../
 
 const ZOOM_LEVELS = [80, 90, 100, 110, 120];
 const THEMES = listThemeDefinitions();
+const PAPER_TEXTURE_UNSUPPORTED_THEMES = new Set<ThemeId>(['night-current', 'abstract']);
 
 function themePreviewStyle(theme: ThemeDefinition): CSSProperties {
   return {
@@ -150,6 +151,23 @@ export function AppearanceSection() {
         />
         <span>检视模式增强 AI 改动与标注颜色</span>
       </label>
+
+      <div className="settings-block">
+        <div className="settings-label">编辑器纸纹</div>
+        <div className="settings-row">
+          <div className="settings-help">
+            为编辑器纸张添加静态纹理；深海与抽象主题不启用此效果。
+          </div>
+          <button
+            type="button"
+            className={`toggle-switch ${settings.editorPaperBackground ? 'on' : ''}`}
+            aria-label="编辑器纸纹"
+            aria-pressed={settings.editorPaperBackground}
+            disabled={PAPER_TEXTURE_UNSUPPORTED_THEMES.has(settings.themeId)}
+            onClick={() => handleChange({ editorPaperBackground: !settings.editorPaperBackground })}
+          />
+        </div>
+      </div>
 
       <div className="settings-hint">
         主题会改变 Typola 的界面、编辑器、AI 浮层和检视标记，但不会改变 Markdown 文件内容。导出样式仍由 Word / HTML 导出预设控制。

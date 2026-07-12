@@ -75,6 +75,7 @@ describe('settingsService', () => {
     expect(getSettings()).toMatchObject({
       appearanceColorSystem: 'define-color',
       defineColorSettings: { l: 1, c: 0, h: 0 },
+      editorFontFamily: 'Source Han Serif SC VF',
       previewFontFamily: 'Default',
       previewChineseFontFamily: 'Default',
       previewLatinFontFamily: 'Default',
@@ -89,6 +90,40 @@ describe('settingsService', () => {
     expect(getSettings().wechatCustomCss).toBe('');
     expect(getSettings().previewFontFamily).toBe('Default');
     expect(getSettings().tocAlwaysPinned).toBe(false);
+  });
+
+  it('persists the selectable editor font and migrates the old default', () => {
+    expect(getSettings().editorFontFamily).toBe('Source Han Serif SC VF');
+
+    updateSettings({ editorFontFamily: 'JetBrains Mono' });
+    expect(getSettings().editorFontFamily).toBe('JetBrains Mono');
+
+    localStorage.setItem('typola-settings', JSON.stringify({
+      fontDefaultsVersion: 3,
+      editorFontFamily: 'IBM Plex Mono',
+    }));
+    expect(getSettings().editorFontFamily).toBe('Source Han Serif SC VF');
+  });
+
+  it('persists custom theme colors and restores them from localStorage', () => {
+    const defineColorSettings = {
+      ...getSettings().defineColorSettings,
+      l: 0.72,
+      c: 0.08,
+      h: 224,
+      isGradient: true,
+      pattern: 'noise' as const,
+    };
+
+    updateSettings({ appearanceColorSystem: 'define-color', defineColorSettings });
+    expect(getSettings()).toMatchObject({ appearanceColorSystem: 'define-color', defineColorSettings });
+
+    localStorage.removeItem('typola-settings');
+    localStorage.setItem('typola-settings', JSON.stringify({
+      appearanceColorSystem: 'define-color',
+      defineColorSettings,
+    }));
+    expect(getSettings()).toMatchObject({ appearanceColorSystem: 'define-color', defineColorSettings });
   });
 
   it('persists and normalizes the default pinned outline preference', () => {
@@ -249,7 +284,7 @@ describe('settingsService', () => {
       previewChineseFontFamily: 'Songti SC',
       previewLatinFontFamily: 'Iowan Old Style',
       previewHeadingFontFamily: 'Latin',
-      fontDefaultsVersion: 3,
+      fontDefaultsVersion: 4,
     });
 
     localStorage.setItem('typola-settings', JSON.stringify({

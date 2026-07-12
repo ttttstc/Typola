@@ -1,8 +1,9 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
+import { updateSettings } from '../services/settingsService';
 import type { TypolaEditorKernel } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
@@ -70,9 +71,11 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
+  const floatingBarHiddenDocsRef = useRef<Set<string>>(new Set());
   const editorFontFamily = settings.editorFontFamily === 'System Default'
     ? 'var(--font-mono)'
-    : `'${settings.editorFontFamily}', var(--font-mono)`;
+    : `'${settings.editorFontFamily}', ${settings.editorFontFamily === 'Source Han Serif SC VF' ? 'var(--font-body)' : 'var(--font-mono)'}`;
+  const editorFontStyle = { '--editor-font-family': editorFontFamily } as CSSProperties;
 
   const flashRange = useCallback((from: number) => {
     const view = editorViewRef.current;
@@ -91,7 +94,10 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   }, []);
 
   useEffect(() => { onAIActionRef.current = onAIAction; }, [onAIAction]);
-  useEffect(() => { filePathRef.current = filePath; }, [filePath]);
+  useEffect(() => {
+    filePathRef.current = filePath;
+    floatingBarHiddenDocsRef.current.clear();
+  }, [filePath]);
   useEffect(() => { sourceRef.current = source; }, [source]);
   useEffect(() => { headingScrollRequestRef.current = headingScrollRequest; }, [headingScrollRequest]);
   useEffect(() => { onScrollRatioRef.current = onScrollRatio; }, [onScrollRatio]);
@@ -128,6 +134,16 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     triggerAIAction(action, origin);
   }, [ctxMenu, triggerAIAction]);
 
+  const handleFloatingBarDismissSession = useCallback(() => {
+    if (filePathRef.current) floatingBarHiddenDocsRef.current.add(filePathRef.current);
+    setFloatingHasSelection(false);
+    setFloatingRect(null);
+  }, []);
+
+  const handleFloatingBarHideGlobally = useCallback(() => {
+    updateSettings({ selectionFloatingBarEnabled: false });
+  }, []);
+
   // 选区浮条状态:跟着 CodeMirror 选区变化重算 rect + hasSelection。
   const [floatingRect, setFloatingRect] = useState<{ selRect: DOMRect } | null>(null);
   const [floatingHasSelection, setFloatingHasSelection] = useState(false);
@@ -152,6 +168,11 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       }
       const sel = view.state.selection.main;
       if (sel.empty) {
+        setFloatingHasSelection(false);
+        setFloatingRect(null);
+        return;
+      }
+      if (filePathRef.current && floatingBarHiddenDocsRef.current.has(filePathRef.current)) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
         return;
@@ -255,7 +276,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const handleFormatPick = useCallback((action: FormatAction) => {
     const editor = editorViewRef.current;
     if (!editor) return;
-    if (!settings.editorFormatPainterEnabled && (action.type === 'capture-format' || action.type === 'apply-format')) return;
+    if (!settings.editorFormatPainterEnabled && (action.type === 'format-painter' || action.type === 'capture-format' || action.type === 'apply-format')) return;
     if (action.type === 'image-insert') {
       onRequestImageInsert?.();
       return;
@@ -314,7 +335,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       onFormat: (action) => {
         const view = editorViewRef.current;
         if (!view) return false;
-        if (!settings.editorFormatPainterEnabled && (action.type === 'capture-format' || action.type === 'apply-format')) return false;
+        if (!settings.editorFormatPainterEnabled && (action.type === 'format-painter' || action.type === 'capture-format' || action.type === 'apply-format')) return false;
         applyCm6Format(view, action, setEditRequest);
         return true;
       },
@@ -555,7 +576,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   }), [flashRange]);
 
   return (
-    <div className="editor-pane" onContextMenu={handleContextMenu} onPaste={handlePaste}>
+    <div className="editor-pane" style={editorFontStyle} onContextMenu={handleContextMenu} onPaste={handlePaste}>
       <CodeMirror
         value={source}
         height="100%"
@@ -576,6 +597,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
           hasSelection={floatingHasSelection}
           stableTick={floatingStableTick}
           onPick={(action, origin) => triggerAIAction(action, origin)}
+          onDismissSession={handleFloatingBarDismissSession}
+          onHideGlobally={handleFloatingBarHideGlobally}
         />
       )}
       <EditorContextMenu

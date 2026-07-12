@@ -103,4 +103,16 @@ describe('applyCm6Format', () => {
     expect(view.state.doc.toString()).toBe('**bold**\n**plain**');
     view.destroy();
   });
+
+  it('uses one format-painter action to capture, then apply and clear the captured format', () => {
+    const { view } = createView('**bold**\nplain', 0, 8);
+    applyCm6Format(view, { type: 'format-painter' });
+    view.dispatch({ selection: { anchor: 9, head: 14 } });
+    applyCm6Format(view, { type: 'format-painter' });
+    expect(view.state.doc.toString()).toBe('**bold**\n**plain**');
+    view.dispatch({ selection: { anchor: 9, head: 18 } });
+    applyCm6Format(view, { type: 'format-painter' });
+    expect(view.state.doc.toString()).toBe('**bold**\n**plain**');
+    view.destroy();
+  });
 });
