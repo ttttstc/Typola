@@ -9053,6 +9053,24 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   margin-left: 10px;
 }
 
+.cm6-edit-popover {
+  position: fixed;
+  z-index: 902;
+  display: grid;
+  gap: 8px;
+  width: min(300px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  background: var(--theme-panel-bg);
+  box-shadow: 0 14px 36px var(--theme-shadow-soft);
+  color: var(--theme-text-primary);
+}
+
+.cm6-edit-popover label { display: grid; gap: 4px; font-size: 12px; }
+.cm6-edit-popover input { width: 100%; box-sizing: border-box; }
+.cm6-edit-popover-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
 
 /* Table Submenu (Vditor IR table edit) */
 .typola-table-submenu {

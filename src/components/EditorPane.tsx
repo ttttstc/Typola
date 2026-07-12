@@ -7,6 +7,7 @@ import type { TypolaEditorKernel } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import { applyCm6Format } from '../services/editor/cm6FormatService';
+import { Cm6EditPopover, type Cm6EditRequest } from './editor/cm6/Cm6EditPopover';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import type { SelectionAnchor } from '../services/agent/types';
 import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions';
@@ -57,6 +58,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean; hasImage: boolean } | null>(null);
+  const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
@@ -248,7 +250,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       }
       return;
     }
-    applyCm6Format(editor, action);
+    applyCm6Format(editor, action, setEditRequest);
   }, [ctxMenu, onRequestImageInsert]);
 
   const extensions = useMemo(() => {
@@ -274,7 +276,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       onFormat: (action) => {
         const view = editorViewRef.current;
         if (!view) return false;
-        applyCm6Format(view, action);
+        applyCm6Format(view, action, setEditRequest);
         return true;
       },
     });
@@ -531,6 +533,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         onClose={() => setCtxMenu(null)}
         onPickAI={onAIAction ? handleAIPick : undefined}
       />
+      <Cm6EditPopover request={editRequest} onClose={() => setEditRequest(null)} />
     </div>
   );
 });

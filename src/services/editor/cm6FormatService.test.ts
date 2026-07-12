@@ -56,21 +56,21 @@ describe('applyCm6Format', () => {
     view.destroy();
   });
 
-  it('edits selected Markdown link label, URL, title and code block languages', () => {
+  it('requests React editing for links and code block languages', () => {
     const link = '[Typola](https://old.example)';
     const { view } = createView(link);
-    vi.spyOn(window, 'prompt')
-      .mockReturnValueOnce('Typola 官网')
-      .mockReturnValueOnce('https://new.example')
-      .mockReturnValueOnce('主页')
-      .mockReturnValueOnce('ts');
-
-    applyCm6Format(view, { type: 'link-edit' });
+    applyCm6Format(view, { type: 'link-edit' }, (request) => {
+      expect(request.kind).toBe('link');
+      if (request.kind === 'link') request.apply({ label: 'Typola 官网', url: 'https://new.example', title: '主页' });
+    });
     expect(view.state.doc.toString()).toBe('[Typola 官网](https://new.example "主页")');
 
     const block = '```\nconst x = 1;\n```';
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: block }, selection: { anchor: 0, head: block.length } });
-    applyCm6Format(view, { type: 'codeblock-lang' });
+    applyCm6Format(view, { type: 'codeblock-lang' }, (request) => {
+      expect(request.kind).toBe('code');
+      if (request.kind === 'code') request.apply('ts');
+    });
     expect(view.state.doc.toString()).toBe('```ts\nconst x = 1;\n```');
     view.destroy();
   });

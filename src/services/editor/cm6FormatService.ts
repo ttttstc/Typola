@@ -2,14 +2,14 @@ import { EditorView } from '@codemirror/view';
 import type { FormatAction, HeadingLevel } from '../../components/EditorContextMenu';
 import { applyTableFormat } from './tableFormatService';
 import { findMarkdownLinkAt } from '../markdownAnalysisService';
-import { rewriteLinkAtSelection } from '../../components/editor/cm6/linkInteractionExtension';
+import type { Cm6EditRequest } from '../../components/editor/cm6/Cm6EditPopover';
 
 // 应用一个格式化动作到 CM6 编辑器(走 view.dispatch 改 doc,不依赖 Vditor)。
 // 行内格式(加粗/斜体/删除线/行内代码)走 wrapInline,光标和选区都保留。
 // 块格式(引用/列表/任务/代码块/分隔线/链接)走 toggleLinePrefix 或 wrapBlock。
 // 标题级别走 setHeadingPrefix(在每行行首加/换/清 # 前缀)。
 // 剪贴板和全选走 document.execCommand / EditorView 全选 dispatch。
-export function applyCm6Format(view: EditorView, action: FormatAction): void {
+export function applyCm6Format(view: EditorView, action: FormatAction, requestEdit?: (request: Cm6EditRequest) => void): void {
   switch (action.type) {
     case 'bold':
       wrapInline(view, '**', '**', '加粗文本');
@@ -54,13 +54,13 @@ export function applyCm6Format(view: EditorView, action: FormatAction): void {
       changeQuoteLevel(view, false);
       return;
     case 'link-edit':
-      editLink(view);
+      editLink(view, requestEdit);
       return;
     case 'clear-format':
       clearFormat(view);
       return;
     case 'codeblock-lang':
-      editCodeBlockLanguage(view);
+      editCodeBlockLanguage(view, requestEdit);
       return;
     case 'cut':
       document.execCommand('cut');
@@ -330,39 +330,17 @@ function changeQuoteLevel(view: EditorView, upgrade: boolean): void {
   view.focus();
 }
 
-function editLink(view: EditorView): void {
+function editLink(view: EditorView, requestEdit?: (request: Cm6EditRequest) => void): void {
   const sel = view.state.selection.main;
   const link = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
   if (!link) return;
-  const initialLabel = link.label;
-  const initialUrl = link.url;
-  const initialTitle = link.title ?? '';
-  const nextLabel = window.prompt('链接文字', initialLabel);
-  if (nextLabel === null) return;
-  const nextUrl = window.prompt('链接网址', initialUrl);
-  if (nextUrl === null) return;
-  const nextTitle = window.prompt('链接标题（可留空）', initialTitle);
-  if (nextTitle === null) return;
-  const replaced = rewriteLinkAtSelection(view, { getLink: () => ({ label: nextLabel, url: nextUrl, title: nextTitle || undefined }) });
-  if (replaced) {
+  const coords = safeCoords(view, sel.from);
+  requestEdit?.({ kind: 'link', x: coords.left, y: coords.bottom + 6, label: link.label, url: link.url, title: link.title ?? '', apply: ({ label, url, title }) => {
+    const current = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
+    const nextLink = `[${label || url}](${url}${title ? ` "${title}"` : ''})`;
+    if (current) view.dispatch({ changes: { from: current.from, to: current.to, insert: nextLink }, selection: { anchor: current.from + nextLink.length } });
     view.focus();
-    return;
-  }
-  // rewriteLinkAtSelection 失败兜底:用更早抓到的 link 范围直接替换。
-  const linkRange = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
-  const nextLink = `[${nextLabel || nextUrl}](${nextUrl}${nextTitle ? ` "${nextTitle}"` : ''})`;
-  if (linkRange) {
-    view.dispatch({
-      changes: { from: linkRange.from, to: linkRange.to, insert: nextLink },
-      selection: { anchor: linkRange.from + nextLink.length },
-    });
-  } else {
-    view.dispatch({
-      changes: { from: sel.from, to: sel.to, insert: nextLink },
-      selection: { anchor: sel.from + nextLink.length },
-    });
-  }
-  view.focus();
+  } });
 }
 
 function clearFormat(view: EditorView): void {
@@ -384,19 +362,26 @@ function clearFormat(view: EditorView): void {
   view.focus();
 }
 
-function editCodeBlockLanguage(view: EditorView): void {
+function editCodeBlockLanguage(view: EditorView, requestEdit?: (request: Cm6EditRequest) => void): void {
   const selection = view.state.selection.main;
   const text = view.state.sliceDoc(selection.from, selection.to);
   const match = text.match(/^```([^\n]*)\n([\s\S]*?)\n```$/);
   if (!match) return;
-  const language = window.prompt('代码语言', match[1]);
-  if (language === null) return;
-  const next = `\`\`\`${language}\n${match[2]}\n\`\`\``;
-  view.dispatch({
-    changes: { from: selection.from, to: selection.to, insert: next },
-    selection: { anchor: selection.from, head: selection.from + next.length },
-  });
-  view.focus();
+  const coords = safeCoords(view, selection.from);
+  requestEdit?.({ kind: 'code', x: coords.left, y: coords.bottom + 6, language: match[1], apply: (language) => {
+    const next = `\`\`\`${language}\n${match[2]}\n\`\`\``;
+    view.dispatch({ changes: { from: selection.from, to: selection.to, insert: next }, selection: { anchor: selection.from, head: selection.from + next.length } });
+    view.focus();
+  } });
+}
+
+function safeCoords(view: EditorView, pos: number): { left: number; bottom: number } {
+  try {
+    const coords = view.coordsAtPos(pos);
+    return coords ? { left: coords.left, bottom: coords.bottom } : { left: 16, bottom: 16 };
+  } catch {
+    return { left: 16, bottom: 16 };
+  }
 }
 
 async function pasteFromClipboard(view: EditorView): Promise<void> {
