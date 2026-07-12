@@ -1,0 +1,26 @@
+changelog:
+  exclude:
+    authors:
+      - "claude"
+      - "app/claude"
+      - "github-actions"
+  categories:
+    - title: 新功能
+      labels:
+        - "feature"
+        - "feat"
+        - "enhancement"
+    - title: 修复
+      labels:
+        - "fix"
+        - "bug"
+        - "bugfix"
+    - title: 其它
+      labels:
+        - "docs"
+        - "chore"
+        - "refactor"
+        - "perf"
+        - "build"
+        - "ci"
+        - "test"
