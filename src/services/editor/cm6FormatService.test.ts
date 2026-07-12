@@ -23,6 +23,10 @@ describe('applyCm6Format', () => {
   it.each([
     ['bold', '**', '**'],
     ['italic', '*', '*'],
+    ['underline', '<u>', '</u>'],
+    ['sup', '<sup>', '</sup>'],
+    ['sub', '<sub>', '</sub>'],
+    ['highlight', '==', '=='],
   ] as const)('toggles existing %s markers for selected text and cursor', (type, open, close) => {
     const doc = `${open}文字${close}`;
     const { view } = createView(doc, open.length, open.length + 2);

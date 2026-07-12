@@ -1,7 +1,7 @@
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import rehypeStringify from 'rehype-stringify';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -29,7 +29,7 @@ const exportMarkdownProcessor = unified()
   .use(remarkMath)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)
-  .use(rehypeSanitize)
+  .use(rehypeSanitize, { ...defaultSchema, tagNames: [...(defaultSchema.tagNames ?? []), 'mark'] })
   .use(rehypeHighlight)
   .use(rehypeKatex)
   .use(rehypeStringify);
@@ -39,7 +39,7 @@ export async function markdownToExportHtml(
   source: string,
   options: MarkdownToExportHtmlOptions = {},
 ): Promise<string> {
-  const exportSource = stripFrontmatter(source);
+  const exportSource = renderHighlightSyntax(stripFrontmatter(source));
   if (!exportSource.trim()) {
     options.target?.replaceChildren();
     return '';
@@ -57,4 +57,9 @@ export async function markdownToExportHtml(
     resolveLocalImages(target, options.filePath),
   ]);
   return target.innerHTML;
+}
+
+// Typola preserves ==mark== in source; export uses portable HTML mark semantics.
+function renderHighlightSyntax(source: string): string {
+  return source.replace(/(^|[^=])==([^=\n]+)==/gmu, '$1<mark>$2</mark>');
 }

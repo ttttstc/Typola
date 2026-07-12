@@ -23,6 +23,18 @@ export function applyCm6Format(view: EditorView, action: FormatAction, requestEd
     case 'strike':
       wrapInline(view, '~~', '~~', '删除文本');
       return;
+    case 'underline':
+      wrapInline(view, '<u>', '</u>', '下划线文本');
+      return;
+    case 'sup':
+      wrapInline(view, '<sup>', '</sup>', '上标');
+      return;
+    case 'sub':
+      wrapInline(view, '<sub>', '</sub>', '下标');
+      return;
+    case 'highlight':
+      wrapInline(view, '==', '==', '高亮文本');
+      return;
     case 'inline-code':
       wrapInline(view, '`', '`', '代码');
       return;
