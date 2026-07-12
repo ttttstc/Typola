@@ -38,7 +38,11 @@ export function resolveCopyDestination(
 ): string {
   const safeDestination = (destination || 'assets').trim() || 'assets';
   const fileName = documentPath ? pathBasenameWithoutExtension(documentPath) : '';
-  return safeDestination.replace(/\$\{filename\}/g, fileName);
+  const now = new Date();
+  return safeDestination
+    .replace(/\$?\{filename\}/g, fileName)
+    .replace(/\{year\}/g, String(now.getFullYear()))
+    .replace(/\{month\}/g, String(now.getMonth() + 1).padStart(2, '0'));
 }
 
 export function parseTyporaCopyImagesTo(markdown: string): string | null {

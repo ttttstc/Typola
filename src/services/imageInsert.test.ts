@@ -8,6 +8,9 @@ import {
 } from './imageInsert';
 
 describe('imageInsert', () => {
+  it('expands filename and date destination tokens', () => {
+    expect(resolveCopyDestination('D:/文章/草稿.md', 'assets/{filename}/{year}/{month}')).toMatch(/^assets\/草稿\/\d{4}\/\d{2}$/u);
+  });
   it('formats copied image paths as relative paths without ./ by default', () => {
     expect(formatImageSrc(
       'D:/docs/post/assets/a b.png',

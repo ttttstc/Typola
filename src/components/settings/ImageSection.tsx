@@ -90,7 +90,7 @@ export function ImageSection() {
         <label className="settings-row">
           <div>
             <div className="settings-label">目标文件夹</div>
-            <div className="settings-description">相对当前文档目录，支持 ${'{filename}'} 占位符。</div>
+            <div className="settings-description">相对当前文档目录，支持 {'{filename}'}、{'{year}'}、{'{month}'} 占位符。</div>
           </div>
           <input
             className="settings-input"
