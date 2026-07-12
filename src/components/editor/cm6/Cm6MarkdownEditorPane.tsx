@@ -131,8 +131,9 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
         onOpenLink,
         onTaskToggle,
         themeId: settings.themeId,
+        frontmatterFold: settings.editorFrontmatterFoldEnabled,
       });
-    }, [mode, settings.editorFontSize, settings.themeId, handleZoomChange, onPreviewHeadingChange, handleFoldChange, reviewComments, rest.filePath, onOpenLink, onTaskToggle]);
+    }, [mode, settings.editorFontSize, settings.themeId, settings.editorFrontmatterFoldEnabled, handleZoomChange, onPreviewHeadingChange, handleFoldChange, reviewComments, rest.filePath, onOpenLink, onTaskToggle]);
     return (
       <div className="cm6-markdown-editor-pane">
         <EditorPane

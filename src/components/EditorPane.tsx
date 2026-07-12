@@ -229,6 +229,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const handleFormatPick = useCallback((action: FormatAction) => {
     const editor = editorViewRef.current;
     if (!editor) return;
+    if (!settings.editorFormatPainterEnabled && (action.type === 'capture-format' || action.type === 'apply-format')) return;
     if (action.type === 'image-insert') {
       onRequestImageInsert?.();
       return;
@@ -262,7 +263,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       return;
     }
     applyCm6Format(editor, action, setEditRequest);
-  }, [ctxMenu, onRequestImageInsert]);
+  }, [ctxMenu, onRequestImageInsert, settings.editorFormatPainterEnabled]);
 
   const extensions = useMemo(() => {
     return createMarkdownExtensions({
@@ -287,11 +288,12 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       onFormat: (action) => {
         const view = editorViewRef.current;
         if (!view) return false;
+        if (!settings.editorFormatPainterEnabled && (action.type === 'capture-format' || action.type === 'apply-format')) return false;
         applyCm6Format(view, action, setEditRequest);
         return true;
       },
     });
-  }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
+  }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap, settings.editorFormatPainterEnabled]);
 
   useEffect(() => {
     if (!editorView || !headingScrollRequest) return;

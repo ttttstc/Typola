@@ -186,6 +186,15 @@ export function ImageSection() {
           {testResult && <pre className="settings-test-output">{testResult}</pre>}
         </div>
       )}
+
+      <div className="settings-row">
+        <div><div className="settings-label">折叠 YAML frontmatter</div></div>
+        <button type="button" className={`toggle-switch ${settings.editorFrontmatterFoldEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFrontmatterFoldEnabled: !settings.editorFrontmatterFoldEnabled })} />
+      </div>
+      <div className="settings-row">
+        <div><div className="settings-label">启用格式刷</div></div>
+        <button type="button" className={`toggle-switch ${settings.editorFormatPainterEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFormatPainterEnabled: !settings.editorFormatPainterEnabled })} />
+      </div>
     </div>
   );
 }

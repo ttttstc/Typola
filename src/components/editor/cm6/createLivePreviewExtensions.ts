@@ -33,6 +33,7 @@ type CreateLivePreviewExtensionsOptions = {
   /** Task 切换后回调;用于埋点或外部状态同步。 */
   onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
   themeId?: string;
+  frontmatterFold?: boolean;
 };
 
 export function createLivePreviewExtensions(
@@ -50,6 +51,7 @@ export function createLivePreviewExtensions(
     onOpenLink,
     onTaskToggle,
     themeId,
+    frontmatterFold = true,
   } = options;
   const filePathRef = { current: filePath };
   const extensions: Extension[] = [
@@ -63,7 +65,7 @@ export function createLivePreviewExtensions(
   ];
   if (livePreview) {
     extensions.unshift(
-      frontmatterFoldExtension(),
+      ...(frontmatterFold ? [frontmatterFoldExtension()] : []),
       footnoteExtension(),
       htmlPreviewExtension(),
       inlinePreview(),

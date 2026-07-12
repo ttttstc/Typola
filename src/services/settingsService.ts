@@ -200,6 +200,8 @@ export interface AppSettings {
   editorSpellCheck: boolean;
   /** 选区浮条(选中即现)开关。关掉后右键菜单 / Ctrl+K 仍在,只是不自动浮现。 */
   selectionFloatingBarEnabled: boolean;
+  editorFrontmatterFoldEnabled: boolean;
+  editorFormatPainterEnabled: boolean;
   // 图像
   imageInsertAction: ImageInsertAction;
   imageCopyDestination: string;
@@ -271,6 +273,8 @@ const defaults: AppSettings = {
   editorLineNumbers: true,
   editorSpellCheck: false,
   selectionFloatingBarEnabled: true,
+  editorFrontmatterFoldEnabled: true,
+  editorFormatPainterEnabled: true,
   imageInsertAction: 'copy',
   imageCopyDestination: 'assets',
   imageApplyToLocal: true,
@@ -883,6 +887,8 @@ export function getSettings(): AppSettings {
       imageEscapeUrl: stored.imageEscapeUrl === true,
       imageAllowYamlUpload: stored.imageAllowYamlUpload === true,
       imageUploadCommand: normalizeImageUploadCommand(stored.imageUploadCommand),
+      editorFrontmatterFoldEnabled: stored.editorFrontmatterFoldEnabled !== false,
+      editorFormatPainterEnabled: stored.editorFormatPainterEnabled !== false,
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
       aiClaudeModel: normalizeModelString(stored.aiClaudeModel),
       aiOpenCodePath: normalizeExecutablePath(stored.aiOpenCodePath),
