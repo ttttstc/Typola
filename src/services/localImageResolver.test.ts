@@ -79,14 +79,13 @@ describe('resolveLocalImages', () => {
     expect(src).toContain('/Users/demo/docs/images/photo.jpg');
   });
 
-  it('resolves absolute Windows image paths to asset URLs', async () => {
+  it('rejects absolute Windows image paths outside document directory', async () => {
     const { resolveLocalImages: resolve } = await importFresh();
     const container = createContainerWithImages([{ src: 'D:/images/photo.jpg' }]);
     await resolve(container, 'D:/docs/note.md');
     const src = container.querySelector('img')?.getAttribute('src');
-    expect(src).toContain('asset.localhost');
-    expect(src).toContain('D:\\images\\photo.jpg');
-    expect(mockInvoke).toHaveBeenCalledWith('allow_asset_directory', { dir: 'D:\\images' });
+    expect(src).toBe('D:/images/photo.jpg');
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it('skips data: URIs', async () => {

@@ -5,11 +5,17 @@ import {
   parseUploadUrls,
   resolveCopyDestination,
   resolveImageInsertAction,
+  serializeHtmlImage,
 } from './imageInsert';
 
 describe('imageInsert', () => {
   it('expands filename and date destination tokens', () => {
     expect(resolveCopyDestination('D:/文章/草稿.md', 'assets/{filename}/{year}/{month}')).toMatch(/^assets\/草稿\/\d{4}\/\d{2}$/u);
+  });
+
+  it('escapes image metadata before writing HTML', () => {
+    expect(serializeHtmlImage('a.png', 'x" onerror="bad', 'title" onload="bad', '50%')).toBe('<img src="a.png" alt="x&quot; onerror=&quot;bad" title="title&quot; onload=&quot;bad" width="50%">');
+    expect(serializeHtmlImage('a.png', 'alt', '', 'javascript')).toBe('<img src="a.png" alt="alt">');
   });
   it('formats copied image paths as relative paths without ./ by default', () => {
     expect(formatImageSrc(

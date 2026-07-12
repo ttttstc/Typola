@@ -91,6 +91,12 @@ export function formatImageSrc(
   return options.imageEscapeUrl ? encodeURI(src) : src;
 }
 
+export function serializeHtmlImage(src: string, alt: string, title: string, width: string): string {
+  const escape = (value: string) => value.replace(/[<>&"']/gu, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[character] ?? character));
+  const safeWidth = /^(?:\d+(?:\.\d+)?)(?:px|%)$/u.test(width) ? width : '';
+  return `<img src="${escape(src)}" alt="${escape(alt)}"${title ? ` title="${escape(title)}"` : ''}${safeWidth ? ` width="${safeWidth}"` : ''}>`;
+}
+
 export function parseUploadUrls(stdout: string, imageCount: number): string[] {
   if (imageCount <= 0) return [];
   const lines = stdout

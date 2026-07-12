@@ -1,12 +1,12 @@
 import { StateField, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType } from '@codemirror/view';
-import DOMPurify from 'dompurify';
+import { sanitizeHtml } from '../../../services/sanitizeService';
 
 class HtmlWidget extends WidgetType {
   private readonly source: string;
   constructor(source: string) { super(); this.source = source; }
   eq(other: HtmlWidget) { return other.source === this.source; }
-  toDOM(): HTMLElement { const element = document.createElement('div'); element.className = 'typola-cm6-html'; element.innerHTML = DOMPurify.sanitize(this.source, { USE_PROFILES: { html: true } }); return element; }
+  toDOM(): HTMLElement { const element = document.createElement('div'); element.className = 'typola-cm6-html'; element.innerHTML = sanitizeHtml(this.source); return element; }
 }
 
 function build(state: EditorView['state']) {

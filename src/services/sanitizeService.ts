@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify';
 const ALLOWED_TAGS = [
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'p', 'br', 'hr',
-  'strong', 'b', 'em', 'i', 'u', 's',
+  'strong', 'b', 'em', 'i', 'u', 's', 'mark', 'sup', 'sub',
   'blockquote', 'pre', 'code',
   'ul', 'ol', 'li',
   'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',

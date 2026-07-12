@@ -88,6 +88,13 @@ describe('applyCm6Format', () => {
     view.destroy();
   });
 
+  it('keeps horizontal rules intact when clearing format', () => {
+    const { view } = createView('---\n___\n***');
+    applyCm6Format(view, { type: 'clear-format' });
+    expect(view.state.doc.toString()).toBe('---\n___\n***');
+    view.destroy();
+  });
+
   it('captures and applies inline format in one transaction', () => {
     const { view } = createView('**bold**\nplain', 0, 8);
     applyCm6Format(view, { type: 'capture-format' });

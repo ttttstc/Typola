@@ -430,6 +430,13 @@ export function headingPathAt(source: string, offset: number): string[] {
     if (levels.length === 0 || levels[levels.length - 1] < heading.level) {
       levels.push(heading.level);
       path.push(heading.text);
+    } else {
+      while (levels.length > 0 && levels[levels.length - 1] >= heading.level) {
+        levels.pop();
+        path.pop();
+      }
+      levels.push(heading.level);
+      path.push(heading.text);
     }
   }
   return path;

@@ -93,6 +93,25 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelector<HTMLImageElement>('.cm-atomic-image img')?.src).toBe('https://example.com/a.png');
   });
 
+  it('sanitizes inline raw HTML widgets', () => {
+    view = createView('<mark onclick="alert(1)">重点</mark> <sup>2</sup>', true);
+    moveCursorToEnd(view);
+    const html = view.contentDOM.querySelector('.typola-cm6-html');
+    expect(html?.querySelector('mark')?.textContent).toBe('重点');
+    expect(html?.querySelector('[onclick]')).toBeNull();
+  });
+
+  it.each([
+    '<details><summary>x</summary><script>alert(1)</script></details>',
+    '<mark onerror="alert(1)">x</mark>',
+    '<mark><a href="javascript:alert(1)">x</a></mark>',
+  ])('does not expose dangerous HTML nodes: %s', (source) => {
+    view = createView(`${source}\nAfter`, true);
+    moveCursorToEnd(view);
+    const html = view.contentDOM.querySelector('.typola-cm6-html');
+    expect(html?.querySelector('script, iframe, [onerror], [onclick], a[href^="javascript:"]')).toBeNull();
+  });
+
   it('renders bare inline math with KaTeX outside the cursor range', async () => {
     view = createView('Energy $E=mc^2$ here', true);
     moveCursorToEnd(view);

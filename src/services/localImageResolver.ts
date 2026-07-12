@@ -65,13 +65,28 @@ export async function resolveLocalImages(
     const convertFn = await ensureConvertFileSrc();
     if (!convertFn) return;
 
-    const absolutePath = resolveLocalResourcePath(filePath, rawSrc) ?? absoluteLocalPath(rawSrc);
+    const directAbsolutePath = absoluteLocalPath(rawSrc);
+    const absolutePath = resolveLocalResourcePath(filePath, rawSrc) ?? directAbsolutePath;
     if (!absolutePath) continue;
+    const documentDir = dirname(filePath);
+    if (directAbsolutePath && documentDir && !isWithinDirectory(absolutePath, documentDir)) continue;
 
     await allowAssetDirectory(absolutePath);
     const assetUrl = convertFn(absolutePath);
     img.src = assetUrl;
   }
+}
+
+function dirname(path: string): string {
+  const normalized = path.replaceAll('/', '\\');
+  const index = normalized.lastIndexOf('\\');
+  return index >= 0 ? normalized.slice(0, index) : '';
+}
+
+function isWithinDirectory(filePath: string, directory: string): boolean {
+  const file = filePath.replaceAll('/', '\\').toLowerCase();
+  const dir = directory.replaceAll('/', '\\').replace(/[\\]+$/u, '').toLowerCase();
+  return file === dir || file.startsWith(`${dir}\\`);
 }
 
 function absoluteLocalPath(src: string): string | undefined {

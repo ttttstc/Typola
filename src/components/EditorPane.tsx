@@ -25,7 +25,7 @@ import {
 } from '../services/markdownAnalysisService';
 import { writeText as writeClipboardText } from '../services/clipboardService';
 import { resolveLocalResourcePath } from '../services/htmlPresentationService';
-import { formatImageSrc } from '../services/imageInsert';
+import { formatImageSrc, serializeHtmlImage } from '../services/imageInsert';
 import { findSearchMatches } from '../services/documentSearchService';
 
 export type SourceHeadingScrollRequest = {
@@ -254,7 +254,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       } else {
         setImageMetaRequest({ x: ctxMenu?.x ?? 16, y: ctxMenu?.y ?? 16, alt: image.alt, title: image.title ?? '', width: image.width ?? '', onSave: ({ alt, title, width }) => {
           const replacement = width
-            ? `<img src="${image.url}" alt="${alt}"${title ? ` title="${title}"` : ''} width="${width}">`
+            ? serializeHtmlImage(image.url, alt, title, width)
             : `![${alt}](${image.url}${title ? ` "${title}"` : ''})`;
           editor.dispatch({ changes: { from: image.from, to: image.to, insert: replacement }, selection: { anchor: image.from + replacement.length } });
           editor.focus();

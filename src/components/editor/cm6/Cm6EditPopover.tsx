@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDismissableDialog } from './useDismissableDialog';
 
 export type Cm6EditRequest =
   | { kind: 'link'; x: number; y: number; label: string; url: string; title: string; apply: (value: { label: string; url: string; title: string }) => void }
@@ -7,6 +8,7 @@ export type Cm6EditRequest =
 export function Cm6EditPopover({ request, onClose }: { request: Cm6EditRequest | null; onClose: () => void }) {
   const firstInput = useRef<HTMLInputElement>(null);
   const [values, setValues] = useState({ label: '', url: '', title: '', language: '' });
+  useDismissableDialog(request !== null, onClose);
   useEffect(() => {
     if (!request) return;
     setValues(request.kind === 'link'

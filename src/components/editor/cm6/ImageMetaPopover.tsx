@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDismissableDialog } from './useDismissableDialog';
 
 export type ImageMetaRequest = { x: number; y: number; alt: string; title: string; width: string; onSave: (value: { alt: string; title: string; width: string }) => void };
 
 export function ImageMetaPopover({ request, onClose }: { request: ImageMetaRequest | null; onClose: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState({ alt: '', title: '', width: '' });
+  useDismissableDialog(request !== null, onClose);
   useEffect(() => { if (request) { setValue({ alt: request.alt, title: request.title, width: request.width }); window.requestAnimationFrame(() => input.current?.focus()); } }, [request]);
   if (!request) return null;
   return <form className="cm6-edit-popover" role="dialog" aria-label="编辑图片信息" style={{ left: request.x, top: request.y }} onSubmit={(event) => { event.preventDefault(); if (value.width && !/^\d+(?:\.\d+)?(?:px|%)$/u.test(value.width)) return; request.onSave(value); onClose(); }}>
