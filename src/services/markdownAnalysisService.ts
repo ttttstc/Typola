@@ -38,6 +38,7 @@ export type MarkdownImage = MarkdownRange & {
   alt: string;
   url: string;
   title?: string;
+  width?: string;
 };
 
 export type MarkdownCodeBlock = MarkdownRange & {
@@ -228,7 +229,17 @@ function collectLinks(source: string, fencedRanges: MarkdownRange[]): MarkdownLi
 }
 
 function collectImages(source: string, fencedRanges: MarkdownRange[]): MarkdownImage[] {
-  return collectLinkEntries(source, fencedRanges, true) as MarkdownImage[];
+  const images = collectLinkEntries(source, fencedRanges, true) as MarkdownImage[];
+  const htmlPattern = /<img\s+([^>]*?)>/giu;
+  for (const match of source.matchAll(htmlPattern)) {
+    const from = match.index ?? 0;
+    if (withinRanges(from, fencedRanges)) continue;
+    const attrs = match[1];
+    const attr = (name: string) => new RegExp(`${name}=["']([^"']*)["']`, 'iu').exec(attrs)?.[1] ?? '';
+    const url = attr('src'); if (!url) continue;
+    images.push({ ...rangeAt(source, from, from + match[0].length), url, alt: attr('alt'), ...(attr('title') ? { title: attr('title') } : {}), ...(attr('width') ? { width: attr('width') } : {}) });
+  }
+  return images.sort((a, b) => a.from - b.from);
 }
 
 function collectLinkEntries(source: string, fencedRanges: MarkdownRange[], images: boolean): Array<MarkdownLink | MarkdownImage> {

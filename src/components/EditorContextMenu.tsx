@@ -17,6 +17,7 @@ export type FormatAction =
   | { type: 'image-replace' }
   | { type: 'image-open' }
   | { type: 'image-copy-path' }
+  | { type: 'image-meta' }
   | { type: 'table-insert'; rows: number; cols: number }
   | { type: 'table-align'; align: TableAlign; colIndex?: number }
   | { type: 'table-row-insert'; after?: boolean }
@@ -163,6 +164,7 @@ export function EditorContextMenu({
           <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />
           <MenuItem label="打开文件" onClick={() => pick({ type: 'image-open' })} />
           <MenuItem label="复制路径" onClick={() => pick({ type: 'image-copy-path' })} />
+          <MenuItem label="编辑 Alt / 标题 / 宽度" onClick={() => pick({ type: 'image-meta' })} />
         </>
       )}
 

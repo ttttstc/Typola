@@ -22,6 +22,11 @@ describe('markdownAnalysisService — images', () => {
     expect(analysis.images[0]?.url).toBe('b.png');
   });
 
+  it('parses HTML image width metadata', () => {
+    const image = analyzeMarkdown('<img src="a.png" alt="封面" title="图" width="50%">').images[0];
+    expect(image).toMatchObject({ url: 'a.png', alt: '封面', title: '图', width: '50%' });
+  });
+
   it('parses image with empty alt', () => {
     const source = '![](x.png)';
     const analysis = analyzeMarkdown(source);

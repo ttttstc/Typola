@@ -8,6 +8,7 @@ import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import { applyCm6Format } from '../services/editor/cm6FormatService';
 import { Cm6EditPopover, type Cm6EditRequest } from './editor/cm6/Cm6EditPopover';
+import { ImageMetaPopover, type ImageMetaRequest } from './editor/cm6/ImageMetaPopover';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import type { SelectionAnchor } from '../services/agent/types';
 import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions';
@@ -60,6 +61,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean; hasImage: boolean } | null>(null);
   const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
+  const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
@@ -231,7 +233,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       onRequestImageInsert?.();
       return;
     }
-    if (action.type === 'image-replace' || action.type === 'image-open' || action.type === 'image-copy-path') {
+    if (action.type === 'image-replace' || action.type === 'image-open' || action.type === 'image-copy-path' || action.type === 'image-meta') {
       const pos = editor.posAtCoords({
         x: ctxMenu?.x ?? 0,
         y: ctxMenu?.y ?? 0,
@@ -246,8 +248,16 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         });
       } else if (action.type === 'image-open') {
         void openImageAt(image, filePathRef.current);
-      } else {
+      } else if (action.type === 'image-copy-path') {
         void copyImagePath(image, filePathRef.current);
+      } else {
+        setImageMetaRequest({ x: ctxMenu?.x ?? 16, y: ctxMenu?.y ?? 16, alt: image.alt, title: image.title ?? '', width: image.width ?? '', onSave: ({ alt, title, width }) => {
+          const replacement = width
+            ? `<img src="${image.url}" alt="${alt}"${title ? ` title="${title}"` : ''} width="${width}">`
+            : `![${alt}](${image.url}${title ? ` "${title}"` : ''})`;
+          editor.dispatch({ changes: { from: image.from, to: image.to, insert: replacement }, selection: { anchor: image.from + replacement.length } });
+          editor.focus();
+        } });
       }
       return;
     }
@@ -538,6 +548,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         onPickAI={onAIAction ? handleAIPick : undefined}
       />
       <Cm6EditPopover request={editRequest} onClose={() => setEditRequest(null)} />
+      <ImageMetaPopover request={imageMetaRequest} onClose={() => setImageMetaRequest(null)} />
     </div>
   );
 });
