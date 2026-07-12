@@ -1,5 +1,5 @@
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView, ViewPlugin } from '@codemirror/view';
 import { analyzeMarkdown } from '../../../services/markdownAnalysisService';
 
 export type PreviewHeadingChange = {
@@ -66,25 +66,21 @@ function findHeadingAtScroll(
  *  配合 PreviewScrollHandle.scrollToHeading 使用。 */
 export function previewSyncExtension(options: PreviewSyncOptions = {}): Extension {
   const { onChange } = options;
-  return EditorView.updateListener.of((update) => {
-    if (!onChange) return;
-    // 只在 doc 变化(positions 重算)或视口滚动时计算
-    const isDocChange = update.docChanged;
-    const isScroll = update.viewportChanged;
-    if (!isDocChange && !isScroll) return;
+  return ViewPlugin.fromClass(class {
+    private rafId: number | null = null;
 
-    const rafId: number | undefined = (previewSyncExtension as unknown as { _rafId?: number })._rafId;
-    if (rafId !== undefined) return;
-    (previewSyncExtension as unknown as { _rafId?: number })._rafId = window.requestAnimationFrame(() => {
-      (previewSyncExtension as unknown as { _rafId?: number })._rafId = undefined;
-      const view = update.view;
-      const headings = collectHeadings(view.state);
-      if (headings.length === 0) {
-        onChange({ index: -1, withinRatio: 0 });
-        return;
-      }
-      onChange(findHeadingAtScroll(view, headings));
-    });
+    update(update: { docChanged: boolean; viewportChanged: boolean; view: EditorView }) {
+      if (!onChange || (!update.docChanged && !update.viewportChanged) || this.rafId !== null) return;
+      this.rafId = window.requestAnimationFrame(() => {
+        this.rafId = null;
+        const headings = collectHeadings(update.view.state);
+        onChange(headings.length === 0 ? { index: -1, withinRatio: 0 } : findHeadingAtScroll(update.view, headings));
+      });
+    }
+
+    destroy() {
+      if (this.rafId !== null) window.cancelAnimationFrame(this.rafId);
+    }
   });
 }
 

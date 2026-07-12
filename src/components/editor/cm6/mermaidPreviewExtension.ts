@@ -4,7 +4,6 @@ import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemir
 import DOMPurify from 'dompurify';
 import { getBlockRender } from './blockRenderCache';
 
-let renderCount = 0;
 let mermaidPromise: Promise<typeof import('mermaid').default> | null = null;
 
 function loadMermaid(theme: 'default' | 'dark') {
@@ -23,14 +22,16 @@ class MermaidWidget extends WidgetType {
   private readonly source: string;
   private readonly themeId: string;
   private readonly refresh: () => void;
+  private readonly nextId: () => string;
 
   constructor(
-    source: string, themeId: string, refresh: () => void,
+    source: string, themeId: string, refresh: () => void, nextId: () => string,
   ) {
     super();
     this.source = source;
     this.themeId = themeId;
     this.refresh = refresh;
+    this.nextId = nextId;
   }
 
   eq(other: MermaidWidget): boolean { return other.source === this.source && other.themeId === this.themeId; }
@@ -46,7 +47,7 @@ class MermaidWidget extends WidgetType {
     const theme = this.themeId.includes('dark') ? 'dark' : 'default';
     const result = getBlockRender('mermaid', this.source, this.themeId, async () => {
       const mermaid = await loadMermaid(theme);
-      const { svg } = await mermaid.render(`typola-cm6-mermaid-${renderCount++}`, this.source);
+      const { svg } = await mermaid.render(this.nextId(), this.source);
       return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
     }, () => {
       this.refresh();
@@ -75,16 +76,18 @@ function collectMermaidRanges(state: EditorState): Array<{ from: number; to: num
 }
 
 export function mermaidPreviewExtension(themeId = 'light'): Extension {
+  let renderCount = 0;
+  const nextId = () => `typola-cm6-mermaid-${renderCount++}`;
   const mermaidField = StateField.define<DecorationSet>({
     create(state) {
       return Decoration.set(collectMermaidRanges(state).map(({ from, to, source }) =>
-        Decoration.replace({ widget: new MermaidWidget(source, themeId, () => {}), block: true }).range(from, to),
+        Decoration.replace({ widget: new MermaidWidget(source, themeId, () => {}, nextId), block: true }).range(from, to),
       ), true);
     },
     update(decorations, transaction) {
       if (transaction.docChanged || transaction.selection || transaction.reconfigured) {
         return Decoration.set(collectMermaidRanges(transaction.state).map(({ from, to, source }) =>
-          Decoration.replace({ widget: new MermaidWidget(source, themeId, () => {}), block: true }).range(from, to),
+          Decoration.replace({ widget: new MermaidWidget(source, themeId, () => {}, nextId), block: true }).range(from, to),
         ), true);
       }
       return decorations;

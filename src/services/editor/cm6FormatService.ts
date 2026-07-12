@@ -308,16 +308,25 @@ function insertHorizontalRule(view: EditorView): void {
 
 function changeQuoteLevel(view: EditorView, upgrade: boolean): void {
   const selection = view.state.selection.main;
-  const line = view.state.doc.lineAt(selection.from);
-  const text = view.state.sliceDoc(line.from, line.to);
-  const indent = text.match(/^[ \t]*/)?.[0] ?? '';
-  const rest = text.slice(indent.length);
-  const match = rest.match(/^(?:> ?)+/);
-  const depth = match ? (match[0].match(/>/g)?.length ?? 0) : 0;
-  const body = rest.slice(match?.[0].length ?? 0);
-  const nextDepth = upgrade ? depth + 1 : Math.max(0, depth - 1);
-  const next = nextDepth === 0 ? `${indent}${body}` : `${indent}${'>'.repeat(nextDepth)} ${body}`;
-  view.dispatch({ changes: { from: line.from, to: line.to, insert: next } });
+  const first = view.state.doc.lineAt(selection.from).number;
+  const last = view.state.doc.lineAt(selection.to).number;
+  const changes = [];
+  for (let number = first; number <= last; number += 1) {
+    const line = view.state.doc.line(number);
+    const text = view.state.sliceDoc(line.from, line.to);
+    const indent = text.match(/^[ \t]*/)?.[0] ?? '';
+    const rest = text.slice(indent.length);
+    const match = rest.match(/^(?:> ?)+/);
+    const depth = match ? (match[0].match(/>/g)?.length ?? 0) : 0;
+    const body = rest.slice(match?.[0].length ?? 0);
+    const nextDepth = upgrade ? depth + 1 : Math.max(0, depth - 1);
+    changes.push({
+      from: line.from,
+      to: line.to,
+      insert: nextDepth === 0 ? `${indent}${body}` : `${indent}${'>'.repeat(nextDepth)} ${body}`,
+    });
+  }
+  view.dispatch({ changes });
   view.focus();
 }
 

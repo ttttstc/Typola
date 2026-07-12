@@ -47,6 +47,15 @@ describe('applyCm6Format', () => {
     view.destroy();
   });
 
+  it('changes every selected quote line in one dispatch', () => {
+    const { view } = createView('> a\n> b\nplain');
+    applyCm6Format(view, { type: 'quote-up' });
+    expect(view.state.doc.toString()).toBe('>> a\n>> b\n> plain');
+    applyCm6Format(view, { type: 'quote-down' });
+    expect(view.state.doc.toString()).toBe('> a\n> b\nplain');
+    view.destroy();
+  });
+
   it('edits selected Markdown link label, URL, title and code block languages', () => {
     const link = '[Typola](https://old.example)';
     const { view } = createView(link);
