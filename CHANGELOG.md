@@ -9,6 +9,7 @@
 - 修复自定义配色首次打开时调色盘被遮罩隐藏；未选颜色时改为使用素笺主题，调整后的颜色在关闭应用后仍会保留。
 - CM6 新增 frontmatter 折叠、脚注跳转、raw HTML 安全预览、格式刷和图片 Alt/Title/宽度编辑；图片目录模板支持 `{filename}`、`{year}`、`{month}`。
 - HTML 导出会复制本地图片至导出文件同级资源目录并重写引用；远程与 data URL 保持原样，缺失文件不阻断导出。
+- CM6 右键格式菜单新增下划线、上标、下标与 `==高亮==`；导出将高亮语法渲染为安全的 `<mark>`。
 
 All notable changes to this project will be documented in this file.
 
