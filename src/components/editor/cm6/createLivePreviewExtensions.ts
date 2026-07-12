@@ -7,6 +7,9 @@ import { mermaidPreviewExtension } from './mermaidPreviewExtension';
 import { wheelZoomExtension } from './wheelZoomExtension';
 import { previewSyncExtension, type PreviewHeadingChange } from './previewSyncExtension';
 import { headingFoldExtension } from './headingFoldExtension';
+import { frontmatterFoldExtension } from './frontmatterFoldExtension';
+import { footnoteExtension } from './footnoteExtension';
+import { htmlPreviewExtension } from './htmlPreviewExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 import type { ReviewComment } from '../../../services/review/reviewState';
 import { reviewMarkExtension } from './reviewMarkExtension';
@@ -30,6 +33,7 @@ type CreateLivePreviewExtensionsOptions = {
   /** Task 切换后回调;用于埋点或外部状态同步。 */
   onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
   themeId?: string;
+  frontmatterFold?: boolean;
 };
 
 export function createLivePreviewExtensions(
@@ -47,6 +51,7 @@ export function createLivePreviewExtensions(
     onOpenLink,
     onTaskToggle,
     themeId,
+    frontmatterFold = true,
   } = options;
   const filePathRef = { current: filePath };
   const extensions: Extension[] = [
@@ -60,6 +65,9 @@ export function createLivePreviewExtensions(
   ];
   if (livePreview) {
     extensions.unshift(
+      ...(frontmatterFold ? [frontmatterFoldExtension()] : []),
+      footnoteExtension(),
+      htmlPreviewExtension(),
       inlinePreview(),
       tables(),
       imageBlocks(),

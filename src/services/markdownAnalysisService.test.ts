@@ -9,6 +9,7 @@ import {
   isRangeWithinSingleMarkdownBlock,
   listMarkdownTasks,
   markdownBlockAt,
+  detectFrontmatter,
 } from './markdownAnalysisService';
 
 const fixture = [
@@ -46,6 +47,30 @@ const fixture = [
 ].join('\n');
 
 describe('markdownAnalysisService', () => {
+  it('detects only leading YAML frontmatter and excludes it from headings', () => {
+    const source = '---\ntitle: 草稿\n---\n# 正文';
+    expect(detectFrontmatter(source)).toMatchObject({ from: 0, to: 17 });
+    expect(analyzeMarkdown(source).headings.map((heading) => heading.text)).toEqual(['正文']);
+  });
+
+  it('handles BOM and CRLF frontmatter fences', () => {
+    const source = '\uFEFF---\r\ntitle: 草稿\r\n---\r\n# 正文';
+    expect(detectFrontmatter(source)).not.toBeNull();
+    expect(analyzeMarkdown(source).headings.map((heading) => heading.text)).toEqual(['正文']);
+  });
+
+  it('replaces same-level headings in the active heading path', () => {
+    const source = '# A\n\n## B\n\n### C\n\n## D\n\n# E';
+    expect(headingPathAt(source, source.indexOf('D'))).toEqual(['A', 'D']);
+    expect(headingPathAt(source, source.indexOf('E'))).toEqual(['E']);
+  });
+
+  it('isolates raw HTML blocks from Markdown scanners', () => {
+    const source = '<details><summary>x</summary>![not-image](x.png)</details>\n![real](a.png)';
+    const result = analyzeMarkdown(source);
+    expect(result.htmlBlocks).toHaveLength(1);
+    expect(result.images.map((image) => image.url)).toEqual(['a.png']);
+  });
   it('collects ATX and Setext headings while ignoring fenced examples', () => {
     const result = analyzeMarkdown([
       '# 总览',

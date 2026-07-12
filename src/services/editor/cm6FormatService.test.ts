@@ -23,6 +23,10 @@ describe('applyCm6Format', () => {
   it.each([
     ['bold', '**', '**'],
     ['italic', '*', '*'],
+    ['underline', '<u>', '</u>'],
+    ['sup', '<sup>', '</sup>'],
+    ['sub', '<sub>', '</sub>'],
+    ['highlight', '==', '=='],
   ] as const)('toggles existing %s markers for selected text and cursor', (type, open, close) => {
     const doc = `${open}文字${close}`;
     const { view } = createView(doc, open.length, open.length + 2);
@@ -47,21 +51,30 @@ describe('applyCm6Format', () => {
     view.destroy();
   });
 
-  it('edits selected Markdown link label, URL, title and code block languages', () => {
+  it('changes every selected quote line in one dispatch', () => {
+    const { view } = createView('> a\n> b\nplain');
+    applyCm6Format(view, { type: 'quote-up' });
+    expect(view.state.doc.toString()).toBe('>> a\n>> b\n> plain');
+    applyCm6Format(view, { type: 'quote-down' });
+    expect(view.state.doc.toString()).toBe('> a\n> b\nplain');
+    view.destroy();
+  });
+
+  it('requests React editing for links and code block languages', () => {
     const link = '[Typola](https://old.example)';
     const { view } = createView(link);
-    vi.spyOn(window, 'prompt')
-      .mockReturnValueOnce('Typola 官网')
-      .mockReturnValueOnce('https://new.example')
-      .mockReturnValueOnce('主页')
-      .mockReturnValueOnce('ts');
-
-    applyCm6Format(view, { type: 'link-edit' });
+    applyCm6Format(view, { type: 'link-edit' }, (request) => {
+      expect(request.kind).toBe('link');
+      if (request.kind === 'link') request.apply({ label: 'Typola 官网', url: 'https://new.example', title: '主页' });
+    });
     expect(view.state.doc.toString()).toBe('[Typola 官网](https://new.example "主页")');
 
     const block = '```\nconst x = 1;\n```';
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: block }, selection: { anchor: 0, head: block.length } });
-    applyCm6Format(view, { type: 'codeblock-lang' });
+    applyCm6Format(view, { type: 'codeblock-lang' }, (request) => {
+      expect(request.kind).toBe('code');
+      if (request.kind === 'code') request.apply('ts');
+    });
     expect(view.state.doc.toString()).toBe('```ts\nconst x = 1;\n```');
     view.destroy();
   });
@@ -72,6 +85,22 @@ describe('applyCm6Format', () => {
 
     applyCm6Format(view, { type: 'clear-format' });
     expect(view.state.doc.toString()).toBe('strong\ncode');
+    view.destroy();
+  });
+
+  it('keeps horizontal rules intact when clearing format', () => {
+    const { view } = createView('---\n___\n***');
+    applyCm6Format(view, { type: 'clear-format' });
+    expect(view.state.doc.toString()).toBe('---\n___\n***');
+    view.destroy();
+  });
+
+  it('captures and applies inline format in one transaction', () => {
+    const { view } = createView('**bold**\nplain', 0, 8);
+    applyCm6Format(view, { type: 'capture-format' });
+    view.dispatch({ selection: { anchor: 9, head: 14 } });
+    applyCm6Format(view, { type: 'apply-format' });
+    expect(view.state.doc.toString()).toBe('**bold**\n**plain**');
     view.destroy();
   });
 });

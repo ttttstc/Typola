@@ -1,5 +1,6 @@
 import type { AnchorStatus } from '../services/agent/types';
 import type { FormatAction } from '../components/EditorContextMenu';
+import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 
 export type EditorSelection = { text: string; from: number; to: number };
 export type EditorTextChange = { from: number; to: number; insert: string };
@@ -11,6 +12,7 @@ export type EditorTextChange = { from: number; to: number; insert: string };
 export type TypolaEditorKernel = {
   focus: () => void;
   getMarkdown: () => string;
+  findSearchMatches: (query: string, options: SearchOptions) => SearchMatch[];
   setMarkdown: (markdown: string) => void;
   insertText: (text: string) => void;
   /** 按指定 doc 位置插入;text 插入后光标停在插入内容尾部,继续输入位置正确。

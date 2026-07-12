@@ -7,6 +7,9 @@ import {
 } from './documentSearchService';
 
 describe('documentSearchService', () => {
+  it('does not search leading frontmatter', () => {
+    expect(findSearchMatches('---\ntitle: 草稿\n---\n正文 草稿', '草稿', { caseSensitive: false, wholeWord: false, regex: false })).toHaveLength(1);
+  });
   it('finds plain text matches case-insensitively by default', () => {
     const matches = findSearchMatches('Alpha beta alpha', 'alpha', {
       caseSensitive: false,

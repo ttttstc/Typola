@@ -38,6 +38,7 @@ export type MarkdownImage = MarkdownRange & {
   alt: string;
   url: string;
   title?: string;
+  width?: string;
 };
 
 export type MarkdownCodeBlock = MarkdownRange & {
@@ -52,6 +53,7 @@ export type MarkdownMathBlock = MarkdownRange & {
 };
 
 export type MarkdownTable = MarkdownRange;
+export type MarkdownHtmlBlock = MarkdownRange;
 
 export type MarkdownDocumentStats = {
   characters: number;
@@ -77,8 +79,10 @@ export type MarkdownAnalysisResult = {
   mathBlocks: MarkdownMathBlock[];
   mermaidBlocks: MarkdownCodeBlock[];
   tables: MarkdownTable[];
+  htmlBlocks: MarkdownHtmlBlock[];
   stats: MarkdownDocumentStats;
   diagnostics: MarkdownDiagnostic[];
+  frontmatter: MarkdownRange | null;
 };
 
 const markdownParser = parser.configure(GFM);
@@ -95,17 +99,19 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
   if (cached?.source === source) return cached.result;
 
   const nodes = collectTreeNodes(source);
+  const frontmatter = detectFrontmatter(source);
   const codeBlocks = nodes
     .filter((node) => node.name === 'FencedCode')
     .map((node) => codeBlockFromRange(source, node.from, node.to));
   const parsedHeadings = nodes
     .map((node, index) => headingFromNode(source, node.name, node.from, node.to, index))
     .filter((heading): heading is MarkdownHeading => heading !== null);
-  const headings = mergeHeadings(source, parsedHeadings);
+  const headings = mergeHeadings(source, parsedHeadings).filter((heading) => !frontmatter || heading.from >= frontmatter.to);
   const tables = nodes
     .filter((node) => node.name === 'Table')
     .map((node) => rangeAt(source, node.from, node.to));
-  const fencedRanges = codeBlocks;
+  const htmlBlocks = collectHtmlBlocks(source);
+  const fencedRanges = [...codeBlocks, ...htmlBlocks, ...(frontmatter ? [frontmatter] : [])];
   const result: MarkdownAnalysisResult = {
     version: MARKDOWN_ANALYSIS_VERSION,
     sourceHash,
@@ -118,11 +124,33 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
     mathBlocks: collectMathBlocks(source, fencedRanges, codeBlocks),
     mermaidBlocks: codeBlocks.filter((block) => block.language === 'mermaid'),
     tables,
+    htmlBlocks,
     stats: calculateStats(source, fencedRanges),
     diagnostics: [],
+    frontmatter,
   };
   remember(source, result);
   return result;
+}
+
+function collectHtmlBlocks(source: string): MarkdownHtmlBlock[] {
+  const blocks: MarkdownHtmlBlock[] = [];
+  for (const match of source.matchAll(/<(details|div|table|figure|blockquote)\b[^>]*>[\s\S]*?<\/\1>/giu)) {
+    const from = match.index ?? 0; blocks.push(rangeAt(source, from, from + match[0].length));
+  }
+  return blocks;
+}
+
+/** Only a first-document YAML fence counts as frontmatter. */
+export function detectFrontmatter(source: string): MarkdownRange | null {
+  const match = source.match(/^(?:\uFEFF)?---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/u);
+  return match ? rangeAt(source, 0, match[0].length) : null;
+}
+
+export function stripFrontmatter(source: string): string {
+  const frontmatter = detectFrontmatter(source);
+  if (!frontmatter) return source;
+  return source.slice(frontmatter.to).replace(/^\r?\n/u, '');
 }
 
 /** Debounced adapter for React/worker callers. Results remain source-hash cached. */
@@ -213,7 +241,17 @@ function collectLinks(source: string, fencedRanges: MarkdownRange[]): MarkdownLi
 }
 
 function collectImages(source: string, fencedRanges: MarkdownRange[]): MarkdownImage[] {
-  return collectLinkEntries(source, fencedRanges, true) as MarkdownImage[];
+  const images = collectLinkEntries(source, fencedRanges, true) as MarkdownImage[];
+  const htmlPattern = /<img\s+([^>]*?)>/giu;
+  for (const match of source.matchAll(htmlPattern)) {
+    const from = match.index ?? 0;
+    if (withinRanges(from, fencedRanges)) continue;
+    const attrs = match[1];
+    const attr = (name: string) => new RegExp(`${name}=["']([^"']*)["']`, 'iu').exec(attrs)?.[1] ?? '';
+    const url = attr('src'); if (!url) continue;
+    images.push({ ...rangeAt(source, from, from + match[0].length), url, alt: attr('alt'), ...(attr('title') ? { title: attr('title') } : {}), ...(attr('width') ? { width: attr('width') } : {}) });
+  }
+  return images.sort((a, b) => a.from - b.from);
 }
 
 function collectLinkEntries(source: string, fencedRanges: MarkdownRange[], images: boolean): Array<MarkdownLink | MarkdownImage> {
@@ -390,6 +428,13 @@ export function headingPathAt(source: string, offset: number): string[] {
       path.pop();
     }
     if (levels.length === 0 || levels[levels.length - 1] < heading.level) {
+      levels.push(heading.level);
+      path.push(heading.text);
+    } else {
+      while (levels.length > 0 && levels[levels.length - 1] >= heading.level) {
+        levels.pop();
+        path.pop();
+      }
       levels.push(heading.level);
       path.push(heading.text);
     }

@@ -693,7 +693,13 @@ export function AppLayout() {
   }, []);
 
   const replaceFromFindPanel = useCallback((matches: readonly SearchMatch[], replacement: string) => {
-    editorCommandRef.current?.replaceRanges(matches.map((match) => ({
+    const editor = editorCommandRef.current;
+    if (!editor) return;
+    const source = editor.getMarkdown();
+    // 文档在面板渲染后被 AI/文件监视器改写时，拒绝旧坐标，绝不替换错位文本。
+    const current = matches.filter((match) => source.slice(match.index, match.index + match.length) === match.text);
+    if (current.length !== matches.length) return;
+    editor.replaceRanges(current.map((match) => ({
       from: match.index,
       to: match.index + match.length,
       insert: replacement,

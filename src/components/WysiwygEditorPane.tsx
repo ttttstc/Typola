@@ -17,6 +17,7 @@ import {
   toggleTaskLine,
 } from '../services/taskListClickHandler';
 import type { TypolaEditorKernel } from '../types/editorCore';
+import { findSearchMatches } from '../services/documentSearchService';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { TableSubmenu, getTableContext } from './table/TableSubmenu';
 import { applyVditorFormat } from '../services/vditorFormatService';
@@ -880,6 +881,9 @@ export const WysiwygEditorPane = forwardRef<TypolaEditorKernel, WysiwygEditorPan
     },
     getMarkdown() {
       return editorRef.current?.getValue() ?? latestSource.current;
+    },
+    findSearchMatches(query, options) {
+      return findSearchMatches(editorRef.current?.getValue() ?? latestSource.current, query, options);
     },
     setMarkdown(markdown: string) {
       const editor = editorRef.current;

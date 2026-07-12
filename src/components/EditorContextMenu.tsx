@@ -7,15 +7,17 @@ export type TableAlign = 'left' | 'center' | 'right';
 
 export type FormatAction =
   | { type: 'heading'; level: HeadingLevel }
-  | { type: 'bold' | 'italic' | 'strike' | 'inline-code' }
+  | { type: 'bold' | 'italic' | 'strike' | 'underline' | 'sup' | 'sub' | 'highlight' | 'inline-code' }
   | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' }
   | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
   | { type: 'link-edit' }
+  | { type: 'capture-format' | 'apply-format' }
   | { type: 'cut' | 'copy' | 'paste' | 'select-all' }
   | { type: 'image-insert' }
   | { type: 'image-replace' }
   | { type: 'image-open' }
   | { type: 'image-copy-path' }
+  | { type: 'image-meta' }
   | { type: 'table-insert'; rows: number; cols: number }
   | { type: 'table-align'; align: TableAlign; colIndex?: number }
   | { type: 'table-row-insert'; after?: boolean }
@@ -124,8 +126,12 @@ export function EditorContextMenu({
 
       <MenuItem label="加粗" hint="Ctrl+B" onClick={() => pick({ type: 'bold' })} />
       <MenuItem label="斜体" hint="Ctrl+I" onClick={() => pick({ type: 'italic' })} />
+      <MenuItem label="下划线" onClick={() => pick({ type: 'underline' })} />
       <MenuItem label="删除线" onClick={() => pick({ type: 'strike' })} />
+      <MenuItem label="高亮" onClick={() => pick({ type: 'highlight' })} />
       <MenuItem label="行内代码" hint="Ctrl+G" onClick={() => pick({ type: 'inline-code' })} />
+      <MenuItem label="上标" onClick={() => pick({ type: 'sup' })} />
+      <MenuItem label="下标" onClick={() => pick({ type: 'sub' })} />
       <MenuItem label="链接" hint="Ctrl+K" onClick={() => pick({ type: 'link' })} />
       <MenuItem label="编辑链接" onClick={() => pick({ type: 'link-edit' })} />
 
@@ -162,6 +168,7 @@ export function EditorContextMenu({
           <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />
           <MenuItem label="打开文件" onClick={() => pick({ type: 'image-open' })} />
           <MenuItem label="复制路径" onClick={() => pick({ type: 'image-copy-path' })} />
+          <MenuItem label="编辑 Alt / 标题 / 宽度" onClick={() => pick({ type: 'image-meta' })} />
         </>
       )}
 

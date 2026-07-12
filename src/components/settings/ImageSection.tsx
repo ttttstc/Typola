@@ -90,7 +90,7 @@ export function ImageSection() {
         <label className="settings-row">
           <div>
             <div className="settings-label">目标文件夹</div>
-            <div className="settings-description">相对当前文档目录，支持 ${'{filename}'} 占位符。</div>
+            <div className="settings-description">相对当前文档目录，支持 {'{filename}'}、{'{year}'}、{'{month}'} 占位符。</div>
           </div>
           <input
             className="settings-input"
@@ -186,6 +186,15 @@ export function ImageSection() {
           {testResult && <pre className="settings-test-output">{testResult}</pre>}
         </div>
       )}
+
+      <div className="settings-row">
+        <div><div className="settings-label">折叠 YAML frontmatter</div></div>
+        <button type="button" className={`toggle-switch ${settings.editorFrontmatterFoldEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFrontmatterFoldEnabled: !settings.editorFrontmatterFoldEnabled })} />
+      </div>
+      <div className="settings-row">
+        <div><div className="settings-label">启用格式刷</div></div>
+        <button type="button" className={`toggle-switch ${settings.editorFormatPainterEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFormatPainterEnabled: !settings.editorFormatPainterEnabled })} />
+      </div>
     </div>
   );
 }

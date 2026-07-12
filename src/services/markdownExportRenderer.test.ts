@@ -34,4 +34,12 @@ describe('markdownToExportHtml', () => {
     await expect(markdownToExportHtml('', { target })).resolves.toBe('');
     expect(target.innerHTML).toBe('');
   });
+
+  it('exports ==highlight== as mark HTML', async () => {
+    await expect(markdownToExportHtml('强调 ==关键词==')).resolves.toContain('<mark>关键词</mark>');
+  });
+
+  it('strips leading frontmatter before export', async () => {
+    await expect(markdownToExportHtml('---\ntitle: 草稿\n---\n# 正文')).resolves.not.toContain('title: 草稿');
+  });
 });

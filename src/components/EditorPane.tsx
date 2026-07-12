@@ -7,6 +7,8 @@ import type { TypolaEditorKernel } from '../types/editorCore';
 import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import { applyCm6Format } from '../services/editor/cm6FormatService';
+import { Cm6EditPopover, type Cm6EditRequest } from './editor/cm6/Cm6EditPopover';
+import { ImageMetaPopover, type ImageMetaRequest } from './editor/cm6/ImageMetaPopover';
 import type { SelectionActionId } from '../services/agent/selectionActions';
 import type { SelectionAnchor } from '../services/agent/types';
 import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions';
@@ -23,7 +25,8 @@ import {
 } from '../services/markdownAnalysisService';
 import { writeText as writeClipboardText } from '../services/clipboardService';
 import { resolveLocalResourcePath } from '../services/htmlPresentationService';
-import { formatImageSrc } from '../services/imageInsert';
+import { formatImageSrc, serializeHtmlImage } from '../services/imageInsert';
+import { findSearchMatches } from '../services/documentSearchService';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -57,6 +60,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const settings = useSettings();
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean; hasImage: boolean } | null>(null);
+  const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
+  const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
@@ -224,11 +229,12 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const handleFormatPick = useCallback((action: FormatAction) => {
     const editor = editorViewRef.current;
     if (!editor) return;
+    if (!settings.editorFormatPainterEnabled && (action.type === 'capture-format' || action.type === 'apply-format')) return;
     if (action.type === 'image-insert') {
       onRequestImageInsert?.();
       return;
     }
-    if (action.type === 'image-replace' || action.type === 'image-open' || action.type === 'image-copy-path') {
+    if (action.type === 'image-replace' || action.type === 'image-open' || action.type === 'image-copy-path' || action.type === 'image-meta') {
       const pos = editor.posAtCoords({
         x: ctxMenu?.x ?? 0,
         y: ctxMenu?.y ?? 0,
@@ -243,13 +249,21 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         });
       } else if (action.type === 'image-open') {
         void openImageAt(image, filePathRef.current);
-      } else {
+      } else if (action.type === 'image-copy-path') {
         void copyImagePath(image, filePathRef.current);
+      } else {
+        setImageMetaRequest({ x: ctxMenu?.x ?? 16, y: ctxMenu?.y ?? 16, alt: image.alt, title: image.title ?? '', width: image.width ?? '', onSave: ({ alt, title, width }) => {
+          const replacement = width
+            ? serializeHtmlImage(image.url, alt, title, width)
+            : `![${alt}](${image.url}${title ? ` "${title}"` : ''})`;
+          editor.dispatch({ changes: { from: image.from, to: image.to, insert: replacement }, selection: { anchor: image.from + replacement.length } });
+          editor.focus();
+        } });
       }
       return;
     }
-    applyCm6Format(editor, action);
-  }, [ctxMenu, onRequestImageInsert]);
+    applyCm6Format(editor, action, setEditRequest);
+  }, [ctxMenu, onRequestImageInsert, settings.editorFormatPainterEnabled]);
 
   const extensions = useMemo(() => {
     return createMarkdownExtensions({
@@ -274,11 +288,12 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       onFormat: (action) => {
         const view = editorViewRef.current;
         if (!view) return false;
-        applyCm6Format(view, action);
+        if (!settings.editorFormatPainterEnabled && (action.type === 'capture-format' || action.type === 'apply-format')) return false;
+        applyCm6Format(view, action, setEditRequest);
         return true;
       },
     });
-  }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap]);
+  }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap, settings.editorFormatPainterEnabled]);
 
   useEffect(() => {
     if (!editorView || !headingScrollRequest) return;
@@ -339,6 +354,9 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     },
     getMarkdown() {
       return editorView?.state.doc.toString() ?? source;
+    },
+    findSearchMatches(query, options) {
+      return findSearchMatches(editorView?.state.doc.toString() ?? source, query, options);
     },
     setMarkdown(markdown: string) {
       if (!editorView) return;
@@ -531,6 +549,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         onClose={() => setCtxMenu(null)}
         onPickAI={onAIAction ? handleAIPick : undefined}
       />
+      <Cm6EditPopover request={editRequest} onClose={() => setEditRequest(null)} />
+      <ImageMetaPopover request={imageMetaRequest} onClose={() => setImageMetaRequest(null)} />
     </div>
   );
 });

@@ -38,11 +38,18 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
   }
 
   if (options.onFormat) {
+    const headingKey = (level: 1 | 2 | 3 | 4 | 5 | 6) =>
+      ({ key: `${navigator.platform.includes('Mac') ? 'Mod-Alt' : 'Ctrl'}-${level}`, preventDefault: true, run: () => options.onFormat?.({ type: 'heading', level }) ?? false });
     extensions.push(keymap.of([
       { key: 'Mod-b', preventDefault: true, run: () => options.onFormat?.({ type: 'bold' }) ?? false },
       { key: 'Mod-i', preventDefault: true, run: () => options.onFormat?.({ type: 'italic' }) ?? false },
       { key: 'Mod-Shift-7', preventDefault: true, run: () => options.onFormat?.({ type: 'ol' }) ?? false },
       { key: 'Mod-Shift-8', preventDefault: true, run: () => options.onFormat?.({ type: 'ul' }) ?? false },
+      headingKey(1), headingKey(2), headingKey(3), headingKey(4), headingKey(5), headingKey(6),
+      { key: 'Mod-g', preventDefault: true, run: () => options.onFormat?.({ type: 'inline-code' }) ?? false },
+      { key: 'Mod-\\', preventDefault: true, run: () => options.onFormat?.({ type: 'clear-format' }) ?? false },
+      { key: 'Mod-.', preventDefault: true, run: () => options.onFormat?.({ type: 'quote-up' }) ?? false },
+      { key: 'Mod-,', preventDefault: true, run: () => options.onFormat?.({ type: 'quote-down' }) ?? false },
     ]));
   }
 
