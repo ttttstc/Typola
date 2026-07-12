@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 修复 CM6 写作预览中新插入的本地 Markdown 图片未转换为 Tauri asset URL、因而无法显示的问题；右键插入/替换现与工具栏、拖拽、粘贴统一遵循图像设置，外部目录和绝对路径图片可获 asset scope 后显示。
 - 修复自定义配色首次打开时调色盘被遮罩隐藏；未选颜色时改为使用素笺主题，调整后的颜色在关闭应用后仍会保留。
 
 All notable changes to this project will be documented in this file.
@@ -26,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - 选区菜单窄化对齐 Typora/Obsidian(`width: max-content; max-width: 240px`,kbd 间距收紧 16→10px);右键菜单新增 5 个基础编辑能力:升级引用 / 降级引用 / 编辑链接 / 清除格式 / 编辑代码块语言,均走 `applyVditorFormat` 现有分发,Vditor IR 模式直接操作选中/选区 + `updateValue` 重渲染;新增 i18n keys `contextMenuQuoteUp / contextMenuQuoteDown / contextMenuLinkEdit / contextMenuClearFormat / contextMenuCodeblockLang` 中英日三译。
 - 选区浮条右端加 `⋯` 子按钮 + hover tooltip,mini menu 暴露两项:「本页不再展示」(filePath 维度 session suppress,直到切文档)与「全局隐藏」(直接写 `selectionFloatingBarEnabled=false`,与设置页 toggle 同步);新增 keys `floatingBarHideThisPage / floatingBarHideGlobal / floatingBarTooltip` 中英日三译;tooltip 用现有 Tooltip 组件浮显。
 - 工具栏新增「打开文件夹」按钮(Cmd+Shift+O),选夹后走新增 Tauri cmd `read_first_level_openable` 仅列一层 md/html/docx(不递归,跳过隐藏文件与节点_modules/dist/target/.git),批量入 tab(last active),单文件打开失败不阻塞其他(#170);新增 keys `toolbarOpenFolderTitle / toolbarOpenFolderLabel` 中英日三译;fileService 加 `openFolder` 函数,useFileTabs 加 `handleOpenFolder` 回调。
+- 写作模块图片资源管理基础能力(issue #185 P0):`markdownAnalysisService` 新增 `MarkdownImage` 类型、`scanImages` 解析与 `findMarkdownImageAt` 命中接口;CM6 编辑器右键图片新增「替换图片 / 打开文件 / 复制路径」三项,菜单任意位置新增「插入图片」,四项均走单笔 CM6 transaction,替换与插入复用 `formatImageSrc` 处理相对路径,打开文件走 Tauri `open_path_external` 命令绕开 opener scope 限制,复制路径走 `clipboardService.writeText`;远端 URL 仅作预览不下载。Vditor 模式与 alt 编辑 / 宽度 / 资源目录策略 / ExportAssetResolver 暂不做,留待 P1。
 
 ### Fixed
 

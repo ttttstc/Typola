@@ -1,6 +1,7 @@
 import { type Extension } from '@codemirror/state';
 import { imageBlocks, inlinePreview, tables } from '@atomic-editor/editor';
 import { imageFallbackExtension } from './imageFallbackExtension';
+import { imageAssetExtension } from './imageAssetExtension';
 import { mathPreviewExtension } from './mathPreviewExtension';
 import { mermaidPreviewExtension } from './mermaidPreviewExtension';
 import { wheelZoomExtension } from './wheelZoomExtension';
@@ -47,6 +48,7 @@ export function createLivePreviewExtensions(
     onTaskToggle,
     themeId,
   } = options;
+  const filePathRef = { current: filePath };
   const extensions: Extension[] = [
     headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }),
     wheelZoomExtension({ baseSize, onChange: onZoomChange }),
@@ -54,6 +56,7 @@ export function createLivePreviewExtensions(
     reviewMarkExtension({ comments: reviewComments, filePath }),
     taskToggleExtension({ onToggle: onTaskToggle }),
     linkOpenExtension({ onOpenLink }),
+    imageAssetExtension({ filePath: () => filePathRef.current }),
   ];
   if (livePreview) {
     extensions.unshift(

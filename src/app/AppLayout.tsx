@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   getExportPresetConfig,
   clearLastOpenedPath,
@@ -55,12 +56,12 @@ import { useSkillHubState } from '../hooks/useSkillHubState';
 import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skillHub';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
-import type { SourceHeadingScrollRequest } from '../components/EditorPane';
+import type { ImageInsertRequest, SourceHeadingScrollRequest } from '../components/EditorPane';
 import type { TypolaEditorKernel } from '../types/editorCore';
 import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { analyzeMarkdown } from '../services/markdownAnalysisService';
+import { analyzeMarkdown, type MarkdownLink } from '../services/markdownAnalysisService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
@@ -760,7 +761,7 @@ export function AppLayout() {
     // 用 MarkdownAnalysisService 找覆盖 match 位置的 heading section,
     // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
     if (editorMode === 'source') {
-      const sections = analyzeMarkdown(file.content).foldSections;
+      const sections = markdownAnalysis.foldSections;
       const coveringKeys: FoldKey[] = [];
       for (const section of sections) {
         if (section.from <= match.index && match.index < section.to) {
@@ -811,7 +812,7 @@ export function AppLayout() {
     bytes?: Uint8Array;
     fileName?: string;
     mime?: string;
-  }, insertAt: number | null = null) => {
+  }, insertAt: number | null = null, request?: ImageInsertRequest) => {
     const currentFile = fileRef.current;
     if (currentFile.fileType === 'docx') return;
     const dedupeKey = source.localPath
@@ -826,6 +827,19 @@ export function AppLayout() {
       setTransientMessage('请先保存文档，再插入图片。');
       return;
     }
+
+    const insertImageMarkdown = (src: string) => {
+      const replacement = request?.replace;
+      const title = replacement?.title ? ` "${replacement.title}"` : '';
+      const markdown = replacement
+        ? `![${replacement.alt}](${src}${title})`
+        : createImageMarkdown('图片', src);
+      if (replacement) {
+        editorCommandRef.current?.replaceRange(replacement.from, replacement.to, markdown);
+      } else {
+        insertMarkdownAt(markdown, insertAt);
+      }
+    };
 
     const { invoke } = await import('@tauri-apps/api/core');
     const resolved = resolveImageInsertAction(settings, currentFile.content);
@@ -853,8 +867,14 @@ export function AppLayout() {
 
     try {
       if (action === 'keep' && source.localPath) {
-        const src = formatImageSrc(source.localPath, currentFile.path, settings);
-        insertMarkdownAt(createImageMarkdown('图片', src), insertAt);
+        const src = settings.imageApplyToLocal
+          ? formatImageSrc(source.localPath, currentFile.path, settings)
+          : formatImageSrc(source.localPath, undefined, {
+            imagePreferRelative: false,
+            imageEnsureDotPrefix: false,
+            imageEscapeUrl: false,
+          });
+        insertImageMarkdown(src);
         return;
       }
 
@@ -873,20 +893,20 @@ export function AppLayout() {
           const [url] = uploadResult.urls.length > 0
             ? uploadResult.urls
             : parseUploadUrls(uploadResult.rawStdout, 1);
-          insertMarkdownAt(createImageMarkdown('图片', url), insertAt);
+          insertImageMarkdown(url);
           setTransientMessage('图片已上传。');
           return;
         } catch (error) {
           console.warn('Image upload failed, falling back to copy:', error);
           setTransientMessage('图片上传失败，已回退为本地复制。');
           const copied = source.localPath ? await copyImage() : uploadPath;
-          insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)), insertAt);
+          insertImageMarkdown(formatImageSrc(copied, currentFile.path, settings));
           return;
         }
       }
 
       const copiedPath = await copyImage();
-      insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)), insertAt);
+      insertImageMarkdown(formatImageSrc(copiedPath, currentFile.path, settings));
       setTransientMessage(`图片已保存到 ${copyDestination}。`);
     } catch (error) {
       console.warn('Failed to insert image:', error);
@@ -895,7 +915,7 @@ export function AppLayout() {
   }, [insertMarkdownAt, settings]);
 
   // 工具栏/菜单「插入本地图片」入口:打开系统文件对话框 → 走 insertImageFromSource。
-  const handleSelectLocalImage = useCallback(async () => {
+  const handleSelectLocalImage = useCallback(async (request?: ImageInsertRequest) => {
     if (fileRef.current.fileType === 'docx') return;
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
@@ -904,7 +924,7 @@ export function AppLayout() {
         filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'] }],
       });
       if (typeof selected !== 'string') return;
-      await insertImageFromSource({ localPath: selected });
+      await insertImageFromSource({ localPath: selected }, null, request);
     } catch (error) {
       console.warn('Failed to select image:', error);
       setTransientMessage('选择图片失败。');
@@ -1440,6 +1460,49 @@ export function AppLayout() {
     }
   }, []);
 
+  const handleOpenMarkdownLink = useCallback(async (link: MarkdownLink) => {
+    const target = link.url.trim();
+    if (!target) return;
+    if (target.startsWith('#')) {
+      const anchorText = target.slice(1);
+      const headingIndex = markdownAnalysis.headings.findIndex((heading) => heading.text === anchorText);
+      if (headingIndex < 0) {
+        await messageDialog(`未找到文档锚点：${target}`, { title: '打开链接失败' });
+        return;
+      }
+      setSourceHeadingScrollRequest({ index: headingIndex, requestId: Date.now() });
+      return;
+    }
+    if (/^(?:https?:|mailto:)/iu.test(target)) {
+      try {
+        await openUrl(target);
+      } catch (error) {
+        await messageDialog(String(error), { title: '打开链接失败' });
+      }
+      return;
+    }
+    if (/^[a-z][a-z0-9+.-]*:/iu.test(target)) {
+      await messageDialog(`不支持的链接协议：${target}`, { title: '打开链接失败' });
+      return;
+    }
+    if (!file.path) {
+      await messageDialog('当前文档尚未保存，无法解析相对路径。', { title: '打开链接失败' });
+      return;
+    }
+    const path = target.split('#', 1)[0]!;
+    const directory = file.path.replace(/[\\/][^\\/]*$/u, '');
+    const resolvedPath = /^(?:[A-Za-z]:[\\/]|[\\/])/u.test(path) ? path : joinLocalPath(directory, path);
+    if (!isOpenableDocumentPath(resolvedPath)) {
+      await messageDialog(`链接不是可打开的文档：${target}`, { title: '打开链接失败' });
+      return;
+    }
+    try {
+      await handleOpenPath(resolvedPath);
+    } catch (error) {
+      await messageDialog(String(error), { title: '打开链接失败' });
+    }
+  }, [file.path, handleOpenPath, markdownAnalysis.headings]);
+
   const handleOpenArtifactExternally = useCallback(async (path: string) => {
     try {
       // 同上,绕开 opener scope。image / 任意本地文件都用 ShellExecuteW 派发。
@@ -1515,6 +1578,8 @@ export function AppLayout() {
         foldedHeadings={foldedHeadings}
         onFoldChange={handleEditorFoldChange}
         reviewComments={reviewStateApi.state.comments}
+        onOpenLink={handleOpenMarkdownLink}
+        onRequestImageInsert={handleSelectLocalImage}
       />
     </Suspense>
   );
