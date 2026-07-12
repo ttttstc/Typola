@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { createMarkdownExtensions } from './createMarkdownExtensions';
-import { createLivePreviewExtensions } from './createLivePreviewExtensions';
+import {
+  createLivePreviewCompartments,
+  createLivePreviewExtensions,
+  reconfigureLivePreviewExtensions,
+} from './createLivePreviewExtensions';
 import { reviewMarkExtension } from './reviewMarkExtension';
 
 vi.mock('mermaid', () => ({
@@ -122,6 +126,18 @@ describe('createMarkdownExtensions live preview', () => {
     expect(inlineMath?.querySelector('.katex')).not.toBeNull();
   });
 
+  it('restores inline math after the cursor leaves its source range', () => {
+    const source = 'Energy $E=mc^2$ here';
+    view = createView(source, true);
+    const mathStart = source.indexOf('$');
+    view.dispatch({ selection: { anchor: mathStart + 3 } });
+    expect(view.contentDOM.querySelector('.typola-cm6-math-inline')).toBeNull();
+
+    moveCursorToEnd(view);
+
+    expect(view.contentDOM.querySelector('.typola-cm6-math-inline')).not.toBeNull();
+  });
+
   it('renders dollar block math and fenced math blocks', () => {
     view = createView([
       '$$',
@@ -137,6 +153,18 @@ describe('createMarkdownExtensions live preview', () => {
     moveCursorToEnd(view);
 
     expect(view.contentDOM.querySelectorAll('.typola-cm6-math-block').length).toBe(2);
+  });
+
+  it('restores dollar block math after the cursor leaves its source range', () => {
+    const source = ['$$', 'a^2+b^2=c^2', '$$', '', 'After'].join('\n');
+    view = createView(source, true);
+    const bodyStart = source.indexOf('a^2');
+    view.dispatch({ selection: { anchor: bodyStart + 2 } });
+    expect(view.contentDOM.querySelector('.typola-cm6-math-block')).toBeNull();
+
+    moveCursorToEnd(view);
+
+    expect(view.contentDOM.querySelector('.typola-cm6-math-block')).not.toBeNull();
   });
 
   it('renders and sanitizes mermaid fenced blocks as widgets', async () => {
@@ -177,5 +205,38 @@ describe('createMarkdownExtensions live preview', () => {
     });
 
     expect(view.contentDOM.querySelector('.cm-line.typola-cm-review-mark')?.textContent).toContain('需要检视的正文');
+  });
+
+  it('reconfigures live preview compartments without replacing the EditorView', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const compartments = createLivePreviewCompartments();
+    view = new EditorView({
+      state: EditorState.create({
+        doc: '# 标题\n\n正文',
+        extensions: [
+          ...createMarkdownExtensions({
+            fontFamily: 'monospace',
+            fontSize: 14,
+            tabSize: 4,
+            wordWrap: true,
+            extraExtensions: createLivePreviewExtensions({ baseSize: 14, compartments }),
+          }),
+        ],
+      }),
+      parent,
+    });
+    const originalView = view;
+
+    reconfigureLivePreviewExtensions(view, {
+      livePreview: false,
+      baseSize: 16,
+      themeId: 'night-current',
+      frontmatterFold: false,
+    }, compartments);
+
+    expect(view).toBe(originalView);
+    expect(view.state.doc.toString()).toBe('# 标题\n\n正文');
+    expect(view.destroyed).toBe(false);
   });
 });

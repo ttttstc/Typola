@@ -56,7 +56,7 @@ class MathWidget extends WidgetType {
   }
 }
 
-function collectInlineMathRanges(view: EditorView): MathRange[] {
+function collectInlineMathRanges(view: EditorView, includeCursor = false): MathRange[] {
   const { state } = view;
   const ranges: MathRange[] = [];
   for (const viewport of view.visibleRanges) {
@@ -67,7 +67,9 @@ function collectInlineMathRanges(view: EditorView): MathRange[] {
       while ((match = matcher.exec(line.text)) !== null) {
         const from = line.from + match.index;
         const to = from + match[0].length;
-        if (!cursorTouches(state, from, to)) ranges.push({ from, to, source: match[1] ?? '', block: false });
+        if (includeCursor || !cursorTouches(state, from, to)) {
+          ranges.push({ from, to, source: match[1] ?? '', block: false });
+        }
       }
       if (line.to >= viewport.to || line.number === state.doc.lines) break;
       line = state.doc.line(line.number + 1);
@@ -76,45 +78,85 @@ function collectInlineMathRanges(view: EditorView): MathRange[] {
   return ranges;
 }
 
-function collectBlockMathRanges(state: EditorState): MathRange[] {
+function selectionTouchesRanges(selection: EditorState['selection'], ranges: MathRange[]): boolean {
+  return ranges.some((range) => selection.ranges.some((selectionRange) => (
+    selectionRange.from <= range.to && selectionRange.to >= range.from
+  )));
+}
+
+function buildInlineDecorations(ranges: MathRange[], themeId: string): DecorationSet {
+  return Decoration.set(ranges.map(({ from, to, source, block }) => (
+    Decoration.replace({ widget: new MathWidget(source, block, themeId, () => {}), block }).range(from, to)
+  )), true);
+}
+
+function collectDollarMathRanges(source: string, state: EditorState): MathRange[] {
   const ranges: MathRange[] = [];
-  const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
-  tree.iterate({ enter(node: any) {
-    if (node.name !== 'FencedCode') return;
-    const info = node.node.getChild('CodeInfo');
-    const code = node.node.getChild('CodeText');
-    const language = info ? state.doc.sliceString(info.from, info.to).trim().toLowerCase() : '';
-    const source = code ? state.doc.sliceString(code.from, code.to).trim() : '';
-    if ((language === 'math' || language === 'katex') && source && !cursorTouches(state, node.from, node.to)) {
-      ranges.push({ from: node.from, to: node.to, source, block: true });
-    }
-  } });
   let opening: { from: number; to: number } | null = null;
-  for (let number = 1; number <= state.doc.lines; number += 1) {
-    const line = state.doc.line(number);
-    if (line.text.trim() !== '$$') continue;
-    if (!opening) { opening = line; continue; }
-    const source = state.doc.sliceString(opening.to + 1, line.from).trim();
-    if (source && !cursorTouches(state, opening.from, line.to)) {
-      ranges.push({ from: opening.from, to: line.to, source, block: true });
+  const fencePattern = /(?:^|\r?\n)[ \t]*\$\$[ \t]*(?=\r?\n|$)/gu;
+  for (const match of source.matchAll(fencePattern)) {
+    const matchStart = match.index ?? 0;
+    const prefixLength = match[0].startsWith('\r\n') ? 2 : match[0].startsWith('\n') ? 1 : 0;
+    const from = matchStart + prefixLength;
+    const to = matchStart + match[0].length;
+    if (!opening) {
+      opening = { from, to };
+      continue;
+    }
+    const mathSource = source.slice(opening.to, from).trim();
+    if (mathSource && !cursorTouches(state, opening.from, to)) {
+      ranges.push({ from: opening.from, to, source: mathSource, block: true });
     }
     opening = null;
   }
   return ranges;
 }
 
+function collectBlockMathRanges(state: EditorState): MathRange[] {
+  const ranges: MathRange[] = [];
+  const source = state.doc.toString();
+  const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
+  tree.iterate({ enter(node: any) {
+    if (node.name !== 'FencedCode') return;
+    const info = node.node.getChild('CodeInfo');
+    const code = node.node.getChild('CodeText');
+    const language = info ? source.slice(info.from, info.to).trim().toLowerCase() : '';
+    const codeSource = code ? source.slice(code.from, code.to).trim() : '';
+    if ((language === 'math' || language === 'katex') && codeSource && !cursorTouches(state, node.from, node.to)) {
+      ranges.push({ from: node.from, to: node.to, source: codeSource, block: true });
+    }
+  } });
+  return [...ranges, ...collectDollarMathRanges(source, state)];
+}
+
 export function mathPreviewExtension(themeId = 'light'): Extension[] {
   const inlineMathPlugin = ViewPlugin.fromClass(class {
     decorations: DecorationSet;
     private readonly view: EditorView;
-    constructor(view: EditorView) { this.view = view; this.decorations = this.build(); }
-    build(): DecorationSet {
-      return Decoration.set(collectInlineMathRanges(this.view).map(({ from, to, source, block }) =>
-        Decoration.replace({ widget: new MathWidget(source, block, themeId, () => {}), block }).range(from, to),
-      ), true);
+    private allRanges: MathRange[] = [];
+    private ranges: MathRange[] = [];
+    constructor(view: EditorView) {
+      this.view = view;
+      this.refreshRanges();
+      this.decorations = buildInlineDecorations(this.ranges, themeId);
+    }
+    private refreshRanges(): void {
+      this.allRanges = collectInlineMathRanges(this.view, true);
+      this.ranges = this.allRanges.filter((range) => !cursorTouches(this.view.state, range.from, range.to));
     }
     update(update: ViewUpdate): void {
-      if (update.docChanged || update.viewportChanged || update.selectionSet) this.decorations = this.build();
+      if (update.docChanged || update.viewportChanged) {
+        this.refreshRanges();
+        this.decorations = buildInlineDecorations(this.ranges, themeId);
+        return;
+      }
+      if (update.selectionSet && (
+        selectionTouchesRanges(update.startState.selection, this.allRanges)
+        || selectionTouchesRanges(update.state.selection, this.allRanges)
+      )) {
+        this.ranges = this.allRanges.filter((range) => !cursorTouches(this.view.state, range.from, range.to));
+        this.decorations = buildInlineDecorations(this.ranges, themeId);
+      }
     }
   }, { decorations: (plugin) => plugin.decorations });
   const blockMathField = StateField.define<DecorationSet>({

@@ -50,22 +50,26 @@ type EditorPaneProps = {
   // origin 是触发点的视口坐标(用于「原地闭环」浮卡定位);无 origin 时退化为对话框路径。
   onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
   onRequestImageInsert?: (request?: ImageInsertRequest) => void;
+  onEditorReady?: (view: EditorView) => void;
 };
 
 export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(function EditorPane(
   props,
   ref,
 ) {
-  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction, onRequestImageInsert } = props;
+  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction, onRequestImageInsert, onEditorReady } = props;
   const settings = useSettings();
-  const [editorView, setEditorView] = useState<EditorView | null>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  const editorListenersCleanupRef = useRef<(() => void) | null>(null);
+  const sourceRef = useRef(source);
+  const headingScrollRequestRef = useRef(headingScrollRequest);
+  const onScrollRatioRef = useRef(onScrollRatio);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean; hasImage: boolean } | null>(null);
   const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
   const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
-  const editorViewRef = useRef<EditorView | null>(null);
   const editorFontFamily = settings.editorFontFamily === 'System Default'
     ? 'var(--font-mono)'
     : `'${settings.editorFontFamily}', var(--font-mono)`;
@@ -88,7 +92,9 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
 
   useEffect(() => { onAIActionRef.current = onAIAction; }, [onAIAction]);
   useEffect(() => { filePathRef.current = filePath; }, [filePath]);
-  useEffect(() => { editorViewRef.current = editorView; }, [editorView]);
+  useEffect(() => { sourceRef.current = source; }, [source]);
+  useEffect(() => { headingScrollRequestRef.current = headingScrollRequest; }, [headingScrollRequest]);
+  useEffect(() => { onScrollRatioRef.current = onScrollRatio; }, [onScrollRatio]);
 
   // 抽 triggerAIAction:菜单/浮条/Ctrl+K 都用它,统一组装 anchor + origin。
   const triggerAIAction = useCallback((action: SelectionActionId, origin?: { x: number; y: number }) => {
@@ -137,22 +143,21 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   // 覆盖 selection commit + 重排;时间越短偶尔会让浮条闪一下,越长会延迟用户主动选区。
   const suppressFloatingBarRef = useRef(false);
   const FLOATING_BAR_SETTLE_MS = 250;
-  useEffect(() => {
-    if (!editorView) return;
+  const attachEditorListeners = useCallback((view: EditorView) => {
     const computeFromSelection = () => {
       if (suppressFloatingBarRef.current) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
         return;
       }
-      const sel = editorView.state.selection.main;
+      const sel = view.state.selection.main;
       if (sel.empty) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
         return;
       }
-      const fromCoords = editorView.coordsAtPos(sel.from);
-      const toCoords = editorView.coordsAtPos(sel.to);
+      const fromCoords = view.coordsAtPos(sel.from);
+      const toCoords = view.coordsAtPos(sel.to);
       if (!fromCoords || !toCoords) {
         setFloatingHasSelection(false);
         setFloatingRect(null);
@@ -167,12 +172,19 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       setFloatingHasSelection(true);
     };
     // CodeMirror 没有 selectionChange 事件,用 document selectionchange 兜底
-    const onChange = () => window.requestAnimationFrame(computeFromSelection);
+    let selectionRafId: number | null = null;
+    const onChange = () => {
+      if (selectionRafId !== null) return;
+      selectionRafId = window.requestAnimationFrame(() => {
+        selectionRafId = null;
+        computeFromSelection();
+      });
+    };
     const onMouseDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
       // 只追踪编辑器正文内的拖选起始,不要吞掉浮条/菜单/工具栏的 mousedown。
-      if (editorView.contentDOM.contains(target)) {
+      if (view.contentDOM.contains(target)) {
         isDraggingRef.current = true;
       }
     };
@@ -187,15 +199,29 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     document.addEventListener('selectionchange', onChange);
     window.addEventListener('mouseup', onMouseUp);
     document.addEventListener('mousedown', onMouseDown);
+    const dom = view.scrollDOM;
+    let scrollRafId: number | null = null;
+    const handleScroll = () => {
+      if (scrollRafId !== null) return;
+      scrollRafId = window.requestAnimationFrame(() => {
+        scrollRafId = null;
+        const max = dom.scrollHeight - dom.clientHeight;
+        onScrollRatioRef.current?.(max > 0 ? dom.scrollTop / max : 0);
+      });
+    };
+    dom.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       document.removeEventListener('selectionchange', onChange);
       window.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('mousedown', onMouseDown);
+      if (selectionRafId !== null) window.cancelAnimationFrame(selectionRafId);
+      dom.removeEventListener('scroll', handleScroll);
+      if (scrollRafId !== null) window.cancelAnimationFrame(scrollRafId);
     };
-  }, [editorView]);
+  }, []);
 
   const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const editor = editorView;
+    const editor = editorViewRef.current;
     if (!editor) return;
     const target = event.target as Node | null;
     if (!target || !editor.contentDOM.contains(target)) return;
@@ -215,7 +241,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       hasTable: pos !== null && findTableAt(editor, pos) !== null,
       hasImage,
     });
-  }, [editorView]);
+  }, []);
 
   const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     const editor = editorViewRef.current;
@@ -295,70 +321,71 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     });
   }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap, settings.editorFormatPainterEnabled]);
 
-  useEffect(() => {
-    if (!editorView || !headingScrollRequest) return;
-    if (handledHeadingScrollRequestRef.current === headingScrollRequest.requestId) return;
+  const applyHeadingScrollRequest = useCallback((editor: EditorView, request?: SourceHeadingScrollRequest) => {
+    if (!request) return;
+    if (handledHeadingScrollRequestRef.current === request.requestId) return;
 
-    const from = headingIndexAt(editorView.state, headingScrollRequest.index);
+    const from = headingIndexAt(editor.state, request.index);
     if (from === null) return;
-    handledHeadingScrollRequestRef.current = headingScrollRequest.requestId;
+    handledHeadingScrollRequestRef.current = request.requestId;
 
-    if (headingScrollRequest.withinRatio !== undefined) {
+    if (request.withinRatio !== undefined) {
       // 段内插值滚动:用 view.lineBlockAt 像素位置 + withinRatio 精确定位
-      const nextFrom = headingIndexAt(editorView.state, headingScrollRequest.index + 1);
-      const headingBlock = editorView.lineBlockAt(from);
-      const nextBlock = nextFrom !== null ? editorView.lineBlockAt(nextFrom) : null;
+      const nextFrom = headingIndexAt(editor.state, request.index + 1);
+      const headingBlock = editor.lineBlockAt(from);
+      const nextBlock = nextFrom !== null ? editor.lineBlockAt(nextFrom) : null;
       const sectionStart = headingBlock.top;
-      const sectionEnd = nextBlock ? nextBlock.top : editorView.scrollDOM.scrollHeight;
-      const ratio = Math.max(0, Math.min(1, headingScrollRequest.withinRatio));
+      const sectionEnd = nextBlock ? nextBlock.top : editor.scrollDOM.scrollHeight;
+      const ratio = Math.max(0, Math.min(1, request.withinRatio));
       const target = sectionStart + (sectionEnd - sectionStart) * ratio;
       suppressFloatingBarRef.current = true;
-      editorView.dispatch({
+      editor.dispatch({
         effects: EditorView.scrollIntoView(from, { y: 'start' }),
         selection: { anchor: from },
       });
-      editorView.scrollDOM.scrollTop = Math.max(0, target);
+      editor.scrollDOM.scrollTop = Math.max(0, target);
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     } else {
       suppressFloatingBarRef.current = true;
-      editorView.dispatch({
+      editor.dispatch({
         effects: EditorView.scrollIntoView(from, { y: 'start' }),
         selection: { anchor: from },
       });
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     }
-  }, [editorView, headingScrollRequest]);
+  }, []);
 
   useEffect(() => {
-    if (!editorView || !onScrollRatio) return;
-    const dom = editorView.scrollDOM;
-    let rafId: number | null = null;
-    const handleScroll = () => {
-      if (rafId !== null) return;
-      rafId = window.requestAnimationFrame(() => {
-        rafId = null;
-        const max = dom.scrollHeight - dom.clientHeight;
-        onScrollRatio(max > 0 ? dom.scrollTop / max : 0);
-      });
-    };
-    dom.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      dom.removeEventListener('scroll', handleScroll);
-      if (rafId !== null) window.cancelAnimationFrame(rafId);
-    };
-  }, [editorView, onScrollRatio]);
+    const editor = editorViewRef.current;
+    if (editor) applyHeadingScrollRequest(editor, headingScrollRequest);
+  }, [applyHeadingScrollRequest, headingScrollRequest]);
+
+  const handleCreateEditor = useCallback((view: EditorView) => {
+    editorViewRef.current = view;
+    editorListenersCleanupRef.current?.();
+    editorListenersCleanupRef.current = attachEditorListeners(view);
+    applyHeadingScrollRequest(view, headingScrollRequestRef.current);
+    onEditorReady?.(view);
+  }, [applyHeadingScrollRequest, attachEditorListeners, onEditorReady]);
+
+  useEffect(() => () => {
+    editorListenersCleanupRef.current?.();
+    editorListenersCleanupRef.current = null;
+    editorViewRef.current = null;
+  }, []);
 
   useImperativeHandle(ref, () => ({
     focus() {
-      editorView?.focus();
+      editorViewRef.current?.focus();
     },
     getMarkdown() {
-      return editorView?.state.doc.toString() ?? source;
+      return editorViewRef.current?.state.doc.toString() ?? sourceRef.current;
     },
     findSearchMatches(query, options) {
-      return findSearchMatches(editorView?.state.doc.toString() ?? source, query, options);
+      return findSearchMatches(editorViewRef.current?.state.doc.toString() ?? sourceRef.current, query, options);
     },
     setMarkdown(markdown: string) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       const docLen = editorView.state.doc.length;
       editorView.dispatch({
@@ -366,6 +393,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       });
     },
     insertText(text: string) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       const selection = editorView.state.selection.main;
       editorView.dispatch({
@@ -375,6 +403,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       editorView.focus();
     },
     insertTextAt(text: string, pos: number) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       const docLen = editorView.state.doc.length;
       const safePos = Math.max(0, Math.min(pos, docLen));
@@ -385,6 +414,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       editorView.focus();
     },
     posAtCoords(x: number, y: number) {
+      const editorView = editorViewRef.current;
       if (!editorView) return null;
       try {
         const result = editorView.posAtCoords({ x, y });
@@ -394,6 +424,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       }
     },
     getSelection() {
+      const editorView = editorViewRef.current;
       if (!editorView) return null;
       const selection = editorView.state.selection.main;
       if (selection.empty) return null;
@@ -404,6 +435,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       };
     },
     replaceSelection(text: string) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       const selection = editorView.state.selection.main;
       editorView.dispatch({
@@ -413,6 +445,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       editorView.focus();
     },
     replaceRange(from: number, to: number, text: string) {
+      const editorView = editorViewRef.current;
       if (!editorView) return false;
       const docLen = editorView.state.doc.length;
       const safeFrom = Math.max(0, Math.min(from, docLen));
@@ -425,6 +458,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       return true;
     },
     replaceRanges(changes) {
+      const editorView = editorViewRef.current;
       if (!editorView || changes.length === 0) return false;
       const docLen = editorView.state.doc.length;
       const safeChanges = changes.map(({ from, to, insert }) => ({
@@ -444,11 +478,12 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       }
     },
     format(action) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       applyCm6Format(editorView, action);
     },
     validateAnchor(anchorFilePath: string, from: number, to: number, originalText: string, _prefixHint?: string) {
-      const editor = editorView;
+      const editor = editorViewRef.current;
       if (!editor) return 'wrong-file';
       // 文件切换：当前编辑器实例对应的 filePath 必须等于 anchor 指向的文件
       const currentPath = filePathRef.current;
@@ -460,6 +495,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     // Source 模式:from/to 直接是 CodeMirror 文档偏移,不需要 opts.text / query /
     // searchOptions。保留 opts 签名仅是为了实现 TypolaEditorKernel 契约。
     revealRange(from: number, to: number, opts) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       suppressFloatingBarRef.current = true;
       editorView.dispatch({
@@ -471,6 +507,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     },
     revealText(text: string, backwards = false) {
+      const editorView = editorViewRef.current;
       if (!editorView || !text) return;
       const docString = editorView.state.doc.toString();
       const fromPos = editorView.state.selection.main.to;
@@ -489,10 +526,12 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     },
     setZoom(size: number) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       applyBaseSize(editorView, size);
     },
     setFoldedHeadings(keys: ReadonlySet<string>) {
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       // setFoldedHeadings 的 keys 类型来自 TypolaEditorKernel 契约(string),
       // headingFoldExtension 内部仍按 FoldKey(`${level}:${text}`) 处理。
@@ -505,6 +544,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     },
     commitAIReplacement(content: string) {
       // 一次性整篇替换:走单次 dispatch,CodeMirror history 自动栈,一次 Ctrl+Z 回退。
+      const editorView = editorViewRef.current;
       if (!editorView) return;
       const docLen = editorView.state.doc.length;
       editorView.dispatch({
@@ -512,7 +552,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       });
       editorView.focus();
     },
-  }), [editorView]);
+  }), [flashRange]);
 
   return (
     <div className="editor-pane" onContextMenu={handleContextMenu} onPaste={handlePaste}>
@@ -521,7 +561,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         height="100%"
         extensions={extensions}
         onChange={onChange}
-        onCreateEditor={setEditorView}
+        onCreateEditor={handleCreateEditor}
         spellCheck={settings.editorSpellCheck}
         theme="light"
         basicSetup={{

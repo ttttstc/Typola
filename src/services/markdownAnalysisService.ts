@@ -96,7 +96,11 @@ type TreeNode = { name: string; from: number; to: number };
 export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
   const sourceHash = hashSource(source);
   const cached = cache.get(sourceHash);
-  if (cached?.source === source) return cached.result;
+  if (cached?.source === source) {
+    cache.delete(sourceHash);
+    cache.set(sourceHash, cached);
+    return cached.result;
+  }
 
   const nodes = collectTreeNodes(source);
   const frontmatter = detectFrontmatter(source);

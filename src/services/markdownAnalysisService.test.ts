@@ -110,6 +110,20 @@ describe('markdownAnalysisService', () => {
     expect(analyzeMarkdown('# B')).not.toBe(first);
   });
 
+  it('refreshes cache recency on hit before evicting the least recently used entry', () => {
+    _clearMarkdownAnalysisCacheForTests();
+    const sources = Array.from({ length: 24 }, (_, index) => `# 第 ${index} 篇`);
+    const first = analyzeMarkdown(sources[0]!);
+    const second = analyzeMarkdown(sources[1]!);
+    for (const source of sources.slice(2)) analyzeMarkdown(source);
+
+    expect(analyzeMarkdown(sources[0]!)).toBe(first);
+    analyzeMarkdown('# 新增缓存项');
+
+    expect(analyzeMarkdown(sources[0]!)).toBe(first);
+    expect(analyzeMarkdown(sources[1]!)).not.toBe(second);
+  });
+
   it('keeps a 10k-line document within the synchronous analysis budget', () => {
     const source = Array.from({ length: 10_000 }, (_, index) => (
       index % 100 === 0 ? `## 第 ${index} 节` : `第 ${index} 行正文 with words`

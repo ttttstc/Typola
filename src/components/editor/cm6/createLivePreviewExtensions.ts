@@ -1,4 +1,5 @@
-import { type Extension } from '@codemirror/state';
+import { Compartment, type Extension } from '@codemirror/state';
+import type { EditorView } from '@codemirror/view';
 import { imageBlocks, inlinePreview, tables } from '@atomic-editor/editor';
 import { imageFallbackExtension } from './imageFallbackExtension';
 import { imageAssetExtension } from './imageAssetExtension';
@@ -19,7 +20,31 @@ import {
 } from './linkInteractionExtension';
 import type { MarkdownLink, MarkdownTask } from '../../../services/markdownAnalysisService';
 
-type CreateLivePreviewExtensionsOptions = {
+export type LivePreviewCompartments = {
+  preview: Compartment;
+  headingFold: Compartment;
+  wheelZoom: Compartment;
+  previewSync: Compartment;
+  reviewMark: Compartment;
+  taskToggle: Compartment;
+  linkOpen: Compartment;
+  imageAsset: Compartment;
+};
+
+export function createLivePreviewCompartments(): LivePreviewCompartments {
+  return {
+    preview: new Compartment(),
+    headingFold: new Compartment(),
+    wheelZoom: new Compartment(),
+    previewSync: new Compartment(),
+    reviewMark: new Compartment(),
+    taskToggle: new Compartment(),
+    linkOpen: new Compartment(),
+    imageAsset: new Compartment(),
+  };
+}
+
+export type CreateLivePreviewExtensionsOptions = {
   livePreview?: boolean;
   baseSize: number;
   onZoomChange?: (size: number) => void;
@@ -34,7 +59,23 @@ type CreateLivePreviewExtensionsOptions = {
   onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
   themeId?: string;
   frontmatterFold?: boolean;
+  compartments?: LivePreviewCompartments;
 };
+
+function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'livePreview' | 'themeId' | 'frontmatterFold'>): Extension[] {
+  if (!options.livePreview) return [];
+  return [
+    ...(options.frontmatterFold ? [frontmatterFoldExtension()] : []),
+    footnoteExtension(),
+    htmlPreviewExtension(),
+    inlinePreview(),
+    tables(),
+    imageBlocks(),
+    imageFallbackExtension(),
+    mathPreviewExtension(options.themeId),
+    mermaidPreviewExtension(options.themeId),
+  ];
+}
 
 export function createLivePreviewExtensions(
   options: CreateLivePreviewExtensionsOptions = { baseSize: 14 },
@@ -52,29 +93,51 @@ export function createLivePreviewExtensions(
     onTaskToggle,
     themeId,
     frontmatterFold = true,
+    compartments = createLivePreviewCompartments(),
   } = options;
-  const filePathRef = { current: filePath };
-  const extensions: Extension[] = [
-    headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }),
-    wheelZoomExtension({ baseSize, onChange: onZoomChange }),
-    previewSyncExtension({ onChange: onPreviewHeadingChange }),
-    reviewMarkExtension({ comments: reviewComments, filePath }),
-    taskToggleExtension({ onToggle: onTaskToggle }),
-    linkOpenExtension({ onOpenLink }),
-    imageAssetExtension({ filePath: () => filePathRef.current }),
+  return [
+    compartments.preview.of(previewExtensions({ livePreview, themeId, frontmatterFold })),
+    compartments.headingFold.of(headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange })),
+    compartments.wheelZoom.of(wheelZoomExtension({ baseSize, onChange: onZoomChange })),
+    compartments.previewSync.of(previewSyncExtension({ onChange: onPreviewHeadingChange })),
+    compartments.reviewMark.of(reviewMarkExtension({ comments: reviewComments, filePath: typeof filePath === 'string' ? filePath : undefined })),
+    compartments.taskToggle.of(taskToggleExtension({ onToggle: onTaskToggle })),
+    compartments.linkOpen.of(linkOpenExtension({ onOpenLink })),
+    compartments.imageAsset.of(imageAssetExtension({ filePath: () => filePath })),
   ];
-  if (livePreview) {
-    extensions.unshift(
-      ...(frontmatterFold ? [frontmatterFoldExtension()] : []),
-      footnoteExtension(),
-      htmlPreviewExtension(),
-      inlinePreview(),
-      tables(),
-      imageBlocks(),
-      imageFallbackExtension(),
-      mathPreviewExtension(themeId),
-      mermaidPreviewExtension(themeId),
-    );
-  }
-  return extensions;
+}
+
+export function reconfigureLivePreviewExtensions(
+  view: EditorView,
+  options: CreateLivePreviewExtensionsOptions,
+  compartments: LivePreviewCompartments,
+): void {
+  const {
+    livePreview = true,
+    baseSize,
+    onZoomChange,
+    onPreviewHeadingChange,
+    foldedHeadings,
+    onFoldChange,
+    reviewComments,
+    filePath,
+    onOpenLink,
+    onTaskToggle,
+    themeId,
+    frontmatterFold = true,
+  } = options;
+  view.dispatch({
+    effects: [
+      compartments.preview.reconfigure(previewExtensions({ livePreview, themeId, frontmatterFold })),
+      compartments.wheelZoom.reconfigure(wheelZoomExtension({ baseSize, onChange: onZoomChange })),
+      compartments.previewSync.reconfigure(previewSyncExtension({ onChange: onPreviewHeadingChange })),
+      compartments.reviewMark.reconfigure(reviewMarkExtension({ comments: reviewComments, filePath: typeof filePath === 'string' ? filePath : undefined })),
+      compartments.taskToggle.reconfigure(taskToggleExtension({ onToggle: onTaskToggle })),
+      compartments.linkOpen.reconfigure(linkOpenExtension({ onOpenLink })),
+      compartments.imageAsset.reconfigure(imageAssetExtension({ filePath: () => filePath })),
+      ...(foldedHeadings !== undefined
+        ? [compartments.headingFold.reconfigure(headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }))]
+        : []),
+    ],
+  });
 }
