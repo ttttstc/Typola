@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Issue #223：CM6 性能路径优化：预览滚动同步缓存 heading 并独立节流；编辑器视图改用 ref；live-preview 扩展按 Compartment 局部 reconfigure；数学、heading 折叠、Markdown 分析缓存与本地图片观察路径减少重复全篇扫描。
 - CM6 格式快捷键补齐标题、行内代码、清除格式与引用层级；多行引用升级/降级现在作为单笔撤销记录。链接与代码语言编辑改为可键盘操作的 React 浮层，删除 CM6 路径中的浏览器 prompt。
 - 修复多个 CM6 编辑器实例共享预览同步帧和 Mermaid SVG 编号的问题；搜索替换在写入前验证当前文档，拒绝陈旧坐标。
 - Markdown 分析与统一导出识别并剥离文首 YAML frontmatter，避免将其误作正文内容或导出产物。

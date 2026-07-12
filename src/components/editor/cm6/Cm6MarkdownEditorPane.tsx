@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { EditorView } from '@codemirror/view';
 import '@atomic-editor/editor/styles.css';
 import 'katex/dist/katex.min.css';
 import { EditorPane, type ImageInsertRequest, type SourceHeadingScrollRequest } from '../../EditorPane';
@@ -7,7 +8,11 @@ import type { SelectionAnchor } from '../../../services/agent/types';
 import type { TypolaEditorKernel } from '../../../types/editorCore';
 import { useSettings } from '../../../hooks/useSettings';
 import { updateSettings } from '../../../services/settingsService';
-import { createLivePreviewExtensions } from './createLivePreviewExtensions';
+import {
+  createLivePreviewCompartments,
+  createLivePreviewExtensions,
+  reconfigureLivePreviewExtensions,
+} from './createLivePreviewExtensions';
 import type { PreviewHeadingChange } from './previewSyncExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 import type { ReviewComment } from '../../../services/review/reviewState';
@@ -116,24 +121,77 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
       }
     }, []);
 
-    // headingFoldExtension 始终传空 initial 集合 — React → editor 的同步走
-    // editorRef.current?.setFoldedHeadings?.(...) 命令式推送(见上面的 useEffect),
-    // 这样 livePreviewExtensions 不依赖 foldedHeadings,折叠切换不再触发整组扩展重建。
-    const livePreviewExtensions = useMemo(() => {
-      return createLivePreviewExtensions({
+    // 动态参数通过 Compartment reconfigure;稳定扩展数组避免 EditorPane 重建编辑器。
+    const livePreviewCompartments = useMemo(createLivePreviewCompartments, []);
+    const editorViewRef = useRef<EditorView | null>(null);
+    const previewHeadingChangeRef = useRef(onPreviewHeadingChange);
+    const foldChangeRef = useRef(handleFoldChange);
+    const zoomChangeRef = useRef(handleZoomChange);
+    const openLinkRef = useRef(onOpenLink);
+    const taskToggleRef = useRef(onTaskToggle);
+    previewHeadingChangeRef.current = onPreviewHeadingChange;
+    foldChangeRef.current = handleFoldChange;
+    zoomChangeRef.current = handleZoomChange;
+    openLinkRef.current = onOpenLink;
+    taskToggleRef.current = onTaskToggle;
+
+    const stablePreviewHeadingChange = useCallback((change: PreviewHeadingChange) => {
+      previewHeadingChangeRef.current?.(change);
+    }, []);
+    const stableFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
+      foldChangeRef.current(next);
+    }, []);
+    const stableZoomChange = useCallback((size: number) => {
+      zoomChangeRef.current(size);
+    }, []);
+    const stableOpenLink = useCallback((link: MarkdownLink) => {
+      openLinkRef.current?.(link);
+    }, []);
+    const stableTaskToggle = useCallback((task: MarkdownTask, nextChecked: boolean) => {
+      taskToggleRef.current?.(task, nextChecked);
+    }, []);
+
+    const reconfigureLivePreview = useCallback(() => {
+      const view = editorViewRef.current;
+      if (!view) return;
+      reconfigureLivePreviewExtensions(view, {
         livePreview: mode !== 'source',
         baseSize: settings.editorFontSize,
-        onZoomChange: handleZoomChange,
-        onPreviewHeadingChange,
-        onFoldChange: handleFoldChange,
+        onZoomChange: stableZoomChange,
+        onPreviewHeadingChange: stablePreviewHeadingChange,
+        onFoldChange: stableFoldChange,
         reviewComments,
         filePath: rest.filePath,
-        onOpenLink,
-        onTaskToggle,
+        onOpenLink: stableOpenLink,
+        onTaskToggle: stableTaskToggle,
         themeId: settings.themeId,
         frontmatterFold: settings.editorFrontmatterFoldEnabled,
-      });
-    }, [mode, settings.editorFontSize, settings.themeId, settings.editorFrontmatterFoldEnabled, handleZoomChange, onPreviewHeadingChange, handleFoldChange, reviewComments, rest.filePath, onOpenLink, onTaskToggle]);
+      }, livePreviewCompartments);
+    }, [livePreviewCompartments, mode, reviewComments, rest.filePath, settings.editorFontSize, settings.editorFrontmatterFoldEnabled, settings.themeId, stableFoldChange, stableOpenLink, stablePreviewHeadingChange, stableTaskToggle, stableZoomChange]);
+
+    const handleEditorReady = useCallback((view: EditorView) => {
+      editorViewRef.current = view;
+      reconfigureLivePreview();
+    }, [reconfigureLivePreview]);
+
+    useEffect(() => {
+      reconfigureLivePreview();
+    }, [reconfigureLivePreview]);
+
+    const [livePreviewExtensions] = useState(() => createLivePreviewExtensions({
+      livePreview: mode !== 'source',
+      baseSize: settings.editorFontSize,
+      onZoomChange: stableZoomChange,
+      onPreviewHeadingChange: stablePreviewHeadingChange,
+      onFoldChange: stableFoldChange,
+      reviewComments,
+      filePath: rest.filePath,
+      onOpenLink: stableOpenLink,
+      onTaskToggle: stableTaskToggle,
+      themeId: settings.themeId,
+      frontmatterFold: settings.editorFrontmatterFoldEnabled,
+      compartments: livePreviewCompartments,
+    }));
     return (
       <div className="cm6-markdown-editor-pane">
         <EditorPane
@@ -145,6 +203,7 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
           }}
           {...rest}
           onRequestImageInsert={onRequestImageInsert}
+          onEditorReady={handleEditorReady}
           extraExtensions={livePreviewExtensions}
         />
         {zoomIndicator && (
