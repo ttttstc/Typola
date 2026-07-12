@@ -155,6 +155,18 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelectorAll('.typola-cm6-math-block').length).toBe(2);
   });
 
+  it('restores dollar block math after the cursor leaves its source range', () => {
+    const source = ['$$', 'a^2+b^2=c^2', '$$', '', 'After'].join('\n');
+    view = createView(source, true);
+    const bodyStart = source.indexOf('a^2');
+    view.dispatch({ selection: { anchor: bodyStart + 2 } });
+    expect(view.contentDOM.querySelector('.typola-cm6-math-block')).toBeNull();
+
+    moveCursorToEnd(view);
+
+    expect(view.contentDOM.querySelector('.typola-cm6-math-block')).not.toBeNull();
+  });
+
   it('renders and sanitizes mermaid fenced blocks as widgets', async () => {
     view = createView([
       '```mermaid',

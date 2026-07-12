@@ -52,7 +52,7 @@ export type CreateLivePreviewExtensionsOptions = {
   foldedHeadings?: ReadonlySet<FoldKey>;
   onFoldChange?: (folded: ReadonlySet<FoldKey>) => void;
   reviewComments?: readonly ReviewComment[];
-  filePath?: string | (() => string | undefined);
+  filePath?: string;
   /** Ctrl/Cmd+click 命中链接时回调;EditorPane 用来打开 URL/锚点/相对路径。 */
   onOpenLink?: (link: MarkdownLink) => void;
   /** Task 切换后回调;用于埋点或外部状态同步。 */
@@ -75,10 +75,6 @@ function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'li
     mathPreviewExtension(options.themeId),
     mermaidPreviewExtension(options.themeId),
   ];
-}
-
-function resolveFilePath(filePath: CreateLivePreviewExtensionsOptions['filePath']): () => string | undefined {
-  return typeof filePath === 'function' ? filePath : () => filePath;
 }
 
 export function createLivePreviewExtensions(
@@ -107,7 +103,7 @@ export function createLivePreviewExtensions(
     compartments.reviewMark.of(reviewMarkExtension({ comments: reviewComments, filePath: typeof filePath === 'string' ? filePath : undefined })),
     compartments.taskToggle.of(taskToggleExtension({ onToggle: onTaskToggle })),
     compartments.linkOpen.of(linkOpenExtension({ onOpenLink })),
-    compartments.imageAsset.of(imageAssetExtension({ filePath: resolveFilePath(filePath) })),
+    compartments.imageAsset.of(imageAssetExtension({ filePath: () => filePath })),
   ];
 }
 
@@ -138,7 +134,7 @@ export function reconfigureLivePreviewExtensions(
       compartments.reviewMark.reconfigure(reviewMarkExtension({ comments: reviewComments, filePath: typeof filePath === 'string' ? filePath : undefined })),
       compartments.taskToggle.reconfigure(taskToggleExtension({ onToggle: onTaskToggle })),
       compartments.linkOpen.reconfigure(linkOpenExtension({ onOpenLink })),
-      compartments.imageAsset.reconfigure(imageAssetExtension({ filePath: resolveFilePath(filePath) })),
+      compartments.imageAsset.reconfigure(imageAssetExtension({ filePath: () => filePath })),
       ...(foldedHeadings !== undefined
         ? [compartments.headingFold.reconfigure(headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }))]
         : []),

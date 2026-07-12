@@ -154,7 +154,7 @@ export function mathPreviewExtension(themeId = 'light'): Extension[] {
         selectionTouchesRanges(update.startState.selection, this.allRanges)
         || selectionTouchesRanges(update.state.selection, this.allRanges)
       )) {
-        this.refreshRanges();
+        this.ranges = this.allRanges.filter((range) => !cursorTouches(this.view.state, range.from, range.to));
         this.decorations = buildInlineDecorations(this.ranges, themeId);
       }
     }

@@ -109,7 +109,7 @@ export function previewSyncExtension(options: PreviewSyncOptions = {}): Extensio
     }
 
     private readonly handleScroll = () => {
-      if (this.scrollTimerId !== null) return;
+      if (this.scrollTimerId !== null || this.rafId !== null) return;
       this.scrollTimerId = window.setTimeout(() => {
         this.scrollTimerId = null;
         this.rafId = window.requestAnimationFrame(() => {
@@ -134,8 +134,8 @@ export function previewSyncExtension(options: PreviewSyncOptions = {}): Extensio
 
     destroy() {
       this.destroyed = true;
-      this.view.scrollDOM.removeEventListener('scroll', this.handleScroll);
       this.cancelScrollSchedule();
+      this.view.scrollDOM.removeEventListener('scroll', this.handleScroll);
     }
   });
 }

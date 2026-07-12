@@ -45,15 +45,10 @@ describe('previewSyncExtension', () => {
       }),
       parent,
     });
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      callback(0);
-      return 0;
-    });
-
     view.scrollDOM.dispatchEvent(new Event('scroll'));
-    vi.advanceTimersByTime(199);
+    vi.advanceTimersByTime(200);
     expect(onChange).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
+    vi.runAllTimers();
 
     expect(onChange).toHaveBeenCalledTimes(1);
   });
