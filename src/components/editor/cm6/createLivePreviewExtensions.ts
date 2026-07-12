@@ -29,6 +29,7 @@ type CreateLivePreviewExtensionsOptions = {
   onOpenLink?: (link: MarkdownLink) => void;
   /** Task 切换后回调;用于埋点或外部状态同步。 */
   onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
+  themeId?: string;
 };
 
 export function createLivePreviewExtensions(
@@ -45,6 +46,7 @@ export function createLivePreviewExtensions(
     filePath,
     onOpenLink,
     onTaskToggle,
+    themeId,
   } = options;
   const filePathRef = { current: filePath };
   const extensions: Extension[] = [
@@ -62,8 +64,8 @@ export function createLivePreviewExtensions(
       tables(),
       imageBlocks(),
       imageFallbackExtension(),
-      mathPreviewExtension(),
-      mermaidPreviewExtension(),
+      mathPreviewExtension(themeId),
+      mermaidPreviewExtension(themeId),
     );
   }
   return extensions;

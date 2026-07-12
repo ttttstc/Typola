@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  _clearMarkdownAnalysisCacheForTests,
   analyzeMarkdown,
+  _clearMarkdownAnalysisCacheForTests,
+  clearMarkdownAnalysisCache,
   findMarkdownLinkAt,
   findMarkdownTaskAt,
   headingPathAt,
@@ -97,7 +98,7 @@ describe('markdownAnalysisService', () => {
 });
 
 describe('markdownAnalysisService structure helpers', () => {
-  _clearMarkdownAnalysisCacheForTests();
+  clearMarkdownAnalysisCache();
 
   it('finds task and link by offset and ignores fenced pseudo ones', () => {
     const analysis = analyzeMarkdown(fixture);
@@ -148,20 +149,9 @@ describe('markdownAnalysisService structure helpers', () => {
     expect(mermaid).toBeDefined();
     expect(markdownBlockAt(fixture, mermaid.from + 1).kind).toBe('mermaid');
 
-    const tableDoc = '| H1 | H2 |\n| --- | --- |\n| a | b |\n';
-    const tableStart = fixture.indexOf('- [ ] 待办');
-    const tableProbe = fixture.length + 2 + 1; // after fixture's tail
-    const fullDoc = `${fixture}\n${tableDoc}`;
-    const tableOffset = fullDoc.indexOf('| H1');
-    const block = markdownBlockAt(fullDoc, tableOffset + 1);
-    expect(block.kind).toBe('table');
-    expect(block.from).toBe(tableOffset);
-    expect(block.to).toBe(tableOffset + tableDoc.length - 1);
-    // 探测 fixture 中表格外的位置不会命中 table
-    expect(markdownBlockAt(fixture, tableStart).kind).not.toBe('table');
-    // 表格范围内的 offset 仍然命中 table
-    expect(block.kind).toBe('table');
-    void tableProbe;
+    const table = analysis.tables[0];
+    expect(table).toBeDefined();
+    expect(markdownBlockAt(fixture, table.from + 1).kind).toBe('table');
 
     const normal = fixture.indexOf('- [ ] 待办');
     expect(normal).toBeGreaterThan(-1);

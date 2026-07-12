@@ -17,6 +17,7 @@ type UseLeftRailResult = {
   workspacePanelWidth: number;
   setWorkspacePanelWidth: Dispatch<SetStateAction<number>>;
   leftResizing: LeftRailMode;
+  handleTogglePrimaryPanel: () => void;
   handleToggleWorkspacePanel: () => void;
   handleToggleAiPanel: () => void;
   handleLeftPanelResizerPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -35,6 +36,10 @@ export function useLeftRail({
   const [leftRailMode, setLeftRailMode] = useState<LeftRailMode>(initialMode);
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(defaultWidth);
   const [leftResizing, setLeftResizing] = useState<LeftRailMode>('none');
+
+  const handleTogglePrimaryPanel = useCallback(() => {
+    setLeftRailMode((mode) => mode === 'none' ? 'workspace' : 'none');
+  }, []);
 
   const handleToggleWorkspacePanel = useCallback(() => {
     setLeftRailMode((mode) => mode === 'workspace' ? 'none' : 'workspace');
@@ -78,6 +83,7 @@ export function useLeftRail({
     workspacePanelWidth,
     setWorkspacePanelWidth,
     leftResizing,
+    handleTogglePrimaryPanel,
     handleToggleWorkspacePanel,
     handleToggleAiPanel,
     handleLeftPanelResizerPointerDown,

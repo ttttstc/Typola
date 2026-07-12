@@ -92,4 +92,14 @@ describe('Tauri capabilities', () => {
       expect(association.description ?? '').toMatch(/^[\x20-\x7E]+$/);
     }
   });
+
+  it('registers a direct Typola Explorer command for every supported document extension', () => {
+    const hooks = readFileSync(join(process.cwd(), 'src-tauri/windows/hooks.nsh'), 'utf8');
+
+    for (const extension of ['md', 'markdown', 'html', 'htm', 'docx']) {
+      expect(hooks).toContain(`SystemFileAssociations\\.${extension}\\shell\\Typola.open`);
+    }
+    expect(hooks).toContain('用 Typola 打开');
+    expect(hooks).toContain('!macro NSIS_HOOK_PREUNINSTALL');
+  });
 });

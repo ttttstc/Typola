@@ -43,6 +43,9 @@ import {
   type LicenseActivationResult,
   type LicenseState,
 } from './licenseService';
+import { DEFAULT_DEFINE_COLOR_SETTINGS } from './defineColorSystem/constants';
+import { normalizeDefineColorSettings } from './defineColorSystem/normalizeDefineColorSettings';
+import type { AppearanceColorSystem, DefineColorSettings } from './defineColorSystem/types';
 
 const STORAGE_KEY = 'typola-settings';
 const LEGACY_KEY = 'typola-export-settings';
@@ -240,6 +243,8 @@ export interface AppSettings {
   aiWorkspaceRecents: string[];
   aiPluginDirs: string[];
   // 外观
+  appearanceColorSystem: AppearanceColorSystem;
+  defineColorSettings: DefineColorSettings;
   themeId: ThemeId;
   themeOptions: AppThemeOptions;
   zoomLevel: number;
@@ -303,6 +308,8 @@ const defaults: AppSettings = {
   aiWorkspaceRoot: '',
   aiWorkspaceRecents: [],
   aiPluginDirs: [],
+  appearanceColorSystem: 'define-color',
+  defineColorSettings: DEFAULT_DEFINE_COLOR_SETTINGS,
   themeId: DEFAULT_THEME_ID,
   themeOptions: {
     reviewEnhanceMarks: true,
@@ -445,6 +452,10 @@ function normalizeThemeOptions(value: unknown): AppThemeOptions {
   return {
     reviewEnhanceMarks: input.reviewEnhanceMarks !== false,
   };
+}
+
+function normalizeAppearanceColorSystem(value: unknown): AppearanceColorSystem {
+  return value === 'static-theme' ? 'static-theme' : 'define-color';
 }
 
 function quoteFontName(name: string): string {
@@ -880,6 +891,8 @@ export function getSettings(): AppSettings {
       aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
       aiWorkspaceRecents: normalizePathList(stored.aiWorkspaceRecents).slice(0, 8),
       aiPluginDirs: normalizePathList(stored.aiPluginDirs),
+      appearanceColorSystem: normalizeAppearanceColorSystem(stored.appearanceColorSystem),
+      defineColorSettings: normalizeDefineColorSettings(stored.defineColorSettings),
       themeId: normalizeThemeId(stored.themeId),
       themeOptions: normalizeThemeOptions(stored.themeOptions),
     };
@@ -969,6 +982,12 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     aiWorkspaceRoot: normalizeExecutablePath(patch.aiWorkspaceRoot ?? current.aiWorkspaceRoot),
     aiWorkspaceRecents: normalizePathList(patch.aiWorkspaceRecents ?? current.aiWorkspaceRecents).slice(0, 8),
     aiPluginDirs: normalizePathList(patch.aiPluginDirs ?? current.aiPluginDirs),
+    appearanceColorSystem: normalizeAppearanceColorSystem(
+      patch.appearanceColorSystem ?? current.appearanceColorSystem,
+    ),
+    defineColorSettings: normalizeDefineColorSettings(
+      patch.defineColorSettings ?? current.defineColorSettings,
+    ),
     themeId: normalizeThemeId(patch.themeId ?? current.themeId),
     themeOptions: normalizeThemeOptions(patch.themeOptions ?? current.themeOptions),
   };

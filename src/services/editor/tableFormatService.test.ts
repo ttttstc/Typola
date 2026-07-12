@@ -6,7 +6,7 @@ import { applyTableFormat } from './tableFormatService';
 import { findTableAt } from '../../components/editor/cm6/table/tableTypes';
 import { pasteTableData } from '../../components/editor/cm6/table/tableCommands';
 
-function createView(doc: string, from = 0, to = doc.length, extensions: Extension[] = []) {
+function createView(doc: string, from = 0, to = doc.length, _extensions: Extension[] = []) {
   const host = document.createElement('div');
   document.body.append(host);
   const view = new EditorView({

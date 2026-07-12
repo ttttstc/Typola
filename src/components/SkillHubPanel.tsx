@@ -484,6 +484,7 @@ export function SkillHubPanel({
                               <>
                                 <button
                                   type="button"
+                                  className="skill-hub-install-action"
                                   onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}
                                 >
                                   {installActionLabel}
