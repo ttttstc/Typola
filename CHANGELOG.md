@@ -10,6 +10,7 @@
 - CM6 新增 frontmatter 折叠、脚注跳转、raw HTML 安全预览、格式刷和图片 Alt/Title/宽度编辑；图片目录模板支持 `{filename}`、`{year}`、`{month}`。
 - HTML 导出会复制本地图片至导出文件同级资源目录并重写引用；远程与 data URL 保持原样，缺失文件不阻断导出。
 - CM6 右键格式菜单新增下划线、上标、下标与 `==高亮==`；导出将高亮语法渲染为安全的 `<mark>`。
+- 修复 PR #222 审查发现的本地图片路径越界、图片元数据转义、heading 路径和浮层关闭问题，并补充 HTML/脚注/frontmatter 安全回归测试。
 
 All notable changes to this project will be documented in this file.
 

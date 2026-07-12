@@ -44,6 +44,7 @@ Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vi
 - Both writing and source modes expose precise CM6 transaction-backed insert, replace, undo, and reveal operations through `TypolaEditorKernel`. Find/replace supplies source ranges to `replaceRanges`, so single and all replacements each become one CM6 history entry instead of a React-side content rewrite.
 - Toolbar controls, Markdown shortcuts, and the editor context menu all call `TypolaEditorKernel.format`; the sole CM6 formatter dispatches each document change, including quote depth, link URL, format clearing, and fenced-code language edits.
 - The CM6 formatter also provides paired inline toggles for underline, superscript, subscript, and source-preserved `==highlight==`; the export pipeline converts the latter to sanitized `<mark>` markup.
+- Local image resolution only expands asset scope for absolute paths inside the current document directory; metadata serialization escapes user text before creating HTML image markup. CM6 editing dialogs are dismissible by Escape, outside click, and trapped Tab navigation.
 - Mermaid rendering is centralized in `mermaidRenderer`. It lazy-loads the Mermaid library, converts `language-mermaid` code blocks to SVG for preview and export renderers, and leaves syntax failures as source plus an inline error message. The same renderer feeds Markdown preview, AI/review previews, HTML preview output, and Word preview artifacts.
 
 ## Terminal
