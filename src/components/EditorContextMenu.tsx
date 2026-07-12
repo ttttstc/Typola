@@ -1,7 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { SELECTION_ACTIONS, type SelectionActionId } from '../services/agent/selectionActions';
-import { useSettings } from '../hooks/useSettings';
-import { translate } from '../services/i18n';
 
 export type HeadingLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -55,7 +53,6 @@ export function EditorContextMenu({
   onClose,
   onPickAI,
 }: Props) {
-  const settings = useSettings();
   const menuRef = useRef<HTMLDivElement>(null);
   const adjustedRef = useRef({ left: x, top: y });
 
@@ -158,13 +155,13 @@ export function EditorContextMenu({
 
       <div className="editor-ctx-separator" />
 
-      <MenuItem label={translate(settings.locale, 'contextMenuImageInsert')} onClick={() => pick({ type: 'image-insert' })} />
+      <MenuItem label="插入图片" onClick={() => pick({ type: 'image-insert' })} />
 
       {hasImage && (
         <>
-          <MenuItem label={translate(settings.locale, 'contextMenuImageReplace')} onClick={() => pick({ type: 'image-replace' })} />
-          <MenuItem label={translate(settings.locale, 'contextMenuImageOpen')} onClick={() => pick({ type: 'image-open' })} />
-          <MenuItem label={translate(settings.locale, 'contextMenuImageCopyPath')} onClick={() => pick({ type: 'image-copy-path' })} />
+          <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />
+          <MenuItem label="打开文件" onClick={() => pick({ type: 'image-open' })} />
+          <MenuItem label="复制路径" onClick={() => pick({ type: 'image-copy-path' })} />
         </>
       )}
 
