@@ -373,12 +373,17 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     // searchOptions。保留 opts 签名仅是为了实现 TypolaEditorKernel 契约。
     revealRange(from: number, to: number, opts) {
       if (!editorView) return;
+      // CM6 会在 from/to 越界时抛 RangeError: Selection points outside of document。
+      // 检视意见等外部 anchor 在文档缩短后可能超出当前长度,这里把范围夹回 [0, docLen]。
+      const docLen = editorView.state.doc.length;
+      const safeFrom = Math.max(0, Math.min(from, docLen));
+      const safeTo = Math.max(safeFrom, Math.min(to, docLen));
       suppressFloatingBarRef.current = true;
       editorView.dispatch({
-        effects: EditorView.scrollIntoView(from, { y: 'center', yMargin: 80 }),
-        selection: { anchor: from, head: to },
+        effects: EditorView.scrollIntoView(safeFrom, { y: 'center', yMargin: 80 }),
+        selection: { anchor: safeFrom, head: safeTo },
       });
-      flashRange(from);
+      flashRange(safeFrom);
       if (!opts?.preserveFocus) editorView.focus();
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     },
