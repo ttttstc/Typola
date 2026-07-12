@@ -1,17 +1,46 @@
 # Changelog
 
+## Unreleased
+
+- Issue #224：自托管 Source Han Serif SC 可变字体子集（OFL 1.1），全局普通文本与文件树/AI 工作台统一使用思源宋体；编辑器字体设置新增思源宋体并设为默认，保留等宽字体切换；新增主题对比度审计与 CM6「编辑器纸纹」持久化开关，纸纹仅用于素笺、墨韵、粗野主题，深海与抽象主题不启用；补充 3 张代表性视觉基线。
+- Issue #223：CM6 性能路径优化：预览滚动同步缓存 heading 并独立节流；编辑器视图改用 ref；live-preview 扩展按 Compartment 局部 reconfigure；数学、heading 折叠、Markdown 分析缓存与本地图片观察路径减少重复全篇扫描。
+- CM6 格式快捷键补齐标题、行内代码、清除格式与引用层级；多行引用升级/降级现在作为单笔撤销记录。链接与代码语言编辑改为可键盘操作的 React 浮层，删除 CM6 路径中的浏览器 prompt。
+- 修复多个 CM6 编辑器实例共享预览同步帧和 Mermaid SVG 编号的问题；搜索替换在写入前验证当前文档，拒绝陈旧坐标。
+- Markdown 分析与统一导出识别并剥离文首 YAML frontmatter，避免将其误作正文内容或导出产物。
+- 修复 CM6 写作预览中新插入的本地 Markdown 图片未转换为 Tauri asset URL、因而无法显示的问题；右键插入/替换现与工具栏、拖拽、粘贴统一遵循图像设置，外部目录和绝对路径图片可获 asset scope 后显示。
+- 修复自定义配色首次打开时调色盘被遮罩隐藏；未选颜色时改为使用素笺主题，调整后的颜色在关闭应用后仍会保留，并在应用启动时重新应用。
+- CM6 新增 frontmatter 折叠、脚注跳转、raw HTML 安全预览、格式刷和图片 Alt/Title/宽度编辑；图片目录模板支持 `{filename}`、`{year}`、`{month}`。
+- HTML 导出会复制本地图片至导出文件同级资源目录并重写引用；远程与 data URL 保持原样，缺失文件不阻断导出。
+- CM6 右键格式菜单新增下划线、上标、下标与 `==高亮==`；导出将高亮语法渲染为安全的 `<mark>`。
+- 修复 PR #222 审查发现的本地图片路径越界、图片元数据转义、heading 路径和浮层关闭问题，并补充 HTML/脚注/frontmatter 安全回归测试。
+
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- 完成 #183 / #184：CM6 数学与 Mermaid 块预览改为带 source-hash / theme 缓存的原生 widget，光标进入块即回到 Markdown 源码；渲染仅在块被 CM6 物化到可视区域时发生，异步错误以卡片展示且不改写 source。HTML、PDF、Word 纸张预览与微信预览的 Markdown→HTML 基座改为 remark/rehype，支持 GFM、代码高亮、KaTeX、Mermaid、本地图片解析与 HTML sanitize，不再依赖 Vditor preview renderer；Word `.docx` 保持原有 fallback。
+- PDF 导出改为与 Word 一致的保存对话框：默认 Downloads 路径和 `.pdf` 文件名，用户可选择目标文件夹或取消导出。
+- 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 继续只用于既有预览与导出渲染链路。
+- 查找替换改为通过 `TypolaEditorKernel.replaceRanges` 提交 CM6 transaction；单个和全部替换都会进入同一 history，支持一次 `Ctrl/Cmd+Z` 撤销。
+- 工具栏、`Ctrl/Cmd+B` / `I` / `Shift+7` / `Shift+8` 快捷键和右键菜单统一调用 CM6 格式命令；补齐引用层级、编辑链接、清除格式与代码块语言编辑的 transaction 实现。
+- 源码模式保留 CM6 标题折叠、缩放和预览同步核心扩展；仅关闭 Markdown live preview widget，搜索命中折叠内容会自动展开。
+- 修复 CM6 写作模式的检视标记与大纲联动：检视意见以 CM6 decoration 标注对应源码行，atomic-editor 标题行可正确驱动悬浮大纲的跳转与当前项。
+- 修复 CM6 格式快捷键与批量替换边界：`Ctrl/Cmd+B`、`Ctrl/Cmd+I` 在已有标记内改为取消格式；重叠替换范围会被拒绝，避免生成不可预期的文稿内容。
+
 ### Added
 
+- 新增与静态主题完全隔离的 Define 动态配色系统（Issue #192）：工具栏画笔入口打开 1:1 Theme Color Editor，支持固定半径 Hue Wheel、Solid / Gradient、垂直 Saturation、50 个 Preset、9 种 Pattern、Pattern Opacity 与 Surprise me；`--dc-*` Token 从 OKLCH 基色实时推导，拖动仅在 rAF 中预览、释放后持久化，重载恢复且不改变 Markdown 内容或 Word / HTML / PDF 导出外观。
+- 外观设置新增“自定义模式 / 主题模式”切换，默认进入纯白自定义模式；选择圆环颜色后，工具栏、面板、控件、编辑器辅助界面与 Windows 原生标题栏统一跟随动态配色。
 - 选区菜单窄化对齐 Typora/Obsidian(`width: max-content; max-width: 240px`,kbd 间距收紧 16→10px);右键菜单新增 5 个基础编辑能力:升级引用 / 降级引用 / 编辑链接 / 清除格式 / 编辑代码块语言,均走 `applyVditorFormat` 现有分发,Vditor IR 模式直接操作选中/选区 + `updateValue` 重渲染;新增 i18n keys `contextMenuQuoteUp / contextMenuQuoteDown / contextMenuLinkEdit / contextMenuClearFormat / contextMenuCodeblockLang` 中英日三译。
 - 选区浮条右端加 `⋯` 子按钮 + hover tooltip,mini menu 暴露两项:「本页不再展示」(filePath 维度 session suppress,直到切文档)与「全局隐藏」(直接写 `selectionFloatingBarEnabled=false`,与设置页 toggle 同步);新增 keys `floatingBarHideThisPage / floatingBarHideGlobal / floatingBarTooltip` 中英日三译;tooltip 用现有 Tooltip 组件浮显。
 - 工具栏新增「打开文件夹」按钮(Cmd+Shift+O),选夹后走新增 Tauri cmd `read_first_level_openable` 仅列一层 md/html/docx(不递归,跳过隐藏文件与节点_modules/dist/target/.git),批量入 tab(last active),单文件打开失败不阻塞其他(#170);新增 keys `toolbarOpenFolderTitle / toolbarOpenFolderLabel` 中英日三译;fileService 加 `openFolder` 函数,useFileTabs 加 `handleOpenFolder` 回调。
+- 写作模块图片资源管理基础能力(issue #185 P0):`markdownAnalysisService` 新增 `MarkdownImage` 类型、`scanImages` 解析与 `findMarkdownImageAt` 命中接口;CM6 编辑器右键图片新增「替换图片 / 打开文件 / 复制路径」三项,菜单任意位置新增「插入图片」,四项均走单笔 CM6 transaction,替换与插入复用 `formatImageSrc` 处理相对路径,打开文件走 Tauri `open_path_external` 命令绕开 opener scope 限制,复制路径走 `clipboardService.writeText`;远端 URL 仅作预览不下载。Vditor 模式与 alt 编辑 / 宽度 / 资源目录策略 / ExportAssetResolver 暂不做,留待 P1。
 
 ### Fixed
 
+- 修复 CM6 任务复选框切换会移除 Markdown 列表标记的问题；新增任务过滤 API；AI 与检视 anchor 现在共享受限的结构化上下文和恢复规则。
 - 修复 AI 会话停止竞态：启动尚未返回 runId 时停止会立即恢复输入；取消后重发不会再被旧进程退出事件中断。
 - 修复源码编辑器选区浮条在缺少隐藏回调时仍展示无效「本文档不再展示／全局隐藏」按钮的问题。
 - 修复 IR 表格编辑在文档包含同内容表格时可能误改第一张表的问题：定位不唯一时拒绝操作；删除整表同步采用同一保护。新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。

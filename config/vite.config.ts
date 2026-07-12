@@ -11,6 +11,10 @@ export default defineConfig({
   root: projectRoot,
   base: './',
   plugins: [react(), perfStub()],
+  // 实验候选仓库包含独立 demo HTML 与未安装依赖；开发服务器只扫描应用入口。
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
     watch: {
       ignored: ['**/src-tauri/target/**'],

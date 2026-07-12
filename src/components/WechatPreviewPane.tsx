@@ -204,7 +204,7 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
     if (!previewResult) return;
 
     try {
-      const result = await exportHtmlDocument(previewResult.clipboardHtml, fileName);
+      const result = await exportHtmlDocument(previewResult.clipboardHtml, fileName, undefined, filePath ? { documentPath: filePath, destination: settings.imageCopyDestination } : undefined);
       setActionStatus({
         target: 'export',
         tone: result === 'cancelled' ? 'muted' : 'ok',

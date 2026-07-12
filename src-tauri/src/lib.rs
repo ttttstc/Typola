@@ -24,6 +24,41 @@ use tauri_plugin_fs::FsExt;
 
 mod export;
 
+#[tauri::command]
+fn set_title_bar_color(window: tauri::Window, red: u8, green: u8, blue: u8) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR,
+        };
+
+        let hwnd = window.hwnd().map_err(|error| error.to_string())?.0;
+        let caption = u32::from(red) | (u32::from(green) << 8) | (u32::from(blue) << 16);
+        let luminance = 0.2126 * f64::from(red) + 0.7152 * f64::from(green) + 0.0722 * f64::from(blue);
+        let text: u32 = if luminance > 145.0 { 0x000000 } else { 0xFFFFFF };
+        unsafe {
+            let caption_result = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_CAPTION_COLOR as u32,
+                (&caption as *const u32).cast(),
+                std::mem::size_of::<u32>() as u32,
+            );
+            if caption_result < 0 {
+                return Err(format!("DwmSetWindowAttribute caption failed: {caption_result}"));
+            }
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_TEXT_COLOR as u32,
+                (&text as *const u32).cast(),
+                std::mem::size_of::<u32>() as u32,
+            );
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = (window, red, green, blue);
+    Ok(())
+}
+
 #[cfg(target_os = "windows")]
 pub mod windows_runtime {
     use std::{
@@ -1630,6 +1665,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            set_title_bar_color,
             pending_opened_paths,
             force_close_main_window,
             allow_asset_directory,

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { SELECTION_ACTIONS, buildInjectionText, fileNameFromPath, findUniqueAnchor } from './selectionActions';
+import {
+  SELECTION_ACTIONS,
+  buildAnchorContext,
+  buildInjectionText,
+  buildStructuredInjectionText,
+  buildStructuredOneshotPrompt,
+  fileNameFromPath,
+  findUniqueAnchor,
+  recoverAnchorInBlock,
+  validateSelectionAnchor,
+} from './selectionActions';
+import type { SelectionAnchor } from './types';
 
 describe('fileNameFromPath', () => {
   it('returns the basename for POSIX-style paths', () => {
@@ -184,5 +195,107 @@ describe('findUniqueAnchor', () => {
       // 精确层就命中,length 等于 originalText.length
       expect(hit).toEqual({ start: source.indexOf('SELECTED'), length: 'SELECTED'.length });
     });
+  });
+});
+
+describe('selectionActions structural anchor helpers', () => {
+  const source = [
+    '# 总览',
+    '',
+    '## 子节',
+    '',
+    '请把这段中文改写得简洁一些并保留术语。',
+    '',
+    '```ts',
+    'const x = 1;',
+    '```',
+  ].join('\n');
+
+  function anchor(from: number, to: number, originalText: string): SelectionAnchor {
+    return { filePath: '/tmp/x.md', from, to, originalText };
+  }
+
+  it('builds heading path and block context under selection', () => {
+    const idx = source.indexOf('请把这段中文');
+    const ctx = buildAnchorContext(source, anchor(idx, idx + '请把这段中文'.length, '请把这段中文'));
+    expect(ctx.headingPath).toEqual(['总览', '子节']);
+    expect(ctx.block.kind).toBe('section');
+    expect(ctx.excerpt).toContain('请把这段中文');
+  });
+
+  it('honors character budget while preserving selected text', () => {
+    const idx = source.indexOf('请把这段中文');
+    const ctx = buildAnchorContext(source, anchor(idx, idx + '请把这段中文'.length, '请把这段中文'), 12);
+    expect(ctx.excerpt.endsWith('…')).toBe(true);
+    expect(ctx.excerpt).toContain('请把这段中文');
+  });
+
+  it('identifies fenced code blocks via block kind', () => {
+    const codeStart = source.indexOf('```ts');
+    const ctx = buildAnchorContext(source, anchor(codeStart + 1, codeStart + 5, '```'));
+    expect(ctx.block.kind).toBe('code');
+  });
+
+  it('recovers anchor with prefixHint within the same block', () => {
+    // originalText 在 source 里改成同义短句;prefixHint 保留原文前缀以便 findUniqueAnchor 唯一定位。
+    const movedSource = source.replace('请把这段中文', '请改这段文字');
+    const a: SelectionAnchor = {
+      filePath: '/tmp/x.md',
+      from: 0,
+      to: 0,
+      originalText: '请改这段文字',
+      prefixHint: '## 子节\n\n',
+    };
+    const block = buildAnchorContext(source, {
+      ...a,
+      originalText: '请把这段中文',
+      from: source.indexOf('请把这段中文'),
+      to: source.indexOf('请把这段中文') + 6,
+    }).block;
+    const recovered = recoverAnchorInBlock(movedSource, a, block);
+    expect(recovered).not.toBeNull();
+  });
+
+  it('rejects recovery that crosses a code block boundary', () => {
+    const a: SelectionAnchor = {
+      filePath: '/tmp/x.md',
+      from: 0,
+      to: 0,
+      originalText: 'const x',
+      prefixHint: '## 子节\n',
+    };
+    const codeStart = source.indexOf('```ts');
+    const block = { kind: 'section' as const, from: codeStart, to: codeStart + 10 };
+    expect(recoverAnchorInBlock(source, a, block)).toBeNull();
+  });
+
+  it('validateSelectionAnchor returns valid for exact hit in single block', () => {
+    const idx = source.indexOf('请把这段中文');
+    const result = validateSelectionAnchor(source, anchor(idx, idx + '请把这段中文'.length, '请把这段中文'));
+    expect(result.status).toBe('valid');
+    expect(result.recovered).toBeUndefined();
+  });
+
+  it('validateSelectionAnchor reports stale when text was changed beyond recognition', () => {
+    const idx = source.indexOf('请把这段中文');
+    const result = validateSelectionAnchor(source, anchor(idx, idx + '请把这段中文'.length, '完全不同的内容'));
+    expect(result.status).toBe('stale');
+  });
+
+  it('structured prompt prepends heading path and block kind', () => {
+    const idx = source.indexOf('请把这段中文');
+    const a = anchor(idx, idx + '请把这段中文'.length, '请把这段中文');
+    const prompt = buildStructuredOneshotPrompt('polish', a, { source, fileName: 'x.md' });
+    expect(prompt).toContain('总览 / 子节');
+    expect(prompt).toContain('section');
+    expect(prompt).toContain('请把这段中文');
+    expect(prompt).toContain('上下文（可能已截断）');
+  });
+
+  it('structured injection text falls back to base behavior when source missing', () => {
+    const idx = source.indexOf('请把这段中文');
+    const a = anchor(idx, idx + '请把这段中文'.length, '请把这段中文');
+    const text = buildStructuredInjectionText('polish', a);
+    expect(text).toContain('引用自当前文档');
   });
 });

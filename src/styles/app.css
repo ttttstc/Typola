@@ -1,5 +1,13 @@
 @import './themes.css';
 
+@font-face {
+  font-family: 'Source Han Serif SC VF';
+  src: url('/fonts/source-han-serif-sc-vf-subset.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+}
+
 /* ===== CSS Variables (DESIGN.md Design System) ===== */
 
 :root {
@@ -22,17 +30,18 @@
   --motion-ease-pop: cubic-bezier(0.2, 0.9, 0.3, 1.1);
 
   /* Font stacks */
-  --font-display: 'Iowan Old Style', 'Charter', 'Songti SC', 'STSong',
+  --font-display: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
     'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun',
-    Georgia, serif;
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI',
-    'PingFang SC', 'Hiragino Sans GB', system-ui, sans-serif;
-  --font-reading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', 'Microsoft YaHei UI',
-    'Noto Sans CJK SC', 'Source Han Sans SC', 'Noto Sans SC', sans-serif;
-  --font-serif-reading: 'Songti SC', 'STSong', 'Noto Serif CJK SC',
-    'Source Han Serif SC', 'Noto Serif SC', 'SimSun', 'Times New Roman', serif;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono',
+    'Iowan Old Style', 'Charter', Georgia, serif;
+  --font-body: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
+    'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', serif;
+  --font-ui: var(--font-body);
+  --font-reading: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
+    'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun', serif;
+  --font-serif-reading: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
+    'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun', serif;
+  --font-mono: 'SF Mono', ui-monospace, 'Cascadia Mono', 'JetBrains Mono',
     'IBM Plex Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace;
 
   /* Smooth text rendering */
@@ -61,6 +70,13 @@ html[data-theme-transition='true'] .terminal-panel {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 html, body, #root {
@@ -415,6 +431,12 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   color: var(--theme-text-primary);
   background: var(--theme-paper);
   border-color: var(--theme-border-hover);
+}
+
+/* 文件树与调色器本身已通过展开面板/色彩系统表达状态，不再使用激活边框。 */
+.app-toolbar .toolbar-nav-actions > button.active {
+  background: transparent;
+  border-color: transparent;
 }
 
 .app-toolbar button.toolbar-update-button {
@@ -1076,9 +1098,9 @@ html[data-color-scheme='dark'] .export-menu {
 .floating-toc {
   position: absolute;
   top: 48px;
-  left: 20px;
+  left: 0;
   z-index: 14;
-  width: 20px;
+  width: 0;
   max-height: calc(100% - 72px);
   overflow: visible;
   color: var(--theme-text-secondary);
@@ -1102,102 +1124,24 @@ html[data-color-scheme='dark'] .export-menu {
 }
 
 .right-panel-open .floating-toc {
-  left: 20px;
+  left: 0;
 }
 
 .right-panel-open .floating-toc.pinned {
   left: 0;
 }
 
-.floating-toc-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  width: 18px;
-  max-height: calc(100vh - 116px);
-  padding: 8px 10px 8px 0;
-  overflow-y: auto;
-  scrollbar-width: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.floating-toc.pinned .floating-toc-rail {
-  display: none;
-}
-
-.floating-toc-rail::-webkit-scrollbar {
-  display: none;
-}
-
-.floating-toc::after {
-  content: '';
+.floating-toc-edge-trigger {
   position: absolute;
-  top: 0;
-  left: 18px;
-  width: 8px;
-  height: 100%;
-  pointer-events: none;
-}
-
-.floating-toc.pinned::after {
-  display: none;
-}
-
-.floating-toc-rail:focus-visible {
-  outline: 2px solid color-mix(in oklch, var(--theme-accent) 36%, transparent);
-  outline-offset: 4px;
-  border-radius: 4px;
-}
-
-.floating-toc-tick {
-  display: block;
-  width: 10px;
-  height: 1px;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--theme-text-secondary) 46%, transparent);
-  opacity: 0.52;
-  transition: width 0.16s, height 0.16s, background 0.16s, opacity 0.16s;
-}
-
-.floating-toc-tick.level-1 {
-  width: 20px;
-  height: 2px;
-  opacity: 0.72;
-}
-
-.floating-toc-tick.level-2 {
-  width: 16px;
-  height: 1.5px;
-  opacity: 0.62;
-}
-
-.floating-toc-tick.level-3 {
-  width: 13px;
-}
-
-.floating-toc-tick.level-4,
-.floating-toc-tick.level-5,
-.floating-toc-tick.level-6 {
-  width: 9px;
-  opacity: 0.42;
-}
-
-.floating-toc-tick.active {
-  width: 22px;
-  height: 2px;
-  opacity: 1;
-  background: var(--theme-accent);
+  inset: 0 auto 0 0;
+  width: 4px;
+  pointer-events: auto;
 }
 
 .floating-toc-panel {
   position: absolute;
   top: 0;
-  left: 22px;
+  left: 4px;
   width: min(260px, 32vw);
   max-height: calc(100vh - 116px);
   overflow: hidden;
@@ -1233,16 +1177,6 @@ html[data-color-scheme='dark'] .export-menu {
   visibility: visible;
   transform: none;
   pointer-events: auto;
-}
-
-.floating-toc.expanded .floating-toc-tick,
-.floating-toc.pinned .floating-toc-tick {
-  background: color-mix(in oklch, var(--theme-text-secondary) 66%, transparent);
-}
-
-.floating-toc.expanded .floating-toc-tick.active,
-.floating-toc.pinned .floating-toc-tick.active {
-  background: var(--theme-accent);
 }
 
 .floating-toc-header {
@@ -1492,8 +1426,47 @@ html[data-color-scheme='dark'] .export-menu {
   --atomic-editor-measure: 70ch;
 }
 
+.cm6-markdown-editor-pane > .editor-paper-background,
 .cm6-markdown-editor-pane > .editor-pane {
   flex: 1;
+}
+
+.editor-paper-background {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--theme-paper);
+}
+
+.editor-paper-background-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-paper-background-content > .editor-pane {
+  flex: 1;
+  background: transparent;
+}
+
+.editor-paper-background-texture {
+  position: absolute !important;
+  inset: 0;
+  z-index: 0;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.editor-paper-background-texture canvas {
+  z-index: 0 !important;
 }
 
 /* CM6 heading 鎶樺彔:toggle 鎸夐挳 + 鎶樺彔鍚庤闅愯棌 */
@@ -1630,6 +1603,12 @@ html[data-color-scheme='dark'] .export-menu {
   font-style: italic;
 }
 
+/* 宽 GFM 表保持编辑器横向滚动，不把内容区撑出窗口。 */
+.cm6-markdown-editor-pane [class*="atomic-table"] {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .cm6-markdown-editor-pane .typola-cm6-math-inline {
   padding: 0 2px;
 }
@@ -1664,20 +1643,20 @@ html[data-color-scheme='dark'] .export-menu {
   height: 100%;
   min-height: 0;
   width: 100%;
-  font-family: var(--font-mono);
+  font-family: var(--editor-font-family, var(--font-mono));
   font-size: 13px;
   line-height: 1.75;
-  background: var(--theme-canvas);
+  background: transparent;
   color: var(--theme-text-primary);
 }
 
 .editor-pane .cm-scroller {
   overflow: auto;
-  background: var(--theme-canvas);
+  background: transparent;
 }
 
 .editor-pane .cm-editor .cm-content {
-  font-family: var(--font-mono);
+  font-family: var(--editor-font-family, var(--font-mono));
   caret-color: var(--theme-accent);
 }
 
@@ -1711,13 +1690,13 @@ html[data-color-scheme='dark'] .export-menu {
  * 璁╂鏂囩敤 --font-reading锛堢瓑瀹戒氦缁?atomic-editor 鐨?.cm-atomic-fenced-code锛夈€?
  * 浣嶇疆蹇呴』鍦?.editor-pane .cm-editor 瑙勫垯涔嬪悗鎵嶈兘璧㈠悓浼樺厛绾с€?*/
 .cm6-markdown-editor-pane .cm-editor {
-  font-family: var(--font-reading);
+  font-family: var(--editor-font-family, var(--font-reading));
   font-size: 14.5px;
   line-height: 1.7;
 }
 
 .cm6-markdown-editor-pane .cm-editor .cm-content {
-  font-family: var(--font-reading);
+  font-family: var(--editor-font-family, var(--font-reading));
 }
 
 .readonly-pane {
@@ -2264,6 +2243,17 @@ html[data-color-scheme='dark'] .export-menu {
 html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark='true'] {
   background: var(--theme-review-mark-bg-strong);
   box-shadow: inset 3px 0 0 var(--theme-review-mark-border);
+}
+
+.cm-line.typola-cm-review-mark {
+  border-left: 3px solid var(--theme-review-mark-border);
+  padding-left: 8px;
+  background: var(--theme-review-mark-bg);
+}
+
+.cm-line.typola-cm-review-mark:hover,
+html[data-doc-mode='review'][data-review-enhance-marks='true'] .cm-line.typola-cm-review-mark {
+  background: var(--theme-review-mark-bg-strong);
 }
 
 .wysiwyg-editor-pane .typola-locked-table * {
@@ -3309,11 +3299,10 @@ html[data-theme-id='abstract'] .skill-hub-scene-count {
 /* 硬阴影 + 0 圆角 + 1px 纯黑边 + hover translate 位移 + 30px 坐标网格。 */
 
 html[data-theme-id='brutalist'] {
-  /* 字体: 标题用 Noto Serif SC 衬线（无 Outfit 时退化到 system-ui）。
-     不用 Google Fonts，纯系统字体栈。 */
-  --font-display: 'Noto Serif SC', 'Songti SC', 'Source Han Serif SC', 'STSong', 'Iowan Old Style', 'Charter', serif;
-  --font-body: 'Outfit', -apple-system, 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Mono', ui-monospace, 'Consolas', monospace;
+  /* 粗野主题也使用本地思源宋体；代码继续使用等宽字体。 */
+  --font-display: 'Source Han Serif SC VF', 'Songti SC', 'Source Han Serif SC', 'STSong', 'Iowan Old Style', 'Charter', serif;
+  --font-body: 'Source Han Serif SC VF', 'Songti SC', 'Source Han Serif SC', 'STSong', -apple-system, 'Segoe UI', serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', ui-monospace, 'Consolas', monospace;
 }
 
 /* 30px 坐标网格背景:整页底层(覆盖在 --theme-canvas 之上) */
@@ -3636,8 +3625,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .skill-hub-item.is-disabled {
-  background: color-mix(in oklch, var(--theme-control-bg) 74%, var(--theme-canvas));
-  opacity: 0.78;
+  background: var(--theme-control-bg);
+  opacity: 1;
 }
 
 .skill-hub-item-main {
@@ -3823,14 +3812,31 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  min-width: 128px;
-  padding: 8px 8px 8px 0;
+  min-width: 0;
+  padding: 8px;
 }
 
 .skill-hub-item-actions button {
   min-height: 24px;
   padding: 3px 7px;
   font-size: 11px;
+}
+
+.skill-hub-item-actions .skill-hub-install-action {
+  min-width: 0;
+  padding-inline: 2px;
+  white-space: nowrap;
+  color: var(--theme-accent);
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.skill-hub-item-actions .skill-hub-install-action:hover {
+  color: var(--theme-text-primary);
+  background: transparent;
+  border-color: transparent;
 }
 
 .skill-hub-item-actions:empty::before {
@@ -7894,6 +7900,48 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   gap: 10px;
 }
 
+.floating-toc:not(.expanded):not(.pinned) .floating-toc-tick {
+  opacity: 0;
+}
+
+.appearance-mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 10px;
+  background: var(--theme-control-bg);
+}
+
+.appearance-mode-switch button {
+  min-width: 96px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+}
+
+.appearance-mode-switch button:hover {
+  color: var(--theme-text-primary);
+}
+
+.appearance-mode-switch button.active {
+  background: var(--theme-paper);
+  color: var(--theme-text-primary);
+  box-shadow: 0 1px 3px var(--theme-shadow-soft);
+}
+
+.appearance-mode-switch button:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
+}
+
+.appearance-mode-hint {
+  margin-top: 8px;
+}
+
 .theme-card {
   display: grid;
   gap: 8px;
@@ -9058,6 +9106,27 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   padding: 0;
   margin-left: 10px;
 }
+
+.cm6-edit-popover {
+  position: fixed;
+  z-index: 902;
+  display: grid;
+  gap: 8px;
+  width: min(300px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  background: var(--theme-panel-bg);
+  box-shadow: 0 14px 36px var(--theme-shadow-soft);
+  color: var(--theme-text-primary);
+}
+
+.cm6-edit-popover label { display: grid; gap: 4px; font-size: 12px; }
+.cm6-edit-popover input { width: 100%; box-sizing: border-box; }
+.cm6-edit-popover-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.cm6-frontmatter-chip, .cm6-footnote-ref, .cm6-footnote-definition { border: 0; color: var(--theme-accent); background: color-mix(in srgb, var(--theme-accent) 12%, transparent); border-radius: 5px; cursor: pointer; }
+.typola-cm6-html { display: block; max-width: 100%; }
 
 
 /* Table Submenu (Vditor IR table edit) */

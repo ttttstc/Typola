@@ -1107,6 +1107,7 @@ export async function exportHtmlDocument(
   html: string,
   fileName: string,
   defaultPath = createHtmlExportFileName(fileName),
+  assets?: { documentPath: string; destination: string },
 ): Promise<WechatHtmlExportResult> {
 
   if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
@@ -1120,7 +1121,12 @@ export async function exportHtmlDocument(
     });
     if (!path) return 'cancelled';
 
-    await writeTextFile(path, html);
+    let content = html;
+    if (assets) {
+      const { mkdir, copyFile } = await import('@tauri-apps/plugin-fs');
+      content = await (await import('./exportAssetResolver')).copyHtmlExportAssets(html, path, assets.documentPath, assets.destination, { mkdir, copyFile });
+    }
+    await writeTextFile(path, content);
     return 'saved';
   }
 

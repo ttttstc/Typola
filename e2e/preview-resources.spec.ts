@@ -19,26 +19,23 @@ function expectPresent(resources: string[], fragment: string): void {
   expect(resources.some((resource) => resource.includes(fragment))).toBe(true);
 }
 
-test('cold start shows WYSIWYG editing while keeping source editor and Word preview lazy', async ({ page }) => {
+test('cold start loads CM6 writing editor while keeping Word preview lazy', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.wysiwyg-editor-pane')).toBeVisible();
+  await expect(page.locator('.cm6-markdown-editor-pane .cm-editor')).toBeVisible();
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
-  await expect(page.locator('.cm-editor')).toHaveCount(0);
   await page.waitForTimeout(900);
 
   const resources = await loadedResourcePaths(page);
 
-  expectMissing(resources, '/src/components/EditorPane.tsx');
+  expectPresent(resources, '/src/components/editor/cm6/Cm6MarkdownEditorPane.tsx');
   expectMissing(resources, '/src/components/WordPaperPreviewPane.tsx');
 });
 
-test('source editor loads only after the source mode button is used', async ({ page }) => {
+test('source mode reuses the loaded CM6 editor', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '源码模式' }).click();
   await expect(page.locator('.cm-editor')).toBeVisible();
-
-  const resources = await loadedResourcePaths(page);
-  expectPresent(resources, '/src/components/EditorPane.tsx');
+  await expect(page.locator('.wysiwyg-editor-pane')).toHaveCount(0);
 });
 
 test('Word preview pane loads only after the Word preview button is used', async ({ page }) => {

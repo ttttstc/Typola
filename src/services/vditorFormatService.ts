@@ -1,6 +1,9 @@
 import type Vditor from 'vditor';
 import type { FormatAction, HeadingLevel } from '../components/EditorContextMenu';
 
+type CapturedFormat = { bold: boolean; italic: boolean; strike: boolean; code: boolean; prefix: string | null };
+const capturedFormats = new WeakMap<Vditor, CapturedFormat>();
+
 // 应用一个格式化动作到 Vditor 编辑器。
 // 行内格式(加粗/斜体/删除线/行内代码)走 Vditor 的 getSelection + updateValue/insertValue,光标保留。
 // 块格式(引用/列表/代码块/分隔线/链接)走 insertValue。
@@ -57,6 +60,16 @@ export async function applyVditorFormat(editor: Vditor, action: FormatAction): P
     case 'clear-format':
       applyClearFormat(editor);
       return;
+    case 'format-painter': {
+      const captured = capturedFormats.get(editor);
+      if (captured) {
+        applyCapturedFormat(editor, captured);
+        capturedFormats.delete(editor);
+      } else {
+        capturedFormats.set(editor, captureFormat(editor));
+      }
+      return;
+    }
     case 'codeblock-lang':
       await applyCodeblockLang(editor);
       return;
@@ -72,6 +85,16 @@ export async function applyVditorFormat(editor: Vditor, action: FormatAction): P
     case 'select-all':
       selectAllInIr(editor);
       return;
+    case 'table-insert':
+      // Vditor 写作路径已废,P0 仅 CM6 支持表格,此处 no-op 兜类型。
+      return;
+    case 'table-align':
+    case 'table-row-insert':
+    case 'table-row-delete':
+    case 'table-column-insert':
+    case 'table-column-delete':
+      // @deprecated Vditor 写作路径已退出主链路；表格命令仅由 CM6 transaction 实现。
+      return;
   }
 }
 
@@ -82,6 +105,28 @@ function wrapInline(editor: Vditor, open: string, close: string, placeholder: st
   } else {
     editor.insertValue(`${open}${placeholder}${close}`, true);
   }
+}
+
+function captureFormat(editor: Vditor): CapturedFormat {
+  const selected = editor.getSelection() || '';
+  return {
+    bold: /\*\*[^*]+\*\*/u.test(selected),
+    italic: /(^|[^*])\*[^*]+\*(?!\*)/u.test(selected),
+    strike: /~~[^~]+~~/u.test(selected),
+    code: /`[^`]+`/u.test(selected),
+    prefix: selected.match(/^(?:#{1,6}\s+|>\s+|[-*]\s(?:\[[ xX]\]\s+)?|\d+\.\s+)/u)?.[0] ?? null,
+  };
+}
+
+function applyCapturedFormat(editor: Vditor, captured: CapturedFormat): void {
+  const selected = editor.getSelection();
+  if (!selected) return;
+  let next = selected;
+  if (captured.code) next = `\`${next}\``;
+  if (captured.strike) next = `~~${next}~~`;
+  if (captured.italic) next = `*${next}*`;
+  if (captured.bold) next = `**${next}**`;
+  editor.updateValue(next);
 }
 
 // 找到光标所在的段落 block(h1..h6 / p / li / blockquote),并把它在 markdown source 中对应的行改前缀。

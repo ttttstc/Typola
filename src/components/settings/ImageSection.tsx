@@ -90,7 +90,7 @@ export function ImageSection() {
         <label className="settings-row">
           <div>
             <div className="settings-label">目标文件夹</div>
-            <div className="settings-description">相对当前文档目录，支持 ${'{filename}'} 占位符。</div>
+            <div className="settings-description">相对当前文档目录，支持 {'{filename}'}、{'{year}'}、{'{month}'} 占位符。</div>
           </div>
           <input
             className="settings-input"
@@ -148,18 +148,6 @@ export function ImageSection() {
 
       <div className="settings-row">
         <div>
-          <div className="settings-label">对网络图片应用上述规则</div>
-          <div className="settings-description">本期仅影响后续扩展的网络图片插入入口。</div>
-        </div>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.imageApplyToOnline ? 'on' : ''}`}
-          onClick={() => handleChange({ imageApplyToOnline: !settings.imageApplyToOnline })}
-        />
-      </div>
-
-      <div className="settings-row">
-        <div>
           <div className="settings-label">允许 YAML 自动上传</div>
           <div className="settings-description">front matter 写 typora-copy-images-to: upload 时启用上传。</div>
         </div>
@@ -198,6 +186,15 @@ export function ImageSection() {
           {testResult && <pre className="settings-test-output">{testResult}</pre>}
         </div>
       )}
+
+      <div className="settings-row">
+        <div><div className="settings-label">折叠 YAML frontmatter</div></div>
+        <button type="button" className={`toggle-switch ${settings.editorFrontmatterFoldEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFrontmatterFoldEnabled: !settings.editorFrontmatterFoldEnabled })} />
+      </div>
+      <div className="settings-row">
+        <div><div className="settings-label">启用格式刷</div></div>
+        <button type="button" className={`toggle-switch ${settings.editorFormatPainterEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFormatPainterEnabled: !settings.editorFormatPainterEnabled })} />
+      </div>
     </div>
   );
 }

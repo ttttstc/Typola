@@ -1,60 +1,45 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import Vditor from 'vditor';
 import { markdownToExportHtml } from './markdownExportRenderer';
 import { renderMermaidIn } from './mermaidRenderer';
 import { resolveLocalImages } from './localImageResolver';
 
-vi.mock('vditor', () => ({
-  default: {
-    preview: vi.fn((element: HTMLElement, markdown: string, options: { after?: () => void }) => {
-      element.innerHTML = markdown
-        .replace(/^# (.+)$/m, '<h1>$1</h1>')
-        .replace(/\n\n(.+)$/m, '<p>$1</p>');
-      options.after?.();
-    }),
-  },
-}));
-
-vi.mock('vditor/dist/index.css', () => ({}));
-
-vi.mock('./mermaidRenderer', () => ({
-  renderMermaidIn: vi.fn(async () => undefined),
-}));
-
-vi.mock('./localImageResolver', () => ({
-  resolveLocalImages: vi.fn(async () => undefined),
-}));
+vi.mock('./mermaidRenderer', () => ({ renderMermaidIn: vi.fn(async () => undefined) }));
+vi.mock('./localImageResolver', () => ({ resolveLocalImages: vi.fn(async () => undefined) }));
 
 describe('markdownToExportHtml', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+  afterEach(() => vi.clearAllMocks());
 
-  it('renders markdown source into export html and runs export postprocessors', async () => {
-    const html = await markdownToExportHtml('# 标题\n\n正文', {
-      filePath: 'D:\\docs\\a.md',
-      theme: 'dark',
-    });
+  it('renders GFM, highlighted code, KaTeX and sanitizes raw HTML without Vditor', async () => {
+    const html = await markdownToExportHtml(
+      '# 标题\n\n- [x] 完成\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n```ts\nconst value = 1\n```\n\n$E=mc^2$\n\n<script>alert(1)</script>',
+      { filePath: 'D:\\docs\\a.md', theme: 'dark' },
+    );
 
     expect(html).toContain('<h1>标题</h1>');
-    expect(html).toContain('<p>正文</p>');
-    expect(Vditor.preview).toHaveBeenCalledWith(expect.any(HTMLDivElement), '# 标题\n\n正文', expect.objectContaining({
-      mode: 'dark',
-      hljs: expect.objectContaining({ style: 'github-dark' }),
-    }));
+    expect(html).toContain('<input type="checkbox" checked="" disabled="">');
+    expect(html).toContain('<table>');
+    expect(html).toContain('hljs');
+    expect(html).toContain('katex');
+    expect(html).not.toContain('<script>');
     expect(renderMermaidIn).toHaveBeenCalledWith(expect.any(HTMLDivElement), { theme: 'dark' });
     expect(resolveLocalImages).toHaveBeenCalledWith(expect.any(HTMLDivElement), 'D:\\docs\\a.md');
   });
 
-  it('can render into an existing target for the HTML preview pane', async () => {
+  it('renders into an existing target and clears it for empty source', async () => {
     const target = document.createElement('div');
-
     const html = await markdownToExportHtml('# 预览', { target });
-
     expect(html).toContain('<h1>预览</h1>');
     expect(target.innerHTML).toBe(html);
-    expect(target.classList.contains('vditor-reset')).toBe(true);
-    expect(target.classList.contains('preview-content')).toBe(true);
+    await expect(markdownToExportHtml('', { target })).resolves.toBe('');
+    expect(target.innerHTML).toBe('');
+  });
+
+  it('exports ==highlight== as mark HTML', async () => {
+    await expect(markdownToExportHtml('强调 ==关键词==')).resolves.toContain('<mark>关键词</mark>');
+  });
+
+  it('strips leading frontmatter before export', async () => {
+    await expect(markdownToExportHtml('---\ntitle: 草稿\n---\n# 正文')).resolves.not.toContain('title: 草稿');
   });
 });

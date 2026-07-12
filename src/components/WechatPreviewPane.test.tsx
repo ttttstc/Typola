@@ -11,9 +11,6 @@ import type { CustomHtmlExportPresetId, HtmlExportPreset } from '../services/htm
 type PreviewCall = {
   element: HTMLElement;
   source: string;
-  options: {
-    after?: () => void;
-  };
   reject: (error: Error) => void;
   resolve: () => void;
 };
@@ -30,17 +27,17 @@ class MockClipboardItem {
   }
 }
 
-vi.mock('vditor', () => ({
-  default: {
-    preview: vi.fn((element: HTMLElement, source: string, options: PreviewCall['options']) => {
-      return new Promise<void>((resolve, reject) => {
-        previewCalls.push({ element, source, options, resolve, reject });
-      });
-    }),
-  },
+vi.mock('../services/markdownExportRenderer', () => ({
+  markdownToExportHtml: vi.fn((source: string, options: { target?: HTMLElement }) => new Promise<string>((resolve, reject) => {
+    const element = options.target ?? document.createElement('div');
+    previewCalls.push({
+      element,
+      source,
+      resolve: () => resolve(element.innerHTML),
+      reject,
+    });
+  })),
 }));
-
-vi.mock('vditor/dist/index.css', () => ({}));
 
 function flushPromises(): Promise<void> {
   return new Promise((resolve) => {
@@ -79,7 +76,6 @@ async function renderReadyPreview(
 
   await act(async () => {
     call.element.innerHTML = options.renderedHtml ?? '<h1>标题</h1><p>正文</p>';
-    call.options.after?.();
     call.resolve();
     await flushPromises();
   });
@@ -136,7 +132,6 @@ describe('WechatPreviewPane', () => {
 
     await act(async () => {
       previewCalls[0].element.innerHTML = '<p>旧文章</p>';
-      previewCalls[0].options.after?.();
       previewCalls[0].resolve();
       await flushPromises();
     });
@@ -153,7 +148,6 @@ describe('WechatPreviewPane', () => {
 
     await act(async () => {
       previewCalls[0].element.innerHTML = '<p>乱序旧文章</p>';
-      previewCalls[0].options.after?.();
       previewCalls[0].resolve();
       await flushPromises();
     });
@@ -161,14 +155,13 @@ describe('WechatPreviewPane', () => {
 
     await act(async () => {
       previewCalls[1].element.innerHTML = '<p>新文章</p>';
-      previewCalls[1].options.after?.();
       previewCalls[1].resolve();
       await flushPromises();
     });
     expect(host.querySelector('.wechat-preview-article-shell')?.textContent).toContain('新文章');
   });
 
-  it('shows an error when Vditor preview rejects and recovers on the next successful source', async () => {
+  it('shows an error when export rendering rejects and recovers on the next successful source', async () => {
     await act(async () => {
       root.render(<WechatPreviewPane source="失败 source" onClose={() => undefined} />);
       await flushPromises();
@@ -191,7 +184,6 @@ describe('WechatPreviewPane', () => {
 
     await act(async () => {
       previewCalls[1].element.innerHTML = '<p>恢复文章</p>';
-      previewCalls[1].options.after?.();
       previewCalls[1].resolve();
       await flushPromises();
     });
@@ -373,7 +365,6 @@ describe('WechatPreviewPane', () => {
       const call = previewCalls.at(-1);
       if (!call) throw new Error('preview call missing after preset switch');
       call.element.innerHTML = '<h1>标题</h1><p>正文</p>';
-      call.options.after?.();
       call.resolve();
       await flushPromises();
     });

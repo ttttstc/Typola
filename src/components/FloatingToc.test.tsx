@@ -31,22 +31,25 @@ type Harness = {
   setActive: (idx: number) => Promise<void>;
   setItems: (items: TocItem[]) => Promise<void>;
   clickChevron: (headingText: string) => Promise<void>;
+  requestOpen: () => Promise<void>;
   itemLabels: () => string[];
 };
 
-async function mountFloatingToc(initialItems: TocItem[], initialActive = 0): Promise<Harness> {
+async function mountFloatingToc(initialItems: TocItem[], initialActive = 0, pinned = true): Promise<Harness> {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   let currentItems = initialItems;
   let currentActive = initialActive;
+  let openRequest = 0;
 
   const render = () => (
     <FloatingToc
       items={currentItems}
       activeIndex={currentActive}
-      pinned
+      pinned={pinned}
       alwaysPinned={false}
+      openRequest={openRequest}
       onPinnedChange={vi.fn()}
       onAlwaysPinnedChange={vi.fn()}
       onNavigate={vi.fn()}
@@ -72,6 +75,10 @@ async function mountFloatingToc(initialItems: TocItem[], initialActive = 0): Pro
       );
       if (!chevron) throw new Error(`chevron for "${headingText}" not found`);
       await act(async () => { chevron.click(); });
+    },
+    requestOpen: async () => {
+      openRequest += 1;
+      await act(async () => { root.render(render()); });
     },
     itemLabels: () => Array.from(host.querySelectorAll('.floating-toc-item span')).map((n) => n.textContent ?? ''),
   };
@@ -155,6 +162,18 @@ describe('FloatingToc — chevron accessibility (reviews #4 and #5)', () => {
     expect(chevron).toBeTruthy();
     expect(chevron?.getAttribute('aria-label')).toMatch(/Parent/);
     expect(chevron?.getAttribute('aria-controls')).toBe('toc-item-p');
+    h.cleanup();
+  });
+});
+
+describe('FloatingToc — edge drawer trigger', () => {
+  it('opens when the toolbar issues an open request without pinning the outline', async () => {
+    const h = await mountFloatingToc(makeItems(), 0, false);
+    expect(h.host.querySelector('.floating-toc-rail')).toBeNull();
+    expect(h.host.querySelector('.floating-toc-edge-trigger')).toBeTruthy();
+    expect(h.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(false);
+    await h.requestOpen();
+    expect(h.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(true);
     h.cleanup();
   });
 });

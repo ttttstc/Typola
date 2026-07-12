@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { TocItem } from '../types/document';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   getExportPresetConfig,
   clearLastOpenedPath,
@@ -56,15 +56,16 @@ import { useSkillHubState } from '../hooks/useSkillHubState';
 import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skillHub';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
-import type { SourceHeadingScrollRequest } from '../components/EditorPane';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { ImageInsertRequest, SourceHeadingScrollRequest } from '../components/EditorPane';
+import type { TypolaEditorKernel } from '../types/editorCore';
+import type { FormatAction } from '../components/EditorContextMenu';
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { calculateDocumentStats } from '../services/documentStatsService';
+import { analyzeMarkdown, type MarkdownLink } from '../services/markdownAnalysisService';
 import { getRecentFiles, type RecentFile } from '../services/recentFilesService';
 import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 import { createImageMarkdown } from '../services/editAssistService';
-import { applyThemeToDocument } from '../services/themeDom';
+import { applyAppearanceToDocument } from '../services/appearanceDom';
 import {
   formatImageSrc,
   isImagePath,
@@ -73,7 +74,7 @@ import {
   resolveCopyDestination,
   resolveImageInsertAction,
 } from '../services/imageInsert';
-import { collectHeadingSections, foldKey, type FoldKey } from '../services/headingFoldService';
+import { foldKey, type FoldKey } from '../services/headingFoldService';
 import {
   extractToc,
   escapeRegExp,
@@ -84,7 +85,6 @@ import {
   joinLocalPath,
   LEFT_PANEL_MAX_WIDTH,
   LEFT_PANEL_MIN_WIDTH,
-  lineIndexAtOffset,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_RESIZER_GAP,
@@ -97,14 +97,6 @@ import {
   SettingsPage,
   SettingsPageFallback,
 } from './settingsPageLoader';
-
-const EditorPane = lazy(() =>
-  import('../components/EditorPane').then((module) => ({ default: module.EditorPane })),
-);
-
-const WysiwygEditorPane = lazy(() =>
-  import('../components/WysiwygEditorPane').then((module) => ({ default: module.WysiwygEditorPane })),
-);
 
 const Cm6MarkdownEditorPane = lazy(() =>
   import('../components/editor/cm6/Cm6MarkdownEditorPane').then((module) => ({ default: module.Cm6MarkdownEditorPane })),
@@ -145,11 +137,6 @@ type UpdateInstallState =
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
-function readEditorEngine(): 'vditor' | 'cm6' {
-  if (typeof window === 'undefined') return 'cm6';
-  return window.localStorage.getItem('typola.editorEngine') === 'vditor' ? 'vditor' : 'cm6';
-}
-
 export function AppLayout() {
   const settings = useSettings();
   const isTauriRuntime = '__TAURI_INTERNALS__' in window;
@@ -158,7 +145,7 @@ export function AppLayout() {
   const autoUpdateCheckStarted = useRef(false);
   const updateDownloadVersionRef = useRef<string | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
-  const editorCommandRef = useRef<EditorCoreHandle | null>(null);
+  const editorCommandRef = useRef<TypolaEditorKernel | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   // 双向同步震荡抑制:任一方向触发后,锁定反向一段时间(防止 editor↔preview 循环)。
@@ -168,12 +155,6 @@ export function AppLayout() {
     if (Date.now() < syncLockUntilRef.current) return;
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
     previewScrollRef.current?.scrollToRatio(ratio);
-  }, []);
-  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
-    if (Date.now() < syncLockUntilRef.current) return;
-    if (change.index < 0) return;
-    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
-    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
   }, []);
   const handlePreviewHeadingScroll = useCallback((change: { index: number }) => {
     if (Date.now() < syncLockUntilRef.current) return;
@@ -200,7 +181,6 @@ export function AppLayout() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
-  const [editorEngine] = useState(readEditorEngine);
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
   // 折叠集合:由 AppLayout 拥有,用于"搜索命中自动展开"等命令式扩展。
   // Cm6MarkdownEditorPane 通过 foldedHeadings + onFoldChange 双向同步。
@@ -225,23 +205,6 @@ export function AppLayout() {
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
   const [transientMessage, setTransientMessage] = useState('');
-  const resolveTocHeading = useCallback((item: TocItem, index: number): HTMLElement | null => {
-    const byId = document.getElementById(item.id);
-    if (byId instanceof HTMLElement) return byId;
-
-    const root = mainContentRef.current;
-    if (!root) return null;
-
-    // 同时兼容 Vditor IR/WYSIWYG 与 CM6 源码模式。
-    // CM6 下 heading 是 .cm-content 里的语义 h1..h6(atomic-editor 用真实标签,
-    // 而非自定义 span),不命中 Vditor selector 会导致 TOC 跳转永远 index 越界。
-    const headings = root.querySelectorAll<HTMLElement>(
-      '.vditor-ir h1, .vditor-ir h2, .vditor-ir h3, .vditor-ir h4, .vditor-ir h5, .vditor-ir h6, '
-      + '.vditor-wysiwyg h1, .vditor-wysiwyg h2, .vditor-wysiwyg h3, .vditor-wysiwyg h4, .vditor-wysiwyg h5, .vditor-wysiwyg h6, '
-      + '.cm-content h1, .cm-content h2, .cm-content h3, .cm-content h4, .cm-content h5, .cm-content h6',
-    );
-    return headings[index] ?? null;
-  }, []);
   const {
     toc,
     setToc,
@@ -250,14 +213,17 @@ export function AppLayout() {
     handleTocNavigate,
     handleTocPinnedChange,
     handleTocAlwaysPinnedChange,
+    handleEditorHeadingChange: handleTocEditorHeadingChange,
   } = useTocState({
-    editorMode,
-    editorEngine,
     alwaysPinned: settings.tocAlwaysPinned,
-    mainContentRef,
-    resolveTocHeading,
     setSourceHeadingScrollRequest,
   });
+  const handleEditorHeadingChange = useCallback((change: { index: number; withinRatio: number }) => {
+    handleTocEditorHeadingChange(change.index);
+    if (Date.now() < syncLockUntilRef.current || change.index < 0) return;
+    syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
+    previewScrollRef.current?.scrollToHeading(change.index, change.withinRatio);
+  }, [handleTocEditorHeadingChange]);
   // 模式 ref 解决「getDefaultRightPanelWidth 在 rightPanelMode 声明前定义」的问题。
   const rightPanelModeRef = useRef<RightPanelMode>('none');
   const getDefaultRightPanelWidth = useCallback(() => {
@@ -338,11 +304,17 @@ export function AppLayout() {
   useEffect(() => {
     setFoldedHeadings(new Set());
   }, [activeTabId]);
-  const debouncedStatsSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 260);
-  const documentStats = useMemo(
-    () => file.fileType === 'docx' ? undefined : calculateDocumentStats(debouncedStatsSource),
-    [debouncedStatsSource, file.fileType],
+  const debouncedAnalysisSource = useDebouncedValue(file.fileType === 'docx' ? '' : file.content, 180);
+  const markdownAnalysis = useMemo(
+    () => analyzeMarkdown(debouncedAnalysisSource),
+    [debouncedAnalysisSource],
   );
+  const documentStats = file.fileType === 'docx' ? undefined : markdownAnalysis.stats;
+  useEffect(() => {
+    // Ignore the previous tab's delayed value until it catches up with current source.
+    if (file.fileType === 'docx' || debouncedAnalysisSource !== file.content) return;
+    setToc(markdownAnalysis.headings.map(({ level, text }, index) => ({ level, text, id: `toc-${index}` })));
+  }, [debouncedAnalysisSource, file.content, file.fileType, markdownAnalysis, setToc]);
   const [defaultAiWorkspaceRoot, setDefaultAiWorkspaceRoot] = useState('');
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -375,6 +347,7 @@ export function AppLayout() {
     workspacePanelWidth,
     setWorkspacePanelWidth,
     leftResizing,
+    handleTogglePrimaryPanel,
     handleToggleWorkspacePanel,
     handleToggleAiPanel,
     handleLeftPanelResizerPointerDown,
@@ -517,8 +490,8 @@ export function AppLayout() {
   }, []);
 
   useEffect(() => {
-    applyThemeToDocument(document, settings.themeId);
-  }, [settings.themeId]);
+    applyAppearanceToDocument(document, settings);
+  }, [settings]);
 
   useEffect(() => {
     /* Kick off the settings chunk immediately on mount so the modal is fully
@@ -715,9 +688,23 @@ export function AppLayout() {
     editorCommandRef.current?.focus();
   }, [handleContentChange]);
 
-  const replaceFromFindPanel = useCallback((value: string) => {
-    handleContentChange(value);
-  }, [handleContentChange]);
+  const handleEditorFormat = useCallback((action: FormatAction) => {
+    editorCommandRef.current?.format(action);
+  }, []);
+
+  const replaceFromFindPanel = useCallback((matches: readonly SearchMatch[], replacement: string) => {
+    const editor = editorCommandRef.current;
+    if (!editor) return;
+    const source = editor.getMarkdown();
+    // 文档在面板渲染后被 AI/文件监视器改写时，拒绝旧坐标，绝不替换错位文本。
+    const current = matches.filter((match) => source.slice(match.index, match.index + match.length) === match.text);
+    if (current.length !== matches.length) return;
+    editor.replaceRanges(current.map((match) => ({
+      from: match.index,
+      to: match.index + match.length,
+      insert: replacement,
+    })));
+  }, []);
 
   // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档:
   // P0-2 走编辑器的 commitAIReplacement,把整篇合并作为一条原子操作压入 AI 撤销栈,
@@ -777,16 +764,16 @@ export function AppLayout() {
     // 让 IR 里的 case/regex/wholeWord 匹配跟 FindReplacePanel 的 findSearchMatches 完全一致。
     //
     // PR5:折叠区域内命中时先自动展开 — 否则命中位置不可视,scrollIntoView 也无意义。
-    // 用 collectHeadingSections 找覆盖 match 位置的最深 heading section,
+    // 用 MarkdownAnalysisService 找覆盖 match 位置的 heading section,
     // 仅当其 foldKey 出现在 foldedHeadings 时移除该 key。
-    if (editorEngine === 'cm6' && editorMode === 'source') {
-      const sections = collectHeadingSections(file.content);
-      const matchStartLine = lineIndexAtOffset(file.content, match.index);
+    if (editorMode === 'source') {
+      const sections = markdownAnalysis.foldSections;
       const coveringKeys: FoldKey[] = [];
       for (const section of sections) {
-        if (section.headingLine <= matchStartLine && matchStartLine <= section.endLine) {
+        if (section.from <= match.index && match.index < section.to) {
           // 展开命中行所在的完整父链,否则只展开最深层时父 heading 仍可能折住内容。
-          coveringKeys.push(foldKey(section.level, section.text, section.sectionIndex));
+          const sectionIndex = Number(section.headingId.slice('heading-'.length));
+          coveringKeys.push(foldKey(section.level, section.title, sectionIndex));
         }
       }
       if (coveringKeys.some((key) => foldedHeadings.has(key))) {
@@ -804,7 +791,7 @@ export function AppLayout() {
       query,
       searchOptions,
     });
-  }, [editorEngine, editorMode, file.content, foldedHeadings]);
+  }, [editorMode, file.content, foldedHeadings]);
 
   // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
   const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {
@@ -831,7 +818,7 @@ export function AppLayout() {
     bytes?: Uint8Array;
     fileName?: string;
     mime?: string;
-  }, insertAt: number | null = null) => {
+  }, insertAt: number | null = null, request?: ImageInsertRequest) => {
     const currentFile = fileRef.current;
     if (currentFile.fileType === 'docx') return;
     const dedupeKey = source.localPath
@@ -846,6 +833,19 @@ export function AppLayout() {
       setTransientMessage('请先保存文档，再插入图片。');
       return;
     }
+
+    const insertImageMarkdown = (src: string) => {
+      const replacement = request?.replace;
+      const title = replacement?.title ? ` "${replacement.title}"` : '';
+      const markdown = replacement
+        ? `![${replacement.alt}](${src}${title})`
+        : createImageMarkdown('图片', src);
+      if (replacement) {
+        editorCommandRef.current?.replaceRange(replacement.from, replacement.to, markdown);
+      } else {
+        insertMarkdownAt(markdown, insertAt);
+      }
+    };
 
     const { invoke } = await import('@tauri-apps/api/core');
     const resolved = resolveImageInsertAction(settings, currentFile.content);
@@ -873,8 +873,14 @@ export function AppLayout() {
 
     try {
       if (action === 'keep' && source.localPath) {
-        const src = formatImageSrc(source.localPath, currentFile.path, settings);
-        insertMarkdownAt(createImageMarkdown('图片', src), insertAt);
+        const src = settings.imageApplyToLocal
+          ? formatImageSrc(source.localPath, currentFile.path, settings)
+          : formatImageSrc(source.localPath, undefined, {
+            imagePreferRelative: false,
+            imageEnsureDotPrefix: false,
+            imageEscapeUrl: false,
+          });
+        insertImageMarkdown(src);
         return;
       }
 
@@ -893,20 +899,20 @@ export function AppLayout() {
           const [url] = uploadResult.urls.length > 0
             ? uploadResult.urls
             : parseUploadUrls(uploadResult.rawStdout, 1);
-          insertMarkdownAt(createImageMarkdown('图片', url), insertAt);
+          insertImageMarkdown(url);
           setTransientMessage('图片已上传。');
           return;
         } catch (error) {
           console.warn('Image upload failed, falling back to copy:', error);
           setTransientMessage('图片上传失败，已回退为本地复制。');
           const copied = source.localPath ? await copyImage() : uploadPath;
-          insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copied, currentFile.path, settings)), insertAt);
+          insertImageMarkdown(formatImageSrc(copied, currentFile.path, settings));
           return;
         }
       }
 
       const copiedPath = await copyImage();
-      insertMarkdownAt(createImageMarkdown('图片', formatImageSrc(copiedPath, currentFile.path, settings)), insertAt);
+      insertImageMarkdown(formatImageSrc(copiedPath, currentFile.path, settings));
       setTransientMessage(`图片已保存到 ${copyDestination}。`);
     } catch (error) {
       console.warn('Failed to insert image:', error);
@@ -915,7 +921,7 @@ export function AppLayout() {
   }, [insertMarkdownAt, settings]);
 
   // 工具栏/菜单「插入本地图片」入口:打开系统文件对话框 → 走 insertImageFromSource。
-  const handleSelectLocalImage = useCallback(async () => {
+  const handleSelectLocalImage = useCallback(async (request?: ImageInsertRequest) => {
     if (fileRef.current.fileType === 'docx') return;
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
@@ -924,7 +930,7 @@ export function AppLayout() {
         filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif'] }],
       });
       if (typeof selected !== 'string') return;
-      await insertImageFromSource({ localPath: selected });
+      await insertImageFromSource({ localPath: selected }, null, request);
     } catch (error) {
       console.warn('Failed to select image:', error);
       setTransientMessage('选择图片失败。');
@@ -1460,6 +1466,49 @@ export function AppLayout() {
     }
   }, []);
 
+  const handleOpenMarkdownLink = useCallback(async (link: MarkdownLink) => {
+    const target = link.url.trim();
+    if (!target) return;
+    if (target.startsWith('#')) {
+      const anchorText = target.slice(1);
+      const headingIndex = markdownAnalysis.headings.findIndex((heading) => heading.text === anchorText);
+      if (headingIndex < 0) {
+        await messageDialog(`未找到文档锚点：${target}`, { title: '打开链接失败' });
+        return;
+      }
+      setSourceHeadingScrollRequest({ index: headingIndex, requestId: Date.now() });
+      return;
+    }
+    if (/^(?:https?:|mailto:)/iu.test(target)) {
+      try {
+        await openUrl(target);
+      } catch (error) {
+        await messageDialog(String(error), { title: '打开链接失败' });
+      }
+      return;
+    }
+    if (/^[a-z][a-z0-9+.-]*:/iu.test(target)) {
+      await messageDialog(`不支持的链接协议：${target}`, { title: '打开链接失败' });
+      return;
+    }
+    if (!file.path) {
+      await messageDialog('当前文档尚未保存，无法解析相对路径。', { title: '打开链接失败' });
+      return;
+    }
+    const path = target.split('#', 1)[0]!;
+    const directory = file.path.replace(/[\\/][^\\/]*$/u, '');
+    const resolvedPath = /^(?:[A-Za-z]:[\\/]|[\\/])/u.test(path) ? path : joinLocalPath(directory, path);
+    if (!isOpenableDocumentPath(resolvedPath)) {
+      await messageDialog(`链接不是可打开的文档：${target}`, { title: '打开链接失败' });
+      return;
+    }
+    try {
+      await handleOpenPath(resolvedPath);
+    } catch (error) {
+      await messageDialog(String(error), { title: '打开链接失败' });
+    }
+  }, [file.path, handleOpenPath, markdownAnalysis.headings]);
+
   const handleOpenArtifactExternally = useCallback(async (path: string) => {
     try {
       // 同上,绕开 opener scope。image / 任意本地文件都用 ShellExecuteW 派发。
@@ -1512,18 +1561,6 @@ export function AppLayout() {
     <div className="editor-pane readonly-pane">
       <span>Word 文件为只读</span>
     </div>
-  ) : editorMode === 'source' ? (
-    <Suspense fallback={<div className="editor-pane lazy-pane"><span>源码编辑器加载中</span></div>}>
-      <EditorPane
-        ref={editorCommandRef}
-        source={file.content}
-        onChange={handleContentChange}
-        headingScrollRequest={sourceHeadingScrollRequest}
-        onScrollRatio={handleEditorScrollRatio}
-        filePath={file.path}
-        onAIAction={handleEditorAIAction}
-      />
-    </Suspense>
   ) : shouldShowHtmlPresentation ? (
     <Suspense fallback={<div className="html-presentation-pane lazy-pane" aria-label={t('htmlPresentationAria')} />}>
       <HtmlPresentationPane
@@ -1532,10 +1569,11 @@ export function AppLayout() {
         onOpenInBrowser={() => { void handleOpenHtmlInBrowser(file.path); }}
       />
     </Suspense>
-  ) : editorEngine === 'cm6' ? (
+  ) : (
     <Suspense fallback={<div className="cm6-markdown-editor-pane lazy-pane"><span>CM6 编辑器加载中</span></div>}>
       <Cm6MarkdownEditorPane
         ref={editorCommandRef}
+        mode={editorMode}
         source={file.content}
         onChange={handleContentChange}
         headingScrollRequest={sourceHeadingScrollRequest}
@@ -1545,18 +1583,9 @@ export function AppLayout() {
         onPreviewHeadingChange={handleEditorHeadingChange}
         foldedHeadings={foldedHeadings}
         onFoldChange={handleEditorFoldChange}
-      />
-    </Suspense>
-  ) : (
-    <Suspense fallback={<div className="wysiwyg-editor-pane lazy-pane"><span>所见即所得编辑器加载中</span></div>}>
-      <WysiwygEditorPane
-        ref={editorCommandRef}
-        source={file.content}
-        onChange={handleContentChange}
-        filePath={file.path}
-        onScrollRatio={handleEditorScrollRatio}
-        onAIAction={handleEditorAIAction}
         reviewComments={reviewStateApi.state.comments}
+        onOpenLink={handleOpenMarkdownLink}
+        onRequestImageInsert={handleSelectLocalImage}
       />
     </Suspense>
   );
@@ -1683,7 +1712,7 @@ export function AppLayout() {
           dirty: file.dirty,
           fileName: file.name,
           editorMode,
-          workspacePanelVisible: leftRailMode === 'workspace',
+          workspacePanelVisible: leftRailMode !== 'none',
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
           artifactsVisible: rightPanelMode === 'artifacts',
@@ -1692,7 +1721,8 @@ export function AppLayout() {
           editingDisabled: isDocx,
           docMode,
           onToggleEditorMode: handleToggleEditorMode,
-          onToggleWorkspacePanel: handleToggleWorkspacePanel,
+          onFormat: handleEditorFormat,
+          onToggleWorkspacePanel: handleTogglePrimaryPanel,
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
@@ -1841,7 +1871,7 @@ export function AppLayout() {
         source={file.content}
         readOnly={isDocx}
         onCloseFind={() => setFindVisible(false)}
-        onReplaceSource={replaceFromFindPanel}
+        onReplace={replaceFromFindPanel}
         onNavigate={handleSearchNavigate}
         quickOpenVisible={quickOpenVisible}
         recentFiles={recentFiles}

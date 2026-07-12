@@ -3,13 +3,27 @@ import { SELECTION_ACTIONS, type SelectionActionId } from '../services/agent/sel
 
 export type HeadingLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+export type TableAlign = 'left' | 'center' | 'right';
+
 export type FormatAction =
   | { type: 'heading'; level: HeadingLevel }
-  | { type: 'bold' | 'italic' | 'strike' | 'inline-code' }
+  | { type: 'bold' | 'italic' | 'strike' | 'underline' | 'sup' | 'sub' | 'highlight' | 'inline-code' }
   | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' }
   | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
   | { type: 'link-edit' }
-  | { type: 'cut' | 'copy' | 'paste' | 'select-all' };
+  | { type: 'format-painter' | 'capture-format' | 'apply-format' }
+  | { type: 'cut' | 'copy' | 'paste' | 'select-all' }
+  | { type: 'image-insert' }
+  | { type: 'image-replace' }
+  | { type: 'image-open' }
+  | { type: 'image-copy-path' }
+  | { type: 'image-meta' }
+  | { type: 'table-insert'; rows: number; cols: number }
+  | { type: 'table-align'; align: TableAlign; colIndex?: number }
+  | { type: 'table-row-insert'; after?: boolean }
+  | { type: 'table-row-delete' }
+  | { type: 'table-column-insert'; after?: boolean }
+  | { type: 'table-column-delete' };
 
 type Props = {
   open: boolean;
@@ -17,6 +31,8 @@ type Props = {
   y: number;
   hasSelection: boolean;
   hasMermaidSvg?: boolean;
+  hasTable?: boolean;
+  hasImage?: boolean;
   onPick: (action: FormatAction) => void;
   onCopyMermaidSvg?: () => void;
   onClose: () => void;
@@ -32,6 +48,8 @@ export function EditorContextMenu({
   y,
   hasSelection,
   hasMermaidSvg = false,
+  hasTable = false,
+  hasImage = false,
   onPick,
   onCopyMermaidSvg,
   onClose,
@@ -108,8 +126,12 @@ export function EditorContextMenu({
 
       <MenuItem label="加粗" hint="Ctrl+B" onClick={() => pick({ type: 'bold' })} />
       <MenuItem label="斜体" hint="Ctrl+I" onClick={() => pick({ type: 'italic' })} />
+      <MenuItem label="下划线" onClick={() => pick({ type: 'underline' })} />
       <MenuItem label="删除线" onClick={() => pick({ type: 'strike' })} />
+      <MenuItem label="高亮" onClick={() => pick({ type: 'highlight' })} />
       <MenuItem label="行内代码" hint="Ctrl+G" onClick={() => pick({ type: 'inline-code' })} />
+      <MenuItem label="上标" onClick={() => pick({ type: 'sup' })} />
+      <MenuItem label="下标" onClick={() => pick({ type: 'sub' })} />
       <MenuItem label="链接" hint="Ctrl+K" onClick={() => pick({ type: 'link' })} />
       <MenuItem label="编辑链接" onClick={() => pick({ type: 'link-edit' })} />
 
@@ -125,6 +147,30 @@ export function EditorContextMenu({
       <MenuItem label="代码块" onClick={() => pick({ type: 'codeblock' })} />
       <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
       <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
+
+      {hasTable && (
+        <>
+          <div className="editor-ctx-separator" />
+          <MenuItem label="在下方插入行" onClick={() => pick({ type: 'table-row-insert', after: true })} />
+          <MenuItem label="删除当前行" onClick={() => pick({ type: 'table-row-delete' })} />
+          <MenuItem label="在右侧插入列" onClick={() => pick({ type: 'table-column-insert', after: true })} />
+          <MenuItem label="删除当前列" onClick={() => pick({ type: 'table-column-delete' })} />
+          <MenuItem label="当前列居中" onClick={() => pick({ type: 'table-align', align: 'center' })} />
+        </>
+      )}
+
+      <div className="editor-ctx-separator" />
+
+      <MenuItem label="插入图片" onClick={() => pick({ type: 'image-insert' })} />
+
+      {hasImage && (
+        <>
+          <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />
+          <MenuItem label="打开文件" onClick={() => pick({ type: 'image-open' })} />
+          <MenuItem label="复制路径" onClick={() => pick({ type: 'image-copy-path' })} />
+          <MenuItem label="编辑 Alt / 标题 / 宽度" onClick={() => pick({ type: 'image-meta' })} />
+        </>
+      )}
 
       <div className="editor-ctx-separator" />
 

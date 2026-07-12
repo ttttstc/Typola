@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   ChevronDown,
+  Bold,
   Code2,
   FileDown,
   FilePlus,
@@ -8,7 +9,14 @@ import {
   FolderDown,
   FolderOpen,
   PackageOpen,
+  Paintbrush,
   ImagePlus,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
+  ListTodo,
+  ListTree,
   Newspaper,
   PanelLeft,
   RefreshCw,
@@ -16,6 +24,7 @@ import {
   SaveAll,
   SlidersHorizontal,
   Terminal,
+  Quote,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -35,6 +44,8 @@ import { handleTitlebarMouseDown } from '../services/titlebarDrag';
 import { DocumentModeSwitcher } from './DocumentModeSwitcher';
 import { Tooltip } from './ui/Tooltip';
 import type { DocMode } from '../hooks/useDocumentMode';
+import type { FormatAction } from './EditorContextMenu';
+import { DefineColorToolbarButton } from './defineColor/DefineColorToolbarButton';
 
 export type EditorMode = 'wysiwyg' | 'source';
 
@@ -56,11 +67,13 @@ type ToolbarProps = {
   docMode: DocMode;
   reviewDirty?: boolean;
   onToggleEditorMode: () => void;
+  onFormat?: (action: FormatAction) => void;
   onToggleWorkspacePanel: () => void;
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleArtifacts?: () => void;
   onToggleTerminal: () => void;
+  onOpenToc?: () => void;
   onSetDocMode: (next: DocMode) => void;
   onNew: () => void;
   onOpen: () => void;
@@ -83,8 +96,8 @@ export function Toolbar({
   dirty, fileName,
   editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
   terminalVisible, editingDisabled, docMode, reviewDirty,
-  onToggleEditorMode, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
-  onToggleTerminal, onSetDocMode,
+  onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
+  onToggleTerminal, onOpenToc, onSetDocMode,
   onNew, onOpen, onOpenFolder, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
@@ -158,23 +171,29 @@ export function Toolbar({
           >
             <PanelLeft size={iconSize} strokeWidth={strokeWidth} />
           </button>
+          <DefineColorToolbarButton settings={settings} />
+          {onOpenToc && (
+            <button data-no-window-drag="true" onClick={onOpenToc} title={t('openTocHint')} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
+              <ListTree size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
         </div>
         <div className="toolbar-group toolbar-file-actions" aria-label={t('toolbarFileGroup')}>
           <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewLabel')} aria-label={t('toolbarNewLabel')}>
             <FilePlus size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onOpen} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
-            <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
+          <button data-no-window-drag="true" onClick={onOpen} title={t('toolbarOpenTitle')} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
+            <FolderDown size={iconSize} strokeWidth={strokeWidth} />
           </button>
           {onOpenFolder && (
             <button data-no-window-drag="true" onClick={onOpenFolder} data-tooltip={t('toolbarOpenFolderTitle')} aria-label={t('toolbarOpenFolderLabel')}>
-              <FolderDown size={iconSize} strokeWidth={strokeWidth} />
+              <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}
-          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
+          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} title={t('toolbarSaveTitle')} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
             <Save size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
+          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} title={t('toolbarSaveAsTitle')} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
             <SaveAll size={iconSize} strokeWidth={strokeWidth} />
           </button>
           {onInsertImage && (
@@ -239,6 +258,18 @@ export function Toolbar({
             </div>
           )}
         </div>
+        {onFormat && (
+          <div className="toolbar-group toolbar-format-actions" aria-label="Markdown 格式">
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip="加粗 (Ctrl+B)" aria-label="加粗"><Bold size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip="斜体 (Ctrl+I)" aria-label="斜体"><Italic size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip="链接" aria-label="链接"><Link size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip="引用块" aria-label="引用块"><Quote size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip="无序列表" aria-label="无序列表"><List size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip="有序列表" aria-label="有序列表"><ListOrdered size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip="任务列表" aria-label="任务列表"><ListTodo size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'format-painter' })} data-tooltip="格式刷" aria-label="格式刷"><Paintbrush size={iconSize} strokeWidth={strokeWidth} /></button>
+          </div>
+        )}
       </div>
       <div className="toolbar-title" data-tauri-drag-region aria-label={t('currentFileLabel')}>
         <span className={`file-name ${hasOpenedFile || dirty ? 'visible' : ''}`}>
@@ -290,6 +321,7 @@ export function Toolbar({
           )}
           <button
             className={editorMode === 'source' ? 'active' : ''}
+            title={t('toolbarSourceTitle')}
             onClick={onToggleEditorMode}
             disabled={editingDisabled}
             data-no-window-drag="true"
@@ -300,6 +332,7 @@ export function Toolbar({
           </button>
           <button
             className={wordPreviewVisible ? 'active' : ''}
+            title={t('toolbarWordPreviewTitle')}
             onClick={onToggleWordPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
@@ -310,6 +343,7 @@ export function Toolbar({
           </button>
           <button
             className={wechatPreviewVisible ? 'active' : ''}
+            title={t('toolbarWechatPreviewTitle')}
             onClick={onToggleWechatPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
@@ -345,6 +379,7 @@ export function Toolbar({
           <button
             data-no-window-drag="true"
             className="toolbar-settings-btn"
+            title={t('toolbarSettingsTitle')}
             onPointerEnter={onPreloadSettings}
             onFocus={onPreloadSettings}
             onClick={onOpenSettings}

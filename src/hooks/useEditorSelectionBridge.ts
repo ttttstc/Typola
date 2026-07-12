@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { EditorCoreHandle } from '../types/editorCore';
+import type { TypolaEditorKernel } from '../types/editorCore';
 import {
   SELECTION_ACTIONS,
-  buildInjectionText,
-  buildOneshotPrompt,
+  buildStructuredInjectionText,
+  buildStructuredOneshotPrompt,
   extractReplacementText,
   isDisplayOnlyAction,
   isOneshotAction,
+  recoverAnchorInBlock,
   type SelectionActionId,
 } from '../services/agent/selectionActions';
 import type { AnchorStatus, SelectionAnchor } from '../services/agent/types';
@@ -45,7 +46,7 @@ const INPUT_PRE_ACTIONS: ReadonlyArray<SelectionActionId> = ['polish'];
 type RunOneshot = (prompt: string, signal: AbortSignal) => Promise<string>;
 
 type UseEditorSelectionBridgeOptions = {
-  editorCommandRef: MutableRefObject<EditorCoreHandle | null>;
+  editorCommandRef: MutableRefObject<TypolaEditorKernel | null>;
   setLeftRailMode: Dispatch<SetStateAction<LeftRailMode>>;
   convManager: ConversationBridge;
   /** AppLayout 装填的 oneshot 调用 wrapper(已绑定 cwd/agentPath/...);
@@ -126,7 +127,11 @@ export function useEditorSelectionBridge({
     const controller = new AbortController();
     oneshotAbortRef.current = controller;
     // 拼 prompt:基础模板 + 可选额外要求
-    const base = buildOneshotPrompt(action, anchor.originalText);
+    const source = editorCommandRef.current?.getMarkdown();
+    const base = buildStructuredOneshotPrompt(action, anchor, {
+      source,
+      fileName: anchor.filePath.split(/[\\/]/).pop(),
+    });
     const prompt = requirements.trim()
       ? `${base}\n\n额外要求：${requirements.trim()}`
       : base;
@@ -221,8 +226,10 @@ export function useEditorSelectionBridge({
       return;
     }
     setLeftRailMode('aiWorkbench');
-    const fileName = anchor.filePath.split(/[\\/]/).pop() || anchor.filePath;
-    const text = buildInjectionText(action, fileName, anchor.originalText);
+    const text = buildStructuredInjectionText(action, anchor, {
+      source: editorCommandRef.current?.getMarkdown(),
+      fileName: anchor.filePath.split(/[\\/]/).pop(),
+    });
     let convId = convManager.activeConvId;
     if (!convManager.conversations.has(convId)) {
       convId = convManager.createConversation('自由对话');
@@ -249,6 +256,7 @@ export function useEditorSelectionBridge({
       return;
     }
     let status: AnchorStatus;
+    let replacementAnchor = current.anchor;
     try {
       status = editor.validateAnchor(
         current.anchor.filePath,
@@ -262,23 +270,36 @@ export function useEditorSelectionBridge({
       setResultCard({ ...current, state: 'error', error: `校验选区失败:${message}` });
       return;
     }
-    if (status !== 'valid') {
-      // 诊断:把实际 anchor 内容前 80 字打到 error,方便定位 stale 真因
-      const ot = (current.anchor.originalText ?? '').slice(0, 80);
-      const ph = (current.anchor.prefixHint ?? '').slice(-40);
+    if (status === 'wrong-file') {
       setResultCard({
         ...current,
         state: 'error',
-        error: status === 'wrong-file'
-          ? '原文档已切换,无法替换'
-          : `[stale] anchor 在 source 里定位不到。 originalText="${ot}" prefixHint="${ph}"`,
+        error: '原文档已切换,无法替换',
       });
       return;
     }
+    // #189: 校验 stale 时,用结构 anchor(heading path / block)作 fallback 探针。
+    // 只有当 recoverAnchorInBlock 仍找不到且 anchor 跨越特殊块时才报 stale。
+    if (status !== 'valid') {
+      const source = editor.getMarkdown();
+      const recovered = recoverAnchorInBlock(source, current.anchor, current.anchor.block);
+      if (!recovered) {
+        const ot = (current.anchor.originalText ?? '').slice(0, 80);
+        const ph = (current.anchor.prefixHint ?? '').slice(-40);
+        setResultCard({
+          ...current,
+          state: 'error',
+          error: `[stale] anchor 在 source 里定位不到,且结构边界不允许回退。 originalText="${ot}" prefixHint="${ph}"`,
+        });
+        return;
+      }
+      // 把替换目标改到恢复到的位置;由 editor.replaceRange 走单笔 dispatch。
+      replacementAnchor = { ...current.anchor, from: recovered.start, to: recovered.start + recovered.length };
+    }
     try {
       const ok = editor.replaceRange(
-        current.anchor.from,
-        current.anchor.to,
+        replacementAnchor.from,
+        replacementAnchor.to,
         current.newText,
       );
       if (!ok) {

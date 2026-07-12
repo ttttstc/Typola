@@ -38,7 +38,11 @@ export function resolveCopyDestination(
 ): string {
   const safeDestination = (destination || 'assets').trim() || 'assets';
   const fileName = documentPath ? pathBasenameWithoutExtension(documentPath) : '';
-  return safeDestination.replace(/\$\{filename\}/g, fileName);
+  const now = new Date();
+  return safeDestination
+    .replace(/\$?\{filename\}/g, fileName)
+    .replace(/\{year\}/g, String(now.getFullYear()))
+    .replace(/\{month\}/g, String(now.getMonth() + 1).padStart(2, '0'));
 }
 
 export function parseTyporaCopyImagesTo(markdown: string): string | null {
@@ -85,6 +89,12 @@ export function formatImageSrc(
     src = `./${src}`;
   }
   return options.imageEscapeUrl ? encodeURI(src) : src;
+}
+
+export function serializeHtmlImage(src: string, alt: string, title: string, width: string): string {
+  const escape = (value: string) => value.replace(/[<>&"']/gu, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[character] ?? character));
+  const safeWidth = /^(?:\d+(?:\.\d+)?)(?:px|%)$/u.test(width) ? width : '';
+  return `<img src="${escape(src)}" alt="${escape(alt)}"${title ? ` title="${escape(title)}"` : ''}${safeWidth ? ` width="${safeWidth}"` : ''}>`;
 }
 
 export function parseUploadUrls(stdout: string, imageCount: number): string[] {
