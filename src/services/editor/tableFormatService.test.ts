@@ -20,7 +20,7 @@ function createView(doc: string, from = 0, to = doc.length, _extensions: Extensi
 }
 
 // 直接重置 doc 形态验证"单 dispatch 整体回退"语义。
-// 不依赖 @codemirror/commands(它会把 state 升 ^6.7.0,违反 repo pnpm.overrides)。
+// 表格组件的嵌套编辑器将 undo/redo 委托给根编辑器的原生 history。
 function resetTo(view: EditorView, prevDoc: string): void {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: prevDoc },
@@ -53,9 +53,8 @@ describe('applyTableFormat', () => {
   });
 
   it('dispatched state can be reverted in a single transaction', () => {
-    // 跳过真 undo 验证:@codemirror/commands 6.10.4 把 state 升 ^6.7.0,
-    // 与 repo pnpm.overrides(@codemirror/state=6.6.0) 冲突。
-    // 这里用单 dispatch 回滚(完全替换 doc)证明"所有 table 编辑可还原"语义。
+    // 这里用单 dispatch 回滚(完全替换 doc)验证"所有 table 编辑可还原"语义;
+    // 根编辑器的真实 Ctrl/Cmd+Z 由 CM6 集成 E2E 覆盖。
     const { view } = createView('hello', 0, 0);
     applyTableFormat(view, { type: 'table-insert', rows: 3, cols: 3 });
     expect(view.state.doc.toString()).not.toBe('hello');

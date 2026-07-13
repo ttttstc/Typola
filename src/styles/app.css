@@ -1593,22 +1593,6 @@ html[data-color-scheme='dark'] .export-menu {
   padding: 4px 0;
 }
 
-/* 琛ㄦ牸绌哄崟鍏冩牸鍗犱綅:cell source 鏃犲唴瀹规椂缁欎竴涓笉鎶㈢溂鐨勬彁绀烘枃瀛?
- * 鐢?CM6 contentEditable 鐩存帴璧?::before content,涓嶆敼 markdown source銆?*/
-.cm6-markdown-editor-pane .cm-atomic-table-cell-source:empty::before {
-  content: '绌哄崟鍏冩牸';
-  color: var(--theme-text-secondary);
-  opacity: 0.55;
-  pointer-events: none;
-  font-style: italic;
-}
-
-/* 宽 GFM 表保持编辑器横向滚动，不把内容区撑出窗口。 */
-.cm6-markdown-editor-pane [class*="atomic-table"] {
-  max-width: 100%;
-  overflow-x: auto;
-}
-
 .cm6-markdown-editor-pane .typola-cm6-math-inline {
   padding: 0 2px;
 }

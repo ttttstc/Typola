@@ -37,3 +37,19 @@ test('CM6 table exposes upstream grid selection controls and Typola right-click 
   await expect(page.getByRole('menu').getByText('当前列居中')).toBeVisible();
   await expect(page.getByRole('menu').getByText('当前列右对齐')).toBeVisible();
 });
+
+test('right-clicking a selected cell applies the column action to that column', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1200 });
+  await page.goto('/');
+  await openTable(page);
+
+  const secondColumnCell = page.locator('.tbl-table-body .tbl-cell').nth(1);
+  await secondColumnCell.click();
+  await secondColumnCell.click({ button: 'right' });
+  await page.getByRole('menu').getByText('当前列右对齐').click({ force: true });
+
+  await page.getByRole('button', { name: '源码模式' }).click();
+  const source = page.locator('.cm-content');
+  await expect(source).toContainText('| - | -: | - |');
+  await expect(source).not.toContainText('| -: | - | - |');
+});
