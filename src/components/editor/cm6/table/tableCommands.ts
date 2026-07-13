@@ -1,27 +1,11 @@
 import type { EditorView } from '@codemirror/view';
 import { findTableAt, formatTableRow, splitTableCells, type TableAction, type TableAlign } from './tableTypes';
 
-const MIN_ROWS = 2;
-const MIN_COLS = 1;
-const MAX_ROWS = 50;
-const MAX_COLS = 20;
+export const MAX_ROWS = 50;
+export const MAX_COLS = 20;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.floor(value)));
-}
-
-export function insertTable(view: EditorView, rows: number, cols: number): void {
-  const rowCount = clamp(rows, MIN_ROWS, MAX_ROWS);
-  const colCount = clamp(cols, MIN_COLS, MAX_COLS);
-  const header = formatTableRow(Array.from({ length: colCount }, (_, index) => `Header ${index + 1}`));
-  const separator = formatTableRow(Array.from({ length: colCount }, () => '---'));
-  const body = Array.from({ length: rowCount - 1 }, () => formatTableRow(Array.from({ length: colCount }, () => 'cell'))).join('\n');
-  const selection = view.state.selection.main;
-  const line = view.state.doc.lineAt(selection.from);
-  const prefix = line.from === 0 || view.state.doc.sliceString(line.from - 1, line.from) === '\n' ? '' : '\n\n';
-  const table = `${header}\n${separator}\n${body}\n`;
-  view.dispatch({ changes: { from: line.from, insert: `${prefix}${table}` }, selection: { anchor: line.from + prefix.length + header.indexOf('Header 1') + 2 } });
-  view.focus();
 }
 
 export function setColumnAlignment(view: EditorView, align: TableAlign, colIndex?: number): void {
@@ -94,7 +78,6 @@ export function pasteTableData(view: EditorView, plain: string, html?: string): 
 
 export function applyTableAction(view: EditorView, action: TableAction): void {
   switch (action.type) {
-    case 'table-insert': insertTable(view, action.rows, action.cols); return;
     case 'table-align': setColumnAlignment(view, action.align, action.colIndex); return;
     case 'table-row-insert': insertTableRow(view, action.after); return;
     case 'table-row-delete': deleteTableRow(view); return;

@@ -151,11 +151,15 @@ export function EditorContextMenu({
       {hasTable && (
         <>
           <div className="editor-ctx-separator" />
+          <MenuItem label="在上方插入行" onClick={() => pick({ type: 'table-row-insert', after: false })} />
           <MenuItem label="在下方插入行" onClick={() => pick({ type: 'table-row-insert', after: true })} />
           <MenuItem label="删除当前行" onClick={() => pick({ type: 'table-row-delete' })} />
+          <MenuItem label="在左侧插入列" onClick={() => pick({ type: 'table-column-insert', after: false })} />
           <MenuItem label="在右侧插入列" onClick={() => pick({ type: 'table-column-insert', after: true })} />
           <MenuItem label="删除当前列" onClick={() => pick({ type: 'table-column-delete' })} />
+          <MenuItem label="当前列左对齐" onClick={() => pick({ type: 'table-align', align: 'left' })} />
           <MenuItem label="当前列居中" onClick={() => pick({ type: 'table-align', align: 'center' })} />
+          <MenuItem label="当前列右对齐" onClick={() => pick({ type: 'table-align', align: 'right' })} />
         </>
       )}
 

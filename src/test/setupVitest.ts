@@ -40,6 +40,34 @@ Object.defineProperty(globalThis, 'sessionStorage', {
   value: sessionStorageMock,
 });
 
+if (typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (media: string): MediaQueryList => ({
+      matches: false,
+      media,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+if (typeof globalThis.ResizeObserver !== 'function') {
+  class ResizeObserverMock implements ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: ResizeObserverMock,
+  });
+}
+
 beforeEach(() => {
   localStorageMock.clear();
   sessionStorageMock.clear();

@@ -47,9 +47,8 @@ describe('applyTableFormat', () => {
 
     applyTableFormat(view, { type: 'table-insert', rows: 3, cols: 3 });
     const after = view.state.doc.toString();
-    expect(after).toContain('| Header 1 | Header 2 | Header 3 |');
-    expect(after).toContain('| --- | --- | --- |');
-    expect(after).toContain('| cell | cell | cell |');
+    expect(after).toContain('|   |   |   |');
+    expect(after).toContain('| - | - | - |');
     view.destroy();
   });
 
@@ -69,7 +68,7 @@ describe('applyTableFormat', () => {
     const { view } = createView('x', 0, 0);
 
     applyTableFormat(view, { type: 'table-insert', rows: 999, cols: 999 });
-    // MAX_ROWS=50 → header(1)+sep(1)+body(50) = 52 行;clamp 后不再更多。
+    // 保持现有输入边界:MAX_ROWS=50 → header(1)+sep(1)+body(50) = 52 行。
     const lines = view.state.doc.toString().split('\n').filter((l) => l.startsWith('| '));
     expect(lines.length).toBeLessThanOrEqual(52);
     expect(lines.length).toBeGreaterThanOrEqual(2);

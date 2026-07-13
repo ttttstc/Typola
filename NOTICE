@@ -15,6 +15,12 @@ for the experimental CodeMirror 6 live-preview editor path.
 @atomic-editor/editor is licensed under the MIT License.
 Copyright belongs to the @atomic-editor/editor contributors.
 
+Typola includes codemirror-markdown-tables (https://github.com/ckant/codemirror-markdown-tables)
+for interactive Markdown table editing in the CodeMirror 6 writing path.
+
+codemirror-markdown-tables is licensed under the MIT License.
+Copyright belongs to the codemirror-markdown-tables contributors.
+
 Typola includes KaTeX (https://katex.org/) for math rendering in Markdown previews
 and the experimental CodeMirror 6 live-preview editor path.
 
