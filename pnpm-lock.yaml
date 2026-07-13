@@ -50,6 +50,9 @@ importers:
       '@lezer/markdown':
         specifier: ^1.4.3
         version: 1.6.4
+      '@mobily/ts-belt':
+        specifier: 3.13.1
+        version: 3.13.1
       '@paper-design/shaders-react':
         specifier: ^0.0.77
         version: 0.0.77(@types/react@19.2.17)(react@19.2.7)

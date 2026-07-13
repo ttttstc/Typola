@@ -4,6 +4,7 @@
 
 - CM6 表格交互切换为 `codemirror-markdown-tables`：支持连续单元格选择、行列操作菜单、对齐、移动、复制/剪切/粘贴、Tab/Enter 导航与原生撤销；保留 Typola 中文右键菜单并补齐行列插入方向和三种对齐方式。
 - 清理旧 Atomic 表格样式，并补充右键点击指定列后的真实对齐回归测试。
+- 补齐 `codemirror-markdown-tables` 的运行时依赖 `@mobily/ts-belt`，确保 pnpm 严格安装后的测试与构建可解析。
 
 ## Unreleased
 
