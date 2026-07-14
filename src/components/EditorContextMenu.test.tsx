@@ -284,3 +284,23 @@ describe('TableContextMenu', () => {
     host.remove();
   });
 });
+
+describe('EditorContextMenu quick format actions', () => {
+  it('exposes common formatting commands and dispatches them directly', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onPick = vi.fn();
+    act(() => {
+      root.render(<EditorContextMenu open x={0} y={0} hasSelection onPick={onPick} onClose={() => {}} />);
+    });
+
+    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.editor-ctx-quick-format-button'));
+    expect(buttons).toHaveLength(8);
+    expect(buttons.map((button) => button.textContent)).toEqual(['B', 'I', '</>', '↗', '❝', '1.', '•', '☑']);
+    act(() => { buttons[0].click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'bold' });
+    act(() => root.unmount());
+    host.remove();
+  });
+});

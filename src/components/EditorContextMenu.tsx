@@ -137,19 +137,6 @@ export function EditorContextMenu({
       role="menu"
       style={{ left: x, top: y }}
     >
-      <div className="editor-ctx-heading-row" role="group" aria-label="段落级别">
-        <span className="editor-ctx-heading-label">标题</span>
-        <button type="button" onClick={() => pick({ type: 'heading', level: 0 })} title="正文 (Ctrl+0)">¶</button>
-        <button type="button" onClick={() => pick({ type: 'heading', level: 1 })} title="一级标题 (Ctrl+1)">H1</button>
-        <button type="button" onClick={() => pick({ type: 'heading', level: 2 })} title="二级标题 (Ctrl+2)">H2</button>
-        <button type="button" onClick={() => pick({ type: 'heading', level: 3 })} title="三级标题 (Ctrl+3)">H3</button>
-        <button type="button" onClick={() => pick({ type: 'heading', level: 4 })} title="四级标题 (Ctrl+4)">H4</button>
-        <button type="button" onClick={() => pick({ type: 'heading', level: 5 })} title="五级标题 (Ctrl+5)">H5</button>
-        <button type="button" onClick={() => pick({ type: 'heading', level: 6 })} title="六级标题 (Ctrl+6)">H6</button>
-      </div>
-
-      <div className="editor-ctx-separator" />
-
       <MenuItem label="剪切" hint="Ctrl+X" disabled={!hasSelection} onClick={() => pick({ type: 'cut' })} />
       <MenuItem label="复制" hint="Ctrl+C" disabled={!hasSelection} onClick={() => pick({ type: 'copy' })} />
       <MenuItem label="粘贴" hint="Ctrl+V" onClick={() => pick({ type: 'paste' })} />
@@ -157,32 +144,47 @@ export function EditorContextMenu({
 
       <div className="editor-ctx-separator" />
 
+      <div className="editor-ctx-quick-format" role="group" aria-label="常用格式">
+        <QuickFormatButton label="B" title="加粗 (Ctrl+B)" onClick={() => pick({ type: 'bold' })} />
+        <QuickFormatButton label="I" title="斜体 (Ctrl+I)" onClick={() => pick({ type: 'italic' })} />
+        <QuickFormatButton label="</>" title="行内代码 (Ctrl+G)" onClick={() => pick({ type: 'inline-code' })} />
+        <QuickFormatButton label="↗" title="链接 (Ctrl+K)" onClick={() => pick({ type: 'link' })} />
+        <QuickFormatButton label="❝" title="引用块" onClick={() => pick({ type: 'quote' })} />
+        <QuickFormatButton label="1." title="有序列表" onClick={() => pick({ type: 'ol' })} />
+        <QuickFormatButton label="•" title="无序列表" onClick={() => pick({ type: 'ul' })} />
+        <QuickFormatButton label="☑" title="任务列表" onClick={() => pick({ type: 'task' })} />
+      </div>
+
+      <div className="editor-ctx-separator" />
+
       <SubmenuItem label="格式">
-        <MenuItem label="加粗" hint="Ctrl+B" onClick={() => pick({ type: 'bold' })} />
-        <MenuItem label="斜体" hint="Ctrl+I" onClick={() => pick({ type: 'italic' })} />
         <MenuItem label="下划线" onClick={() => pick({ type: 'underline' })} />
         <MenuItem label="删除线" onClick={() => pick({ type: 'strike' })} />
         <MenuItem label="高亮" onClick={() => pick({ type: 'highlight' })} />
-        <MenuItem label="行内代码" hint="Ctrl+G" onClick={() => pick({ type: 'inline-code' })} />
         <MenuItem label="上标" onClick={() => pick({ type: 'sup' })} />
         <MenuItem label="下标" onClick={() => pick({ type: 'sub' })} />
-        <MenuItem label="链接" hint="Ctrl+K" onClick={() => pick({ type: 'link' })} />
         <MenuItem label="编辑链接" onClick={() => pick({ type: 'link-edit' })} />
       </SubmenuItem>
 
       <SubmenuItem label="段落">
-        <MenuItem label="引用块" onClick={() => pick({ type: 'quote' })} />
+        <div className="editor-ctx-heading-row" role="group" aria-label="段落级别">
+          <span className="editor-ctx-heading-label">标题</span>
+          <button type="button" onClick={() => pick({ type: 'heading', level: 0 })} title="正文 (Ctrl+0)">¶</button>
+          <button type="button" onClick={() => pick({ type: 'heading', level: 1 })} title="一级标题 (Ctrl+1)">H1</button>
+          <button type="button" onClick={() => pick({ type: 'heading', level: 2 })} title="二级标题 (Ctrl+2)">H2</button>
+          <button type="button" onClick={() => pick({ type: 'heading', level: 3 })} title="三级标题 (Ctrl+3)">H3</button>
+          <button type="button" onClick={() => pick({ type: 'heading', level: 4 })} title="四级标题 (Ctrl+4)">H4</button>
+          <button type="button" onClick={() => pick({ type: 'heading', level: 5 })} title="五级标题 (Ctrl+5)">H5</button>
+          <button type="button" onClick={() => pick({ type: 'heading', level: 6 })} title="六级标题 (Ctrl+6)">H6</button>
+        </div>
+        <div className="editor-ctx-separator" />
         <MenuItem label="升级引用" hint="Ctrl+." onClick={() => pick({ type: 'quote-up' })} />
         <MenuItem label="降级引用" hint="Ctrl+," onClick={() => pick({ type: 'quote-down' })} />
         <MenuItem label="清除格式" hint="Ctrl+\\" onClick={() => pick({ type: 'clear-format' })} />
-        <MenuItem label="无序列表" onClick={() => pick({ type: 'ul' })} />
-        <MenuItem label="有序列表" onClick={() => pick({ type: 'ol' })} />
-        <MenuItem label="任务列表" onClick={() => pick({ type: 'task' })} />
         <MenuItem label="代码块" onClick={() => pick({ type: 'codeblock' })} />
         <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
         <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
       </SubmenuItem>
-
       <SubmenuItem label="插入">
         <MenuItem label="插入表格" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
         <MenuItem label="插入图片" onClick={() => pick({ type: 'image-insert' })} />
@@ -278,6 +280,17 @@ function SubmenuItem({
       </div>
     </div>
   );
+}
+function QuickFormatButton({
+  label,
+  title,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return <button type="button" className="editor-ctx-quick-format-button" title={title} aria-label={title} onClick={onClick}>{label}</button>;
 }
 function MenuItem({
   label,

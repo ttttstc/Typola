@@ -9029,6 +9029,28 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   background: var(--theme-border-soft);
 }
 
+.editor-ctx-quick-format {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.editor-ctx-quick-format-button {
+  height: 24px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--theme-text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editor-ctx-quick-format-button:hover {
+  background: var(--theme-control-hover-bg);
+}
 .editor-ctx-item {
   display: flex;
   align-items: center;
