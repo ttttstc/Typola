@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react';
-import { SELECTION_ACTIONS, type SelectionActionId } from '../services/agent/selectionActions';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { TableMenuAction } from './editor/cm6/table/tableInteractionExtension';
 
 export type HeadingLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -36,11 +35,8 @@ type Props = {
   onPick: (action: FormatAction) => void;
   onCopyMermaidSvg?: () => void;
   onClose: () => void;
-  // 选区 AI 动作（可选，渲染在菜单底部）。仅 hasSelection 时可点。
-  onPickAI?: (action: SelectionActionId) => void;
 };
 
-const AI_ACTION_IDS: SelectionActionId[] = ['polish', 'shorten', 'expand', 'explain', 'custom'];
 export type TableContextAction = TableMenuAction | 'table-delete';
 
 const TABLE_MENU_SECTIONS: ReadonlyArray<{
@@ -84,7 +80,6 @@ export function EditorContextMenu({
   onPick,
   onCopyMermaidSvg,
   onClose,
-  onPickAI,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const adjustedRef = useRef({ left: x, top: y });
@@ -143,7 +138,7 @@ export function EditorContextMenu({
       style={{ left: x, top: y }}
     >
       <div className="editor-ctx-heading-row" role="group" aria-label="段落级别">
-        <span className="editor-ctx-heading-label">段落</span>
+        <span className="editor-ctx-heading-label">标题</span>
         <button type="button" onClick={() => pick({ type: 'heading', level: 0 })} title="正文 (Ctrl+0)">¶</button>
         <button type="button" onClick={() => pick({ type: 'heading', level: 1 })} title="一级标题 (Ctrl+1)">H1</button>
         <button type="button" onClick={() => pick({ type: 'heading', level: 2 })} title="二级标题 (Ctrl+2)">H2</button>
@@ -155,53 +150,51 @@ export function EditorContextMenu({
 
       <div className="editor-ctx-separator" />
 
-      <MenuItem label="加粗" hint="Ctrl+B" onClick={() => pick({ type: 'bold' })} />
-      <MenuItem label="斜体" hint="Ctrl+I" onClick={() => pick({ type: 'italic' })} />
-      <MenuItem label="下划线" onClick={() => pick({ type: 'underline' })} />
-      <MenuItem label="删除线" onClick={() => pick({ type: 'strike' })} />
-      <MenuItem label="高亮" onClick={() => pick({ type: 'highlight' })} />
-      <MenuItem label="行内代码" hint="Ctrl+G" onClick={() => pick({ type: 'inline-code' })} />
-      <MenuItem label="上标" onClick={() => pick({ type: 'sup' })} />
-      <MenuItem label="下标" onClick={() => pick({ type: 'sub' })} />
-      <MenuItem label="链接" hint="Ctrl+K" onClick={() => pick({ type: 'link' })} />
-      <MenuItem label="编辑链接" onClick={() => pick({ type: 'link-edit' })} />
-
-      <div className="editor-ctx-separator" />
-
-      <MenuItem label="引用块" onClick={() => pick({ type: 'quote' })} />
-      <MenuItem label="升级引用" hint="Ctrl+." onClick={() => pick({ type: 'quote-up' })} />
-      <MenuItem label="降级引用" hint="Ctrl+," onClick={() => pick({ type: 'quote-down' })} />
-      <MenuItem label="清除格式" hint="Ctrl+\" onClick={() => pick({ type: 'clear-format' })} />
-      <MenuItem label="无序列表" onClick={() => pick({ type: 'ul' })} />
-      <MenuItem label="有序列表" onClick={() => pick({ type: 'ol' })} />
-      <MenuItem label="任务列表" onClick={() => pick({ type: 'task' })} />
-      <MenuItem label="代码块" onClick={() => pick({ type: 'codeblock' })} />
-      <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
-      <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
-
-      <div className="editor-ctx-separator" />
-      <MenuItem label="插入表格" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
-
-      <div className="editor-ctx-separator" />
-
-      <MenuItem label="插入图片" onClick={() => pick({ type: 'image-insert' })} />
-
-      {hasImage && (
-        <>
-          <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />
-          <MenuItem label="打开文件" onClick={() => pick({ type: 'image-open' })} />
-          <MenuItem label="复制路径" onClick={() => pick({ type: 'image-copy-path' })} />
-          <MenuItem label="编辑 Alt / 标题 / 宽度" onClick={() => pick({ type: 'image-meta' })} />
-        </>
-      )}
-
-      <div className="editor-ctx-separator" />
-
       <MenuItem label="剪切" hint="Ctrl+X" disabled={!hasSelection} onClick={() => pick({ type: 'cut' })} />
       <MenuItem label="复制" hint="Ctrl+C" disabled={!hasSelection} onClick={() => pick({ type: 'copy' })} />
       <MenuItem label="粘贴" hint="Ctrl+V" onClick={() => pick({ type: 'paste' })} />
       <MenuItem label="全选" hint="Ctrl+A" onClick={() => pick({ type: 'select-all' })} />
 
+      <div className="editor-ctx-separator" />
+
+      <SubmenuItem label="格式">
+        <MenuItem label="加粗" hint="Ctrl+B" onClick={() => pick({ type: 'bold' })} />
+        <MenuItem label="斜体" hint="Ctrl+I" onClick={() => pick({ type: 'italic' })} />
+        <MenuItem label="下划线" onClick={() => pick({ type: 'underline' })} />
+        <MenuItem label="删除线" onClick={() => pick({ type: 'strike' })} />
+        <MenuItem label="高亮" onClick={() => pick({ type: 'highlight' })} />
+        <MenuItem label="行内代码" hint="Ctrl+G" onClick={() => pick({ type: 'inline-code' })} />
+        <MenuItem label="上标" onClick={() => pick({ type: 'sup' })} />
+        <MenuItem label="下标" onClick={() => pick({ type: 'sub' })} />
+        <MenuItem label="链接" hint="Ctrl+K" onClick={() => pick({ type: 'link' })} />
+        <MenuItem label="编辑链接" onClick={() => pick({ type: 'link-edit' })} />
+      </SubmenuItem>
+
+      <SubmenuItem label="段落">
+        <MenuItem label="引用块" onClick={() => pick({ type: 'quote' })} />
+        <MenuItem label="升级引用" hint="Ctrl+." onClick={() => pick({ type: 'quote-up' })} />
+        <MenuItem label="降级引用" hint="Ctrl+," onClick={() => pick({ type: 'quote-down' })} />
+        <MenuItem label="清除格式" hint="Ctrl+\\" onClick={() => pick({ type: 'clear-format' })} />
+        <MenuItem label="无序列表" onClick={() => pick({ type: 'ul' })} />
+        <MenuItem label="有序列表" onClick={() => pick({ type: 'ol' })} />
+        <MenuItem label="任务列表" onClick={() => pick({ type: 'task' })} />
+        <MenuItem label="代码块" onClick={() => pick({ type: 'codeblock' })} />
+        <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
+        <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
+      </SubmenuItem>
+
+      <SubmenuItem label="插入">
+        <MenuItem label="插入表格" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
+        <MenuItem label="插入图片" onClick={() => pick({ type: 'image-insert' })} />
+        {hasImage && (
+          <>
+            <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />
+            <MenuItem label="打开文件" onClick={() => pick({ type: 'image-open' })} />
+            <MenuItem label="复制路径" onClick={() => pick({ type: 'image-copy-path' })} />
+            <MenuItem label="编辑 Alt / 标题 / 宽度" onClick={() => pick({ type: 'image-meta' })} />
+          </>
+        )}
+      </SubmenuItem>
       {hasMermaidSvg && (
         <>
           <div className="editor-ctx-separator" />
@@ -209,35 +202,7 @@ export function EditorContextMenu({
         </>
       )}
 
-      {onPickAI && (
-        <>
-          <div className="editor-ctx-separator" />
-          <div className="selection-ai-section-title" role="presentation">AI</div>
-          {AI_ACTION_IDS.map((id) => {
-            const action = SELECTION_ACTIONS[id];
-            const disabled = !hasSelection && id !== 'custom';
-            return (
-              <button
-                key={id}
-                type="button"
-                role="menuitem"
-                className="editor-ctx-item"
-                disabled={disabled}
-                onClick={() => { onPickAI(id); onClose(); }}
-                title={disabled ? '请先选中文字' : ''}
-              >
-                <span className="selection-ai-item-label">
-                  <span className="selection-ai-item-icon" aria-hidden="true">
-                    <action.icon size={13} strokeWidth={1.7} />
-                  </span>
-                  {action.label}
-                </span>
-                {id === 'custom' ? <kbd>自定义</kbd> : null}
-              </button>
-            );
-          })}
-        </>
-      )}
+
     </div>
   );
 }
@@ -292,6 +257,25 @@ export function TableContextMenu({
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+function SubmenuItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="editor-ctx-submenu">
+      <button type="button" role="menuitem" className="editor-ctx-item editor-ctx-submenu-trigger" aria-haspopup="menu">
+        <span>{label}</span>
+        <span className="editor-ctx-submenu-arrow" aria-hidden="true">›</span>
+      </button>
+      <div className="editor-ctx-submenu-panel" role="menu">
+        {children}
+      </div>
     </div>
   );
 }

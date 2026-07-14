@@ -1,18 +1,40 @@
 import { syntaxTree } from '@codemirror/language';
+import type { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 
 export const MAX_ROWS = 50;
 export const MAX_COLS = 20;
 
-export function deleteMarkdownTableAt(view: EditorView, pos: number): boolean {
-  const tree = syntaxTree(view.state);
-  let node = tree.resolveInner(pos, 1);
+function tableNodeAt(state: EditorState, pos: number) {
+  const tree = syntaxTree(state);
+  let node = tree.resolveInner(Math.max(0, Math.min(pos, state.doc.length)), 1);
   while (node.parent && node.name !== 'Table') node = node.parent;
-  if (node.name !== 'Table') {
-    node = tree.resolveInner(pos, -1);
-    while (node.parent && node.name !== 'Table') node = node.parent;
-  }
-  if (node.name !== 'Table') return false;
+  if (node.name === 'Table') return node;
+  if (pos <= 0) return null;
+  node = tree.resolveInner(pos - 1, -1);
+  while (node.parent && node.name !== 'Table') node = node.parent;
+  return node.name === 'Table' ? node : null;
+}
+
+export function selectedMarkdownTable(state: EditorState): { from: number; to: number } | null {
+  const range = state.selection.main;
+  if (range.empty) return null;
+  const node = tableNodeAt(state, range.from);
+  return node && node.from === range.from && node.to === range.to ? { from: node.from, to: node.to } : null;
+}
+
+export function markdownTableBeforeCursor(state: EditorState): { from: number; to: number } | null {
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  if (line.from !== pos) return null;
+  const node = tableNodeAt(state, Math.max(0, pos - 1));
+  if (!node || !/^\n+$/u.test(state.doc.sliceString(node.to, pos))) return null;
+  return { from: node.from, to: node.to };
+}
+
+export function deleteMarkdownTableAt(view: EditorView, pos: number): boolean {
+  const node = tableNodeAt(view.state, pos);
+  if (!node) return false;
 
   const doc = view.state.doc;
   let from = node.from;
@@ -27,7 +49,6 @@ export function deleteMarkdownTableAt(view: EditorView, pos: number): boolean {
   view.focus();
   return true;
 }
-
 export function pasteTableData(view: EditorView, plain: string, html?: string): boolean {
   const rows = html ? htmlTableRows(html) : plainTableRows(plain);
   if (!rows || rows.length === 0 || rows.some((row) => row.length === 0)) return false;

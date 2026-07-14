@@ -129,12 +129,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     cb(action, anchor, origin);
   }, []);
 
-  const handleAIPick = useCallback((action: SelectionActionId) => {
-    // 菜单 origin 用菜单当前位置;菜单 state 在 onClose 才被清,这里仍可读。
-    const origin = ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : undefined;
-    triggerAIAction(action, origin);
-  }, [ctxMenu, triggerAIAction]);
-
   const handleFloatingBarDismissSession = useCallback(() => {
     if (filePathRef.current) floatingBarHiddenDocsRef.current.add(filePathRef.current);
     setFloatingHasSelection(false);
@@ -631,7 +625,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         hasImage={ctxMenu?.hasImage ?? false}
         onPick={handleFormatPick}
         onClose={() => setCtxMenu(null)}
-        onPickAI={onAIAction ? handleAIPick : undefined}
       />
       <TableContextMenu
         open={tableCtxMenu !== null}

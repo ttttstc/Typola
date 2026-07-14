@@ -9046,6 +9046,47 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   cursor: pointer;
 }
 
+.editor-ctx-submenu {
+  position: relative;
+}
+
+.editor-ctx-submenu-trigger {
+  gap: 18px;
+}
+
+.editor-ctx-submenu-arrow {
+  color: var(--theme-text-secondary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.editor-ctx-submenu-panel {
+  position: absolute;
+  top: -7px;
+  left: calc(100% + 4px);
+  z-index: 1;
+  width: max-content;
+  min-width: 150px;
+  max-width: 240px;
+  padding: 6px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-panel-bg);
+  box-shadow: 0 14px 36px var(--theme-shadow-soft);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-4px);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.editor-ctx-submenu:hover > .editor-ctx-submenu-panel,
+.editor-ctx-submenu:focus-within > .editor-ctx-submenu-panel {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
 .editor-ctx-item:hover:not(:disabled) {
   background: var(--theme-control-hover-bg);
 }

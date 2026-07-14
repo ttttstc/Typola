@@ -1,6 +1,7 @@
-import type { Extension } from '@codemirror/state';
-import { EditorView, ViewPlugin } from '@codemirror/view';
+import { Prec, type Extension } from '@codemirror/state';
+import { EditorView, ViewPlugin, keymap } from '@codemirror/view';
 import type { AppLocale } from '../../../../services/settingsService';
+import { deleteMarkdownTableAt, markdownTableBeforeCursor, selectedMarkdownTable } from './tableCommands';
 
 const EXACT_LABELS: Record<string, string> = {
   'Align none': '不对齐',
@@ -87,10 +88,25 @@ export function tableCellFromEventTarget(target: EventTarget | null): HTMLElemen
   return cell?.closest('.tbl-table-widget') ? cell : null;
 }
 
+function tableHandleForCell(cell: HTMLElement, location: 'row' | 'col'): HTMLElement | null {
+  const table = cell.closest<HTMLElement>('.tbl-table-widget');
+  const selector = `.tbl-handle[data-type="header"][data-location="${location}"]`;
+  const direct = cell.querySelector<HTMLElement>(selector);
+  if (direct) return direct;
+  if (!table) return null;
+
+  if (location === 'row') return cell.parentElement?.querySelector<HTMLElement>(selector) ?? null;
+
+  const row = cell.parentElement;
+  if (!row) return null;
+  const cellIndex = Array.from(row.children).indexOf(cell);
+  if (cellIndex < 0) return null;
+  const firstRow = table.querySelector('tr');
+  return firstRow?.children[cellIndex]?.querySelector<HTMLElement>(selector) ?? null;
+}
+
 function openTableMenuForCell(cell: HTMLElement, location: 'row' | 'col', event?: MouseEvent): boolean {
-  const handle = cell.querySelector<HTMLElement>(
-    `.tbl-handle[data-type="header"][data-location="${location}"]`,
-  );
+  const handle = tableHandleForCell(cell, location);
   const window = handle?.ownerDocument.defaultView;
   if (!handle || !window?.PointerEvent) return false;
 
@@ -147,6 +163,14 @@ export async function runTableMenuAction(cell: HTMLElement, action: TableMenuAct
   return false;
 }
 
+function handleTableBoundaryBackspace(view: EditorView): boolean {
+  const selected = selectedMarkdownTable(view.state);
+  if (selected) return deleteMarkdownTableAt(view, selected.from);
+  const table = markdownTableBeforeCursor(view.state);
+  if (!table) return false;
+  view.dispatch({ selection: { anchor: table.from, head: table.to }, scrollIntoView: true });
+  return true;
+}
 export function tableInteractionExtension(locale: AppLocale = 'zh-CN'): Extension[] {
   const localization = ViewPlugin.fromClass(class {
     private readonly observer: MutationObserver | null;
@@ -167,6 +191,6 @@ export function tableInteractionExtension(locale: AppLocale = 'zh-CN'): Extensio
     }
   });
 
-  return [localization];
+  return [Prec.highest(keymap.of([{ key: 'Backspace', run: handleTableBoundaryBackspace }])), localization];
 
 }

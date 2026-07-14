@@ -52,3 +52,30 @@ describe('openTableMenu', () => {
     expect(pointerEvents.up).toBe(1);
   });
 });
+
+it('finds a row handle from another cell in the same row', () => {
+  const widget = document.createElement('div');
+  widget.className = 'tbl-table-widget';
+  const row = document.createElement('tr');
+  const first = document.createElement('td');
+  first.className = 'tbl-cell tbl-data-cell';
+  const handle = document.createElement('div');
+  handle.className = 'tbl-handle';
+  handle.dataset.type = 'header';
+  handle.dataset.location = 'row';
+  first.append(handle);
+  const second = document.createElement('td');
+  second.className = 'tbl-cell tbl-data-cell';
+  const text = document.createTextNode('cell');
+  second.append(text);
+  row.append(first, second);
+  widget.append(row);
+  document.body.append(widget);
+
+  let opened = 0;
+  handle.addEventListener('pointerdown', () => { opened += 1; });
+  const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'target', { configurable: true, value: text });
+  expect(openTableMenu(event)).toBe(true);
+  expect(opened).toBe(1);
+});
