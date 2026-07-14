@@ -112,19 +112,6 @@ export function applyCm6Format(view: EditorView, action: FormatAction, requestEd
         cols: action.cols,
       });
       return;
-    case 'table-align':
-      applyTableFormat(view, {
-        type: 'table-align',
-        align: action.align,
-        colIndex: action.colIndex,
-      });
-      return;
-    case 'table-row-insert':
-    case 'table-row-delete':
-    case 'table-column-insert':
-    case 'table-column-delete':
-      applyTableFormat(view, action);
-      return;
   }
 }
 

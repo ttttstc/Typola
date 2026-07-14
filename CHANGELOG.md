@@ -9,7 +9,7 @@
 ## Unreleased
 
 - 工具栏中央不再显示当前文件名，保留窗口拖拽区与编辑器标签页文件名。
-- CM6 表格新增工具栏与非表格区域右键“插入表格”入口；右键按真实单元格定位，补齐 Typora 的 Ctrl/Cmd+Enter、Shift+Ctrl/Cmd+Backspace 行操作，并保持字面量 `|` 与单列表格的 Markdown 保真。
+- CM6 表格操作收敛为上游 `codemirror-markdown-tables`：表格右键转交上游行/列菜单，中文界面由轻量适配层翻译；移除 Typola 自研表格行列事务、表格快捷键拦截和重复 Markdown 解析，工具栏与非表格区域右键插入继续调用上游 `insertEmptyMarkdownTable()`。
 - Issue #224：自托管 Source Han Serif SC 可变字体子集（OFL 1.1），全局普通文本与文件树/AI 工作台统一使用思源宋体；编辑器字体设置新增思源宋体并设为默认，保留等宽字体切换；新增主题对比度审计与 CM6「编辑器纸纹」持久化开关，纸纹仅用于素笺、墨韵、粗野主题，深海与抽象主题不启用；补充 3 张代表性视觉基线。
 - Issue #223：CM6 性能路径优化：预览滚动同步缓存 heading 并独立节流；编辑器视图改用 ref；live-preview 扩展按 Compartment 局部 reconfigure；数学、heading 折叠、Markdown 分析缓存与本地图片观察路径减少重复全篇扫描。
 - CM6 格式快捷键补齐标题、行内代码、清除格式与引用层级；多行引用升级/降级现在作为单笔撤销记录。链接与代码语言编辑改为可键盘操作的 React 浮层，删除 CM6 路径中的浏览器 prompt。

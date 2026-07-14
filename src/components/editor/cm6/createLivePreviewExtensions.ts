@@ -26,6 +26,8 @@ import {
   taskToggleExtension,
 } from './linkInteractionExtension';
 import type { MarkdownLink, MarkdownTask } from '../../../services/markdownAnalysisService';
+import type { AppLocale } from '../../../services/settingsService';
+import { tableInteractionExtension } from './table/tableInteractionExtension';
 
 const typolaTableTheme = TableTheme.light.with({
   '--tbl-theme-row-background': 'var(--theme-paper)',
@@ -101,11 +103,12 @@ export type CreateLivePreviewExtensionsOptions = {
   /** Task 切换后回调;用于埋点或外部状态同步。 */
   onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
   themeId?: string;
+  locale?: AppLocale;
   frontmatterFold?: boolean;
   compartments?: LivePreviewCompartments;
 };
 
-function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'livePreview' | 'themeId' | 'frontmatterFold'>): Extension[] {
+function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'livePreview' | 'themeId' | 'frontmatterFold' | 'locale'>): Extension[] {
   if (!options.livePreview) return [];
   return [
     ...(options.frontmatterFold ? [frontmatterFoldExtension()] : []),
@@ -113,6 +116,7 @@ function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'li
     htmlPreviewExtension(),
     inlinePreview(),
     typolaTableExtension,
+    ...tableInteractionExtension(options.locale),
     imageBlocks(),
     imageFallbackExtension(),
     mathPreviewExtension(options.themeId),
@@ -135,11 +139,12 @@ export function createLivePreviewExtensions(
     onOpenLink,
     onTaskToggle,
     themeId,
+    locale = 'zh-CN',
     frontmatterFold = true,
     compartments = createLivePreviewCompartments(),
   } = options;
   return [
-    compartments.preview.of(previewExtensions({ livePreview, themeId, frontmatterFold })),
+    compartments.preview.of(previewExtensions({ livePreview, themeId, frontmatterFold, locale })),
     compartments.headingFold.of(headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange })),
     compartments.wheelZoom.of(wheelZoomExtension({ baseSize, onChange: onZoomChange })),
     compartments.previewSync.of(previewSyncExtension({ onChange: onPreviewHeadingChange })),
@@ -167,11 +172,12 @@ export function reconfigureLivePreviewExtensions(
     onOpenLink,
     onTaskToggle,
     themeId,
+    locale = 'zh-CN',
     frontmatterFold = true,
   } = options;
   view.dispatch({
     effects: [
-      compartments.preview.reconfigure(previewExtensions({ livePreview, themeId, frontmatterFold })),
+      compartments.preview.reconfigure(previewExtensions({ livePreview, themeId, frontmatterFold, locale })),
       compartments.wheelZoom.reconfigure(wheelZoomExtension({ baseSize, onChange: onZoomChange })),
       compartments.previewSync.reconfigure(previewSyncExtension({ onChange: onPreviewHeadingChange })),
       compartments.reviewMark.reconfigure(reviewMarkExtension({ comments: reviewComments, filePath: typeof filePath === 'string' ? filePath : undefined })),

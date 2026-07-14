@@ -31,7 +31,6 @@ type Props = {
   y: number;
   hasSelection: boolean;
   hasMermaidSvg?: boolean;
-  hasTable?: boolean;
   hasImage?: boolean;
   onPick: (action: FormatAction) => void;
   onCopyMermaidSvg?: () => void;
@@ -48,7 +47,6 @@ export function EditorContextMenu({
   y,
   hasSelection,
   hasMermaidSvg = false,
-  hasTable = false,
   hasImage = false,
   onPick,
   onCopyMermaidSvg,
@@ -148,27 +146,8 @@ export function EditorContextMenu({
       <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
       <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
 
-      {!hasTable && (
-        <>
-          <div className="editor-ctx-separator" />
-          <MenuItem label="插入表格" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
-        </>
-      )}
-
-      {hasTable && (
-        <>
-          <div className="editor-ctx-separator" />
-          <MenuItem label="在上方插入行" onClick={() => pick({ type: 'table-row-insert', after: false })} />
-          <MenuItem label="在下方插入行" onClick={() => pick({ type: 'table-row-insert', after: true })} />
-          <MenuItem label="删除当前行" onClick={() => pick({ type: 'table-row-delete' })} />
-          <MenuItem label="在左侧插入列" onClick={() => pick({ type: 'table-column-insert', after: false })} />
-          <MenuItem label="在右侧插入列" onClick={() => pick({ type: 'table-column-insert', after: true })} />
-          <MenuItem label="删除当前列" onClick={() => pick({ type: 'table-column-delete' })} />
-          <MenuItem label="当前列左对齐" onClick={() => pick({ type: 'table-align', align: 'left' })} />
-          <MenuItem label="当前列居中" onClick={() => pick({ type: 'table-align', align: 'center' })} />
-          <MenuItem label="当前列右对齐" onClick={() => pick({ type: 'table-align', align: 'right' })} />
-        </>
-      )}
+      <div className="editor-ctx-separator" />
+      <MenuItem label="插入表格" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
 
       <div className="editor-ctx-separator" />
 

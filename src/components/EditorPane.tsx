@@ -16,8 +16,8 @@ import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions'
 import { headingIndexAt } from './editor/cm6/previewSyncExtension';
 import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
 import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
-import { findTableAt, tableCellPositionAt } from './editor/cm6/table/tableTypes';
-import { deleteTableRow, insertTableRow, pasteTableData } from './editor/cm6/table/tableCommands';
+import { pasteTableData } from './editor/cm6/table/tableCommands';
+import { openTableMenu } from './editor/cm6/table/tableInteractionExtension';
 import {
   findMarkdownImageAt,
   headingPathAt,
@@ -65,7 +65,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const sourceRef = useRef(source);
   const headingScrollRequestRef = useRef(headingScrollRequest);
   const onScrollRatioRef = useRef(onScrollRatio);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean; hasImage: boolean } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasImage: boolean } | null>(null);
   const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
   const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
@@ -201,21 +201,12 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         computeFromSelection();
       });
     };
-    let activeTableCell: { tableIndex: number; row: number; col: number } | null = null;
     const onMouseDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
       // 只追踪编辑器正文内的拖选起始,不要吞掉浮条/菜单/工具栏的 mousedown。
       if (view.dom.contains(target)) {
         isDraggingRef.current = true;
-        const cell = target instanceof Element ? target.closest<HTMLElement>('.tbl-cell') : null;
-        const widget = cell?.closest<HTMLElement>('.tbl-table-widget');
-        const tableIndex = widget
-          ? Array.from(view.dom.querySelectorAll<HTMLElement>('.tbl-table-widget')).indexOf(widget)
-          : -1;
-        activeTableCell = cell && tableIndex >= 0
-          ? { tableIndex, row: Number(cell.dataset.row), col: Number(cell.dataset.col) }
-          : null;
       }
     };
     const onMouseUp = () => {
@@ -226,38 +217,9 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       floatingStableTickRef.current += 1;
       setFloatingStableTick(floatingStableTickRef.current);
     };
-    const activeTableCellPosition = (): number | null => {
-      const selectedCell = view.dom.querySelector<HTMLElement>('.tbl-cell[data-selected]');
-      const selectedWidget = selectedCell?.closest<HTMLElement>('.tbl-table-widget');
-      const widgets = Array.from(view.dom.querySelectorAll<HTMLElement>('.tbl-table-widget'));
-      const cellContext = activeTableCell && widgets[activeTableCell.tableIndex]
-        ? { widget: widgets[activeTableCell.tableIndex], row: activeTableCell.row, col: activeTableCell.col }
-        : selectedCell && selectedWidget
-          ? { widget: selectedWidget, row: Number(selectedCell.dataset.row), col: Number(selectedCell.dataset.col) }
-          : null;
-      if (!cellContext?.widget) return null;
-      const tablePos = view.posAtDOM(cellContext.widget, -1);
-      const range = findTableAt(view, tablePos);
-      return range ? tableCellPositionAt(view, range, cellContext.row, cellContext.col) : null;
-    };
-    const onTableKeyDown = (event: KeyboardEvent) => {
-      const isMod = event.ctrlKey || event.metaKey;
-      if (!isMod) return;
-      const insertRow = event.key === 'Enter' && !event.shiftKey && !event.altKey;
-      const deleteRow = event.key === 'Backspace' && event.shiftKey && !event.altKey;
-      const deleteLine = event.key.toLowerCase() === 'l' && event.shiftKey && event.altKey;
-      if (!insertRow && !deleteRow && !deleteLine) return;
-      const position = activeTableCellPosition();
-      if (position === null) return;
-      event.preventDefault();
-      if (view.state.selection.main.from !== position) view.dispatch({ selection: { anchor: position } });
-      if (insertRow) insertTableRow(view, true);
-      else deleteTableRow(view);
-    };
     document.addEventListener('selectionchange', onChange);
     window.addEventListener('mouseup', onMouseUp);
     view.dom.addEventListener('mousedown', onMouseDown, true);
-    view.dom.addEventListener('keydown', onTableKeyDown, true);
     const dom = view.scrollDOM;
     let scrollRafId: number | null = null;
     const handleScroll = () => {
@@ -273,7 +235,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       document.removeEventListener('selectionchange', onChange);
       window.removeEventListener('mouseup', onMouseUp);
       view.dom.removeEventListener('mousedown', onMouseDown, true);
-      view.dom.removeEventListener('keydown', onTableKeyDown, true);
       if (selectionRafId !== null) window.cancelAnimationFrame(selectionRafId);
       dom.removeEventListener('scroll', handleScroll);
       if (scrollRafId !== null) window.cancelAnimationFrame(scrollRafId);
@@ -285,20 +246,13 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     if (!editor) return;
     const target = event.target as Node | null;
     if (!target || !editor.contentDOM.contains(target)) return;
+    if (target instanceof Element && target.closest('.tbl-table-widget')) {
+      openTableMenu(event.nativeEvent);
+      return;
+    }
     event.preventDefault();
     const sel = editor.state.selection.main;
     const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
-    const tableAtPos = pos !== null ? findTableAt(editor, pos) : null;
-    const tableCell = target instanceof Element ? target.closest<HTMLElement>('.tbl-cell') : null;
-    const tableRow = tableCell ? Number(tableCell.dataset.row) : NaN;
-    const tableColumn = tableCell ? Number(tableCell.dataset.col) : NaN;
-    const tableCellPos = tableAtPos
-      ? tableCellPositionAt(editor, tableAtPos, tableRow, tableColumn)
-      : null;
-    const contextPos = tableCellPos ?? pos;
-    if (contextPos !== null && tableAtPos && sel.from !== contextPos) {
-      editor.dispatch({ selection: { anchor: contextPos } });
-    }
     const onImage = target instanceof Element && target.closest('.cm-atomic-image') !== null;
     let hasImage = false;
     if (onImage && pos !== null) {
@@ -309,7 +263,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       x: event.clientX,
       y: event.clientY,
       hasSelection: !sel.empty,
-      hasTable: tableAtPos !== null,
       hasImage,
     });
   }, []);
@@ -317,6 +270,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     const editor = editorViewRef.current;
     if (!editor) return;
+    if (event.target instanceof Element && event.target.closest('.tbl-table-widget')) return;
     const html = event.clipboardData.getData('text/html');
     const plain = event.clipboardData.getData('text/plain');
     if (!pasteTableData(editor, plain, html || undefined)) return;
@@ -379,7 +333,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         if (sel.empty) return false;
         // 用选区首字符的视口位置作为菜单位置;coords 不可用时退化到视口左上
         const coords = view.coordsAtPos(sel.from) ?? { left: 80, top: 80 };
-        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true, hasTable: false, hasImage: false });
+        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true, hasImage: false });
         return true;
       },
       onFormat: (action) => {
@@ -656,7 +610,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         x={ctxMenu?.x ?? 0}
         y={ctxMenu?.y ?? 0}
         hasSelection={ctxMenu?.hasSelection ?? false}
-        hasTable={ctxMenu?.hasTable ?? false}
         hasImage={ctxMenu?.hasImage ?? false}
         onPick={handleFormatPick}
         onClose={() => setCtxMenu(null)}

@@ -31,14 +31,24 @@ test('CM6 table exposes upstream grid selection controls and Typola right-click 
   await expect(page.locator('.tbl-cell[data-outline]')).not.toHaveCount(0);
 
   await page.locator('.tbl-cell-view').first().click({ button: 'right' });
-  const menu = page.getByRole('menu');
+  const menu = page.locator('.tbl-menu');
   await expect(menu).toHaveCount(1);
   await expect(menu).toBeVisible();
-  await expect(menu.getByText('在上方插入行')).toBeVisible();
-  await expect(menu.getByText('当前列左对齐')).toBeVisible();
-  await expect(menu.getByText('当前列居中')).toBeVisible();
-  await expect(menu.getByText('当前列右对齐')).toBeVisible();
+  await expect(menu.getByText('按列排序（A-Z）')).toBeVisible();
+  await expect(menu.getByText('左对齐')).toBeVisible();
+  await expect(menu.getByText('居中对齐')).toBeVisible();
+  await expect(menu.getByText('右对齐')).toBeVisible();
+  await expect(menu.getByText('在左侧插入列')).toBeVisible();
   await expect(menu.getByText('插入表格')).toHaveCount(0);
+
+  await page.keyboard.press('Escape');
+  await bodyCells.first().click({ button: 'right' });
+  const rowMenu = page.locator('.tbl-menu');
+  await expect(rowMenu).toHaveCount(1);
+  await expect(rowMenu.getByText('在上方插入行')).toBeVisible();
+  await expect(rowMenu.getByText('在下方插入行')).toBeVisible();
+  await expect(rowMenu.getByText('清空行')).toBeVisible();
+  await expect(rowMenu.getByText('插入表格')).toHaveCount(0);
 });
 
 test('toolbar exposes table insertion outside table context', async ({ page }) => {
@@ -70,21 +80,19 @@ test('right-clicking outside a table exposes table insertion', async ({ page }) 
   await expect(page.locator('.cm-content')).toContainText('|   |   |   |');
 });
 
-test('supports Typora row insert and delete shortcuts', async ({ page }) => {
+test('supports upstream table navigation and appends a row from the last cell', async ({ page }) => {
   await page.goto('/');
   await openTable(page);
 
   const bodyRows = page.locator('.tbl-table-body .tbl-table-row');
   await expect(bodyRows).toHaveCount(2);
-  await page.locator('.tbl-table-body .tbl-cell-view').first().click();
-  await page.keyboard.press('Control+Enter');
+  await page.locator('.tbl-table-body .tbl-cell').last().click();
+  await page.keyboard.press('Tab');
   await expect(bodyRows).toHaveCount(3);
-  await page.keyboard.press('Control+Shift+Backspace');
-  await expect(bodyRows).toHaveCount(2);
   await page.getByRole('button', { name: '源码模式' }).click();
   const source = page.locator('.cm-content');
-  await expect(source).toContainText('| cell | cell | cell |');
-  await expect(source).not.toContainText('| 1 | 2 | 3 |');
+  await expect(source).toContainText('|   |   |   |');
+  await expect(source).toContainText('| 1 | 2 | 3 |');
 });
 
 test('right-clicking a selected cell applies the column action to that column', async ({ page }) => {
@@ -92,10 +100,9 @@ test('right-clicking a selected cell applies the column action to that column', 
   await page.goto('/');
   await openTable(page);
 
-  const secondColumnCell = page.locator('.tbl-table-body .tbl-cell').nth(1);
-  await page.locator('.tbl-table-body .tbl-cell').first().click();
-  await secondColumnCell.click({ button: 'right' });
-  await page.getByRole('menu').getByText('当前列右对齐').click({ force: true });
+  const secondColumnHeader = page.locator('.tbl-table-head .tbl-cell-view').nth(1);
+  await secondColumnHeader.click({ button: 'right' });
+  await page.locator('.tbl-menu').getByText('右对齐').click({ force: true });
 
   await page.getByRole('button', { name: '源码模式' }).click();
   const source = page.locator('.cm-content');

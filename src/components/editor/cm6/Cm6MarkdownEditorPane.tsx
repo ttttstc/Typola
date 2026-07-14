@@ -166,9 +166,10 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
         onOpenLink: stableOpenLink,
         onTaskToggle: stableTaskToggle,
         themeId: settings.themeId,
+        locale: settings.locale,
         frontmatterFold: settings.editorFrontmatterFoldEnabled,
       }, livePreviewCompartments);
-    }, [livePreviewCompartments, mode, reviewComments, rest.filePath, settings.editorFontSize, settings.editorFrontmatterFoldEnabled, settings.themeId, stableFoldChange, stableOpenLink, stablePreviewHeadingChange, stableTaskToggle, stableZoomChange]);
+    }, [livePreviewCompartments, mode, reviewComments, rest.filePath, settings.editorFontSize, settings.editorFrontmatterFoldEnabled, settings.locale, settings.themeId, stableFoldChange, stableOpenLink, stablePreviewHeadingChange, stableTaskToggle, stableZoomChange]);
 
     const handleEditorReady = useCallback((view: EditorView) => {
       editorViewRef.current = view;
@@ -190,6 +191,7 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
       onOpenLink: stableOpenLink,
       onTaskToggle: stableTaskToggle,
       themeId: settings.themeId,
+      locale: settings.locale,
       frontmatterFold: settings.editorFrontmatterFoldEnabled,
       compartments: livePreviewCompartments,
     }));
