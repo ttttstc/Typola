@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { SELECTION_ACTIONS, type SelectionActionId } from '../services/agent/selectionActions';
+import type { TableMenuAction } from './editor/cm6/table/tableInteractionExtension';
 
 export type HeadingLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -40,6 +41,38 @@ type Props = {
 };
 
 const AI_ACTION_IDS: SelectionActionId[] = ['polish', 'shorten', 'expand', 'explain', 'custom'];
+export type TableContextAction = TableMenuAction | 'table-delete';
+
+const TABLE_MENU_SECTIONS: ReadonlyArray<{
+  label: string;
+  items: ReadonlyArray<{ label: string; action: TableContextAction }>;
+}> = [
+  { label: '行', items: [
+    { label: '在上方插入行', action: 'row-add-above' },
+    { label: '在下方插入行', action: 'row-add-below' },
+    { label: '向上移动行', action: 'row-move-up' },
+    { label: '向下移动行', action: 'row-move-down' },
+    { label: '复制行', action: 'row-duplicate' },
+    { label: '清空行', action: 'row-clear' },
+    { label: '删除行', action: 'row-delete' },
+  ] },
+  { label: '列', items: [
+    { label: '按列升序排列', action: 'column-sort-asc' },
+    { label: '按列降序排列', action: 'column-sort-desc' },
+    { label: '取消列对齐', action: 'column-align-none' },
+    { label: '列左对齐', action: 'column-align-left' },
+    { label: '列居中对齐', action: 'column-align-center' },
+    { label: '列右对齐', action: 'column-align-right' },
+    { label: '在左侧插入列', action: 'column-add-before' },
+    { label: '在右侧插入列', action: 'column-add-after' },
+    { label: '向左移动列', action: 'column-move-left' },
+    { label: '向右移动列', action: 'column-move-right' },
+    { label: '复制列', action: 'column-duplicate' },
+    { label: '清空列', action: 'column-clear' },
+    { label: '删除列', action: 'column-delete' },
+  ] },
+  { label: '表格', items: [{ label: '删除表格', action: 'table-delete' }] },
+];
 
 export function EditorContextMenu({
   open,
@@ -209,6 +242,59 @@ export function EditorContextMenu({
   );
 }
 
+export function TableContextMenu({
+  open,
+  x,
+  y,
+  onPick,
+  onClose,
+}: {
+  open: boolean;
+  x: number;
+  y: number;
+  onPick: (action: TableContextAction) => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const menu = menuRef.current;
+    if (menu) {
+      const rect = menu.getBoundingClientRect();
+      const padding = 6;
+      menu.style.left = `${Math.max(padding, Math.min(x, window.innerWidth - rect.width - padding))}px`;
+      menu.style.top = `${Math.max(padding, Math.min(y, window.innerHeight - rect.height - padding))}px`;
+    }
+    const closeOutside = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) onClose();
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', closeOutside, true);
+    document.addEventListener('keydown', closeOnEscape, true);
+    return () => {
+      document.removeEventListener('mousedown', closeOutside, true);
+      document.removeEventListener('keydown', closeOnEscape, true);
+    };
+  }, [open, onClose, x, y]);
+
+  if (!open) return null;
+  return (
+    <div ref={menuRef} className="editor-ctx-menu table-ctx-menu" role="menu" style={{ left: x, top: y }}>
+      {TABLE_MENU_SECTIONS.map((section, index) => (
+        <div key={section.label}>
+          {index > 0 && <div className="editor-ctx-separator" />}
+          <div className="table-ctx-section-label">{section.label}</div>
+          {section.items.map((item) => (
+            <MenuItem key={item.action} label={item.label} onClick={() => { onPick(item.action); onClose(); }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 function MenuItem({
   label,
   hint,

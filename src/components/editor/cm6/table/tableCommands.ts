@@ -1,7 +1,32 @@
+import { syntaxTree } from '@codemirror/language';
 import type { EditorView } from '@codemirror/view';
 
 export const MAX_ROWS = 50;
 export const MAX_COLS = 20;
+
+export function deleteMarkdownTableAt(view: EditorView, pos: number): boolean {
+  const tree = syntaxTree(view.state);
+  let node = tree.resolveInner(pos, 1);
+  while (node.parent && node.name !== 'Table') node = node.parent;
+  if (node.name !== 'Table') {
+    node = tree.resolveInner(pos, -1);
+    while (node.parent && node.name !== 'Table') node = node.parent;
+  }
+  if (node.name !== 'Table') return false;
+
+  const doc = view.state.doc;
+  let from = node.from;
+  let to = node.to;
+  while (from > 0 && doc.sliceString(from - 1, from) === '\n') from -= 1;
+  while (to < doc.length && doc.sliceString(to, to + 1) === '\n') to += 1;
+  const insert = from > 0 && to < doc.length ? '\n\n' : '';
+  view.dispatch({
+    changes: { from, to, insert },
+    selection: { anchor: from + insert.length },
+  });
+  view.focus();
+  return true;
+}
 
 export function pasteTableData(view: EditorView, plain: string, html?: string): boolean {
   const rows = html ? htmlTableRows(html) : plainTableRows(plain);

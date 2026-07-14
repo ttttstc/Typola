@@ -8977,6 +8977,17 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   user-select: none;
 }
 
+.table-ctx-menu {
+  max-height: calc(100vh - 12px);
+  overflow-y: auto;
+}
+
+.table-ctx-section-label {
+  padding: 3px 10px 2px;
+  color: var(--theme-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+}
 .editor-ctx-heading-row {
   display: flex;
   align-items: center;

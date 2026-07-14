@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EditorContextMenu } from './EditorContextMenu';
+import { EditorContextMenu, TableContextMenu } from './EditorContextMenu';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -257,5 +257,30 @@ describe('EditorContextMenu image actions (insert / replace / open / copy-path)'
     });
     act(() => { clickLabel('复制路径').click(); });
     expect(onPick).toHaveBeenCalledWith({ type: 'image-copy-path' });
+  });
+});
+describe('TableContextMenu', () => {
+  it('shows only table actions and exposes complete table deletion', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onPick = vi.fn();
+    act(() => {
+      root.render(<TableContextMenu open x={0} y={0} onPick={onPick} onClose={() => {}} />);
+    });
+
+    const labels = Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .map((item) => item.textContent?.trim());
+    expect(labels).toContain('在上方插入行');
+    expect(labels).toContain('删除列');
+    expect(labels).toContain('删除表格');
+    expect(labels).not.toContain('加粗');
+
+    const deleteTable = Array.from(host.querySelectorAll<HTMLButtonElement>('.editor-ctx-item'))
+      .find((item) => item.textContent?.trim() === '删除表格');
+    act(() => deleteTable?.click());
+    expect(onPick).toHaveBeenCalledWith('table-delete');
+    act(() => root.unmount());
+    host.remove();
   });
 });

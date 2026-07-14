@@ -5,7 +5,7 @@ import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
 import { updateSettings } from '../services/settingsService';
 import type { TypolaEditorKernel } from '../types/editorCore';
-import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
+import { EditorContextMenu, TableContextMenu, type FormatAction, type TableContextAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import { applyCm6Format } from '../services/editor/cm6FormatService';
 import { Cm6EditPopover, type Cm6EditRequest } from './editor/cm6/Cm6EditPopover';
@@ -16,8 +16,8 @@ import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions'
 import { headingIndexAt } from './editor/cm6/previewSyncExtension';
 import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
 import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
-import { pasteTableData } from './editor/cm6/table/tableCommands';
-import { openTableMenu } from './editor/cm6/table/tableInteractionExtension';
+import { deleteMarkdownTableAt, pasteTableData } from './editor/cm6/table/tableCommands';
+import { runTableMenuAction, tableCellFromEventTarget } from './editor/cm6/table/tableInteractionExtension';
 import {
   findMarkdownImageAt,
   headingPathAt,
@@ -66,6 +66,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const headingScrollRequestRef = useRef(headingScrollRequest);
   const onScrollRatioRef = useRef(onScrollRatio);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasImage: boolean } | null>(null);
+  const [tableCtxMenu, setTableCtxMenu] = useState<{ x: number; y: number; pos: number; cell: HTMLElement } | null>(null);
   const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
   const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
@@ -246,10 +247,18 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     if (!editor) return;
     const target = event.target as Node | null;
     if (!target || !editor.contentDOM.contains(target)) return;
-    if (openTableMenu(event.nativeEvent)) {
+    const tableCell = tableCellFromEventTarget(target);
+    if (tableCell) {
+      event.preventDefault();
+      event.stopPropagation();
+      const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY })
+        ?? editor.state.selection.main.head;
+      setCtxMenu(null);
+      setTableCtxMenu({ x: event.clientX, y: event.clientY, pos, cell: tableCell });
       return;
     }
     event.preventDefault();
+    setTableCtxMenu(null);
     const sel = editor.state.selection.main;
     const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
     const targetElement = target instanceof Element ? target : target?.parentElement;
@@ -277,6 +286,15 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     event.preventDefault();
   }, []);
 
+  const handleTablePick = useCallback((action: TableContextAction) => {
+    const editor = editorViewRef.current;
+    if (!editor || !tableCtxMenu) return;
+    if (action === 'table-delete') {
+      deleteMarkdownTableAt(editor, tableCtxMenu.pos);
+      return;
+    }
+    void runTableMenuAction(tableCtxMenu.cell, action);
+  }, [tableCtxMenu]);
   const handleFormatPick = useCallback((action: FormatAction) => {
     const editor = editorViewRef.current;
     if (!editor) return;
@@ -615,7 +633,13 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         onClose={() => setCtxMenu(null)}
         onPickAI={onAIAction ? handleAIPick : undefined}
       />
-      <Cm6EditPopover request={editRequest} onClose={() => setEditRequest(null)} />
+      <TableContextMenu
+        open={tableCtxMenu !== null}
+        x={tableCtxMenu?.x ?? 0}
+        y={tableCtxMenu?.y ?? 0}
+        onPick={handleTablePick}
+        onClose={() => setTableCtxMenu(null)}
+      />      <Cm6EditPopover request={editRequest} onClose={() => setEditRequest(null)} />
       <ImageMetaPopover request={imageMetaRequest} onClose={() => setImageMetaRequest(null)} />
     </div>
   );

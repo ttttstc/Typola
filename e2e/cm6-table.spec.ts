@@ -31,24 +31,21 @@ test('CM6 table exposes upstream grid selection controls and Typola right-click 
   await expect(page.locator('.tbl-cell[data-outline]')).not.toHaveCount(0);
 
   await page.locator('.tbl-cell-view').first().click({ button: 'right' });
-  const menu = page.locator('.tbl-menu');
+  const menu = page.locator('.table-ctx-menu');
   await expect(menu).toHaveCount(1);
   await expect(menu).toBeVisible();
-  await expect(menu.getByText('按列排序（A-Z）')).toBeVisible();
-  await expect(menu.getByText('左对齐')).toBeVisible();
-  await expect(menu.getByText('居中对齐')).toBeVisible();
-  await expect(menu.getByText('右对齐')).toBeVisible();
+  await expect(menu.getByText('在上方插入行')).toBeVisible();
+  await expect(menu.getByText('在下方插入行')).toBeVisible();
+  await expect(menu.getByText('按列升序排列')).toBeVisible();
+  await expect(menu.getByText('列左对齐')).toBeVisible();
+  await expect(menu.getByText('列居中对齐')).toBeVisible();
+  await expect(menu.getByText('列右对齐')).toBeVisible();
   await expect(menu.getByText('在左侧插入列')).toBeVisible();
+  await expect(menu.getByText('删除行')).toBeVisible();
+  await expect(menu.getByText('删除列')).toBeVisible();
+  await expect(menu.getByText('删除表格')).toBeVisible();
   await expect(menu.getByText('插入表格')).toHaveCount(0);
-
-  await page.keyboard.press('Escape');
-  await bodyCells.first().click({ button: 'right' });
-  const rowMenu = page.locator('.tbl-menu');
-  await expect(rowMenu).toHaveCount(1);
-  await expect(rowMenu.getByText('在上方插入行')).toBeVisible();
-  await expect(rowMenu.getByText('在下方插入行')).toBeVisible();
-  await expect(rowMenu.getByText('清空行')).toBeVisible();
-  await expect(rowMenu.getByText('插入表格')).toHaveCount(0);
+  await expect(page.locator('.tbl-menu')).toHaveCount(0);
 });
 
 test('toolbar exposes table insertion outside table context', async ({ page }) => {
@@ -102,10 +99,21 @@ test('right-clicking a selected cell applies the column action to that column', 
 
   const secondColumnHeader = page.locator('.tbl-table-head .tbl-cell-view').nth(1);
   await secondColumnHeader.click({ button: 'right' });
-  await page.locator('.tbl-menu').getByText('右对齐').click({ force: true });
+  await page.locator('.table-ctx-menu').getByText('列右对齐').click();
 
   await page.getByRole('button', { name: '源码模式' }).click();
   const source = page.locator('.cm-content');
   await expect(source).toContainText('| - | -: | - |');
   await expect(source).not.toContainText('| -: | - | - |');
+});
+test('table context menu deletes the complete table as one CM6 change', async ({ page }) => {
+  await page.goto('/');
+  await openTable(page);
+
+  await page.locator('.tbl-table-body .tbl-cell-view').first().click({ button: 'right' });
+  await page.locator('.table-ctx-menu').getByText('删除表格').click();
+  await expect(page.locator('.tbl-table')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '源码模式' }).click();
+  await expect(page.locator('.cm-content')).not.toContainText('| A | B | C |');
 });
