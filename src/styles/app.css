@@ -1625,13 +1625,13 @@ html[data-color-scheme='dark'] .export-menu {
 .editor-pane .cm-editor .cm-content ::selection,
 .editor-pane .cm-editor ::selection {
   background: var(--theme-selection) !important;
-  color: var(--theme-text-primary);
+  color: #fff !important;
 }
 
 /* 全局选中样式：让选区在所有视图（包括 Vditor）都可见 */
 ::selection {
   background: var(--theme-selection);
-  color: var(--theme-text-primary);
+  color: #fff;
 }
 
 /* CM6 markdown 缂栬緫鍣細瑕嗙洊涓婃柟 .editor-pane .cm-editor 鐨?--font-mono锛?

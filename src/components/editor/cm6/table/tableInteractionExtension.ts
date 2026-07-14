@@ -46,8 +46,14 @@ function localizeMenus(document: Document, locale: AppLocale): void {
   }
 }
 
+function elementFromEventTarget(target: EventTarget | null): Element | null {
+  if (target instanceof Element) return target;
+  if (target instanceof Node) return target.parentElement;
+  return null;
+}
+
 export function openTableMenu(event: MouseEvent): boolean {
-  const target = event.target instanceof Element ? event.target : null;
+  const target = elementFromEventTarget(event.target);
   const cell = target?.closest<HTMLElement>('.tbl-cell');
   if (!cell || !cell.closest('.tbl-table-widget')) return false;
 

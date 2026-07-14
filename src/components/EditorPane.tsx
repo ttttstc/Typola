@@ -246,14 +246,14 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     if (!editor) return;
     const target = event.target as Node | null;
     if (!target || !editor.contentDOM.contains(target)) return;
-    if (target instanceof Element && target.closest('.tbl-table-widget')) {
-      openTableMenu(event.nativeEvent);
+    if (openTableMenu(event.nativeEvent)) {
       return;
     }
     event.preventDefault();
     const sel = editor.state.selection.main;
     const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
-    const onImage = target instanceof Element && target.closest('.cm-atomic-image') !== null;
+    const targetElement = target instanceof Element ? target : target?.parentElement;
+    const onImage = targetElement?.closest('.cm-atomic-image') !== null;
     let hasImage = false;
     if (onImage && pos !== null) {
       const sourceText = editor.state.doc.toString();
