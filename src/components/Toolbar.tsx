@@ -55,8 +55,6 @@ type UpdateToolbarStatus = {
 };
 
 type ToolbarProps = {
-  dirty: boolean;
-  fileName: string;
   editorMode: EditorMode;
   workspacePanelVisible: boolean;
   wordPreviewVisible: boolean;
@@ -65,7 +63,6 @@ type ToolbarProps = {
   terminalVisible: boolean;
   editingDisabled: boolean;
   docMode: DocMode;
-  reviewDirty?: boolean;
   onToggleEditorMode: () => void;
   onFormat?: (action: FormatAction) => void;
   onToggleWorkspacePanel: () => void;
@@ -80,7 +77,6 @@ type ToolbarProps = {
   onOpenFolder?: () => void;
   onSave: () => void;
   onSaveAs: () => void;
-  onRename?: () => void;
   onInsertImage?: () => void;
   onExportPdf?: () => void;
   onExportWord?: () => void;
@@ -93,17 +89,15 @@ type ToolbarProps = {
 };
 
 export function Toolbar({
-  dirty, fileName,
   editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
-  terminalVisible, editingDisabled, docMode, reviewDirty,
+  terminalVisible, editingDisabled, docMode,
   onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
   onToggleTerminal, onOpenToc, onSetDocMode,
-  onNew, onOpen, onOpenFolder, onSave, onSaveAs, onRename, onInsertImage, onExportPdf, onExportWord,
+  onNew, onOpen, onOpenFolder, onSave, onSaveAs, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
-  const hasOpenedFile = fileName !== '未命名';
   const iconSize = 18;
   const strokeWidth = 1.6;
   const workspacePanelTooltip = workspacePanelVisible ? t('toolbarCollapseFileTree') : t('toolbarOpenFileTree');
@@ -271,22 +265,7 @@ export function Toolbar({
           </div>
         )}
       </div>
-      <div className="toolbar-title" data-tauri-drag-region aria-label={t('currentFileLabel')}>
-        <span className={`file-name ${hasOpenedFile || dirty ? 'visible' : ''}`}>
-          {dirty && <span className="dirty-dot" />}
-          <span
-            className="file-name-text"
-            title={onRename ? t('toolbarRenameTitle') : undefined}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              onRename?.();
-            }}
-          >
-            {fileName}
-          </span>
-          {reviewDirty && <span className="dirty-dot" title="有未保存的检视意见" aria-label="未保存的检视意见" />}
-        </span>
-      </div>
+      <div className="toolbar-title" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-right">
         <div className="toolbar-group toolbar-view-actions" aria-label={t('toolbarViewGroup')}>

@@ -1710,14 +1710,11 @@ export function AppLayout() {
       <AppLayoutChrome
         appStyle={appStyle}
         toolbarProps={{
-          dirty: file.dirty,
-          fileName: file.name,
           editorMode,
           workspacePanelVisible: leftRailMode !== 'none',
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
           artifactsVisible: rightPanelMode === 'artifacts',
-          reviewDirty: reviewStateApi.state.dirty,
           terminalVisible,
           editingDisabled: isDocx,
           docMode,
@@ -1735,7 +1732,6 @@ export function AppLayout() {
           onOpenFolder: handleOpenFolder,
           onSave: handleSave,
           onSaveAs: handleSaveAs,
-          onRename: () => handleRequestRename(),
           onInsertImage: handleSelectLocalImage,
           onExportPdf: handleExportPdf,
           pdfExporting,

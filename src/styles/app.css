@@ -550,42 +550,6 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 0.7;
 }
 
-.file-name {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  max-width: 100%;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: color-mix(in oklch, var(--theme-text-primary) 72%, var(--theme-text-secondary));
-  white-space: nowrap;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-}
-
-.file-name-text {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Show file name when a file is opened (class added by parent) */
-.file-name.visible {
-  opacity: 1;
-}
-
-.dirty-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--theme-accent);
-  margin-right: 6px;
-  flex-shrink: 0;
-}
-
 /* ===== Main Content 鈥?Writing Layout ===== */
 
 .main-content {

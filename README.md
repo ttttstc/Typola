@@ -27,6 +27,7 @@
 - Markdown 写作统一使用 CM6 内核：写作模式提供 live preview，源码模式保留纯 Markdown 编辑。
 - 支持阅读 / 心流 / 检视三种文档模式、源码模式、文件内查找替换、快速打开、编辑辅助、文档统计、同步滚动和浮动大纲跳转。
 - 支持任务列表、表格、代码块、图片、KaTeX 数学公式和 Mermaid 图表；大纲会避开 fenced code block 内的 `#`。
+- CM6 表格支持连续单元格、行、列选择，以及右键插删/移动/清空/对齐；支持 Markdown、TSV、HTML 剪贴板、Tab / Shift+Tab / Enter 导航和撤销重做。
 - 图片支持本地相对路径、剪贴板粘贴保存、远程图片预览与导出。
 - 多文件 tab、文件树、拖拽打开、未保存关闭确认，适合日常长文档工作。
 - 内置素笺、深海、墨韵、抽象、粗野五套主题，并覆盖编辑器、AI 浮层、检视标注与终端配色。
@@ -139,6 +140,8 @@ npm run tauri dev        # 桌面开发模式
 npm run dev              # 前端开发模式
 npm run typecheck        # TypeScript 检查
 npm test                 # Vitest 单测
+npm run lint             # ESLint 检查
+npm run build            # 生产构建
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 

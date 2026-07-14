@@ -27,6 +27,7 @@ Most importantly, AI output does not stay buried in chat history. It becomes loc
 - Markdown live preview for writing in a near-final layout.
 - Source mode, find/replace, quick open, editing helpers, document statistics, scroll sync, and outline navigation.
 - Task lists, tables, code blocks, images, KaTeX math, and Mermaid diagrams.
+- The CM6 table editor supports contiguous cell, row, and column selection; context-menu insert/delete/move/clear/alignment actions; Markdown, TSV, and HTML clipboard operations; Tab / Shift+Tab / Enter navigation; and undo/redo.
 - Local relative images, clipboard image paste into `assets/`, remote image preview, and export consistency.
 - Multi-file tabs, file tree, drag-and-drop open, and safe prompts for unsaved changes.
 
@@ -135,6 +136,8 @@ npm run tauri dev        # desktop dev mode
 npm run dev              # frontend-only dev mode
 npm run typecheck        # TypeScript check
 npm test                 # Vitest unit tests
+npm run lint             # ESLint check
+npm run build            # production build
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
