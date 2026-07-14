@@ -148,6 +148,13 @@ export function EditorContextMenu({
       <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
       <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
 
+      {!hasTable && (
+        <>
+          <div className="editor-ctx-separator" />
+          <MenuItem label="插入表格" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
+        </>
+      )}
+
       {hasTable && (
         <>
           <div className="editor-ctx-separator" />

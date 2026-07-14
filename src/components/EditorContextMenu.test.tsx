@@ -36,9 +36,51 @@ describe('EditorContextMenu new actions (quote-up/down, link-edit, clear-format,
     });
     const items = host.querySelectorAll('.editor-ctx-item');
     const labelTexts = new Set(Array.from(items).map((b: Element) => (b.firstChild as HTMLElement)?.textContent ?? ''));
-    for (const expected of ['编辑链接', '升级引用', '降级引用', '清除格式', '编辑语言']) {
+    for (const expected of ['编辑链接', '升级引用', '降级引用', '清除格式', '编辑语言', '插入表格']) {
       expect(labelTexts.has(expected)).toBe(true);
     }
+  });
+
+  it('keeps table-only actions scoped to table context', () => {
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          hasTable
+          onPick={() => {}}
+          onClose={() => {}}
+        />,
+      );
+    });
+    const labels = new Set(Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .map((button) => (button.firstChild as HTMLElement)?.textContent ?? ''));
+    expect(labels.has('插入表格')).toBe(false);
+    expect(labels.has('在上方插入行')).toBe(true);
+    expect(labels.has('当前列右对齐')).toBe(true);
+  });
+
+  it('click 插入表格 → onPick default 2×3 table action', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          onPick={onPick}
+          onClose={() => {}}
+        />,
+      );
+    });
+    const insert = Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((button) => (button.firstChild as HTMLElement)?.textContent === '插入表格') as HTMLButtonElement;
+    expect(insert).toBeTruthy();
+    act(() => { insert.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'table-insert', rows: 2, cols: 3 });
   });
 
   it('click 升级引用 → onPick({type:"quote-up"})', () => {

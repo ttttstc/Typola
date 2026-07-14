@@ -23,6 +23,7 @@ import {
   Save,
   SaveAll,
   SlidersHorizontal,
+  Table2,
   Terminal,
   Quote,
 } from 'lucide-react';
@@ -190,6 +191,17 @@ export function Toolbar({
           <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} title={t('toolbarSaveAsTitle')} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
             <SaveAll size={iconSize} strokeWidth={strokeWidth} />
           </button>
+          {onFormat && (
+            <button
+              data-no-window-drag="true"
+              onClick={() => onFormat({ type: 'table-insert', rows: 2, cols: 3 })}
+              disabled={editingDisabled}
+              data-tooltip={t('toolbarInsertTableLabel')}
+              aria-label={t('toolbarInsertTableLabel')}
+            >
+              <Table2 size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
           {onInsertImage && (
             <button
               data-no-window-drag="true"

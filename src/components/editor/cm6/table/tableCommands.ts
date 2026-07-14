@@ -97,7 +97,14 @@ function columnIndexAt(view: EditorView, range: NonNullable<ReturnType<typeof fi
   const cells = splitTableCells(line.text);
   if (cells.length !== range.colCount) return 0;
   const before = line.text.slice(0, Math.max(0, pos - line.from));
-  return clamp(Math.max(0, before.split('|').length - 2), 0, range.colCount - 1);
+  let delimiters = 0;
+  for (let index = 0; index < before.length; index++) {
+    if (before[index] !== '|') continue;
+    let slashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && before[cursor] === '\\'; cursor--) slashes++;
+    if (slashes % 2 === 0) delimiters++;
+  }
+  return clamp(Math.max(0, delimiters - 1), 0, range.colCount - 1);
 }
 
 function rewriteColumns(view: EditorView, range: NonNullable<ReturnType<typeof findTableAt>>, transform: (cells: string[], line: number) => string[]): void {

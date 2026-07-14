@@ -1,7 +1,7 @@
 import { Compartment, type Extension } from '@codemirror/state';
 import { defaultKeymap, historyKeymap } from '@codemirror/commands';
 import { searchKeymap } from '@codemirror/search';
-import { keymap, type EditorView } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import { imageBlocks, inlinePreview } from '@atomic-editor/editor';
 import {
   markdownTables,

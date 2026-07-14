@@ -173,6 +173,20 @@ describe('findTableAt', () => {
     view.destroy();
   });
 
+  it('keeps escaped pipes inside a cell and accepts one-column tables', () => {
+    const escaped = ['| A | B |', '| --- | --- |', '| a\\|b | c |'].join('\n');
+    const escapedView = createView(escaped, 0, 0).view;
+    const escapedRange = findTableAt(escapedView, escaped.indexOf('a\\|b'));
+    expect(escapedRange?.colCount).toBe(2);
+    escapedView.destroy();
+
+    const oneColumn = ['| A |', '| --- |', '| value |'].join('\n');
+    const oneColumnView = createView(oneColumn, 0, 0).view;
+    const oneColumnRange = findTableAt(oneColumnView, oneColumn.indexOf('value'));
+    expect(oneColumnRange?.colCount).toBe(1);
+    oneColumnView.destroy();
+  });
+
   it('returns null inside a fenced code block even if it looks like a table', () => {
     const fenced = ['```sh', '| a | b |', '| --- | --- |', '| 1 | 2 |', '```'].join('\n');
     const { view } = createView(fenced, 0, 0);

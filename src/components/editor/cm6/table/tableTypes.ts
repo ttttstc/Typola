@@ -23,16 +23,54 @@ export type TableRange = {
   lineCount: number;
 };
 
-const SEP_LINE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/;
+const SEP_LINE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
 const PIPE_LINE = /^\s*\|.*\|\s*$/;
 
+function isEscapedPipe(text: string, index: number): boolean {
+  let slashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor--) slashes++;
+  return slashes % 2 === 1;
+}
+
 export function splitTableCells(text: string): string[] {
-  const trimmed = text.replace(/^\s*\|/, '').replace(/\|\s*$/, '');
-  return trimmed.includes('|') ? trimmed.split('|').map((cell) => cell.trim()) : [];
+  const trimmed = text.trim();
+  const start = trimmed.startsWith('|') ? 1 : 0;
+  const end = trimmed.endsWith('|') && !isEscapedPipe(trimmed, trimmed.length - 1) ? trimmed.length - 1 : trimmed.length;
+  const cells: string[] = [];
+  let cell = '';
+  for (let index = start; index < end; index++) {
+    if (trimmed[index] === '|' && !isEscapedPipe(trimmed, index)) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += trimmed[index];
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
 }
 
 export function formatTableRow(cells: string[]): string {
   return `| ${cells.join(' | ')} |`;
+}
+
+export function tableCellPositionAt(view: EditorView, range: TableRange, rowIndex: number, colIndex: number): number | null {
+  if (
+    !Number.isInteger(rowIndex)
+    || !Number.isInteger(colIndex)
+    || rowIndex < 0
+    || rowIndex >= range.lineCount - 1
+    || colIndex < 0
+    || colIndex >= range.colCount
+  ) return null;
+  const line = rowIndex === 0 ? view.state.doc.lineAt(range.headerFrom) : view.state.doc.line(range.firstBodyLine + rowIndex);
+  let column = -1;
+  for (let index = 0; index < line.text.length; index++) {
+    if (line.text[index] !== '|' || isEscapedPipe(line.text, index)) continue;
+    column++;
+    if (column === colIndex) return line.from + Math.min(index + 1, line.text.length);
+  }
+  return null;
 }
 
 export function findTableAt(view: EditorView, pos: number): TableRange | null {
