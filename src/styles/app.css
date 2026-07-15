@@ -23,10 +23,12 @@
   --status-neutral-border: var(--theme-border-soft);
   --motion-duration-press: 60ms;
   --motion-duration-fast: 120ms;
+  --motion-duration-modal: 140ms;
   --motion-duration-base: 180ms;
   --motion-duration-slow: 220ms;
   --motion-duration-ring: 600ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
+  --motion-ease-modal: cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-ease-pop: cubic-bezier(0.2, 0.9, 0.3, 1.1);
 
   /* Font stacks */
@@ -7023,8 +7025,14 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   justify-content: center;
   z-index: 2000;
+}
+
+.settings-overlay,
+.rename-dialog-overlay,
+.diff-preview-overlay,
+.unsaved-dialog-overlay {
   /* Start from a visible opacity so the first paint is non-blank. */
-  animation: settings-overlay-in 120ms ease-out both;
+  animation: settings-overlay-in var(--motion-duration-fast) ease-out both;
 }
 
 .settings-modal {
@@ -7036,8 +7044,14 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   border-radius: 5px;
   overflow: hidden;
   box-shadow: 0 6px 32px var(--theme-shadow-soft);
+}
+
+.settings-modal,
+.rename-dialog,
+.diff-preview-modal,
+.unsaved-dialog {
   /* Transform-only entrance so the first frame is fully visible. */
-  animation: settings-modal-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: settings-modal-in var(--motion-duration-modal) var(--motion-ease-modal) both;
   will-change: transform;
 }
 
@@ -7122,7 +7136,13 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 @media (prefers-reduced-motion: reduce) {
   .settings-overlay,
-  .settings-modal {
+  .rename-dialog-overlay,
+  .diff-preview-overlay,
+  .unsaved-dialog-overlay,
+  .settings-modal,
+  .rename-dialog,
+  .diff-preview-modal,
+  .unsaved-dialog {
     animation: none;
     will-change: auto;
   }
