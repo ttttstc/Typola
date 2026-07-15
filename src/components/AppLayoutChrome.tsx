@@ -1,5 +1,6 @@
-import { Fragment, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { FolderOpen, Sparkles, BookOpenText, Newspaper, X } from 'lucide-react';
 import { Toolbar } from './Toolbar';
 import { FloatingToc } from './FloatingToc';
@@ -137,9 +138,21 @@ export function AppLayoutChrome({
   terminalNode,
   statusBarNode,
 }: AppLayoutChromeProps) {
+  const shouldReduceMotion = useReducedMotion();
+  const [tabsRef] = useAutoAnimate<HTMLDivElement>({
+    duration: shouldReduceMotion ? 0 : 180,
+    easing: 'ease-out',
+  });
+  const supportsWebAnimations = typeof Element !== 'undefined'
+    && typeof Element.prototype.animate === 'function';
   const leftRailIndicator = useActiveTabIndicator<HTMLDivElement>(leftRailMode);
   const editorTabIndicator = useActiveTabIndicator<HTMLDivElement>(activeTabId);
   const rightRailIndicator = useActiveTabIndicator<HTMLDivElement>(rightPanelMode);
+  const editorTabContainerRef = editorTabIndicator.containerRef;
+  const setEditorTabbarRef = useCallback((node: HTMLDivElement | null) => {
+    editorTabContainerRef.current = node;
+    if (supportsWebAnimations) tabsRef(node);
+  }, [editorTabContainerRef, supportsWebAnimations, tabsRef]);
 
   return (
     <MotionProvider>
@@ -230,7 +243,7 @@ export function AppLayoutChrome({
             </div>
           )}
           {shouldShowTabbar && (
-            <div ref={editorTabIndicator.containerRef} className="editor-tabbar" role="tablist" aria-label="打开的文件">
+            <div ref={setEditorTabbarRef} className="editor-tabbar" role="tablist" aria-label="打开的文件">
               {editorTabIndicator.indicatorStyle && (
                 <span className="tab-motion-indicator editor-tab-indicator" style={editorTabIndicator.indicatorStyle} aria-hidden="true" />
               )}
