@@ -156,10 +156,10 @@ export function AppLayoutChrome({
                 <motion.aside
                   key="left-rail"
                   className="left-rail-shell"
-                  style={{ width: workspacePanelWidth }}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  style={{ width: workspacePanelWidth, overflow: 'hidden' }}
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: workspacePanelWidth, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
                   transition={calmTransition}
                 >
               <div ref={leftRailIndicator.containerRef} className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
@@ -195,9 +195,13 @@ export function AppLayoutChrome({
                 <FileTreePanel {...fileTreeProps} />
               )}
                 </motion.aside>
-                <div
+                <motion.div
                   key="left-rail-resizer"
                   className={`left-panel-resizer ${leftResizing === 'workspace' ? 'dragging' : ''}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ ...calmTransition, duration: 0.12 }}
                   role="separator"
                   aria-label="调整目录栏宽度"
                   aria-orientation="vertical"
@@ -264,9 +268,13 @@ export function AppLayoutChrome({
         </section>
         <AnimatePresence initial={false}>
           {rightPanelMode !== 'none' && !isDocx && (
-            <div
+            <motion.div
               key="right-rail-resizer"
               className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ ...calmTransition, duration: 0.12 }}
               role="separator"
               aria-label={rightPanelResizeLabel}
               aria-orientation="vertical"
@@ -284,10 +292,10 @@ export function AppLayoutChrome({
             <motion.aside
               key="right-rail"
               className="right-rail-shell"
-              style={{ width: rightPanelWidth }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              style={{ width: rightPanelWidth, overflow: 'hidden' }}
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: rightPanelWidth, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
               transition={calmTransition}
             >
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (
