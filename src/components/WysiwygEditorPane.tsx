@@ -399,12 +399,6 @@ export const WysiwygEditorPane = forwardRef<TypolaEditorKernel, WysiwygEditorPan
     onAIAction(action, anchor, origin);
   }, [filePath, getSavedOrCurrentSelection, onAIAction]);
 
-  const handleAIPick = useCallback((action: SelectionActionId) => {
-    // 菜单 origin 用 contextMenu 的坐标(右键/Ctrl+K 弹菜单时已记录)。
-    const origin = contextMenu ? { x: contextMenu.x, y: contextMenu.y } : undefined;
-    triggerAIAction(action, origin);
-  }, [contextMenu, triggerAIAction]);
-
   const handleMenuClose = useCallback(() => setContextMenu(null), []);
   const handleTableMenuClose = useCallback(() => setTableMenu(null), []);
 
@@ -1110,7 +1104,6 @@ export const WysiwygEditorPane = forwardRef<TypolaEditorKernel, WysiwygEditorPan
         onPick={handleMenuPick}
         onCopyMermaidSvg={handleCopyMermaidSvg}
         onClose={handleMenuClose}
-        onPickAI={onAIAction ? handleAIPick : undefined}
       />
       {tableMenu && (
         <TableSubmenu

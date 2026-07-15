@@ -44,6 +44,7 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
 
   await expect(page.locator('.wordmark')).toHaveCount(0);
   await expect(page.locator('.app-toolbar')).not.toContainText('Typola');
+  await expect(page.locator('.toolbar-title .file-name')).toHaveCount(0);
   const toolbarState = await page.evaluate(() => {
     const toolbar = document.querySelector('.app-toolbar')?.getBoundingClientRect();
     const title = document.querySelector('.toolbar-title')?.getBoundingClientRect();
@@ -66,7 +67,7 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
     titleDrag: true,
     overlayCount: 0,
     fallback: 'manual',
-    groups: ['文件操作', 'Markdown 格式', '视图与导出', '导航设置'],
+    groups: ['导航', '文件操作', 'Markdown 格式', '视图与导出', '导航设置', '文档模式'],
   }));
   expect(toolbarState.centerOffset).toBeLessThanOrEqual(1);
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);

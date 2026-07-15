@@ -550,42 +550,6 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 0.7;
 }
 
-.file-name {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  max-width: 100%;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: color-mix(in oklch, var(--theme-text-primary) 72%, var(--theme-text-secondary));
-  white-space: nowrap;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-}
-
-.file-name-text {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Show file name when a file is opened (class added by parent) */
-.file-name.visible {
-  opacity: 1;
-}
-
-.dirty-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--theme-accent);
-  margin-right: 6px;
-  flex-shrink: 0;
-}
-
 /* ===== Main Content 鈥?Writing Layout ===== */
 
 .main-content {
@@ -1593,22 +1557,6 @@ html[data-color-scheme='dark'] .export-menu {
   padding: 4px 0;
 }
 
-/* 琛ㄦ牸绌哄崟鍏冩牸鍗犱綅:cell source 鏃犲唴瀹规椂缁欎竴涓笉鎶㈢溂鐨勬彁绀烘枃瀛?
- * 鐢?CM6 contentEditable 鐩存帴璧?::before content,涓嶆敼 markdown source銆?*/
-.cm6-markdown-editor-pane .cm-atomic-table-cell-source:empty::before {
-  content: '绌哄崟鍏冩牸';
-  color: var(--theme-text-secondary);
-  opacity: 0.55;
-  pointer-events: none;
-  font-style: italic;
-}
-
-/* 宽 GFM 表保持编辑器横向滚动，不把内容区撑出窗口。 */
-.cm6-markdown-editor-pane [class*="atomic-table"] {
-  max-width: 100%;
-  overflow-x: auto;
-}
-
 .cm6-markdown-editor-pane .typola-cm6-math-inline {
   padding: 0 2px;
 }
@@ -1677,13 +1625,13 @@ html[data-color-scheme='dark'] .export-menu {
 .editor-pane .cm-editor .cm-content ::selection,
 .editor-pane .cm-editor ::selection {
   background: var(--theme-selection) !important;
-  color: var(--theme-text-primary);
+  color: #fff !important;
 }
 
 /* 全局选中样式：让选区在所有视图（包括 Vditor）都可见 */
 ::selection {
   background: var(--theme-selection);
-  color: var(--theme-text-primary);
+  color: #fff;
 }
 
 /* CM6 markdown 缂栬緫鍣細瑕嗙洊涓婃柟 .editor-pane .cm-editor 鐨?--font-mono锛?
@@ -9029,6 +8977,17 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   user-select: none;
 }
 
+.table-ctx-menu {
+  max-height: calc(100vh - 12px);
+  overflow-y: auto;
+}
+
+.table-ctx-section-label {
+  padding: 3px 10px 2px;
+  color: var(--theme-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+}
 .editor-ctx-heading-row {
   display: flex;
   align-items: center;
@@ -9070,6 +9029,28 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   background: var(--theme-border-soft);
 }
 
+.editor-ctx-quick-format {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.editor-ctx-quick-format-button {
+  height: 24px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--theme-text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.editor-ctx-quick-format-button:hover {
+  background: var(--theme-control-hover-bg);
+}
 .editor-ctx-item {
   display: flex;
   align-items: center;
@@ -9087,6 +9068,47 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   cursor: pointer;
 }
 
+.editor-ctx-submenu {
+  position: relative;
+}
+
+.editor-ctx-submenu-trigger {
+  gap: 18px;
+}
+
+.editor-ctx-submenu-arrow {
+  color: var(--theme-text-secondary);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.editor-ctx-submenu-panel {
+  position: absolute;
+  top: -7px;
+  left: calc(100% + 4px);
+  z-index: 1;
+  width: max-content;
+  min-width: 150px;
+  max-width: 240px;
+  padding: 6px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-panel-bg);
+  box-shadow: 0 14px 36px var(--theme-shadow-soft);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-4px);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+
+.editor-ctx-submenu:hover > .editor-ctx-submenu-panel,
+.editor-ctx-submenu:focus-within > .editor-ctx-submenu-panel {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
 .editor-ctx-item:hover:not(:disabled) {
   background: var(--theme-control-hover-bg);
 }

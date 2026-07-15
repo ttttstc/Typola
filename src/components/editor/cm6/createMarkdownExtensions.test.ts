@@ -93,7 +93,7 @@ describe('createMarkdownExtensions live preview', () => {
     moveCursorToEnd(view);
 
     expect(view.contentDOM.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
-    expect(view.contentDOM.querySelector('.cm-atomic-table')).not.toBeNull();
+    expect(view.contentDOM.querySelector('.tbl-table-widget .tbl-table')).not.toBeNull();
     expect(view.contentDOM.querySelector<HTMLImageElement>('.cm-atomic-image img')?.src).toBe('https://example.com/a.png');
   });
 

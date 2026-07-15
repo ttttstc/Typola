@@ -5,7 +5,7 @@ import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
 import { updateSettings } from '../services/settingsService';
 import type { TypolaEditorKernel } from '../types/editorCore';
-import { EditorContextMenu, type FormatAction } from './EditorContextMenu';
+import { EditorContextMenu, TableContextMenu, type FormatAction, type TableContextAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
 import { applyCm6Format } from '../services/editor/cm6FormatService';
 import { Cm6EditPopover, type Cm6EditRequest } from './editor/cm6/Cm6EditPopover';
@@ -16,8 +16,8 @@ import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions'
 import { headingIndexAt } from './editor/cm6/previewSyncExtension';
 import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
 import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
-import { findTableAt } from './editor/cm6/table/tableTypes';
-import { pasteTableData } from './editor/cm6/table/tableCommands';
+import { deleteMarkdownTableAt, pasteTableData } from './editor/cm6/table/tableCommands';
+import { runTableMenuAction, tableCellFromEventTarget } from './editor/cm6/table/tableInteractionExtension';
 import {
   findMarkdownImageAt,
   headingPathAt,
@@ -65,7 +65,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const sourceRef = useRef(source);
   const headingScrollRequestRef = useRef(headingScrollRequest);
   const onScrollRatioRef = useRef(onScrollRatio);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasTable: boolean; hasImage: boolean } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasImage: boolean } | null>(null);
+  const [tableCtxMenu, setTableCtxMenu] = useState<{ x: number; y: number; pos: number; cell: HTMLElement } | null>(null);
   const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
   const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
@@ -127,12 +128,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     };
     cb(action, anchor, origin);
   }, []);
-
-  const handleAIPick = useCallback((action: SelectionActionId) => {
-    // 菜单 origin 用菜单当前位置;菜单 state 在 onClose 才被清,这里仍可读。
-    const origin = ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : undefined;
-    triggerAIAction(action, origin);
-  }, [ctxMenu, triggerAIAction]);
 
   const handleFloatingBarDismissSession = useCallback(() => {
     if (filePathRef.current) floatingBarHiddenDocsRef.current.add(filePathRef.current);
@@ -205,7 +200,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       const target = event.target as Node | null;
       if (!target) return;
       // 只追踪编辑器正文内的拖选起始,不要吞掉浮条/菜单/工具栏的 mousedown。
-      if (view.contentDOM.contains(target)) {
+      if (view.dom.contains(target)) {
         isDraggingRef.current = true;
       }
     };
@@ -219,7 +214,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     };
     document.addEventListener('selectionchange', onChange);
     window.addEventListener('mouseup', onMouseUp);
-    document.addEventListener('mousedown', onMouseDown);
+    view.dom.addEventListener('mousedown', onMouseDown, true);
     const dom = view.scrollDOM;
     let scrollRafId: number | null = null;
     const handleScroll = () => {
@@ -234,7 +229,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     return () => {
       document.removeEventListener('selectionchange', onChange);
       window.removeEventListener('mouseup', onMouseUp);
-      document.removeEventListener('mousedown', onMouseDown);
+      view.dom.removeEventListener('mousedown', onMouseDown, true);
       if (selectionRafId !== null) window.cancelAnimationFrame(selectionRafId);
       dom.removeEventListener('scroll', handleScroll);
       if (scrollRafId !== null) window.cancelAnimationFrame(scrollRafId);
@@ -246,10 +241,22 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     if (!editor) return;
     const target = event.target as Node | null;
     if (!target || !editor.contentDOM.contains(target)) return;
+    const tableCell = tableCellFromEventTarget(target);
+    if (tableCell) {
+      event.preventDefault();
+      event.stopPropagation();
+      const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY })
+        ?? editor.state.selection.main.head;
+      setCtxMenu(null);
+      setTableCtxMenu({ x: event.clientX, y: event.clientY, pos, cell: tableCell });
+      return;
+    }
     event.preventDefault();
+    setTableCtxMenu(null);
     const sel = editor.state.selection.main;
     const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
-    const onImage = target instanceof Element && target.closest('.cm-atomic-image') !== null;
+    const targetElement = target instanceof Element ? target : target?.parentElement;
+    const onImage = targetElement?.closest('.cm-atomic-image') !== null;
     let hasImage = false;
     if (onImage && pos !== null) {
       const sourceText = editor.state.doc.toString();
@@ -259,7 +266,6 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       x: event.clientX,
       y: event.clientY,
       hasSelection: !sel.empty,
-      hasTable: pos !== null && findTableAt(editor, pos) !== null,
       hasImage,
     });
   }, []);
@@ -267,12 +273,22 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     const editor = editorViewRef.current;
     if (!editor) return;
+    if (event.target instanceof Element && event.target.closest('.tbl-table-widget')) return;
     const html = event.clipboardData.getData('text/html');
     const plain = event.clipboardData.getData('text/plain');
     if (!pasteTableData(editor, plain, html || undefined)) return;
     event.preventDefault();
   }, []);
 
+  const handleTablePick = useCallback((action: TableContextAction) => {
+    const editor = editorViewRef.current;
+    if (!editor || !tableCtxMenu) return;
+    if (action === 'table-delete') {
+      deleteMarkdownTableAt(editor, tableCtxMenu.pos);
+      return;
+    }
+    void runTableMenuAction(tableCtxMenu.cell, action);
+  }, [tableCtxMenu]);
   const handleFormatPick = useCallback((action: FormatAction) => {
     const editor = editorViewRef.current;
     if (!editor) return;
@@ -329,7 +345,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         if (sel.empty) return false;
         // 用选区首字符的视口位置作为菜单位置;coords 不可用时退化到视口左上
         const coords = view.coordsAtPos(sel.from) ?? { left: 80, top: 80 };
-        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true, hasTable: false, hasImage: false });
+        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true, hasImage: false });
         return true;
       },
       onFormat: (action) => {
@@ -606,13 +622,17 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         x={ctxMenu?.x ?? 0}
         y={ctxMenu?.y ?? 0}
         hasSelection={ctxMenu?.hasSelection ?? false}
-        hasTable={ctxMenu?.hasTable ?? false}
         hasImage={ctxMenu?.hasImage ?? false}
         onPick={handleFormatPick}
         onClose={() => setCtxMenu(null)}
-        onPickAI={onAIAction ? handleAIPick : undefined}
       />
-      <Cm6EditPopover request={editRequest} onClose={() => setEditRequest(null)} />
+      <TableContextMenu
+        open={tableCtxMenu !== null}
+        x={tableCtxMenu?.x ?? 0}
+        y={tableCtxMenu?.y ?? 0}
+        onPick={handleTablePick}
+        onClose={() => setTableCtxMenu(null)}
+      />      <Cm6EditPopover request={editRequest} onClose={() => setEditRequest(null)} />
       <ImageMetaPopover request={imageMetaRequest} onClose={() => setImageMetaRequest(null)} />
     </div>
   );

@@ -1,6 +1,13 @@
 import { Compartment, type Extension } from '@codemirror/state';
-import type { EditorView } from '@codemirror/view';
-import { imageBlocks, inlinePreview, tables } from '@atomic-editor/editor';
+import { defaultKeymap, historyKeymap } from '@codemirror/commands';
+import { searchKeymap } from '@codemirror/search';
+import { EditorView, keymap } from '@codemirror/view';
+import { imageBlocks, inlinePreview } from '@atomic-editor/editor';
+import {
+  markdownTables,
+  TableStyle,
+  TableTheme,
+} from 'codemirror-markdown-tables';
 import { imageFallbackExtension } from './imageFallbackExtension';
 import { imageAssetExtension } from './imageAssetExtension';
 import { mathPreviewExtension } from './mathPreviewExtension';
@@ -19,6 +26,44 @@ import {
   taskToggleExtension,
 } from './linkInteractionExtension';
 import type { MarkdownLink, MarkdownTask } from '../../../services/markdownAnalysisService';
+import type { AppLocale } from '../../../services/settingsService';
+import { tableInteractionExtension } from './table/tableInteractionExtension';
+
+const typolaTableTheme = TableTheme.light.with({
+  '--tbl-theme-row-background': 'var(--theme-paper)',
+  '--tbl-theme-header-row-background': 'var(--theme-paper)',
+  '--tbl-theme-even-row-background': 'var(--theme-paper)',
+  '--tbl-theme-odd-row-background': 'var(--theme-surface-muted)',
+  '--tbl-theme-border-color': 'var(--theme-border-soft)',
+  '--tbl-theme-border-hover-color': 'var(--theme-border-hover)',
+  '--tbl-theme-border-active-color': 'var(--theme-accent)',
+  '--tbl-theme-outline-color': 'var(--theme-accent)',
+  '--tbl-theme-text-color': 'var(--theme-text-primary)',
+  '--tbl-theme-menu-border-color': 'var(--theme-border-soft)',
+  '--tbl-theme-menu-background': 'var(--theme-surface)',
+  '--tbl-theme-menu-hover-background': 'var(--theme-accent)',
+  '--tbl-theme-menu-text-color': 'var(--theme-text-primary)',
+  '--tbl-theme-menu-hover-text-color': 'var(--theme-text-primary)',
+  '--tbl-theme-select-all-focus-overlay': 'var(--theme-selection)',
+  '--tbl-theme-select-all-blur-overlay': 'var(--theme-selection)',
+});
+
+const typolaTableStyle = TableStyle.default.with({
+  '--tbl-style-font-family': 'inherit',
+  '--tbl-style-font-size': 'inherit',
+  '--tbl-style-menu-font-family': 'inherit',
+  '--tbl-style-menu-font-size': 'inherit',
+});
+
+const typolaTableExtension = markdownTables({
+  theme: typolaTableTheme,
+  style: typolaTableStyle,
+  selectionType: 'codemirror',
+  handlePosition: 'outside',
+  lineWrapping: 'wrap',
+  extensions: [keymap.of(defaultKeymap)],
+  globalKeyBindings: [...historyKeymap, ...searchKeymap],
+});
 
 export type LivePreviewCompartments = {
   preview: Compartment;
@@ -58,18 +103,20 @@ export type CreateLivePreviewExtensionsOptions = {
   /** Task 切换后回调;用于埋点或外部状态同步。 */
   onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
   themeId?: string;
+  locale?: AppLocale;
   frontmatterFold?: boolean;
   compartments?: LivePreviewCompartments;
 };
 
-function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'livePreview' | 'themeId' | 'frontmatterFold'>): Extension[] {
+function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'livePreview' | 'themeId' | 'frontmatterFold' | 'locale'>): Extension[] {
   if (!options.livePreview) return [];
   return [
     ...(options.frontmatterFold ? [frontmatterFoldExtension()] : []),
     footnoteExtension(),
     htmlPreviewExtension(),
     inlinePreview(),
-    tables(),
+    typolaTableExtension,
+    ...tableInteractionExtension(options.locale),
     imageBlocks(),
     imageFallbackExtension(),
     mathPreviewExtension(options.themeId),
@@ -92,11 +139,12 @@ export function createLivePreviewExtensions(
     onOpenLink,
     onTaskToggle,
     themeId,
+    locale = 'zh-CN',
     frontmatterFold = true,
     compartments = createLivePreviewCompartments(),
   } = options;
   return [
-    compartments.preview.of(previewExtensions({ livePreview, themeId, frontmatterFold })),
+    compartments.preview.of(previewExtensions({ livePreview, themeId, frontmatterFold, locale })),
     compartments.headingFold.of(headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange })),
     compartments.wheelZoom.of(wheelZoomExtension({ baseSize, onChange: onZoomChange })),
     compartments.previewSync.of(previewSyncExtension({ onChange: onPreviewHeadingChange })),
@@ -124,11 +172,12 @@ export function reconfigureLivePreviewExtensions(
     onOpenLink,
     onTaskToggle,
     themeId,
+    locale = 'zh-CN',
     frontmatterFold = true,
   } = options;
   view.dispatch({
     effects: [
-      compartments.preview.reconfigure(previewExtensions({ livePreview, themeId, frontmatterFold })),
+      compartments.preview.reconfigure(previewExtensions({ livePreview, themeId, frontmatterFold, locale })),
       compartments.wheelZoom.reconfigure(wheelZoomExtension({ baseSize, onChange: onZoomChange })),
       compartments.previewSync.reconfigure(previewSyncExtension({ onChange: onPreviewHeadingChange })),
       compartments.reviewMark.reconfigure(reviewMarkExtension({ comments: reviewComments, filePath: typeof filePath === 'string' ? filePath : undefined })),
