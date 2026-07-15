@@ -3366,11 +3366,9 @@ html[data-theme-id='brutalist'] .editor-tab-close,
 html[data-theme-id='brutalist'] .editor-tab-indicator,
 html[data-theme-id='brutalist'] .file-tree-list,
 html[data-theme-id='brutalist'] .file-tree-node,
-html[data-theme-id='brutalist'] .file-tree-children,
 html[data-theme-id='brutalist'] .file-tree-item,
 html[data-theme-id='brutalist'] .file-tree-folder,
 html[data-theme-id='brutalist'] .file-tree-action,
-html[data-theme-id='brutalist'] .file-tree-folder-chevron,
 html[data-theme-id='brutalist'] .file-tree-icon,
 html[data-theme-id='brutalist'] .file-tree-name,
 html[data-theme-id='brutalist'] .skill-hub-item,
@@ -4557,7 +4555,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   }
 
   .tab-motion-indicator,
-  .file-tree-folder-chevron {
+  .file-tree-folder-chevron,
+  .file-tree-children {
     transition: none !important;
   }
 
@@ -4764,8 +4763,29 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .file-tree-children {
-  animation: file-tree-children-in var(--motion-duration-base) var(--motion-ease-standard) both;
-  transform-origin: top left;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--motion-duration-base) var(--motion-ease-standard),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.file-tree-node[data-expanded='true'] > .file-tree-children {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+@starting-style {
+  .file-tree-node[data-expanded='true'] > .file-tree-children {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.file-tree-children-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workspace-empty {
@@ -4807,7 +4827,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   height: 13px;
   flex-shrink: 0;
   color: color-mix(in oklch, var(--theme-text-secondary) 92%, var(--theme-text-primary));
-  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .file-tree-folder-chevron[data-expanded='true'] {
@@ -4861,17 +4881,6 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes file-tree-children-in {
-  from {
-    opacity: 0;
-    transform: translateY(-3px) scaleY(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scaleY(1);
   }
 }
 
