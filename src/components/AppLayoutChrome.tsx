@@ -226,22 +226,33 @@ export function AppLayoutChrome({
           </AnimatePresence>
         {showToc && <FloatingToc {...tocProps} />}
         <section className="editor-workbench">
-          {externalChangeConflict && (
-            <div className="external-change-conflict" role="alert">
-              <span className="external-change-text">
-                Claude 改了这个文件,你有未保存修改
-              </span>
-              <button type="button" onClick={onViewDiff}>
-                查看差异
-              </button>
-              <button type="button" onClick={onAcceptExternal}>
-                用 Claude 的版本
-              </button>
-              <button type="button" onClick={onKeepMine}>
-                保留我的
-              </button>
-            </div>
-          )}
+          <AnimatePresence initial={false}>
+            {externalChangeConflict && (
+              <motion.div
+                key="external-change-conflict"
+                className="external-change-conflict"
+                role="alert"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={shouldReduceMotion ? { duration: 0 } : calmTransition}
+                style={{ overflow: 'hidden' }}
+              >
+                <span className="external-change-text">
+                  Claude 改了这个文件,你有未保存修改
+                </span>
+                <button type="button" onClick={onViewDiff}>
+                  查看差异
+                </button>
+                <button type="button" onClick={onAcceptExternal}>
+                  用 Claude 的版本
+                </button>
+                <button type="button" onClick={onKeepMine}>
+                  保留我的
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {shouldShowTabbar && (
             <div ref={setEditorTabbarRef} className="editor-tabbar" role="tablist" aria-label="打开的文件">
               {editorTabIndicator.indicatorStyle && (
