@@ -1118,7 +1118,10 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 0;
   visibility: hidden;
   transform: translateX(-8px);
-  transition: opacity 0.15s, transform 0.15s, visibility 0.15s;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    visibility 0s linear var(--motion-duration-fast);
   pointer-events: none;
 }
 
@@ -1126,6 +1129,7 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
+  transition-delay: 0s;
   pointer-events: auto;
 }
 
@@ -1142,6 +1146,7 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 1;
   visibility: visible;
   transform: none;
+  transition-delay: 0s;
   pointer-events: auto;
 }
 
@@ -1338,6 +1343,18 @@ html[data-color-scheme='dark'] .export-menu {
   cursor: pointer;
   border-radius: 3px;
   transition: color 0.1s, background 0.1s;
+}
+
+.floating-toc-chevron-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(0deg);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.floating-toc-row > .floating-toc-chevron[aria-expanded="true"] .floating-toc-chevron-icon {
+  transform: rotate(90deg);
 }
 
 .floating-toc-chevron.is-leaf {
@@ -4542,6 +4559,11 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   .tab-motion-indicator,
   .file-tree-folder-chevron {
     transition: none !important;
+  }
+
+  .floating-toc-panel,
+  .floating-toc-chevron-icon {
+    transition: none;
   }
 }
 

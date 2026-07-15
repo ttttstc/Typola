@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Pin, PinOff, X } from 'lucide-react';
+import { ChevronRight, Pin, PinOff, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import type { TocItem } from '../types/document';
 import { useSettings } from '../hooks/useSettings';
@@ -215,9 +215,9 @@ export function FloatingToc({
                     aria-controls={itemId}
                     onClick={() => toggleCollapsed(flatIndex)}
                   >
-                    {isCollapsed
-                      ? <ChevronRight size={12} aria-hidden="true" />
-                      : <ChevronDown size={12} aria-hidden="true" />}
+                    <span className="floating-toc-chevron-icon" aria-hidden="true">
+                      <ChevronRight size={12} aria-hidden="true" />
+                    </span>
                   </button>
                 ) : (
                   // Leaf placeholder: preserves the chevron column width so
