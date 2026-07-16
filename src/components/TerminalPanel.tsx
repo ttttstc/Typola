@@ -33,6 +33,8 @@ type TerminalPanelProps = {
   workspaceRoot?: string;
   createRequest: number;
   onHeightChange: (height: number) => void;
+  onResizeStart: () => void;
+  onResizeEnd: () => void;
   onHide: () => void;
 };
 
@@ -71,6 +73,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
   workspaceRoot,
   createRequest,
   onHeightChange,
+  onResizeStart,
+  onResizeEnd,
   onHide,
 }: TerminalPanelProps, ref) {
   const settings = useSettings();
@@ -280,20 +284,26 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
 
   const handleResizePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
+    onResizeStart();
     const startY = event.clientY;
     const startHeight = height;
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       onHeightChange(clampHeight(startHeight - (moveEvent.clientY - startY)));
     };
-    const handlePointerUp = () => {
+    const finishResize = () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointerup', finishResize);
+      window.removeEventListener('pointercancel', finishResize);
+      window.removeEventListener('blur', finishResize);
+      onResizeEnd();
     };
 
     window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-  }, [height, onHeightChange]);
+    window.addEventListener('pointerup', finishResize);
+    window.addEventListener('pointercancel', finishResize);
+    window.addEventListener('blur', finishResize);
+  }, [height, onHeightChange, onResizeEnd, onResizeStart]);
 
   useEffect(() => {
     if (!visible) return;
@@ -410,8 +420,6 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       runtime?.terminal.focus();
     },
   }), [tabs, openNewTab, closeTab]);
-
-  if (!visible) return null;
 
   return (
     <section className="terminal-panel" style={{ height }} aria-label="终端">

@@ -4556,7 +4556,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
   .tab-motion-indicator,
   .file-tree-folder-chevron,
-  .file-tree-children {
+  .file-tree-children,
+  .terminal-shell {
     transition: none !important;
   }
 
@@ -8709,6 +8710,20 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
 }
 
 /* ===== Terminal Panel ===== */
+
+.terminal-shell {
+  flex: 0 0 auto;
+  min-height: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear var(--motion-duration-base);
+}
+
+.terminal-shell[data-visible='true'] {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
 
 .terminal-panel {
   position: relative;
