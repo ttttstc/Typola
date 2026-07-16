@@ -3,7 +3,6 @@
 import {
   ArrowLeft,
   ChevronDown,
-  Edit3,
   EyeOff,
   FileDown,
   FilePlus2,
@@ -11,6 +10,7 @@ import {
   GitCompare,
   History,
   LoaderCircle,
+  LocateFixed,
   MessageSquare,
   RefreshCw,
   Send,
@@ -39,13 +39,18 @@ export type AIReviewSettings = {
 
 export type ReviewSkillOption = { name: string; label: string };
 
+export type ReviewCommentNavigation = {
+  ids: string[];
+  index: number;
+};
+
 type Props = {
   comments: ReviewComment[];
   dirty: boolean;
   currentFilePath?: string;
   currentSource?: string;
   onJump: (comment: ReviewComment) => void;
-  onEdit: (comment: ReviewComment) => void;
+  onEdit: (comment: ReviewComment, navigation: ReviewCommentNavigation) => void;
   onSetIgnored: (commentId: string, ignored: boolean) => void;
   onExport: () => void;
   onSendToAI: () => void;
@@ -228,7 +233,7 @@ function ReviewListView({
   currentFilePath?: string;
   currentSource: string;
   onJump: (comment: ReviewComment) => void;
-  onEdit: (comment: ReviewComment) => void;
+  onEdit: (comment: ReviewComment, navigation: ReviewCommentNavigation) => void;
   onSetIgnored: (commentId: string, ignored: boolean) => void;
   onExport: () => void;
   onSendToAI: () => void;
@@ -255,8 +260,9 @@ function ReviewListView({
   });
 
   return (
-    <>
-      {currentFilePath && onStartAIReview && (
+    <div className="review-sidebar-review-view">
+      <div className="review-sidebar-review-scroll">
+        {currentFilePath && onStartAIReview && (
         <details
           className="review-sidebar-ai-inspection"
           open={inspectionOpen}
@@ -374,7 +380,7 @@ function ReviewListView({
         </details>
       )}
 
-      <div className="review-sidebar-filter-row" role="tablist" aria-label="检视意见筛选">
+        <div className="review-sidebar-filter-row" role="tablist" aria-label="检视意见筛选">
         {([
           ['all', '全部'],
           ['human', '人工'],
@@ -391,20 +397,20 @@ function ReviewListView({
             {label}
           </button>
         ))}
-      </div>
+        </div>
 
-      {!currentFilePath && <div className="review-sidebar-empty">请先打开一个文档</div>}
-      {currentFilePath && visibleComments.length === 0 && filter !== 'ignored' && (
+        {!currentFilePath && <div className="review-sidebar-empty">请先打开一个文档</div>}
+        {currentFilePath && visibleComments.length === 0 && filter !== 'ignored' && (
         <div className="review-sidebar-empty">
           <p>{activeComments.length === 0 ? '当前文档暂无有效检视意见' : '当前筛选下暂无意见'}</p>
           <p className="review-sidebar-empty-hint">选中正文 → 浮条「加检视意见」即可加批注。</p>
         </div>
       )}
-      {currentFilePath && filter === 'ignored' && visibleComments.length === 0 && (
+        {currentFilePath && filter === 'ignored' && visibleComments.length === 0 && (
         <div className="review-sidebar-empty">暂无已忽略意见</div>
       )}
 
-      {visibleComments.length > 0 && (
+        {visibleComments.length > 0 && (
         <ol className="review-sidebar-list">
           {visibleComments.map((comment, index) => {
             const ignored = comment.status === 'ignored';
@@ -418,8 +424,11 @@ function ReviewListView({
                 <button
                   type="button"
                   className="review-sidebar-item-main"
-                  onClick={() => onJump(comment)}
-                  title="跳转到原文片段"
+                  onClick={() => onEdit(comment, {
+                    ids: visibleComments.map((item) => item.id),
+                    index,
+                  })}
+                  title="查看并编辑检视意见"
                 >
                   <span className="review-sidebar-item-meta">
                     <span className="review-sidebar-item-index">#{index + 1}</span>
@@ -431,18 +440,25 @@ function ReviewListView({
                       <span className="review-sidebar-item-basis">依据：{comment.basis.label}</span>
                     )}
                   </span>
-                  <span className="review-sidebar-item-quote">{truncate(comment.anchor.originalText, 60)}</span>
-                  <span className="review-sidebar-item-text">{comment.text}</span>
+                  <span className="review-sidebar-item-section is-original">
+                    <span className="review-sidebar-item-section-label">原文</span>
+                    <span className="review-sidebar-item-quote">{truncate(comment.anchor.originalText, 120)}</span>
+                  </span>
+                  <span className="review-sidebar-item-section is-opinion">
+                    <span className="review-sidebar-item-section-label">意见</span>
+                    <span className="review-sidebar-item-text">{comment.text}</span>
+                  </span>
                 </button>
                 <div className="review-sidebar-item-tools">
                   <button
                     type="button"
                     className="review-sidebar-item-tool"
-                    onClick={() => onEdit(comment)}
-                    title="编辑意见"
-                    aria-label="编辑意见"
+                    onClick={() => onJump(comment)}
+                    title="定位原文"
+                    aria-label="定位原文"
                   >
-                    <Edit3 size={12} />
+                    <LocateFixed size={12} />
+                    <span>定位</span>
                   </button>
                   <button
                     type="button"
@@ -460,7 +476,8 @@ function ReviewListView({
             );
           })}
         </ol>
-      )}
+        )}
+      </div>
 
       <div className="review-sidebar-actions review-sidebar-actions-bottom">
         <button
@@ -482,7 +499,7 @@ function ReviewListView({
           <Send size={13} /> {aiRewriteRunning ? '改稿中…' : 'AI 改稿'}
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -510,7 +527,7 @@ function RewriteHistoryView({
   onReturnFromRevision?: () => void;
 }) {
   return (
-    <>
+    <div className="review-sidebar-history-view">
       {currentFilePath && (
         <>
         {revisionReturnPath && onReturnFromRevision && (
@@ -622,6 +639,6 @@ function RewriteHistoryView({
         </>
       )}
       {!currentFilePath && <div className="review-sidebar-empty">请先打开一个文档</div>}
-    </>
+    </div>
   );
 }

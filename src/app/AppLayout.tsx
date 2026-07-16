@@ -33,6 +33,7 @@ import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor
 import {
   ReviewSidebarPanel,
   type AIReviewSettings,
+  type ReviewCommentNavigation,
   type ReviewSkillOption,
 } from '../components/review/ReviewSidebarPanel';
 import {
@@ -498,10 +499,29 @@ export function AppLayout() {
     initialText: string;
     /** 非 null = 编辑现有意见;null = 新增 */
     editingId: string | null;
+    navigationIds: string[];
   } | null>(null);
   const handleReviewRequested = useCallback((anchor: SelectionAnchor, origin: { x: number; y: number }) => {
-    setReviewEditor({ x: origin.x, y: origin.y, anchor, initialText: '', editingId: null });
+    setReviewEditor({ x: origin.x, y: origin.y, anchor, initialText: '', editingId: null, navigationIds: [] });
   }, []);
+  const navigateReviewEditor = useCallback((offset: -1 | 1) => {
+    setReviewEditor((current) => {
+      if (!current?.editingId) return current;
+      const currentIndex = current.navigationIds.indexOf(current.editingId);
+      const nextId = current.navigationIds[currentIndex + offset];
+      const nextComment = reviewStateApi.state.comments.find((comment) => comment.id === nextId);
+      if (!nextComment) return current;
+      return {
+        ...current,
+        anchor: nextComment.anchor,
+        initialText: nextComment.text,
+        editingId: nextComment.id,
+      };
+    });
+  }, [reviewStateApi.state.comments]);
+  const reviewEditorIndex = reviewEditor?.editingId
+    ? reviewEditor.navigationIds.indexOf(reviewEditor.editingId)
+    : -1;
 
   // 选区原地闭环用的 oneshot wrapper:绑好 settings 里的 claude 参数 + 工作区 dirs。
   // 不传 cwd(oneshot 不产文件,不需要落 .typola-output 子目录),让 claude 默认即可。
@@ -2258,13 +2278,14 @@ export function AppLayout() {
           preserveFocus: true,
         });
       }}
-      onEdit={(comment: ReviewComment) => {
+      onEdit={(comment: ReviewComment, navigation: ReviewCommentNavigation) => {
         setReviewEditor({
-          x: window.innerWidth / 2 - 180,
-          y: window.innerHeight / 2 - 140,
+          x: window.innerWidth / 2 - 320,
+          y: window.innerHeight / 2 - 250,
           anchor: comment.anchor,
           initialText: comment.text,
           editingId: comment.id,
+          navigationIds: navigation.ids,
         });
       }}
       onSetIgnored={(commentId, ignored) => reviewStateApi.setIgnored(commentId, ignored)}
@@ -2609,16 +2630,25 @@ export function AppLayout() {
         y={reviewEditor?.y ?? 0}
         originalText={reviewEditor?.anchor.originalText ?? ''}
         initialText={reviewEditor?.initialText ?? ''}
+        currentIndex={reviewEditorIndex >= 0 ? reviewEditorIndex : undefined}
+        total={reviewEditor?.navigationIds.length || undefined}
+        onPrevious={reviewEditorIndex > 0 ? () => navigateReviewEditor(-1) : undefined}
+        onNext={reviewEditor && reviewEditorIndex >= 0 && reviewEditorIndex < reviewEditor.navigationIds.length - 1
+          ? () => navigateReviewEditor(1)
+          : undefined}
         onSave={(text) => {
           if (!reviewEditor) return;
           if (reviewEditor.editingId) {
             reviewStateApi.updateComment(reviewEditor.editingId, text);
+            setReviewEditor((current) => current?.editingId === reviewEditor.editingId
+              ? { ...current, initialText: text }
+              : current);
           } else {
             reviewStateApi.addComment(reviewEditor.anchor, text);
             // 新增检视意见后自动切到右栏 review 面板
             setRightPanelMode('review');
+            setReviewEditor(null);
           }
-          setReviewEditor(null);
         }}
         onCancel={() => setReviewEditor(null)}
       />

@@ -76,7 +76,7 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     expect(host.querySelector('[aria-label="接纳意见"]')).toBeNull();
   });
 
-  it('人工、AI 和已忽略意见都可编辑，活动意见只支持忽略', async () => {
+  it('点击意见卡打开编辑器，独立按钮用于定位和忽略', async () => {
     const values = props([
       comment({ id: 'human' }),
       comment({ id: 'ai', source: 'ai' }),
@@ -84,10 +84,17 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     ]);
     await act(async () => root.render(<ReviewSidebarPanel {...values} />));
 
-    expect(host.querySelectorAll('[aria-label="编辑意见"]')).toHaveLength(2);
-    const aiEdit = host.querySelectorAll<HTMLButtonElement>('[aria-label="编辑意见"]')[1];
-    await act(async () => aiEdit.click());
-    expect(values.onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'ai' }));
+    const cards = host.querySelectorAll<HTMLButtonElement>('.review-sidebar-item-main');
+    expect(cards).toHaveLength(2);
+    await act(async () => cards[1].click());
+    expect(values.onEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'ai' }),
+      { ids: ['human', 'ai'], index: 1 },
+    );
+
+    const locate = host.querySelector<HTMLButtonElement>('[aria-label="定位原文"]')!;
+    await act(async () => locate.click());
+    expect(values.onJump).toHaveBeenCalledWith(expect.objectContaining({ id: 'human' }));
 
     const ignore = host.querySelector<HTMLButtonElement>('[aria-label="忽略意见"]')!;
     await act(async () => ignore.click());
