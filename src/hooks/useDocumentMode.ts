@@ -5,7 +5,7 @@
 //
 //   read:   左栏维持用户当前状态;右栏若是 review/flow 则清成 none;窗口不动
 //   flow:   左栏=AI 工作台;右栏=flow(SkillHub);窗口最大化(可关)
-//   review: 左栏维持;右栏=review;窗口不动
+//   review: 左栏收起;右栏=review;窗口不动
 //
 // 退出 flow 时:还原进入前的最大化状态 + 还原左栏(如果进入时不是 AI 工作台)。
 //
@@ -137,8 +137,7 @@ export function useDocumentMode({
     }
 
     if (next === 'review') {
-      // 从 flow 来:左栏从 aiWorkbench 切到 workspace(检视更适合配文件树)
-      if (prev === 'flow') setLeftRailMode('workspace');
+      setLeftRailMode('none');
       setRightPanelMode('review');
       setDocModeState('review');
       return;

@@ -28,7 +28,7 @@ import { writeText as writeClipboardText } from '../services/clipboardService';
 import { resolveLocalResourcePath } from '../services/htmlPresentationService';
 import { formatImageSrc, serializeHtmlImage } from '../services/imageInsert';
 import { findSearchMatches } from '../services/documentSearchService';
-import { sourceBlockLineNumberGutter } from './editor/cm6/sourceLineNumberGutter';
+import { sourceLineNumberGutter } from './editor/cm6/sourceLineNumberGutter';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -242,7 +242,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     const editor = editorViewRef.current;
     if (!editor) return;
     const target = event.target as Node | null;
-    if (!target || !editor.contentDOM.contains(target)) return;
+    if (!target || !editor.dom.contains(target)) return;
     const tableCell = tableCellFromEventTarget(target);
     if (tableCell) {
       event.preventDefault();
@@ -256,7 +256,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     event.preventDefault();
     setTableCtxMenu(null);
     const sel = editor.state.selection.main;
-    const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
+    const inContent = editor.contentDOM.contains(target);
+    const pos = inContent ? editor.posAtCoords({ x: event.clientX, y: event.clientY }) : null;
     const targetElement = target instanceof Element ? target : target?.parentElement;
     const onImage = targetElement?.closest('.cm-atomic-image') !== null;
     let hasImage = false;
@@ -342,7 +343,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       wordWrap: settings.editorWordWrap,
       extraExtensions: [
         ...(extraExtensions ?? []),
-        ...(settings.editorLineNumbers && lineNumberMode === 'blocks' ? [sourceBlockLineNumberGutter()] : []),
+        ...(settings.editorLineNumbers && lineNumberMode === 'blocks' ? [sourceLineNumberGutter()] : []),
       ],
       // Cmd/Ctrl+K → 弹起 5+1 AI 菜单(对齐右键的动线),菜单触发后再走 onAIAction 注入
       onModK: () => {

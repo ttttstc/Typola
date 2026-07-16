@@ -38,3 +38,11 @@ html[data-color-scheme='dark'] body :where(*) {
 html[data-color-scheme='dark'] body :where(input, textarea)::placeholder {
   color: #fff !important;
 }
+
+/* Tooltip 使用反色表面，不能继承正文的强制前景色。 */
+body .typola-floating-tooltip,
+body .typola-floating-tooltip :where(*),
+html[data-color-scheme='dark'] body .typola-floating-tooltip,
+html[data-color-scheme='dark'] body .typola-floating-tooltip :where(*) {
+  color: var(--theme-canvas) !important;
+}
