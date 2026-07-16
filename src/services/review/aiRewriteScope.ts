@@ -40,7 +40,7 @@ export function resolveAIRewriteScope(
   let label = '全文';
 
   if (scope === 'selection') {
-    if (!selectionRange) throw new Error('请先在正文中选中一段可唯一定位的文字。');
+    if (!selectionRange) throw new Error('请先选中正文中可唯一定位的文字；所见即所得模式里遇到重复文本，请扩大选区。');
     ({ from, to } = selectionRange);
     label = '选中文本';
   } else if (scope === 'section') {
@@ -68,5 +68,6 @@ export function resolveAIRewriteScope(
 }
 
 export function isHighImpactRewrite(requirement: string): boolean {
-  return /(全文.{0,6}(重写|改写|重构)|重写.{0,6}全文|整体重写|合并.{0,8}(章|节)|删除.{0,8}(章|节)|(章|节).{0,8}(合并|删除|重组)|结构.{0,6}(重组|重构|重排)|重新组织.{0,6}全文|改变.{0,6}结论|推翻.{0,6}结论|rewrite.{0,12}(whole|entire)|merge.{0,12}sections?|delete.{0,12}sections?|restructure)/iu.test(requirement);
+  // 仅按措辞做保守启发式判断；即使漏判，改稿仍停留在候选稿，必须由用户应用。
+  return /((全文|整篇|整稿|文章|全部).{0,8}(重写|改写|重构|推翻|重来|重新写)|(重写|改写|重构|推翻|重来|重新写).{0,8}(全文|整篇|整稿|文章)|整体重写|推翻.{0,4}重来|合并.{0,8}(章|节)|删除.{0,8}(章|节)|(章|节).{0,8}(合并|删除|重组)|结构.{0,6}(重组|重构|重排)|重新组织.{0,6}全文|改变.{0,6}结论|推翻.{0,6}结论|rewrite.{0,12}(whole|entire)|merge.{0,12}sections?|delete.{0,12}sections?|restructure)/iu.test(requirement);
 }

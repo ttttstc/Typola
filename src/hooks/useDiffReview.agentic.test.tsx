@@ -81,6 +81,25 @@ describe('useDiffReview 持续候选稿', () => {
     expect(controller.state.selfCheckStatus).toBe('warning');
   });
 
+  it('持久化时不写入可重建的 hunks，配额不足时保留内存候选稿', async () => {
+    await act(async () => root.render(
+      <Harness persistenceKey="conv-1::a.md" onController={(value) => { controller = value; }} />,
+    ));
+    await act(async () => controller.open({
+      source: 'review', originalContent: '原文', proposedContent: '候选稿',
+    }));
+    const stored = JSON.parse(localStorage.getItem('typola.diff-review.v1:conv-1::a.md') ?? '{}');
+    expect(stored.hunks).toBeUndefined();
+    expect(stored.feedbackPending).toBeUndefined();
+
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    });
+    await expect(act(async () => controller.updateCandidate('更大的候选稿'))).resolves.toBeUndefined();
+    expect(controller.state.proposedContent).toBe('更大的候选稿');
+    setItem.mockRestore();
+  });
+
   it('放弃候选稿并立即切换文档时不会留下旧候选稿', async () => {
     await act(async () => root.render(
       <Harness persistenceKey="conv-1::a.md" onController={(value) => { controller = value; }} />,

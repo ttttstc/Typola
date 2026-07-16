@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAIReviewFindings, resolveAIReviewAnchor } from './aiReviewResult';
+import { parseAIReviewFindings, resolveAIReviewAnchor, resolveStoredReviewAnchor } from './aiReviewResult';
 
 describe('aiReviewResult', () => {
   it('只接受最小且合法的 AI 检视结果', () => {
@@ -17,6 +17,13 @@ describe('aiReviewResult', () => {
     expect(resolveAIReviewAnchor('重复 重复', 'a.md', {
       originalText: '重复', text: '意见',
     })).toBeNull();
+  });
+
+  it('保存位置仍匹配时优先跳到原始坐标，避免重复文本失去跳转能力', () => {
+    const source = '重复文本\n中间内容\n重复文本';
+    expect(resolveStoredReviewAnchor(source, 'a.md', {
+      filePath: 'a.md', from: 10, to: 14, originalText: '重复文本',
+    })).toEqual(expect.objectContaining({ from: 10, to: 14 }));
   });
 
   it('区分没有问题和无效结果', () => {

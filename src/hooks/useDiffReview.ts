@@ -175,8 +175,16 @@ export function useDiffReview(
       skipPersistRef.current = false;
       return;
     }
-    if (state.isOpen) localStorage.setItem(key, JSON.stringify(state));
-    else localStorage.removeItem(key);
+    try {
+      if (state.isOpen) {
+        const { hunks: _hunks, feedbackPending: _feedbackPending, ...persisted } = state;
+        localStorage.setItem(key, JSON.stringify(persisted));
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // localStorage 可能因候选稿过大而写满；保留内存态，不中断当前编辑。
+    }
   }, [persistenceKey, state]);
 
   const open = useCallback((options: OpenDiffReviewOptions) => {
@@ -185,7 +193,12 @@ export function useDiffReview(
 
   const clearPersistedCandidate = useCallback(() => {
     const key = storageKey(persistenceKey);
-    if (key && typeof localStorage !== 'undefined') localStorage.removeItem(key);
+    if (!key || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // 清理失败不影响关闭内存中的候选稿。
+    }
   }, [persistenceKey]);
 
   const close = useCallback(() => {

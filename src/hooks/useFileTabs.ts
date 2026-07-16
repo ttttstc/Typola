@@ -568,6 +568,14 @@ export function useFileTabs({
       dirty: value !== fileRef.current.lastSavedContent,
     };
     fileRef.current = nextFile;
+    const activeTabId = activeTabIdRef.current;
+    if (activeTabId) {
+      const nextTabs = openTabsRef.current.map((tab) => (
+        tab.id === activeTabId ? { ...tab, file: nextFile } : tab
+      ));
+      openTabsRef.current = nextTabs;
+      setOpenTabs(nextTabs);
+    }
     setFile(nextFile);
     setSaveVisualState(nextFile.dirty ? 'dirty' : 'idle');
   }, [clearSaveVisualTimer, setAutoSaveError, setDiskChangeMessage, setTransientMessage]);

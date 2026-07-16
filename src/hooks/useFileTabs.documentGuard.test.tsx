@@ -112,4 +112,25 @@ describe('useFileTabs 文档切换守卫', () => {
     expect(value.unsavedDialog?.message).toContain('有未保存的修改');
     expect(value.file.path).toBe('D:/docs/a.md');
   });
+
+  it('守卫应用候选稿后立即切换标签，返回时保留候选内容', async () => {
+    await act(async () => value.handleOpenPath('D:/docs/a.md'));
+    await act(async () => value.handleOpenPath('D:/docs/b.md'));
+    guardRef.current = async () => {
+      value.handleContentChange('候选正文');
+      return true;
+    };
+
+    await act(async () => {
+      value.handleSwitchTab(value.openTabs.find((tab) => tab.file.path === 'D:/docs/a.md')!.id);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      value.handleSwitchTab(value.openTabs.find((tab) => tab.file.path === 'D:/docs/b.md')!.id);
+      await Promise.resolve();
+    });
+
+    expect(value.file.content).toBe('候选正文');
+    expect(value.file.dirty).toBe(true);
+  });
 });

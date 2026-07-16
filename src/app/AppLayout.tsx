@@ -66,7 +66,7 @@ import type { DiffFeedbackRequest } from '../components/diff/DiffReviewPane';
 import { useDocumentHistoryList } from '../hooks/useDocumentHistoryList';
 import { createDocumentHistoryVersion } from '../services/review/documentHistoryService';
 import { mergeDecisions } from '../services/diff/markdownDiff';
-import { parseAIReviewFindings, resolveAIReviewAnchor } from '../services/review/aiReviewResult';
+import { parseAIReviewFindings, resolveAIReviewAnchor, resolveStoredReviewAnchor } from '../services/review/aiReviewResult';
 import { isHighImpactRewrite, resolveAIRewriteScope } from '../services/review/aiRewriteScope';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
@@ -1383,7 +1383,14 @@ export function AppLayout() {
       return false;
     }
     try {
-      return await diffReviewController.apply();
+      const applied = await diffReviewController.apply();
+      if (!applied) {
+        const reason = state.baselineStatus === 'stale'
+          ? '源文档已在候选稿生成后发生变化，请重新对比或以最新文档重新开始。'
+          : state.selfCheckSummary || '候选稿自检未通过，请处理阻断项后再应用。';
+        await messageDialog(reason, { title: '暂不能应用候选稿' });
+      }
+      return applied;
     } catch (error) {
       await messageDialog(String(error), { title: '应用候选稿失败' });
       return false;
@@ -2334,11 +2341,7 @@ export function AppLayout() {
       currentFilePath={file.path}
       currentSource={file.content}
       onJump={(comment: ReviewComment) => {
-        const hit = resolveAIReviewAnchor(file.content, file.path, {
-          originalText: comment.anchor.originalText,
-          prefixHint: comment.anchor.prefixHint,
-          text: comment.text,
-        });
+        const hit = resolveStoredReviewAnchor(file.content, file.path, comment.anchor);
         if (!hit) {
           setTransientMessage('原文位置已变化，未执行跳转。');
           return;

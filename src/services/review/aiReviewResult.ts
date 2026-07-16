@@ -46,3 +46,27 @@ export function resolveAIReviewAnchor(
     ...(finding.prefixHint ? { prefixHint: finding.prefixHint } : {}),
   };
 }
+
+export function resolveStoredReviewAnchor(
+  source: string,
+  filePath: string,
+  anchor: SelectionAnchor,
+): SelectionAnchor | null {
+  if (
+    anchor.from >= 0
+    && anchor.to >= anchor.from
+    && anchor.to <= source.length
+    && source.slice(anchor.from, anchor.to) === anchor.originalText
+  ) {
+    return {
+      ...anchor,
+      filePath,
+      originalText: source.slice(anchor.from, anchor.to),
+    };
+  }
+  return resolveAIReviewAnchor(source, filePath, {
+    originalText: anchor.originalText,
+    prefixHint: anchor.prefixHint,
+    text: '',
+  });
+}
