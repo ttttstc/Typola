@@ -797,6 +797,8 @@ export function AppLayout() {
     setAIReviewRunning(true);
     setAIReviewRunVersion((value) => value + 1);
     try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('allow_fs_directory', { dir: outputBaseDir });
       await mkdir(parentDirectory(resultPath), { recursive: true });
       await writeTextFile(resultPath, AI_REVIEW_PENDING_RESULT);
       await convManager.send(prompt, {

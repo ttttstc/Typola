@@ -5,12 +5,17 @@ import { useWorkspaceWatch } from './useWorkspaceWatch';
 import type { WorkspaceChangedPayload } from '../services/workspaceWatchService';
 
 const mkdirMock = vi.fn().mockResolvedValue(undefined);
+const invokeMock = vi.fn().mockResolvedValue(undefined);
 const watchWorkspaceMock = vi.fn().mockResolvedValue(undefined);
 const unwatchWorkspaceMock = vi.fn().mockResolvedValue(undefined);
 let workspaceChangedHandler: ((payload: WorkspaceChangedPayload) => void) | null = null;
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   mkdir: mkdirMock,
+}));
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
 }));
 
 vi.mock('../services/workspaceWatchService', () => ({
@@ -52,6 +57,7 @@ describe('useWorkspaceWatch', () => {
     api = undefined;
     workspaceChangedHandler = null;
     mkdirMock.mockClear();
+    invokeMock.mockClear();
     watchWorkspaceMock.mockClear();
     unwatchWorkspaceMock.mockClear();
   });
@@ -70,6 +76,9 @@ describe('useWorkspaceWatch', () => {
     });
 
     expect(mkdirMock).toHaveBeenCalledWith(String.raw`D:\workspace\.typola-output`, { recursive: true });
+    expect(invokeMock).toHaveBeenCalledWith('allow_fs_directory', {
+      dir: String.raw`D:\workspace\.typola-output`,
+    });
     expect(watchWorkspaceMock).toHaveBeenCalledWith(String.raw`D:\workspace\.typola-output`);
 
     act(() => {

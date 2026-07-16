@@ -574,11 +574,10 @@ fn allow_asset_directory(app: tauri::AppHandle, dir: String) -> Result<(), Strin
         .map_err(|error| format!("failed to allow asset directory: {error}"))
 }
 
-// Issue #156 §10.5-§10.7:HTML 预览时需要把产物文件所在目录动态加进 fs scope,
-// 让 plugin-fs 可以读取 HTML 内引用的本地 CSS / JS / 图片等。
-// 不限制目录内容(整个目录递归允许),因为产物可能带 assets/ 子目录。
+// 将用户当前工作区的产物目录动态加入 fs scope。工作区由用户显式选择，
+// 目录内的候选稿、检视结果及 HTML 产物均需由 plugin-fs 读写。
 #[tauri::command]
-fn allow_html_preview_directory(app: tauri::AppHandle, dir: String) -> Result<(), String> {
+fn allow_fs_directory(app: tauri::AppHandle, dir: String) -> Result<(), String> {
     app.fs_scope()
         .allow_directory(&dir, true)
         .map_err(|error| format!("failed to allow html preview directory: {error}"))
@@ -1670,7 +1669,7 @@ pub fn run() {
             pending_opened_paths,
             force_close_main_window,
             allow_asset_directory,
-            allow_html_preview_directory,
+            allow_fs_directory,
             open_path_external,
             read_first_level_openable,
             read_opened_document,
