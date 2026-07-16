@@ -28,6 +28,7 @@ describe('aiReviewResult', () => {
 
   it('区分没有问题和无效结果', () => {
     expect(parseAIReviewFindings('{"comments":[]}')).toEqual([]);
+    expect(parseAIReviewFindings('```json\n{"comments":[]}\n```')).toEqual([]);
     expect(() => parseAIReviewFindings('not-json')).toThrow('不是合法 JSON');
     expect(() => parseAIReviewFindings('{}')).toThrow('缺少 comments');
   });

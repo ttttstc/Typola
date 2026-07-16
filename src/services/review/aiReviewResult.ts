@@ -10,7 +10,9 @@ export type AIReviewFinding = {
 export function parseAIReviewFindings(raw: string): AIReviewFinding[] {
   let value: unknown;
   try {
-    value = JSON.parse(raw);
+    const trimmed = raw.trim();
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/iu);
+    value = JSON.parse(fenced?.[1] ?? trimmed);
   } catch {
     throw new Error('AI 检视结果不是合法 JSON。');
   }

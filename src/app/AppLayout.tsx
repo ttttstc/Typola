@@ -53,7 +53,7 @@ import {
 import { ensureArtifactManifest } from '../services/artifacts/manifest';
 import type { ArtifactRecord } from '../services/artifacts/types';
 import { saveFileDialog } from '../services/dialogService';
-import { mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { SelectionAnchor } from '../services/agent/types';
 import { resolveWorkbenchWorkspaceRoot } from '../services/agent/workbenchWorkspace';
 import { useConversationManager } from '../hooks/useAgentSession';
@@ -185,14 +185,11 @@ type PendingCandidateRun = {
 };
 
 type PendingAIReviewRun = {
-  resultPath: string;
   conversationId: string;
   documentPath: string;
   basis: ReviewBasis;
   started: boolean;
 };
-
-const AI_REVIEW_PENDING_RESULT = '{"status":"pending","comments":[]}';
 
 function candidateSelfCheckPath(candidatePath: string): string {
   return `${candidatePath}.selfcheck.json`;
@@ -737,7 +734,7 @@ export function AppLayout() {
   }, [convManager.activeConvId, effectiveAiWorkspaceRoot, file.content, file.name, file.path, outputBaseDir, reviewStateApi]);
 
   const handleStartAIReview = useCallback(async (options: AIReviewSettings) => {
-    if (!file.path || !outputBaseDir) {
+    if (!file.path) {
       await messageDialog('请先打开并保存文档，再开始 AI 检视。', { title: 'AI 检视' });
       return;
     }
@@ -755,9 +752,6 @@ export function AppLayout() {
         return;
       }
     }
-    const stem = pathBasenameWithoutExtension(file.path) || 'document';
-    const resultName = `${stem}.ai检视.json`;
-    const resultPath = joinLocalPath(outputBaseDir, safeOutputSegment(conversationId), resultName);
     const contextBoundary = documentContextBoundary(conversation.currentFileContextPath, file.path);
     const useStyleGuide = options.useStyleGuide && Boolean(styleGuidePath);
     const basisLabels = [
@@ -783,12 +777,11 @@ export function AppLayout() {
       options.requirement ? `本次额外要求：${options.requirement}` : '本次没有额外要求，重点检查表达、结构和重复论证。',
       `已有人工与 AI 意见如下，仅用于去重；不得改写、分类或覆盖：\n${JSON.stringify(existingComments)}`,
       '每条意见必须引用文档中连续且可唯一定位的原文片段。重复原文时提供紧邻前缀 prefixHint 消歧。',
-      `将结果写入 ${resultName}，不要创建其他文件。JSON 格式固定为：`,
+      '直接返回以下 JSON，不调用文件写入工具，不创建任何文件。JSON 格式固定为：',
       '{"comments":[{"originalText":"原文片段","prefixHint":"可选前缀","text":"检视意见"}]}',
-      '没有有效问题时写入 {"comments":[]}。执行一轮后停止，不要提问。',
+      '除 JSON 外不要输出其他内容。没有有效问题时返回 {"comments":[]}。执行一轮后停止，不要提问。',
     ].filter(Boolean).join('\n\n');
     pendingAIReviewRunRef.current = {
-      resultPath,
       conversationId,
       documentPath: file.path,
       basis,
@@ -797,10 +790,6 @@ export function AppLayout() {
     setAIReviewRunning(true);
     setAIReviewRunVersion((value) => value + 1);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('allow_fs_directory', { dir: outputBaseDir });
-      await mkdir(parentDirectory(resultPath), { recursive: true });
-      await writeTextFile(resultPath, AI_REVIEW_PENDING_RESULT);
       await convManager.send(prompt, {
         conversationId,
         currentFileContextPath: file.path,
@@ -815,7 +804,7 @@ export function AppLayout() {
       setAIReviewRunning(false);
       await messageDialog(String(error), { title: 'AI 检视失败' });
     }
-  }, [convManager, file.dirty, file.path, handleSave, outputBaseDir, reviewStateApi.state.comments, styleGuidePath, truncate]);
+  }, [convManager, file.dirty, file.path, handleSave, reviewStateApi.state.comments, styleGuidePath, truncate]);
 
   useEffect(() => {
     const pending = pendingAIReviewRunRef.current;
@@ -837,10 +826,10 @@ export function AppLayout() {
       setTransientMessage('AI 检视已完成，但当前文档已切换；结果未加入当前列表。');
       return;
     }
-    void readTextFile(pending.resultPath).then((raw) => {
-      if (raw.trim() === AI_REVIEW_PENDING_RESULT) {
-        throw new Error('AI 未写入检视结果文件。');
-      }
+    try {
+      const assistant = [...conversation.messages].reverse().find((message) => message.role === 'assistant');
+      const raw = assistant?.role === 'assistant' ? assistant.content : '';
+      if (!raw.trim()) throw new Error('AI 未返回检视结果。');
       const findings = parseAIReviewFindings(raw);
       const existing = new Set(reviewStateApi.state.comments.map((comment) => (
         `${comment.anchor.originalText}\n${comment.text}`
@@ -862,9 +851,9 @@ export function AppLayout() {
       setTransientMessage(unmatched > 0
         ? `AI 检视新增 ${added} 条意见，${unmatched} 条因无法可靠定位已跳过。`
         : `AI 检视完成，新增 ${added} 条意见。`);
-    }).catch((error) => {
+    } catch (error) {
       void messageDialog(`读取 AI 检视结果失败：${String(error)}`, { title: 'AI 检视失败' });
-    });
+    }
   }, [aiReviewRunVersion, convManager.conversations, file.content, file.path, reviewStateApi, setLeftRailMode]);
 
   const startInitialCandidate = useCallback(async (
