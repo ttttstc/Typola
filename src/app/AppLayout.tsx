@@ -33,7 +33,6 @@ import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor
 import {
   ReviewSidebarPanel,
   type AIReviewSettings,
-  type AIRewriteRequest,
   type ReviewSkillOption,
 } from '../components/review/ReviewSidebarPanel';
 import {
@@ -67,7 +66,6 @@ import { useDocumentHistoryList } from '../hooks/useDocumentHistoryList';
 import { createDocumentHistoryVersion } from '../services/review/documentHistoryService';
 import { mergeDecisions } from '../services/diff/markdownDiff';
 import { parseAIReviewFindings, resolveAIReviewAnchor, resolveStoredReviewAnchor } from '../services/review/aiReviewResult';
-import { isHighImpactRewrite, resolveAIRewriteScope } from '../services/review/aiRewriteScope';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
@@ -895,76 +893,6 @@ export function AppLayout() {
       throw error;
     }
   }, [convManager, file.path, outputBaseDir]);
-
-  const handleStartAIRewrite = useCallback(async (request: AIRewriteRequest) => {
-    if (!file.path) {
-      await messageDialog('请先打开并保存文档，再发起改稿。', { title: 'AI 改稿' });
-      return;
-    }
-    if (!request.requirement.trim()) return;
-    if (file.dirty) {
-      try {
-        await handleSave();
-      } catch (error) {
-        await messageDialog(`保存当前文档失败：${String(error)}`, { title: 'AI 改稿' });
-        return;
-      }
-    }
-
-    const rawSelection = editorCommandRef.current?.getSelection() ?? null;
-    const selection = editorMode === 'wysiwyg' && rawSelection
-      ? { ...rawSelection, from: -1, to: -1 }
-      : rawSelection;
-    let scope;
-    try {
-      scope = resolveAIRewriteScope(
-        file.content,
-        request.scope,
-        selection,
-        analyzeMarkdown(file.content).foldSections,
-        activeTocIndex,
-      );
-    } catch (error) {
-      await messageDialog(String(error instanceof Error ? error.message : error), { title: '选择改稿范围' });
-      return;
-    }
-
-    if (isHighImpactRewrite(request.requirement)) {
-      const confirmed = await confirmDialog(
-        `这次要求可能改变文章结构或核心内容。\n\n影响范围：${scope.label}（L${scope.lineFrom}–L${scope.lineTo}）\n\nAI 只会生成候选稿，不会覆盖当前文档。是否继续？`,
-        { title: '确认高影响改稿', okLabel: '生成候选稿', cancelLabel: '取消' },
-      );
-      if (!confirmed) return;
-    }
-
-    const stem = pathBasenameWithoutExtension(file.path) || 'document';
-    refreshRevisions();
-    const versions = aiRevisions
-      .filter((revision) => revision.name.startsWith(`${stem}.ai改`))
-      .map((revision) => revision.version ?? 0);
-    const targetFileName = `${stem}.ai改${(versions.length ? Math.max(...versions) : 0) + 1}.md`;
-    const selfCheckFileName = `${targetFileName}.selfcheck.json`;
-    const scopeExcerpt = request.scope === 'document'
-      ? ''
-      : `范围原文（仅用于定位，完整内容以源文档为准）：\n${truncate(scope.anchorText, 1200)}`;
-    const prompt = [
-      '请基于当前源文档生成一份完整候选稿。源文档只读，不得直接修改。',
-      `源文档：${file.path}`,
-      `本轮要求：${request.requirement}`,
-      `允许修改范围：${scope.label}，源行 L${scope.lineFrom}–L${scope.lineTo}。范围外内容保持不变。`,
-      scopeExcerpt,
-      `把完整候选稿写入 ${targetFileName}，不要创建其他改稿文件。`,
-      `完成后把自检写入 ${selfCheckFileName}，JSON 格式：`,
-      '{"status":"fresh|warning|blocked","summary":"一句话说明要求是否完成、是否越界及是否存在高影响变化"}',
-      '若修改超出指定范围或无法安全完成，状态必须为 blocked。执行一轮修改和自检后停止，不要提问。',
-    ].filter(Boolean).join('\n\n');
-
-    try {
-      await startInitialCandidate(targetFileName, prompt, [file.path]);
-    } catch (error) {
-      await messageDialog(String(error), { title: '发起 AI 改稿失败' });
-    }
-  }, [activeTocIndex, aiRevisions, editorMode, file.content, file.dirty, file.path, handleSave, refreshRevisions, startInitialCandidate, truncate]);
 
   // 任务 #15 发 AI 改:把全文 + 所有意见拼成 prompt,沿用当前 Session,走产物回流。
   // 文件命名约定:{stem}.ai改{N}.md(N 递增),所以每次发送前先扫一遍现有 N,取 max+1。
@@ -2246,6 +2174,7 @@ export function AppLayout() {
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
     rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
+    rightPanelMode === 'review' && !isDocx ? 'review-panel-open' : '',
     leftRailMode !== 'none' ? 'left-panel-open' : '',
     leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
@@ -2350,7 +2279,6 @@ export function AppLayout() {
           editingId: comment.id,
         });
       }}
-      onRemove={(commentId) => reviewStateApi.removeComment(commentId)}
       onSetIgnored={(commentId, ignored) => reviewStateApi.setIgnored(commentId, ignored)}
       onExport={() => void handleExportReviewMarkdown()}
       onSendToAI={() => void handleSendReviewToAI()}
@@ -2366,7 +2294,6 @@ export function AppLayout() {
       aiReviewRunning={aiReviewRunning}
       onStartAIReview={(options) => { void handleStartAIReview(options); }}
       aiRewriteRunning={Boolean(pendingInitialCandidate)}
-      onStartAIRewrite={(request) => { void handleStartAIRewrite(request); }}
       onClose={() => setRightPanelMode('none')}
     />
   ) : rightPanelMode === 'artifacts' && !isDocx ? (

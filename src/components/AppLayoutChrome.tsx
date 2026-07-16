@@ -263,7 +263,7 @@ export function AppLayoutChrome({
           {isDocx ? docxPane : editorPane}
         </section>
         <AnimatePresence initial={false}>
-          {rightPanelMode !== 'none' && !isDocx && (
+          {rightPanelMode !== 'none' && rightPanelMode !== 'review' && !isDocx && (
             <div
               key="right-rail-resizer"
               className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
@@ -284,7 +284,7 @@ export function AppLayoutChrome({
             <motion.aside
               key="right-rail"
               className="right-rail-shell"
-              style={{ width: rightPanelWidth }}
+              style={rightPanelMode === 'review' ? undefined : { width: rightPanelWidth }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

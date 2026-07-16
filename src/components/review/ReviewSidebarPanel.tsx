@@ -1,6 +1,7 @@
-// 右栏「检视意见」面板 —— 人工与 AI 意见共用一份列表,AI 改稿沿用原视图。
+// 右栏检视工作台：统一管理意见、发起改稿并查看历史版本。
 
 import {
+  Check,
   Edit3,
   EyeOff,
   FileDown,
@@ -9,10 +10,8 @@ import {
   History,
   MessageSquare,
   RefreshCw,
-  RotateCcw,
   Send,
   Sparkles,
-  Trash2,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -24,21 +23,13 @@ import type { RevisionEntry } from '../../hooks/useRevisionList';
 import type { DocumentHistoryEntry } from '../../services/review/documentHistoryService';
 import { findUniqueAnchor } from '../../services/agent/selectionActions';
 import { lineNumberForAnchor } from '../../services/review/reviewState';
-import type { AIRewriteScope } from '../../services/review/aiRewriteScope';
 
-type View = 'review' | 'aiRevisions';
+type View = 'review' | 'history';
 type ReviewFilter = 'all' | 'human' | 'ai' | 'ignored';
 
 export type AIReviewSettings = {
   useStyleGuide: boolean;
   skillName?: string;
-  requirement: string;
-};
-
-export type { AIRewriteScope } from '../../services/review/aiRewriteScope';
-
-export type AIRewriteRequest = {
-  scope: AIRewriteScope;
   requirement: string;
 };
 
@@ -51,7 +42,6 @@ type Props = {
   currentSource?: string;
   onJump: (comment: ReviewComment) => void;
   onEdit: (comment: ReviewComment) => void;
-  onRemove: (commentId: string) => void;
   onSetIgnored: (commentId: string, ignored: boolean) => void;
   onExport: () => void;
   onSendToAI: () => void;
@@ -68,7 +58,6 @@ type Props = {
   aiReviewRunning?: boolean;
   onStartAIReview?: (settings: AIReviewSettings) => void;
   aiRewriteRunning?: boolean;
-  onStartAIRewrite?: (request: AIRewriteRequest) => void;
 };
 
 function truncate(text: string, max: number): string {
@@ -97,7 +86,6 @@ export function ReviewSidebarPanel({
   currentSource = '',
   onJump,
   onEdit,
-  onRemove,
   onSetIgnored,
   onExport,
   onSendToAI,
@@ -114,7 +102,6 @@ export function ReviewSidebarPanel({
   aiReviewRunning = false,
   onStartAIReview,
   aiRewriteRunning = false,
-  onStartAIRewrite,
 }: Props) {
   const activeComments = getActiveReviewComments(comments);
   const ignoredCount = comments.length - activeComments.length;
@@ -156,11 +143,11 @@ export function ReviewSidebarPanel({
         <button
           type="button"
           role="tab"
-          aria-selected={view === 'aiRevisions'}
-          className={`review-sidebar-view-tab${view === 'aiRevisions' ? ' active' : ''}`}
-          onClick={() => setView('aiRevisions')}
+          aria-selected={view === 'history'}
+          className={`review-sidebar-view-tab${view === 'history' ? ' active' : ''}`}
+          onClick={() => setView('history')}
         >
-          AI 改稿
+          改稿历史
           {revisions.length > 0 && <span className="review-sidebar-view-count">{revisions.length}</span>}
         </button>
       </div>
@@ -175,21 +162,20 @@ export function ReviewSidebarPanel({
           currentSource={currentSource}
           onJump={onJump}
           onEdit={onEdit}
-          onRemove={onRemove}
           onSetIgnored={onSetIgnored}
           onExport={onExport}
+          onSendToAI={onSendToAI}
           styleGuidePath={styleGuidePath}
           reviewSkills={reviewSkills}
           aiReviewRunning={aiReviewRunning}
           onStartAIReview={onStartAIReview}
+          aiRewriteRunning={aiRewriteRunning}
         />
       )}
 
-      {view === 'aiRevisions' && (
-        <AIRevisionsView
+      {view === 'history' && (
+        <RewriteHistoryView
           currentFilePath={currentFilePath}
-          canSend={canAct}
-          onSendToAI={onSendToAI}
           revisions={revisions}
           onOpenRevision={onOpenRevision}
           onReviewRevision={onReviewRevision}
@@ -197,8 +183,6 @@ export function ReviewSidebarPanel({
           histories={histories}
           onReviewHistory={onReviewHistory}
           onRefreshHistories={onRefreshHistories}
-          aiRewriteRunning={aiRewriteRunning}
-          onStartAIRewrite={onStartAIRewrite}
         />
       )}
     </aside>
@@ -214,13 +198,14 @@ function ReviewListView({
   currentSource,
   onJump,
   onEdit,
-  onRemove,
   onSetIgnored,
   onExport,
+  onSendToAI,
   styleGuidePath,
   reviewSkills,
   aiReviewRunning,
   onStartAIReview,
+  aiRewriteRunning,
 }: {
   comments: ReviewComment[];
   activeComments: ReviewComment[];
@@ -230,13 +215,14 @@ function ReviewListView({
   currentSource: string;
   onJump: (comment: ReviewComment) => void;
   onEdit: (comment: ReviewComment) => void;
-  onRemove: (commentId: string) => void;
   onSetIgnored: (commentId: string, ignored: boolean) => void;
   onExport: () => void;
+  onSendToAI: () => void;
   styleGuidePath?: string;
   reviewSkills: ReviewSkillOption[];
   aiReviewRunning: boolean;
   onStartAIReview?: (settings: AIReviewSettings) => void;
+  aiRewriteRunning: boolean;
 }) {
   const [filter, setFilter] = useState<ReviewFilter>('all');
   const [useStyleGuide, setUseStyleGuide] = useState(true);
@@ -357,34 +343,36 @@ function ReviewListView({
                   <span className="review-sidebar-item-text">{comment.text}</span>
                 </button>
                 <div className="review-sidebar-item-tools">
-                  {!ignored && comment.source === 'human' && (
-                    <button
-                      type="button"
-                      className="review-sidebar-item-tool"
-                      onClick={() => onEdit(comment)}
-                      title="编辑意见"
-                      aria-label="编辑意见"
-                    >
-                      <Edit3 size={12} />
-                    </button>
-                  )}
                   <button
                     type="button"
                     className="review-sidebar-item-tool"
-                    onClick={() => onSetIgnored(comment.id, !ignored)}
-                    title={ignored ? '恢复意见' : '忽略意见'}
-                    aria-label={ignored ? '恢复意见' : '忽略意见'}
+                    onClick={() => onEdit(comment)}
+                    title="编辑意见"
+                    aria-label="编辑意见"
                   >
-                    {ignored ? <RotateCcw size={12} /> : <EyeOff size={12} />}
+                    <Edit3 size={12} />
                   </button>
                   <button
                     type="button"
-                    className="review-sidebar-item-tool review-sidebar-item-tool-danger"
-                    onClick={() => onRemove(comment.id)}
-                    title="删除"
-                    aria-label="删除意见"
+                    className={`review-sidebar-item-tool${!ignored ? ' is-selected' : ''}`}
+                    onClick={() => onSetIgnored(comment.id, false)}
+                    title="接纳意见"
+                    aria-label="接纳意见"
+                    aria-pressed={!ignored}
                   >
-                    <Trash2 size={12} />
+                    <Check size={12} />
+                    <span>接纳</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`review-sidebar-item-tool${ignored ? ' is-selected' : ''}`}
+                    onClick={() => onSetIgnored(comment.id, true)}
+                    title="忽略意见"
+                    aria-label="忽略意见"
+                    aria-pressed={ignored}
+                  >
+                    <EyeOff size={12} />
+                    <span>忽略</span>
                   </button>
                 </div>
               </li>
@@ -403,15 +391,22 @@ function ReviewListView({
         >
           <FileDown size={13} /> 导出检视版
         </button>
+        <button
+          type="button"
+          className="review-sidebar-action review-sidebar-action-send"
+          disabled={!canAct || aiRewriteRunning}
+          onClick={onSendToAI}
+          title={canAct ? '按当前接纳并编辑后的意见发起 AI 改稿' : '没有接纳的意见或未打开文档'}
+        >
+          <Send size={13} /> {aiRewriteRunning ? '改稿中…' : 'AI 改稿'}
+        </button>
       </div>
     </>
   );
 }
 
-function AIRevisionsView({
+function RewriteHistoryView({
   currentFilePath,
-  canSend,
-  onSendToAI,
   revisions,
   onOpenRevision,
   onReviewRevision,
@@ -419,12 +414,8 @@ function AIRevisionsView({
   histories,
   onReviewHistory,
   onRefreshHistories,
-  aiRewriteRunning,
-  onStartAIRewrite,
 }: {
   currentFilePath?: string;
-  canSend: boolean;
-  onSendToAI: () => void;
   revisions: RevisionEntry[];
   onOpenRevision: (path: string) => void;
   onReviewRevision: (path: string) => void;
@@ -432,61 +423,19 @@ function AIRevisionsView({
   histories: DocumentHistoryEntry[];
   onReviewHistory?: (path: string) => void;
   onRefreshHistories?: () => void;
-  aiRewriteRunning: boolean;
-  onStartAIRewrite?: (request: AIRewriteRequest) => void;
 }) {
-  const [rewriteScope, setRewriteScope] = useState<AIRewriteScope>('section');
-  const [rewriteRequirement, setRewriteRequirement] = useState('');
-
   return (
     <>
       {currentFilePath && (
         <>
-        <section className="review-sidebar-revisions" aria-label="AI 改稿">
-          {onStartAIRewrite && (
-            <div className="review-sidebar-rewrite-request">
-              <label className="review-sidebar-ai-field">
-                <span>修改范围</span>
-                <select
-                  value={rewriteScope}
-                  onChange={(event) => setRewriteScope(event.target.value as AIRewriteScope)}
-                >
-                  <option value="selection">选中文本</option>
-                  <option value="section">当前章节</option>
-                  <option value="document">全文</option>
-                </select>
-              </label>
-              <label className="review-sidebar-ai-field">
-                <span>改稿要求</span>
-                <textarea
-                  value={rewriteRequirement}
-                  placeholder="例如：这一节再自然一点，压缩重复论证"
-                  onChange={(event) => setRewriteRequirement(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="review-sidebar-action review-sidebar-action-send"
-                disabled={aiRewriteRunning || !rewriteRequirement.trim()}
-                onClick={() => onStartAIRewrite({
-                  scope: rewriteScope,
-                  requirement: rewriteRequirement.trim(),
-                })}
-              >
-                <Sparkles size={13} /> {aiRewriteRunning ? '改稿中…' : '生成候选稿'}
-              </button>
-            </div>
-          )}
-          <div className="review-sidebar-revisions-actions">
-            <button
-              type="button"
-              className="review-sidebar-action review-sidebar-action-send"
-              disabled={!canSend}
-              onClick={onSendToAI}
-              title={canSend ? '按当前有效意见发起 AI 修改' : '没有有效意见或未打开文档'}
-            >
-              <Send size={13} /> 发 AI 修改
-            </button>
+        <section className="review-sidebar-revisions" aria-label="改稿历史">
+          <header className="review-sidebar-revisions-header">
+            <span className="review-sidebar-revisions-title">
+              <FileText size={12} /> AI 改稿版本
+              {revisions.length > 0 && (
+                <span className="review-sidebar-revisions-count">{revisions.length}</span>
+              )}
+            </span>
             <button
               type="button"
               className="review-sidebar-revisions-refresh"
@@ -496,17 +445,9 @@ function AIRevisionsView({
             >
               <RefreshCw size={11} />
             </button>
-          </div>
-          <header className="review-sidebar-revisions-header">
-            <span className="review-sidebar-revisions-title">
-              <FileText size={12} /> 已有改稿
-              {revisions.length > 0 && (
-                <span className="review-sidebar-revisions-count">{revisions.length}</span>
-              )}
-            </span>
           </header>
           {revisions.length === 0 ? (
-            <p className="review-sidebar-revisions-empty">暂无 AI 改稿。点上方「发 AI 修改」让 AI 生成。</p>
+            <p className="review-sidebar-revisions-empty">暂无改稿版本。请在检视列表底部发起 AI 改稿。</p>
           ) : (
             <ol className="review-sidebar-revisions-list">
               {revisions.map((revision) => (

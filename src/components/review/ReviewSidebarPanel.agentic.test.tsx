@@ -28,7 +28,6 @@ function props(comments: ReviewComment[]) {
     currentSource: '原文',
     onJump: vi.fn(),
     onEdit: vi.fn(),
-    onRemove: vi.fn(),
     onSetIgnored: vi.fn(),
     onExport: vi.fn(),
     onSendToAI: vi.fn(),
@@ -82,9 +81,29 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     expect(host.textContent).toContain('已忽略意见');
     expect(host.textContent).not.toContain('人工意见');
 
-    const restore = host.querySelector<HTMLButtonElement>('[aria-label="恢复意见"]');
-    await act(async () => restore!.click());
+    const accept = host.querySelector<HTMLButtonElement>('[aria-label="接纳意见"]');
+    await act(async () => accept!.click());
     expect(values.onSetIgnored).toHaveBeenCalledWith('ignored', false);
+  });
+
+  it('人工、AI 和已忽略意见都可编辑，并以接纳或忽略标记状态', async () => {
+    const values = props([
+      comment({ id: 'human' }),
+      comment({ id: 'ai', source: 'ai' }),
+      comment({ id: 'ignored', status: 'ignored' }),
+    ]);
+    await act(async () => root.render(<ReviewSidebarPanel {...values} />));
+
+    expect(host.querySelectorAll('[aria-label="编辑意见"]')).toHaveLength(2);
+    const aiEdit = host.querySelectorAll<HTMLButtonElement>('[aria-label="编辑意见"]')[1];
+    await act(async () => aiEdit.click());
+    expect(values.onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'ai' }));
+
+    const showIgnored = Array.from(host.querySelectorAll<HTMLButtonElement>('.review-sidebar-filter'))
+      .find((button) => button.textContent?.includes('已忽略'))!;
+    await act(async () => showIgnored.click());
+    expect(host.querySelectorAll('[aria-label="编辑意见"]')).toHaveLength(1);
+    expect(host.querySelector<HTMLButtonElement>('[aria-label="忽略意见"]')?.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('AI 检视只暴露 style、Skill 与本次要求，不展示完整 Prompt', async () => {
@@ -126,38 +145,29 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
 
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-export')?.disabled).toBe(true);
 
-    const aiTab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('AI 改稿'));
-    await act(async () => aiTab!.click());
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-send')?.disabled).toBe(true);
   });
 
-  it('在 AI 改稿页用自然语言选择范围并生成候选稿', async () => {
-    const values = props([]);
-    const onStartAIRewrite = vi.fn();
-    await act(async () => root.render(
-      <ReviewSidebarPanel {...values} onStartAIRewrite={onStartAIRewrite} />,
-    ));
-    const aiTab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('AI 改稿'));
-    await act(async () => aiTab!.click());
+  it('从检视列表发起 AI 改稿，改稿历史只展示版本查看与对比', async () => {
+    const values = {
+      ...props([comment({ id: 'accepted' })]),
+      revisions: [{ name: 'a.ai改1.md', path: 'D:\\a.ai改1.md', mtime: 1, version: 1 }],
+    };
+    await act(async () => root.render(<ReviewSidebarPanel {...values} />));
 
-    const panel = host.querySelector<HTMLElement>('.review-sidebar-rewrite-request')!;
-    const select = panel.querySelector<HTMLSelectElement>('select')!;
-    const textarea = panel.querySelector<HTMLTextAreaElement>('textarea')!;
-    await act(async () => {
-      select.value = 'document';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-      setter?.call(textarea, '全文压缩一成，保留结论');
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    const start = Array.from(panel.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('生成候选稿'));
-    await act(async () => start!.click());
-    expect(onStartAIRewrite).toHaveBeenCalledWith({
-      scope: 'document',
-      requirement: '全文压缩一成，保留结论',
-    });
+    const rewrite = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('AI 改稿'))!;
+    await act(async () => rewrite.click());
+    expect(values.onSendToAI).toHaveBeenCalledTimes(1);
+
+    const historyTab = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+      .find((button) => button.textContent?.includes('改稿历史'))!;
+    await act(async () => historyTab.click());
+    expect(host.textContent).toContain('a.ai改1.md');
+    expect(host.textContent).not.toContain('修改范围');
+
+    const compare = host.querySelector<HTMLButtonElement>('[aria-label="以 Diff 审阅"]')!;
+    await act(async () => compare.click());
+    expect(values.onReviewRevision).toHaveBeenCalledWith('D:\\a.ai改1.md');
   });
 });

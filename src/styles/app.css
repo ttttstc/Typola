@@ -968,6 +968,18 @@ html[data-color-scheme='dark'] .export-menu {
   overflow: hidden;
 }
 
+/* 检视模式固定为正文、检视工作台各占一半，不引入额外可调布局状态。 */
+.review-panel-open .editor-workbench,
+.review-panel-open .right-rail-shell {
+  flex: 1 1 0;
+  width: 50%;
+  min-width: 0;
+}
+
+.review-panel-open .right-rail-shell {
+  border-left: 1px solid var(--theme-border-soft);
+}
+
 .right-rail-tabs {
   position: relative;
   flex: 0 0 auto;
@@ -9904,16 +9916,6 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   line-height: 13px;
   font-weight: 400;
 }
-.review-sidebar-revisions-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px 8px;
-}
-.review-sidebar-revisions-actions .review-sidebar-action {
-  flex: 1;
-}
-
 .review-sidebar-actions-bottom {
   margin-top: auto;
   border-top: 1px solid var(--theme-border);
@@ -9921,7 +9923,7 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   margin-top: 8px;
 }
 .review-sidebar-actions-bottom .review-sidebar-action {
-  grid-column: 1 / -1;
+  min-width: 0;
 }
 .review-sidebar-revisions {
   border-top: 1px solid var(--theme-border);
@@ -10093,6 +10095,7 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
 .review-sidebar-item-tools {
   display: flex;
   flex-direction: column;
+  width: 62px;
   border-left: 1px solid var(--theme-border-soft);
 }
 
@@ -10100,13 +10103,22 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 100%;
   flex: 1;
   border: none;
   background: transparent;
   color: var(--theme-text-secondary);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
+}
+
+.review-sidebar-item-tool span {
+  font-size: 10.5px;
+}
+
+.review-sidebar-item-tool.is-selected {
+  background: color-mix(in oklch, var(--theme-accent) 10%, var(--theme-control-bg));
+  color: var(--theme-accent);
 }
 
 .review-sidebar-item-tool + .review-sidebar-item-tool {
@@ -10116,10 +10128,6 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
 .review-sidebar-item-tool:hover {
   background: var(--theme-control-hover-bg);
   color: var(--theme-text-primary);
-}
-
-.review-sidebar-item-tool-danger:hover {
-  color: var(--theme-danger);
 }
 
 .conversation-toast {
@@ -10797,17 +10805,6 @@ button[data-tooltip]:disabled::before {
   resize: vertical;
 }
 .review-sidebar-ai-inspection > .review-sidebar-action { margin-top: 8px; }
-.review-sidebar-rewrite-request {
-  margin: 0 4px 10px;
-  padding: 8px;
-  border: 1px solid var(--theme-border);
-  border-radius: 8px;
-  background: color-mix(in oklch, var(--theme-surface-muted) 55%, transparent);
-}
-.review-sidebar-rewrite-request > .review-sidebar-action {
-  width: 100%;
-  margin-top: 8px;
-}
 .review-sidebar-item-line {
   color: var(--theme-text-tertiary, var(--theme-text-secondary));
   font-size: 9.5px;
