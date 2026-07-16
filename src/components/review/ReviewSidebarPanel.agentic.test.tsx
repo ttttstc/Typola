@@ -110,14 +110,14 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
         onStartAIReview={onStartAIReview}
       />,
     ));
-    await act(async () => host.querySelector('summary')?.click());
+    expect(host.querySelector<HTMLDetailsElement>('.review-sidebar-ai-inspection')?.open).toBe(true);
     const importRules = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
       .find((button) => button.textContent?.includes('导入 Markdown'))!;
     await act(async () => importRules.click());
     expect(host.textContent).toContain('style.md');
     expect(host.textContent).toContain('tone.md');
 
-    const skills = host.querySelectorAll<HTMLInputElement>('.review-sidebar-skill-list input');
+    const skills = host.querySelectorAll<HTMLInputElement>('.review-sidebar-skill-options input');
     const requirement = host.querySelector<HTMLTextAreaElement>('.review-sidebar-ai-field textarea')!;
     await act(async () => {
       skills.forEach((skill) => {
@@ -147,7 +147,8 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
         onStopAIReview={onStopAIReview}
       />,
     ));
-    await act(async () => host.querySelector('summary')?.click());
+    expect(host.querySelector('.review-sidebar-ai-running')).not.toBeNull();
+    expect(host.textContent).toContain('正在读取规则并分析正文');
     const stop = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
       .find((button) => button.textContent?.includes('停止检视'))!;
     await act(async () => stop.click());

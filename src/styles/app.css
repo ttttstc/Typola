@@ -10770,11 +10770,15 @@ button[data-tooltip]:disabled::before {
 .review-sidebar-ai-inspection summary {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   cursor: pointer;
   color: var(--theme-text-primary);
   font-size: 12px;
   font-weight: 600;
+}
+.review-sidebar-ai-inspection > summary {
+  justify-content: flex-start;
 }
 .review-sidebar-ai-option,
 .review-sidebar-ai-field {
@@ -10818,22 +10822,73 @@ button[data-tooltip]:disabled::before {
   background: var(--theme-control-bg);
   cursor: pointer;
 }
-.review-sidebar-rule-list,
-.review-sidebar-skill-list {
-  display: grid;
-  gap: 4px;
-  margin-top: 6px;
-  padding: 0;
-  border: 0;
+.review-sidebar-multi-select {
+  position: relative;
+}
+.review-sidebar-multi-select > summary {
+  min-height: 32px;
+  padding: 5px 9px;
+  box-sizing: border-box;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  background: var(--theme-control-bg);
+  font-weight: 400;
   list-style: none;
-  font-size: 11px;
+}
+.review-sidebar-multi-select > summary::-webkit-details-marker { display: none; }
+.review-sidebar-multi-select > summary svg {
+  flex: 0 0 auto;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.review-sidebar-multi-select[open] > summary {
+  border-color: var(--theme-accent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--theme-accent) 24%, transparent);
+}
+.review-sidebar-multi-select[open] > summary svg { transform: rotate(180deg); }
+.review-sidebar-multi-menu {
+  display: grid;
+  gap: 5px;
+  max-height: 210px;
+  margin-top: 4px;
+  padding: 7px;
+  overflow: auto;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  background: var(--theme-surface);
+}
+.review-sidebar-multi-menu > p {
+  margin: 2px;
+  font-size: 10.5px;
+}
+.review-sidebar-rule-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .review-sidebar-rule-list li,
-.review-sidebar-skill-list label {
+.review-sidebar-skill-options label {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+.review-sidebar-rule-list li,
+.review-sidebar-skill-options label {
+  min-height: 26px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.review-sidebar-skill-options label:hover,
+.review-sidebar-rule-list li:hover {
+  background: var(--theme-surface-muted);
+}
+.review-sidebar-skill-options label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .review-sidebar-rule-list li > span {
   flex: 1;
@@ -10847,9 +10902,38 @@ button[data-tooltip]:disabled::before {
   background: transparent;
   cursor: pointer;
 }
-.review-sidebar-skill-list legend {
-  margin-bottom: 4px;
+.review-sidebar-ai-running {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: color-mix(in oklch, var(--theme-accent) 8%, var(--theme-surface));
+}
+.review-sidebar-ai-running-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
+  font-weight: 600;
+}
+.review-sidebar-ai-running-label svg {
+  animation: review-ai-spin 900ms linear infinite;
+}
+.review-sidebar-ai-running-track {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--theme-accent) 16%, transparent);
+}
+.review-sidebar-ai-running-track > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  border-radius: inherit;
+  background: var(--theme-accent);
+  animation: review-ai-progress 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 .review-sidebar-action-stop {
   border-color: var(--theme-danger);
@@ -10858,6 +10942,23 @@ button[data-tooltip]:disabled::before {
 .review-sidebar-return {
   margin: 8px 12px 0;
   justify-content: flex-start;
+}
+@keyframes review-ai-spin { to { transform: rotate(360deg); } }
+@keyframes review-ai-progress {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(90%); }
+  100% { transform: translateX(270%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .review-sidebar-multi-select > summary svg,
+  .review-sidebar-ai-running-label svg,
+  .review-sidebar-ai-running-track > span {
+    animation: none;
+    transition: none;
+  }
+  .review-sidebar-ai-running-track > span {
+    left: 31%;
+  }
 }
 .review-sidebar-item-line {
   color: var(--theme-text-tertiary, var(--theme-text-secondary));

@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  ChevronDown,
   Edit3,
   EyeOff,
   FileDown,
@@ -9,6 +10,7 @@ import {
   FileText,
   GitCompare,
   History,
+  LoaderCircle,
   MessageSquare,
   RefreshCw,
   Send,
@@ -238,6 +240,7 @@ function ReviewListView({
   aiRewriteRunning: boolean;
 }) {
   const [filter, setFilter] = useState<ReviewFilter>('all');
+  const [inspectionOpen, setInspectionOpen] = useState(true);
   const [rulePaths, setRulePaths] = useState<string[]>([]);
   const [skillNames, setSkillNames] = useState<string[]>([]);
   const [requirement, setRequirement] = useState('');
@@ -254,59 +257,90 @@ function ReviewListView({
   return (
     <>
       {currentFilePath && onStartAIReview && (
-        <details className="review-sidebar-ai-inspection">
+        <details
+          className="review-sidebar-ai-inspection"
+          open={inspectionOpen}
+          onToggle={(event) => setInspectionOpen(event.currentTarget.open)}
+        >
           <summary><Sparkles size={12} /> AI 检视</summary>
+          {aiReviewRunning && (
+            <div className="review-sidebar-ai-running" role="status" aria-live="polite">
+              <span className="review-sidebar-ai-running-label">
+                <LoaderCircle size={14} /> 正在读取规则并分析正文…
+              </span>
+              <span className="review-sidebar-ai-running-track" aria-hidden="true">
+                <span />
+              </span>
+            </div>
+          )}
           <div className="review-sidebar-ai-field">
-            <span>规则文件（可多选）</span>
-            <button
-              type="button"
-              className="review-sidebar-rule-import"
-              disabled={aiReviewRunning || !onPickRuleFiles}
-              onClick={() => {
-                void onPickRuleFiles?.().then((paths) => {
-                  setRulePaths((current) => [...new Set([...current, ...paths])]);
-                });
-              }}
-            >
-              <FilePlus2 size={12} /> 导入 Markdown
-            </button>
-            {rulePaths.length > 0 && (
-              <ul className="review-sidebar-rule-list">
-                {rulePaths.map((path) => (
-                  <li key={path} title={path}>
-                    <span>{path.replace(/\\/gu, '/').split('/').pop()}</span>
-                    <button
-                      type="button"
-                      disabled={aiReviewRunning}
-                      onClick={() => setRulePaths((current) => current.filter((item) => item !== path))}
-                      aria-label={`移除规则文件 ${path}`}
-                    >
-                      <X size={11} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <span>规则文件</span>
+            <details className="review-sidebar-multi-select">
+              <summary>
+                <span>{rulePaths.length ? `已选 ${rulePaths.length} 个 Markdown 文件` : '选择 Markdown 规则文件'}</span>
+                <ChevronDown size={13} />
+              </summary>
+              <div className="review-sidebar-multi-menu">
+                <button
+                  type="button"
+                  className="review-sidebar-rule-import"
+                  disabled={aiReviewRunning || !onPickRuleFiles}
+                  onClick={() => {
+                    void onPickRuleFiles?.().then((paths) => {
+                      setRulePaths((current) => [...new Set([...current, ...paths])]);
+                    });
+                  }}
+                >
+                  <FilePlus2 size={12} /> 导入 Markdown
+                </button>
+                {rulePaths.length === 0 && <p>可同时导入多个写作规范文件</p>}
+                {rulePaths.length > 0 && (
+                  <ul className="review-sidebar-rule-list">
+                    {rulePaths.map((path) => (
+                      <li key={path} title={path}>
+                        <span>{path.replace(/\\/gu, '/').split('/').pop()}</span>
+                        <button
+                          type="button"
+                          disabled={aiReviewRunning}
+                          onClick={() => setRulePaths((current) => current.filter((item) => item !== path))}
+                          aria-label={`移除规则文件 ${path}`}
+                        >
+                          <X size={11} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </details>
           </div>
-          <fieldset className="review-sidebar-skill-list">
-            <legend>写作规范 Skill（可多选）</legend>
-            {reviewSkills.length === 0 && <span>暂无可用 Skill</span>}
-            {reviewSkills.map((skill) => (
-              <label key={skill.name}>
-                <input
-                  type="checkbox"
-                  checked={skillNames.includes(skill.name)}
-                  disabled={aiReviewRunning}
-                  onChange={(event) => setSkillNames((current) => (
-                    event.target.checked
-                      ? [...current, skill.name]
-                      : current.filter((name) => name !== skill.name)
-                  ))}
-                />
-                {skill.label}
-              </label>
-            ))}
-          </fieldset>
+          <div className="review-sidebar-ai-field">
+            <span>写作规范 Skill</span>
+            <details className="review-sidebar-multi-select">
+              <summary>
+                <span>{skillNames.length ? `已选 ${skillNames.length} 个 Skill` : '选择写作规范 Skill'}</span>
+                <ChevronDown size={13} />
+              </summary>
+              <div className="review-sidebar-multi-menu review-sidebar-skill-options">
+                {reviewSkills.length === 0 && <p>暂无可用 Skill</p>}
+                {reviewSkills.map((skill) => (
+                  <label key={skill.name}>
+                    <input
+                      type="checkbox"
+                      checked={skillNames.includes(skill.name)}
+                      disabled={aiReviewRunning}
+                      onChange={(event) => setSkillNames((current) => (
+                        event.target.checked
+                          ? [...current, skill.name]
+                          : current.filter((name) => name !== skill.name)
+                      ))}
+                    />
+                    <span>{skill.label}</span>
+                  </label>
+                ))}
+              </div>
+            </details>
+          </div>
           <label className="review-sidebar-ai-field">
             <span>手工规则</span>
             <textarea
