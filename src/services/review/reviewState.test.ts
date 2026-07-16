@@ -121,6 +121,18 @@ describe('buildReviewMarkdown', () => {
     expect(out).toMatch(/### 2\. 第 3 行 · 针对片段「四五六段落。」\n\n改二/);
   });
 
+  it('回读元数据统一置于检视意见汇总末尾,不打断可读内容', () => {
+    const src = '第一段。\n\n第二段。';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('第一段。'), '改一');
+    state = addReviewComment(state, 'a.md', mkAnchor('第二段。', '第一段。\n\n'), '改二');
+    const out = buildReviewMarkdown(src, state.comments);
+    const lastSummary = out.lastIndexOf('改二');
+    const firstMetadata = out.indexOf('<!-- typola-review:v2:');
+
+    expect(firstMetadata).toBeGreaterThan(lastSummary);
+    expect(out.slice(0, firstMetadata)).not.toContain('typola-review:v2:');
+  });
+
   it('用 prefixHint 区分多处重复 originalText 的歧义', () => {
     // 同一句话出现两次,通过 prefixHint 能定位到第二次出现的那条
     const src = '介绍\n\n关键观点。\n\n再来一段\n\n关键观点。';

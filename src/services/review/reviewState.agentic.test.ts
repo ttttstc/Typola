@@ -77,6 +77,8 @@ describe('检视版往返识别', () => {
 
     const exported = buildReviewMarkdown(source, state.comments);
     expect(exported).toContain('<!-- typola-review-document:v1 -->');
+    expect(exported).toContain('<!-- typola-review:v2:');
+    expect(exported).not.toContain('%E6');
 
     const parsed = parseReviewMarkdown(exported, 'a-检视版1.md');
     expect(parsed).toHaveLength(2);
@@ -93,6 +95,25 @@ describe('检视版往返识别', () => {
       text: 'AI 意见',
     });
     expect(parsed[1].anchor.filePath).toBe('a-检视版1.md');
+  });
+
+  it('兼容旧版 URL 编码元数据', () => {
+    const legacy = encodeURIComponent(JSON.stringify({
+      version: 1,
+      id: 'legacy',
+      anchor: anchor('原文'),
+      text: '旧意见',
+      createdAt: 1,
+      source: 'human',
+      status: 'active',
+    })).replace(/-/g, '%2D');
+    const source = `<!-- typola-review-document:v1 -->\n<!-- typola-review:v1:${legacy} -->`;
+
+    expect(parseReviewMarkdown(source, 'legacy.md')).toEqual([expect.objectContaining({
+      id: 'legacy',
+      filePath: 'legacy.md',
+      text: '旧意见',
+    })]);
   });
 
   it('损坏或伪造的元数据不会让整个检视版解析失败', () => {
