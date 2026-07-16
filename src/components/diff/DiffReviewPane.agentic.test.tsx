@@ -11,10 +11,14 @@ function Harness({
   onFeedback,
   onRecheck,
   onController,
+  originalContent = '# 标题\n\n旧段',
+  proposedContent = '# 标题\n\n新段',
 }: {
   onFeedback: (request: DiffFeedbackRequest) => Promise<void>;
   onRecheck: () => Promise<void>;
   onController?: (controller: DiffReviewController) => void;
+  originalContent?: string;
+  proposedContent?: string;
 }) {
   const controller = useDiffReview();
   onController?.(controller);
@@ -22,8 +26,8 @@ function Harness({
     controller.open({
       source: 'review',
       documentPath: 'a.md',
-      originalContent: '# 标题\n\n旧段',
-      proposedContent: '# 标题\n\n新段',
+      originalContent,
+      proposedContent,
       selfCheckStatus: 'fresh',
     });
   }, []);
@@ -70,6 +74,25 @@ describe('DiffReviewPane 双栏候选稿', () => {
 
     expect(host.textContent).toContain('自检已过期');
     expect(host.textContent).toContain('旧段');
+  });
+
+  it('只把真实变化列为可确认差异，折叠远处未变化内容', async () => {
+    const original = ['段落 1', '段落 2', '段落 3', '旧内容', '段落 5', '段落 6', '段落 7'].join('\n\n');
+    const proposed = ['段落 1', '段落 2', '段落 3', '新内容', '段落 5', '段落 6', '段落 7'].join('\n\n');
+    await act(async () => root.render(
+      <Harness
+        onFeedback={async () => {}}
+        onRecheck={async () => {}}
+        originalContent={original}
+        proposedContent={proposed}
+      />,
+    ));
+
+    expect(host.querySelectorAll('[data-candidate-hunk]')).toHaveLength(1);
+    expect(host.querySelectorAll('.diff-review-navigation li')).toHaveLength(1);
+    expect(host.querySelector('.diff-review-cell.has-gap-before')).not.toBeNull();
+    expect(host.textContent).not.toContain('段落 1');
+    expect(host.textContent).not.toContain('段落 7');
   });
 
   it('反馈在候选页提交并明确作用范围', async () => {

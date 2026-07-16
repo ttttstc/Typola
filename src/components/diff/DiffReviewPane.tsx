@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { DiffReviewController } from '../../hooks/useDiffReview';
 import {
+  diffInline,
   isDecidableHunk,
   mergeDecisions,
   type DiffHunk,
@@ -74,6 +75,18 @@ function candidateAfterRowEdit(
     .join('\n\n');
 }
 
+function InlineDiffText({ hunk, side }: { hunk: DiffHunk; side: 'before' | 'after' }) {
+  if (hunk.kind === 'modified') {
+    const parts = diffInline(hunk.before, hunk.after)[side];
+    return parts.map((part, index) => (
+      <span key={index} className={`diff-review-inline-${part.kind}`}>{part.text}</span>
+    ));
+  }
+  const text = side === 'before' ? originalSide(hunk) : proposedSide(hunk);
+  const kind = hunk.kind === 'added' ? 'added' : hunk.kind === 'removed' ? 'removed' : 'equal';
+  return <span className={`diff-review-inline-${kind}`}>{text || ' '}</span>;
+}
+
 export function DiffReviewPane({
   controller,
   onFeedback,
@@ -97,6 +110,7 @@ export function DiffReviewPane({
   } = controller;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const [editingHunkIndex, setEditingHunkIndex] = useState<number | null>(null);
   const [feedback, setFeedback] = useState('');
   const [feedbackScope, setFeedbackScope] = useState<DiffFeedbackScope>('current-diff');
 
@@ -168,6 +182,18 @@ export function DiffReviewPane({
     () => mergeDecisions(state.hunks, state.decisions),
     [state.decisions, state.hunks],
   );
+
+  const visibleHunkIndexes = useMemo(() => {
+    if (decidableCount === 0) return [];
+    const visible = new Set<number>();
+    state.hunks.forEach((hunk, index) => {
+      if (!isDecidableHunk(hunk)) return;
+      visible.add(index);
+      if (index > 0) visible.add(index - 1);
+      if (index + 1 < state.hunks.length) visible.add(index + 1);
+    });
+    return [...visible].sort((left, right) => left - right);
+  }, [decidableCount, state.hunks]);
 
   const handleCandidateEdit = useCallback((hunkIndex: number, text: string) => {
     updateCandidate(candidateAfterRowEdit(state.hunks, state.decisions, hunkIndex, text));
@@ -251,38 +277,63 @@ export function DiffReviewPane({
           <div className="diff-review-column-heading">修改前（只读）</div>
           <div className="diff-review-column-heading">候选稿（可编辑）</div>
           <div className="diff-review-baseline" aria-label="修改前原文">
-            {state.hunks.map((hunk, index) => {
+            {visibleHunkIndexes.map((index, visibleIndex) => {
+              const hunk = state.hunks[index];
               const focused = state.focusIndex === index;
+              const hasGapBefore = index > 0
+                && (visibleIndex === 0 || visibleHunkIndexes[visibleIndex - 1] < index - 1);
               return (
                 <pre
                   key={`before-${index}`}
-                  className={`diff-review-cell before is-${hunk.kind}${focused ? ' is-focused' : ''}`}
+                  className={`diff-review-cell before is-${hunk.kind}${focused ? ' is-focused' : ''}${hasGapBefore ? ' has-gap-before' : ''}`}
                   data-hunk-index={index}
                   onClick={() => focusHunk(index)}
                 >
-                  {originalSide(hunk) || ' '}
+                  <InlineDiffText hunk={hunk} side="before" />
                 </pre>
               );
             })}
           </div>
           <div className="diff-review-candidate" aria-label="候选稿">
-            {state.hunks.map((hunk, index) => {
+            {visibleHunkIndexes.map((index, visibleIndex) => {
+              const hunk = state.hunks[index];
               const decision = decisionByHunk.get(index);
               const focused = state.focusIndex === index;
               const value = candidateSide(hunk, decision);
+              const hasGapBefore = index > 0
+                && (visibleIndex === 0 || visibleHunkIndexes[visibleIndex - 1] < index - 1);
+              if (!isDecidableHunk(hunk)) {
+                return (
+                  <pre
+                    key={`after-${index}`}
+                    className={`diff-review-cell after is-unchanged${hasGapBefore ? ' has-gap-before' : ''}`}
+                    data-hunk-index={index}
+                  >
+                    {value}
+                  </pre>
+                );
+              }
               return (
                 <div
                   key={`after-${index}`}
-                  className={`diff-review-cell after is-${hunk.kind}${focused ? ' is-focused' : ''}${decision === 'reject' ? ' is-rejected' : ''}`}
+                  className={`diff-review-cell after is-${hunk.kind}${focused ? ' is-focused' : ''}${decision === 'reject' ? ' is-rejected' : ''}${hasGapBefore ? ' has-gap-before' : ''}`}
                   data-hunk-index={index}
                   onClick={() => focusHunk(index)}
                 >
+                  {editingHunkIndex !== index && (
+                    <pre className="diff-review-inline-preview" aria-hidden="true">
+                      <InlineDiffText hunk={hunk} side="after" />
+                    </pre>
+                  )}
                   <textarea
                     data-candidate-hunk={index}
                     aria-label={`候选稿片段 ${index + 1}`}
+                    className={editingHunkIndex === index ? 'is-editing' : 'has-inline-preview'}
                     value={value}
                     rows={Math.max(2, value.split('\n').length)}
                     placeholder={hunk.kind === 'removed' && decision !== 'reject' ? '此段已删除' : '输入候选内容'}
+                    onFocus={() => setEditingHunkIndex(index)}
+                    onBlur={() => setEditingHunkIndex((current) => current === index ? null : current)}
                     onChange={(event) => handleCandidateEdit(index, event.target.value)}
                   />
                   {isDecidableHunk(hunk) && (

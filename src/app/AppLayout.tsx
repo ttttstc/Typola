@@ -193,12 +193,6 @@ function candidateSelfCheckPath(candidatePath: string): string {
   return `${candidatePath}.selfcheck.json`;
 }
 
-function parentDirectory(path: string): string {
-  const normalized = path.replace(/\\/gu, '/');
-  const index = normalized.lastIndexOf('/');
-  return index >= 0 ? path.slice(0, index) : '';
-}
-
 function safeOutputSegment(value: string): string {
   return value.replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '') || 'conversation';
 }
@@ -535,31 +529,15 @@ export function AppLayout() {
     }
     return [...options.values()].sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
   }, [skillHub.sceneAdditions]);
-  const [styleGuidePath, setStyleGuidePath] = useState<string>();
-  useEffect(() => {
-    if (!file.path || file.fileType !== 'markdown') {
-      setStyleGuidePath(undefined);
-      return undefined;
-    }
-    let cancelled = false;
-    const candidates = [
-      file.path ? joinLocalPath(parentDirectory(file.path), 'style.md') : '',
-      effectiveAiWorkspaceRoot ? joinLocalPath(effectiveAiWorkspaceRoot, 'style.md') : '',
-    ].filter((path, index, all) => path && all.indexOf(path) === index);
-    void (async () => {
-      for (const candidate of candidates) {
-        try {
-          await readTextFile(candidate);
-          if (!cancelled) setStyleGuidePath(candidate);
-          return;
-        } catch {
-          // 继续检查下一个约定位置。
-        }
-      }
-      if (!cancelled) setStyleGuidePath(undefined);
-    })();
-    return () => { cancelled = true; };
-  }, [effectiveAiWorkspaceRoot, file.fileType, file.path]);
+  const handlePickReviewRuleFiles = useCallback(async (): Promise<string[]> => {
+    if (!isTauriRuntime) return [];
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const selected = await open({
+      multiple: true,
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+    });
+    return Array.isArray(selected) ? selected : selected ? [selected] : [];
+  }, [isTauriRuntime]);
   // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
   const [skillPrefill, setSkillPrefill] = useState<{ tick: number; text: string } | null>(null);
   const {
@@ -617,6 +595,7 @@ export function AppLayout() {
   const pendingAIReviewRunRef = useRef<PendingAIReviewRun | null>(null);
   const [aiReviewRunning, setAIReviewRunning] = useState(false);
   const [aiReviewRunVersion, setAIReviewRunVersion] = useState(0);
+  const [revisionReturnPath, setRevisionReturnPath] = useState<string>();
   const { histories: documentHistories, refresh: refreshDocumentHistories } = useDocumentHistoryList({
     outputBaseDir,
     conversationId: convManager.activeConvId,
@@ -751,14 +730,15 @@ export function AppLayout() {
       }
     }
     const contextBoundary = documentContextBoundary(conversation.currentFileContextPath, file.path);
-    const useStyleGuide = options.useStyleGuide && Boolean(styleGuidePath);
+    const rulePaths = [...new Set(options.rulePaths)];
+    const skillNames = [...new Set(options.skillNames)];
     const basisLabels = [
-      useStyleGuide ? 'style.md' : '',
-      options.skillName ? `Skill: ${options.skillName}` : '',
-      options.requirement ? `本次要求: ${options.requirement}` : '',
+      ...rulePaths.map((path) => path.replace(/\\/gu, '/').split('/').pop() || path),
+      ...skillNames.map((name) => `Skill: ${name}`),
+      options.requirement ? `手工规则: ${options.requirement}` : '',
     ].filter(Boolean);
     const basis: ReviewBasis = {
-      kind: options.requirement ? 'request' : options.skillName ? 'skill' : useStyleGuide ? 'style' : 'request',
+      kind: options.requirement ? 'request' : skillNames.length ? 'skill' : rulePaths.length ? 'style' : 'request',
       label: basisLabels.join(' · ') || '通用检视',
     };
     const existingComments = reviewStateApi.state.comments.map((comment) => ({
@@ -770,9 +750,9 @@ export function AppLayout() {
       contextBoundary,
       '请对当前文档执行一轮检视，只提出可定位、可执行的意见，不修改任何文档。',
       `当前文档：${file.path}`,
-      useStyleGuide ? `检视时必须遵循：${styleGuidePath}` : '',
-      options.skillName ? `调用当前 Session 可用的 Skill「$${options.skillName}」执行检视；若 Provider 不支持 Skill 调用，则按该 Skill 的已知规则检视。` : '',
-      options.requirement ? `本次额外要求：${options.requirement}` : '本次没有额外要求，重点检查表达、结构和重复论证。',
+      rulePaths.length ? `检视时必须同时遵循以下规则文件：\n${rulePaths.join('\n')}` : '',
+      ...skillNames.map((name) => `调用当前 Session 可用的 Skill「$${name}」执行检视；若 Provider 不支持 Skill 调用，则按该 Skill 的已知规则检视。`),
+      options.requirement ? `本次手工规则：${options.requirement}` : '本次没有手工规则，重点检查表达、结构和重复论证。',
       `已有人工与 AI 意见如下，仅用于去重；不得改写、分类或覆盖：\n${JSON.stringify(existingComments)}`,
       '每条意见必须引用文档中连续且可唯一定位的原文片段。重复原文时提供紧邻前缀 prefixHint 消歧。',
       '直接返回以下 JSON，不调用文件写入工具，不创建任何文件。JSON 格式固定为：',
@@ -791,7 +771,7 @@ export function AppLayout() {
       await convManager.send(prompt, {
         conversationId,
         currentFileContextPath: file.path,
-        referencePaths: [file.path, useStyleGuide ? styleGuidePath : undefined].filter((path): path is string => Boolean(path)),
+        referencePaths: [file.path, ...rulePaths],
       });
       if (pendingAIReviewRunRef.current?.conversationId === conversationId) {
         pendingAIReviewRunRef.current.started = true;
@@ -802,7 +782,15 @@ export function AppLayout() {
       setAIReviewRunning(false);
       await messageDialog(String(error), { title: 'AI 检视失败' });
     }
-  }, [convManager, file.dirty, file.path, handleSave, reviewStateApi.state.comments, styleGuidePath, truncate]);
+  }, [convManager, file.dirty, file.path, handleSave, reviewStateApi.state.comments, truncate]);
+
+  const handleStopAIReview = useCallback(() => {
+    pendingAIReviewRunRef.current = null;
+    setAIReviewRunning(false);
+    setAIReviewRunVersion((value) => value + 1);
+    void convManager.cancel();
+    setTransientMessage('已停止 AI 检视。');
+  }, [convManager]);
 
   useEffect(() => {
     const pending = pendingAIReviewRunRef.current;
@@ -2283,17 +2271,28 @@ export function AppLayout() {
       onExport={() => void handleExportReviewMarkdown()}
       onSendToAI={() => void handleSendReviewToAI()}
       revisions={aiRevisions}
-      onOpenRevision={(path) => { void handleOpenPath(path).catch((e) => console.warn('Failed to open AI revision:', e)); }}
+      onOpenRevision={(path) => {
+        if (file.path && !sameLocalPath(file.path, path)) setRevisionReturnPath(file.path);
+        void handleOpenPath(path).catch((error) => console.warn('Failed to open AI revision:', error));
+      }}
       onReviewRevision={(path) => { void handleReviewRevision(path); }}
       onRefreshRevisions={refreshRevisions}
       histories={documentHistories}
       onReviewHistory={(path) => { void handleReviewRevision(path, { history: true }); }}
       onRefreshHistories={refreshDocumentHistories}
-      styleGuidePath={styleGuidePath}
       reviewSkills={reviewSkillOptions}
       aiReviewRunning={aiReviewRunning}
       onStartAIReview={(options) => { void handleStartAIReview(options); }}
+      onStopAIReview={handleStopAIReview}
+      onPickRuleFiles={handlePickReviewRuleFiles}
       aiRewriteRunning={Boolean(pendingInitialCandidate)}
+      revisionReturnPath={revisionReturnPath && !sameLocalPath(revisionReturnPath, file.path) ? revisionReturnPath : undefined}
+      onReturnFromRevision={() => {
+        if (!revisionReturnPath) return;
+        void handleOpenPath(revisionReturnPath)
+          .then(() => setRevisionReturnPath(undefined))
+          .catch((error) => console.warn('Failed to return from AI revision:', error));
+      }}
       onClose={() => setRightPanelMode('none')}
     />
   ) : rightPanelMode === 'artifacts' && !isDocx ? (

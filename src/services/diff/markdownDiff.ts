@@ -29,6 +29,7 @@ export type DiffHunk =
   | { kind: 'removed'; content: string };
 
 export type HunkDecision = 'accept' | 'reject';
+export type InlineDiffPart = { kind: 'equal' | 'added' | 'removed'; text: string };
 
 // 把 markdown 切成"语义段":普通段落 + 结构化块。
 //
@@ -41,7 +42,7 @@ export type HunkDecision = 'accept' | 'reject';
 // 其他用空行(\n{2,})切。
 export function splitParagraphs(text: string): string[] {
   if (!text) return [];
-  const lines = text.split('\n');
+  const lines = text.replace(/\r\n?/gu, '\n').split('\n');
   const blocks: string[] = [];
   let buffer: string[] = [];
 
@@ -151,6 +152,45 @@ export function splitParagraphs(text: string): string[] {
   }
   flushBuffer();
   return blocks;
+}
+
+function inlineTokens(text: string): string[] {
+  return text.match(/\s+|[\p{Script=Han}]|[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? [];
+}
+
+function appendInlinePart(parts: InlineDiffPart[], kind: InlineDiffPart['kind'], text: string): void {
+  const last = parts[parts.length - 1];
+  if (last?.kind === kind) last.text += text;
+  else parts.push({ kind, text });
+}
+
+/** 供双栏 Diff 做行内高亮；中文按字、英文按词、标点与空白独立比较。 */
+export function diffInline(before: string, after: string): {
+  before: InlineDiffPart[];
+  after: InlineDiffPart[];
+} {
+  const left = inlineTokens(before);
+  const right = inlineTokens(after);
+  const ops = backtrack(left, right, buildLcs(left, right));
+  const beforeParts: InlineDiffPart[] = [];
+  const afterParts: InlineDiffPart[] = [];
+  let leftIndex = 0;
+  let rightIndex = 0;
+  for (const op of ops) {
+    if (op === 'same') {
+      appendInlinePart(beforeParts, 'equal', left[leftIndex]);
+      appendInlinePart(afterParts, 'equal', right[rightIndex]);
+      leftIndex += 1;
+      rightIndex += 1;
+    } else if (op === 'del-a') {
+      appendInlinePart(beforeParts, 'removed', left[leftIndex]);
+      leftIndex += 1;
+    } else {
+      appendInlinePart(afterParts, 'added', right[rightIndex]);
+      rightIndex += 1;
+    }
+  }
+  return { before: beforeParts, after: afterParts };
 }
 
 // 判断 hunk 是否需要用户决策(unchanged 不需要)。

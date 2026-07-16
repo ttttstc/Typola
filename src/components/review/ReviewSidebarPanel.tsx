@@ -1,10 +1,11 @@
 // 右栏检视工作台：统一管理意见、发起改稿并查看历史版本。
 
 import {
-  Check,
+  ArrowLeft,
   Edit3,
   EyeOff,
   FileDown,
+  FilePlus2,
   FileText,
   GitCompare,
   History,
@@ -12,6 +13,7 @@ import {
   RefreshCw,
   Send,
   Sparkles,
+  Square,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -28,8 +30,8 @@ type View = 'review' | 'history';
 type ReviewFilter = 'all' | 'human' | 'ai' | 'ignored';
 
 export type AIReviewSettings = {
-  useStyleGuide: boolean;
-  skillName?: string;
+  rulePaths: string[];
+  skillNames: string[];
   requirement: string;
 };
 
@@ -53,11 +55,14 @@ type Props = {
   histories?: DocumentHistoryEntry[];
   onReviewHistory?: (path: string) => void;
   onRefreshHistories?: () => void;
-  styleGuidePath?: string;
   reviewSkills?: ReviewSkillOption[];
   aiReviewRunning?: boolean;
   onStartAIReview?: (settings: AIReviewSettings) => void;
+  onStopAIReview?: () => void;
+  onPickRuleFiles?: () => Promise<string[]>;
   aiRewriteRunning?: boolean;
+  revisionReturnPath?: string;
+  onReturnFromRevision?: () => void;
 };
 
 function truncate(text: string, max: number): string {
@@ -97,11 +102,14 @@ export function ReviewSidebarPanel({
   histories = [],
   onReviewHistory,
   onRefreshHistories,
-  styleGuidePath,
   reviewSkills = [],
   aiReviewRunning = false,
   onStartAIReview,
+  onStopAIReview,
+  onPickRuleFiles,
   aiRewriteRunning = false,
+  revisionReturnPath,
+  onReturnFromRevision,
 }: Props) {
   const activeComments = getActiveReviewComments(comments);
   const ignoredCount = comments.length - activeComments.length;
@@ -165,10 +173,11 @@ export function ReviewSidebarPanel({
           onSetIgnored={onSetIgnored}
           onExport={onExport}
           onSendToAI={onSendToAI}
-          styleGuidePath={styleGuidePath}
           reviewSkills={reviewSkills}
           aiReviewRunning={aiReviewRunning}
           onStartAIReview={onStartAIReview}
+          onStopAIReview={onStopAIReview}
+          onPickRuleFiles={onPickRuleFiles}
           aiRewriteRunning={aiRewriteRunning}
         />
       )}
@@ -183,6 +192,8 @@ export function ReviewSidebarPanel({
           histories={histories}
           onReviewHistory={onReviewHistory}
           onRefreshHistories={onRefreshHistories}
+          revisionReturnPath={revisionReturnPath}
+          onReturnFromRevision={onReturnFromRevision}
         />
       )}
     </aside>
@@ -201,10 +212,11 @@ function ReviewListView({
   onSetIgnored,
   onExport,
   onSendToAI,
-  styleGuidePath,
   reviewSkills,
   aiReviewRunning,
   onStartAIReview,
+  onStopAIReview,
+  onPickRuleFiles,
   aiRewriteRunning,
 }: {
   comments: ReviewComment[];
@@ -218,15 +230,16 @@ function ReviewListView({
   onSetIgnored: (commentId: string, ignored: boolean) => void;
   onExport: () => void;
   onSendToAI: () => void;
-  styleGuidePath?: string;
   reviewSkills: ReviewSkillOption[];
   aiReviewRunning: boolean;
   onStartAIReview?: (settings: AIReviewSettings) => void;
+  onStopAIReview?: () => void;
+  onPickRuleFiles?: () => Promise<string[]>;
   aiRewriteRunning: boolean;
 }) {
   const [filter, setFilter] = useState<ReviewFilter>('all');
-  const [useStyleGuide, setUseStyleGuide] = useState(true);
-  const [skillName, setSkillName] = useState('');
+  const [rulePaths, setRulePaths] = useState<string[]>([]);
+  const [skillNames, setSkillNames] = useState<string[]>([]);
   const [requirement, setRequirement] = useState('');
   const filteredComments = filter === 'ignored'
     ? comments.filter((comment) => comment.status === 'ignored')
@@ -243,42 +256,87 @@ function ReviewListView({
       {currentFilePath && onStartAIReview && (
         <details className="review-sidebar-ai-inspection">
           <summary><Sparkles size={12} /> AI 检视</summary>
-          <label className="review-sidebar-ai-option">
-            <input
-              type="checkbox"
-              checked={useStyleGuide && Boolean(styleGuidePath)}
-              disabled={!styleGuidePath}
-              onChange={(event) => setUseStyleGuide(event.target.checked)}
-            />
-            {styleGuidePath ? '当前项目 style.md' : '未发现 style.md'}
-          </label>
+          <div className="review-sidebar-ai-field">
+            <span>规则文件（可多选）</span>
+            <button
+              type="button"
+              className="review-sidebar-rule-import"
+              disabled={aiReviewRunning || !onPickRuleFiles}
+              onClick={() => {
+                void onPickRuleFiles?.().then((paths) => {
+                  setRulePaths((current) => [...new Set([...current, ...paths])]);
+                });
+              }}
+            >
+              <FilePlus2 size={12} /> 导入 Markdown
+            </button>
+            {rulePaths.length > 0 && (
+              <ul className="review-sidebar-rule-list">
+                {rulePaths.map((path) => (
+                  <li key={path} title={path}>
+                    <span>{path.replace(/\\/gu, '/').split('/').pop()}</span>
+                    <button
+                      type="button"
+                      disabled={aiReviewRunning}
+                      onClick={() => setRulePaths((current) => current.filter((item) => item !== path))}
+                      aria-label={`移除规则文件 ${path}`}
+                    >
+                      <X size={11} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <fieldset className="review-sidebar-skill-list">
+            <legend>写作规范 Skill（可多选）</legend>
+            {reviewSkills.length === 0 && <span>暂无可用 Skill</span>}
+            {reviewSkills.map((skill) => (
+              <label key={skill.name}>
+                <input
+                  type="checkbox"
+                  checked={skillNames.includes(skill.name)}
+                  disabled={aiReviewRunning}
+                  onChange={(event) => setSkillNames((current) => (
+                    event.target.checked
+                      ? [...current, skill.name]
+                      : current.filter((name) => name !== skill.name)
+                  ))}
+                />
+                {skill.label}
+              </label>
+            ))}
+          </fieldset>
           <label className="review-sidebar-ai-field">
-            <span>Skill（可选）</span>
-            <select value={skillName} onChange={(event) => setSkillName(event.target.value)}>
-              <option value="">不使用</option>
-              {reviewSkills.map((skill) => <option key={skill.name} value={skill.name}>{skill.label}</option>)}
-            </select>
-          </label>
-          <label className="review-sidebar-ai-field">
-            <span>本次要求</span>
+            <span>手工规则</span>
             <textarea
               value={requirement}
               placeholder="例如：重点检查重复论证和报告腔"
+              disabled={aiReviewRunning}
               onChange={(event) => setRequirement(event.target.value)}
             />
           </label>
-          <button
-            type="button"
-            className="review-sidebar-action review-sidebar-action-send"
-            disabled={aiReviewRunning}
-            onClick={() => onStartAIReview({
-              useStyleGuide: useStyleGuide && Boolean(styleGuidePath),
-              skillName: skillName || undefined,
-              requirement: requirement.trim(),
-            })}
-          >
-            <Sparkles size={13} /> {aiReviewRunning ? '检视中…' : '开始检视'}
-          </button>
+          {aiReviewRunning ? (
+            <button
+              type="button"
+              className="review-sidebar-action review-sidebar-action-stop"
+              onClick={onStopAIReview}
+            >
+              <Square size={12} /> 停止检视
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="review-sidebar-action review-sidebar-action-send"
+              onClick={() => onStartAIReview({
+                rulePaths,
+                skillNames,
+                requirement: requirement.trim(),
+              })}
+            >
+              <Sparkles size={13} /> 开始检视
+            </button>
+          )}
         </details>
       )}
 
@@ -354,17 +412,6 @@ function ReviewListView({
                   </button>
                   <button
                     type="button"
-                    className={`review-sidebar-item-tool${!ignored ? ' is-selected' : ''}`}
-                    onClick={() => onSetIgnored(comment.id, false)}
-                    title="接纳意见"
-                    aria-label="接纳意见"
-                    aria-pressed={!ignored}
-                  >
-                    <Check size={12} />
-                    <span>接纳</span>
-                  </button>
-                  <button
-                    type="button"
                     className={`review-sidebar-item-tool${ignored ? ' is-selected' : ''}`}
                     onClick={() => onSetIgnored(comment.id, true)}
                     title="忽略意见"
@@ -396,7 +443,7 @@ function ReviewListView({
           className="review-sidebar-action review-sidebar-action-send"
           disabled={!canAct || aiRewriteRunning}
           onClick={onSendToAI}
-          title={canAct ? '按当前接纳并编辑后的意见发起 AI 改稿' : '没有接纳的意见或未打开文档'}
+          title={canAct ? '按所有未忽略意见发起 AI 改稿' : '没有未忽略意见或未打开文档'}
         >
           <Send size={13} /> {aiRewriteRunning ? '改稿中…' : 'AI 改稿'}
         </button>
@@ -414,6 +461,8 @@ function RewriteHistoryView({
   histories,
   onReviewHistory,
   onRefreshHistories,
+  revisionReturnPath,
+  onReturnFromRevision,
 }: {
   currentFilePath?: string;
   revisions: RevisionEntry[];
@@ -423,11 +472,23 @@ function RewriteHistoryView({
   histories: DocumentHistoryEntry[];
   onReviewHistory?: (path: string) => void;
   onRefreshHistories?: () => void;
+  revisionReturnPath?: string;
+  onReturnFromRevision?: () => void;
 }) {
   return (
     <>
       {currentFilePath && (
         <>
+        {revisionReturnPath && onReturnFromRevision && (
+          <button
+            type="button"
+            className="review-sidebar-return"
+            onClick={onReturnFromRevision}
+            title={revisionReturnPath}
+          >
+            <ArrowLeft size={13} /> 返回前一篇
+          </button>
+        )}
         <section className="review-sidebar-revisions" aria-label="改稿历史">
           <header className="review-sidebar-revisions-header">
             <span className="review-sidebar-revisions-title">

@@ -10805,11 +10805,68 @@ button[data-tooltip]:disabled::before {
   resize: vertical;
 }
 .review-sidebar-ai-inspection > .review-sidebar-action { margin-top: 8px; }
+.review-sidebar-rule-import,
+.review-sidebar-return {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--theme-border);
+  border-radius: 6px;
+  background: var(--theme-control-bg);
+  cursor: pointer;
+}
+.review-sidebar-rule-list,
+.review-sidebar-skill-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  list-style: none;
+  font-size: 11px;
+}
+.review-sidebar-rule-list li,
+.review-sidebar-skill-list label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.review-sidebar-rule-list li > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-sidebar-rule-list li > button {
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.review-sidebar-skill-list legend {
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+.review-sidebar-action-stop {
+  border-color: var(--theme-danger);
+  background: color-mix(in oklch, var(--theme-danger) 10%, var(--theme-control-bg));
+}
+.review-sidebar-return {
+  margin: 8px 12px 0;
+  justify-content: flex-start;
+}
 .review-sidebar-item-line {
   color: var(--theme-text-tertiary, var(--theme-text-secondary));
   font-size: 9.5px;
 }
-.review-sidebar-item.is-ignored { opacity: 0.68; }
+.review-sidebar-item.is-ignored {
+  opacity: 1;
+  background: var(--theme-surface-muted);
+}
 .review-sidebar-item-meta {
   display: flex;
   align-items: center;
@@ -10971,6 +11028,17 @@ button[data-tooltip]:disabled::before {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.diff-review-cell.has-gap-before {
+  border-top: 24px solid var(--theme-surface-muted);
+}
+.diff-review-cell.before.has-gap-before::before {
+  content: '未变化内容已折叠';
+  position: absolute;
+  top: -20px;
+  left: 10px;
+  font-size: 10px;
+  color: var(--theme-text-secondary);
+}
 .diff-review-cell.before.is-modified,
 .diff-review-cell.before.is-removed {
   background: color-mix(in oklch, var(--theme-danger) 7%, transparent);
@@ -10991,6 +11059,33 @@ button[data-tooltip]:disabled::before {
   color: inherit;
   font: inherit;
   line-height: inherit;
+}
+.diff-review-inline-preview {
+  position: absolute;
+  inset: 10px 12px;
+  z-index: 1;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  font: inherit;
+  line-height: inherit;
+}
+.diff-review-cell textarea.has-inline-preview {
+  color: transparent !important;
+  caret-color: transparent;
+}
+.diff-review-inline-added,
+.diff-review-inline-removed {
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.diff-review-inline-added {
+  background: color-mix(in oklch, var(--theme-success) 30%, transparent);
+}
+.diff-review-inline-removed {
+  background: color-mix(in oklch, var(--theme-danger) 28%, transparent);
+  text-decoration: line-through;
 }
 .diff-review-cell-actions {
   position: absolute;

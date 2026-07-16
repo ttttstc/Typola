@@ -55,18 +55,12 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     vi.clearAllMocks();
   });
 
-  it('人工与 AI 意见同列展示,AI 显示依据,忽略项默认隐藏且可恢复', async () => {
+  it('人工与 AI 意见同列展示，AI 显示依据，忽略项单独筛选', async () => {
     const values = props([
       comment({ id: 'human', text: '人工意见' }),
-      comment({
-        id: 'ai',
-        source: 'ai',
-        text: 'AI 意见',
-        basis: { kind: 'style', label: 'style.md' },
-      }),
+      comment({ id: 'ai', source: 'ai', text: 'AI 意见', basis: { kind: 'style', label: 'style.md' } }),
       comment({ id: 'ignored', text: '已忽略意见', status: 'ignored' }),
     ]);
-
     await act(async () => root.render(<ReviewSidebarPanel {...values} />));
 
     expect(host.textContent).toContain('人工意见');
@@ -75,18 +69,14 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     expect(host.textContent).not.toContain('已忽略意见');
 
     const showIgnored = Array.from(host.querySelectorAll<HTMLButtonElement>('.review-sidebar-filter'))
-      .find((button) => button.textContent?.includes('已忽略'));
-    expect(showIgnored).not.toBeNull();
-    await act(async () => showIgnored!.click());
+      .find((button) => button.textContent?.includes('已忽略'))!;
+    await act(async () => showIgnored.click());
     expect(host.textContent).toContain('已忽略意见');
     expect(host.textContent).not.toContain('人工意见');
-
-    const accept = host.querySelector<HTMLButtonElement>('[aria-label="接纳意见"]');
-    await act(async () => accept!.click());
-    expect(values.onSetIgnored).toHaveBeenCalledWith('ignored', false);
+    expect(host.querySelector('[aria-label="接纳意见"]')).toBeNull();
   });
 
-  it('人工、AI 和已忽略意见都可编辑，并以接纳或忽略标记状态', async () => {
+  it('人工、AI 和已忽略意见都可编辑，活动意见只支持忽略', async () => {
     const values = props([
       comment({ id: 'human' }),
       comment({ id: 'ai', source: 'ai' }),
@@ -99,58 +89,81 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     await act(async () => aiEdit.click());
     expect(values.onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'ai' }));
 
-    const showIgnored = Array.from(host.querySelectorAll<HTMLButtonElement>('.review-sidebar-filter'))
-      .find((button) => button.textContent?.includes('已忽略'))!;
-    await act(async () => showIgnored.click());
-    expect(host.querySelectorAll('[aria-label="编辑意见"]')).toHaveLength(1);
-    expect(host.querySelector<HTMLButtonElement>('[aria-label="忽略意见"]')?.getAttribute('aria-pressed')).toBe('true');
+    const ignore = host.querySelector<HTMLButtonElement>('[aria-label="忽略意见"]')!;
+    await act(async () => ignore.click());
+    expect(values.onSetIgnored).toHaveBeenCalledWith('human', true);
+    expect(host.querySelector('[aria-label="接纳意见"]')).toBeNull();
   });
 
-  it('AI 检视只暴露 style、Skill 与本次要求，不展示完整 Prompt', async () => {
+  it('AI 检视支持多规则文件、多 Skill 与手工规则', async () => {
     const values = props([]);
     const onStartAIReview = vi.fn();
+    const onPickRuleFiles = vi.fn(async () => ['D:\\docs\\style.md', 'D:\\docs\\tone.md']);
     await act(async () => root.render(
       <ReviewSidebarPanel
         {...values}
-        styleGuidePath="D:\\docs\\style.md"
-        reviewSkills={[{ name: 'humanizer-zh', label: '中文去 AI 味' }]}
+        reviewSkills={[
+          { name: 'humanizer-zh', label: '中文去 AI 味' },
+          { name: 'tech-writing', label: '技术写作' },
+        ]}
+        onPickRuleFiles={onPickRuleFiles}
         onStartAIReview={onStartAIReview}
       />,
     ));
-    const summary = host.querySelector('summary');
-    await act(async () => summary?.click());
-    const select = host.querySelector<HTMLSelectElement>('.review-sidebar-ai-field select');
-    const requirement = host.querySelector<HTMLTextAreaElement>('.review-sidebar-ai-field textarea');
+    await act(async () => host.querySelector('summary')?.click());
+    const importRules = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('导入 Markdown'))!;
+    await act(async () => importRules.click());
+    expect(host.textContent).toContain('style.md');
+    expect(host.textContent).toContain('tone.md');
+
+    const skills = host.querySelectorAll<HTMLInputElement>('.review-sidebar-skill-list input');
+    const requirement = host.querySelector<HTMLTextAreaElement>('.review-sidebar-ai-field textarea')!;
     await act(async () => {
-      select!.value = 'humanizer-zh';
-      select!.dispatchEvent(new Event('change', { bubbles: true }));
+      skills.forEach((skill) => {
+        skill.click();
+      });
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
       setter?.call(requirement, '检查报告腔');
-      requirement!.dispatchEvent(new Event('input', { bubbles: true }));
+      requirement.dispatchEvent(new Event('input', { bubbles: true }));
     });
     const start = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('开始检视'));
-    await act(async () => start!.click());
+      .find((button) => button.textContent?.includes('开始检视'))!;
+    await act(async () => start.click());
     expect(onStartAIReview).toHaveBeenCalledWith({
-      useStyleGuide: true,
-      skillName: 'humanizer-zh',
+      rulePaths: ['D:\\docs\\style.md', 'D:\\docs\\tone.md'],
+      skillNames: ['humanizer-zh', 'tech-writing'],
       requirement: '检查报告腔',
     });
-    expect(host.textContent).not.toContain('完整 Prompt');
+  });
+
+  it('AI 检视运行时可以停止', async () => {
+    const onStopAIReview = vi.fn();
+    await act(async () => root.render(
+      <ReviewSidebarPanel
+        {...props([])}
+        aiReviewRunning
+        onStartAIReview={vi.fn()}
+        onStopAIReview={onStopAIReview}
+      />,
+    ));
+    await act(async () => host.querySelector('summary')?.click());
+    const stop = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('停止检视'))!;
+    await act(async () => stop.click());
+    expect(onStopAIReview).toHaveBeenCalledOnce();
   });
 
   it('只有忽略项时不允许导出或发 AI 修改', async () => {
     const values = props([comment({ status: 'ignored', text: '已忽略意见' })]);
     await act(async () => root.render(<ReviewSidebarPanel {...values} />));
-
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-export')?.disabled).toBe(true);
-
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-send')?.disabled).toBe(true);
   });
 
   it('从检视列表发起 AI 改稿，改稿历史只展示版本查看与对比', async () => {
     const values = {
-      ...props([comment({ id: 'accepted' })]),
+      ...props([comment({ id: 'active' })]),
       revisions: [{ name: 'a.ai改1.md', path: 'D:\\a.ai改1.md', mtime: 1, version: 1 }],
     };
     await act(async () => root.render(<ReviewSidebarPanel {...values} />));
