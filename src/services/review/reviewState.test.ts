@@ -118,7 +118,7 @@ describe('buildReviewMarkdown', () => {
     // 文末汇总(双轨)
     expect(out).toContain('## 检视意见汇总');
     expect(out).toMatch(/### 1\. 第 1 行 · 针对片段「一二三段落。」\n\n改一/);
-    expect(out).toMatch(/### 2\. 第 1 行 · 针对片段「四五六段落。」\n\n改二/);
+    expect(out).toMatch(/### 2\. 第 3 行 · 针对片段「四五六段落。」\n\n改二/);
   });
 
   it('用 prefixHint 区分多处重复 originalText 的歧义', () => {
@@ -183,8 +183,8 @@ describe('buildReviewMarkdown 行号前缀', () => {
     const out = buildReviewMarkdown(src, evil.comments);
     expect(out).toContain('\\`伪\\#代码块\\`');
     expect(out).toContain('\\*星号\\*');
-    // ### N. 行仍保持完整标题结构,不被井号破坏(## → \#\#)
-    expect(out).toContain('### 1. 第 1 行 · 针对片段「伪 \\#\\# 标题」');
+    // ### N. 行仍保持完整标题结构,不被井号破坏(## → \#\#)；原文中不存在时明确标为定位失效。
+    expect(out).toContain('### 1. 定位失效 · 针对片段「伪 \\#\\# 标题」');
   });
 
   it('anchor.from 为负 → 文末汇总显示「定位失效」', () => {

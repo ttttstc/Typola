@@ -1,10 +1,6 @@
-// AI Diff Preview 审阅态状态管理。
-//
-// 严格按 SPEC §2.1 触发判定:openDiffReview 是 A 类直接触发(检视发AI改、
-// `output: review_inline` 的 skill)和 B 类显式触发(产物 chip 点「合并到当前文档」)
-// 共用入口;不在 hook 内做任何意图猜测,意图判定由调用方负责。
+// 候选稿 Diff 审阅状态：同一会话持续演进，正式文档仅在 apply 时改变。
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   countDecidableHunks,
   diffMarkdown,
@@ -15,27 +11,37 @@ import {
 } from '../services/diff/markdownDiff';
 
 export type DiffReviewSource = 'review' | 'skill' | 'merge-artifact';
+export type CandidateSelfCheckStatus = 'fresh' | 'stale' | 'warning' | 'blocked';
+export type CandidateBaselineStatus = 'current' | 'stale';
 
 export type DiffReviewState = {
   isOpen: boolean;
   source: DiffReviewSource;
   title: string;
+  documentPath?: string;
+  candidatePath?: string;
   originalContent: string;
   proposedContent: string;
   hunks: DiffHunk[];
   decisions: HunkDecision[];
-  /** 当前焦点 hunk 在 hunks 中的索引(可能落在 unchanged 上,UI 应跳过) */
   focusIndex: number;
-  /** 用户是否动过任何 hunk 的决定(从默认 accept 翻成 reject 算动过)。
-   *  关闭审阅时若此为 true 需要轻确认「放弃本次 AI 审阅?」(SPEC §2.7) */
   dirty: boolean;
+  selfCheckStatus: CandidateSelfCheckStatus;
+  selfCheckSummary?: string;
+  baselineStatus: CandidateBaselineStatus;
+  latestSourceContent?: string;
+  feedbackPending: boolean;
 };
 
 export type OpenDiffReviewOptions = {
   source: DiffReviewSource;
   title?: string;
+  documentPath?: string;
+  candidatePath?: string;
   originalContent: string;
   proposedContent: string;
+  selfCheckStatus?: CandidateSelfCheckStatus;
+  selfCheckSummary?: string;
 };
 
 const EMPTY_STATE: DiffReviewState = {
@@ -48,122 +54,293 @@ const EMPTY_STATE: DiffReviewState = {
   decisions: [],
   focusIndex: -1,
   dirty: false,
+  selfCheckStatus: 'fresh',
+  baselineStatus: 'current',
+  feedbackPending: false,
 };
 
-/** 在 hunks 中找下一个/上一个可决策的 hunk 索引。step=+1 next / -1 prev。 */
+const STORAGE_PREFIX = 'typola.diff-review.v1:';
+
+function createReviewState(options: OpenDiffReviewOptions): DiffReviewState {
+  const hunks = diffMarkdown(options.originalContent, options.proposedContent);
+  const decisions: HunkDecision[] = new Array(countDecidableHunks(hunks)).fill('accept');
+  return {
+    isOpen: true,
+    source: options.source,
+    title: options.title ?? '',
+    documentPath: options.documentPath,
+    candidatePath: options.candidatePath,
+    originalContent: options.originalContent,
+    proposedContent: options.proposedContent,
+    hunks,
+    decisions,
+    focusIndex: hunks.findIndex(isDecidableHunk),
+    dirty: false,
+    selfCheckStatus: options.selfCheckStatus ?? 'fresh',
+    selfCheckSummary: options.selfCheckSummary,
+    baselineStatus: 'current',
+    feedbackPending: false,
+  };
+}
+
 function findDecidable(hunks: DiffHunk[], from: number, step: 1 | -1): number {
   if (hunks.length === 0) return -1;
-  const n = hunks.length;
-  let i = from;
-  for (let count = 0; count < n; count += 1) {
-    i = (i + step + n) % n;
-    if (isDecidableHunk(hunks[i])) return i;
+  const count = hunks.length;
+  let index = from;
+  for (let visited = 0; visited < count; visited += 1) {
+    index = (index + step + count) % count;
+    if (isDecidableHunk(hunks[index])) return index;
   }
   return -1;
 }
 
-/** 把 hunks 中某个 hunk 的全局索引转成 decisions 数组里的索引(跳过 unchanged)。 */
 function hunkToDecisionIndex(hunks: DiffHunk[], hunkIndex: number): number {
   let decisionIndex = -1;
-  for (let i = 0; i <= hunkIndex; i += 1) {
-    if (isDecidableHunk(hunks[i])) decisionIndex += 1;
+  for (let index = 0; index <= hunkIndex; index += 1) {
+    if (isDecidableHunk(hunks[index])) decisionIndex += 1;
   }
   return decisionIndex;
 }
 
-export function useDiffReview(onApplyMerged?: (merged: string, originalContent: string) => void) {
-  const [state, setState] = useState<DiffReviewState>(EMPTY_STATE);
+function storageKey(persistenceKey?: string): string | null {
+  return persistenceKey ? `${STORAGE_PREFIX}${persistenceKey}` : null;
+}
+
+function restoreState(persistenceKey?: string): DiffReviewState {
+  const key = storageKey(persistenceKey);
+  if (!key || typeof localStorage === 'undefined') return EMPTY_STATE;
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+    if (!value || typeof value !== 'object') return EMPTY_STATE;
+    const saved = value as Partial<DiffReviewState>;
+    if (
+      saved.isOpen !== true
+      || typeof saved.originalContent !== 'string'
+      || typeof saved.proposedContent !== 'string'
+      || (saved.source !== 'review' && saved.source !== 'skill' && saved.source !== 'merge-artifact')
+    ) return EMPTY_STATE;
+    const restored = createReviewState({
+      source: saved.source,
+      title: typeof saved.title === 'string' ? saved.title : '',
+      documentPath: typeof saved.documentPath === 'string' ? saved.documentPath : undefined,
+      candidatePath: typeof saved.candidatePath === 'string' ? saved.candidatePath : undefined,
+      originalContent: saved.originalContent,
+      proposedContent: saved.proposedContent,
+      selfCheckStatus: isSelfCheckStatus(saved.selfCheckStatus) ? saved.selfCheckStatus : 'fresh',
+      selfCheckSummary: typeof saved.selfCheckSummary === 'string' ? saved.selfCheckSummary : undefined,
+    });
+    const decisionCount = countDecidableHunks(restored.hunks);
+    const decisions = Array.isArray(saved.decisions)
+      && saved.decisions.length === decisionCount
+      && saved.decisions.every((decision) => decision === 'accept' || decision === 'reject')
+      ? saved.decisions as HunkDecision[]
+      : restored.decisions;
+    return {
+      ...restored,
+      decisions,
+      focusIndex: typeof saved.focusIndex === 'number' ? saved.focusIndex : restored.focusIndex,
+      dirty: saved.dirty === true,
+      baselineStatus: saved.baselineStatus === 'stale' ? 'stale' : 'current',
+      latestSourceContent: typeof saved.latestSourceContent === 'string' ? saved.latestSourceContent : undefined,
+      feedbackPending: false,
+    };
+  } catch {
+    return EMPTY_STATE;
+  }
+}
+
+function isSelfCheckStatus(value: unknown): value is CandidateSelfCheckStatus {
+  return value === 'fresh' || value === 'stale' || value === 'warning' || value === 'blocked';
+}
+
+export function useDiffReview(
+  onApplyMerged?: (merged: string, originalContent: string) => void | Promise<void>,
+  persistenceKey?: string,
+) {
+  const [state, setState] = useState<DiffReviewState>(() => restoreState(persistenceKey));
+  const loadedKeyRef = useRef(persistenceKey);
+  const skipPersistRef = useRef(false);
+
+  useEffect(() => {
+    if (loadedKeyRef.current === persistenceKey) return;
+    loadedKeyRef.current = persistenceKey;
+    skipPersistRef.current = true;
+    setState(restoreState(persistenceKey));
+  }, [persistenceKey]);
+
+  useEffect(() => {
+    const key = storageKey(persistenceKey);
+    if (!key || typeof localStorage === 'undefined') return;
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false;
+      return;
+    }
+    if (state.isOpen) localStorage.setItem(key, JSON.stringify(state));
+    else localStorage.removeItem(key);
+  }, [persistenceKey, state]);
 
   const open = useCallback((options: OpenDiffReviewOptions) => {
-    const hunks = diffMarkdown(options.originalContent, options.proposedContent);
-    const decisionCount = countDecidableHunks(hunks);
-    const decisions: HunkDecision[] = new Array(decisionCount).fill('accept');
-    // 焦点落在第一个可决策 hunk 上
-    const firstDecidable = hunks.findIndex(isDecidableHunk);
-    setState({
-      isOpen: true,
-      source: options.source,
-      title: options.title ?? '',
-      originalContent: options.originalContent,
-      proposedContent: options.proposedContent,
-      hunks,
-      decisions,
-      focusIndex: firstDecidable,
-      dirty: false,
+    setState(createReviewState(options));
+  }, []);
+
+  const clearPersistedCandidate = useCallback(() => {
+    const key = storageKey(persistenceKey);
+    if (key && typeof localStorage !== 'undefined') localStorage.removeItem(key);
+  }, [persistenceKey]);
+
+  const close = useCallback(() => {
+    clearPersistedCandidate();
+    setState(EMPTY_STATE);
+  }, [clearPersistedCandidate]);
+
+  const updateCandidate = useCallback((
+    proposedContent: string,
+    selfCheckStatus: CandidateSelfCheckStatus = 'stale',
+    selfCheckSummary?: string,
+  ) => {
+    setState((previous) => {
+      if (!previous.isOpen) return previous;
+      if (previous.proposedContent === proposedContent) {
+        return previous.selfCheckStatus === selfCheckStatus && previous.selfCheckSummary === selfCheckSummary
+          ? previous
+          : { ...previous, selfCheckStatus, selfCheckSummary };
+      }
+      const next = createReviewState({
+          source: previous.source,
+          title: previous.title,
+          documentPath: previous.documentPath,
+          candidatePath: previous.candidatePath,
+          originalContent: previous.originalContent,
+          proposedContent,
+          selfCheckStatus,
+          selfCheckSummary,
+        });
+      return {
+        ...next,
+        baselineStatus: previous.baselineStatus,
+        latestSourceContent: previous.latestSourceContent,
+        dirty: true,
+      };
     });
   }, []);
 
-  const close = useCallback(() => {
-    setState(EMPTY_STATE);
+  const setSelfCheckStatus = useCallback((selfCheckStatus: CandidateSelfCheckStatus, selfCheckSummary?: string) => {
+    setState((previous) => {
+      if (!previous.isOpen) return previous;
+      if (previous.selfCheckStatus === selfCheckStatus && previous.selfCheckSummary === selfCheckSummary) return previous;
+      return { ...previous, selfCheckStatus, selfCheckSummary };
+    });
+  }, []);
+
+  const markBaselineStale = useCallback((latestSourceContent: string) => {
+    setState((previous) => {
+      if (!previous.isOpen || previous.originalContent === latestSourceContent) return previous;
+      if (previous.baselineStatus === 'stale' && previous.latestSourceContent === latestSourceContent) return previous;
+      return { ...previous, baselineStatus: 'stale', latestSourceContent };
+    });
+  }, []);
+
+  const resetToLatestSource = useCallback(() => {
+    setState((previous) => {
+      if (!previous.isOpen || previous.baselineStatus !== 'stale' || previous.latestSourceContent === undefined) return previous;
+      return createReviewState({
+        source: previous.source,
+        title: previous.title,
+        documentPath: previous.documentPath,
+        candidatePath: previous.candidatePath,
+        originalContent: previous.latestSourceContent,
+        proposedContent: previous.latestSourceContent,
+        selfCheckStatus: 'stale',
+        selfCheckSummary: '源文档已更新，请重新发起修改或检视。',
+      });
+    });
+  }, []);
+
+  const rebaseCandidateToLatestSource = useCallback(() => {
+    setState((previous) => {
+      if (!previous.isOpen || previous.baselineStatus !== 'stale' || previous.latestSourceContent === undefined) return previous;
+      const candidate = mergeDecisions(previous.hunks, previous.decisions);
+      return {
+        ...createReviewState({
+          source: previous.source,
+          title: previous.title,
+          documentPath: previous.documentPath,
+          candidatePath: previous.candidatePath,
+          originalContent: previous.latestSourceContent,
+          proposedContent: candidate,
+          selfCheckStatus: 'warning',
+          selfCheckSummary: '候选稿已改用最新源文档作为基线，请人工确认新增差异。',
+        }),
+        dirty: true,
+      };
+    });
+  }, []);
+
+  const setFeedbackPending = useCallback((feedbackPending: boolean) => {
+    setState((previous) => previous.isOpen ? { ...previous, feedbackPending } : previous);
   }, []);
 
   const setDecision = useCallback((hunkIndex: number, decision: HunkDecision) => {
-    setState((prev) => {
-      if (!prev.isOpen) return prev;
-      const decisionIndex = hunkToDecisionIndex(prev.hunks, hunkIndex);
-      if (decisionIndex < 0) return prev;
-      if (prev.decisions[decisionIndex] === decision) return prev;
-      const decisions = prev.decisions.slice();
+    setState((previous) => {
+      if (!previous.isOpen) return previous;
+      const decisionIndex = hunkToDecisionIndex(previous.hunks, hunkIndex);
+      if (decisionIndex < 0 || previous.decisions[decisionIndex] === decision) return previous;
+      const decisions = previous.decisions.slice();
       decisions[decisionIndex] = decision;
-      return { ...prev, decisions, dirty: true };
+      return { ...previous, decisions, dirty: true };
     });
   }, []);
 
   const acceptAll = useCallback(() => {
-    setState((prev) => {
-      if (!prev.isOpen) return prev;
-      return { ...prev, decisions: prev.decisions.map(() => 'accept'), dirty: true };
-    });
+    setState((previous) => previous.isOpen
+      ? { ...previous, decisions: previous.decisions.map(() => 'accept'), dirty: true }
+      : previous);
   }, []);
 
   const rejectAll = useCallback(() => {
-    setState((prev) => {
-      if (!prev.isOpen) return prev;
-      return { ...prev, decisions: prev.decisions.map(() => 'reject'), dirty: true };
-    });
+    setState((previous) => previous.isOpen
+      ? { ...previous, decisions: previous.decisions.map(() => 'reject'), dirty: true }
+      : previous);
   }, []);
 
   const focusNext = useCallback(() => {
-    setState((prev) => {
-      if (!prev.isOpen) return prev;
-      const next = findDecidable(prev.hunks, prev.focusIndex, 1);
-      if (next < 0 || next === prev.focusIndex) return prev;
-      return { ...prev, focusIndex: next };
+    setState((previous) => {
+      if (!previous.isOpen) return previous;
+      const next = findDecidable(previous.hunks, previous.focusIndex, 1);
+      return next < 0 || next === previous.focusIndex ? previous : { ...previous, focusIndex: next };
     });
   }, []);
 
   const focusPrev = useCallback(() => {
-    setState((prev) => {
-      if (!prev.isOpen) return prev;
-      const prevIdx = findDecidable(prev.hunks, prev.focusIndex, -1);
-      if (prevIdx < 0 || prevIdx === prev.focusIndex) return prev;
-      return { ...prev, focusIndex: prevIdx };
+    setState((previous) => {
+      if (!previous.isOpen) return previous;
+      const next = findDecidable(previous.hunks, previous.focusIndex, -1);
+      return next < 0 || next === previous.focusIndex ? previous : { ...previous, focusIndex: next };
     });
   }, []);
 
   const focusHunk = useCallback((hunkIndex: number) => {
-    setState((prev) => {
-      if (!prev.isOpen) return prev;
-      if (hunkIndex < 0 || hunkIndex >= prev.hunks.length) return prev;
-      if (!isDecidableHunk(prev.hunks[hunkIndex])) return prev;
-      return { ...prev, focusIndex: hunkIndex };
+    setState((previous) => {
+      if (!previous.isOpen || hunkIndex < 0 || hunkIndex >= previous.hunks.length) return previous;
+      return isDecidableHunk(previous.hunks[hunkIndex])
+        ? { ...previous, focusIndex: hunkIndex }
+        : previous;
     });
   }, []);
 
-  const apply = useCallback(() => {
-    if (!state.isOpen) return;
-    const merged = mergeDecisions(state.hunks, state.decisions);
-    onApplyMerged?.(merged, state.originalContent);
+  const apply = useCallback(async () => {
+    if (!state.isOpen || state.selfCheckStatus === 'blocked' || state.baselineStatus === 'stale') return false;
+    await onApplyMerged?.(mergeDecisions(state.hunks, state.decisions), state.originalContent);
+    clearPersistedCandidate();
     setState(EMPTY_STATE);
-  }, [state, onApplyMerged]);
+    return true;
+  }, [clearPersistedCandidate, onApplyMerged, state]);
 
   const decidableCount = useMemo(() => countDecidableHunks(state.hunks), [state.hunks]);
   const focusOrdinal = useMemo(() => {
-    // 1-based "第 N 处"。focusIndex 落在不可决策上则返回 0。
-    if (state.focusIndex < 0) return 0;
-    if (!isDecidableHunk(state.hunks[state.focusIndex])) return 0;
+    if (state.focusIndex < 0 || !isDecidableHunk(state.hunks[state.focusIndex])) return 0;
     return hunkToDecisionIndex(state.hunks, state.focusIndex) + 1;
-  }, [state.hunks, state.focusIndex]);
+  }, [state.focusIndex, state.hunks]);
 
   return {
     state,
@@ -171,6 +348,12 @@ export function useDiffReview(onApplyMerged?: (merged: string, originalContent: 
     focusOrdinal,
     open,
     close,
+    updateCandidate,
+    setSelfCheckStatus,
+    markBaselineStale,
+    resetToLatestSource,
+    rebaseCandidateToLatestSource,
+    setFeedbackPending,
     setDecision,
     acceptAll,
     rejectAll,

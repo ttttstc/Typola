@@ -28,6 +28,7 @@ import { writeText as writeClipboardText } from '../services/clipboardService';
 import { resolveLocalResourcePath } from '../services/htmlPresentationService';
 import { formatImageSrc, serializeHtmlImage } from '../services/imageInsert';
 import { findSearchMatches } from '../services/documentSearchService';
+import { sourceBlockLineNumberGutter } from './editor/cm6/sourceLineNumberGutter';
 
 export type SourceHeadingScrollRequest = {
   index: number;
@@ -52,13 +53,14 @@ type EditorPaneProps = {
   onAIAction?: (action: SelectionActionId, anchor: SelectionAnchor, origin?: { x: number; y: number }) => void;
   onRequestImageInsert?: (request?: ImageInsertRequest) => void;
   onEditorReady?: (view: EditorView) => void;
+  lineNumberMode?: 'source' | 'blocks';
 };
 
 export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(function EditorPane(
   props,
   ref,
 ) {
-  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction, onRequestImageInsert, onEditorReady } = props;
+  const { source, onChange, extraExtensions, headingScrollRequest, onScrollRatio, filePath, onAIAction, onRequestImageInsert, onEditorReady, lineNumberMode = 'source' } = props;
   const settings = useSettings();
   const editorViewRef = useRef<EditorView | null>(null);
   const editorListenersCleanupRef = useRef<(() => void) | null>(null);
@@ -328,13 +330,20 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     applyCm6Format(editor, action, setEditRequest);
   }, [ctxMenu, onRequestImageInsert, settings.editorFormatPainterEnabled]);
 
+  const handleToggleLineNumbers = useCallback(() => {
+    updateSettings({ editorLineNumbers: !settings.editorLineNumbers });
+  }, [settings.editorLineNumbers]);
+
   const extensions = useMemo(() => {
     return createMarkdownExtensions({
       fontFamily: editorFontFamily,
       fontSize: settings.editorFontSize,
       tabSize: settings.editorTabSize,
       wordWrap: settings.editorWordWrap,
-      extraExtensions,
+      extraExtensions: [
+        ...(extraExtensions ?? []),
+        ...(settings.editorLineNumbers && lineNumberMode === 'blocks' ? [sourceBlockLineNumberGutter()] : []),
+      ],
       // Cmd/Ctrl+K → 弹起 5+1 AI 菜单(对齐右键的动线),菜单触发后再走 onAIAction 注入
       onModK: () => {
         const cb = onAIActionRef.current;
@@ -356,7 +365,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         return true;
       },
     });
-  }, [editorFontFamily, extraExtensions, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap, settings.editorFormatPainterEnabled]);
+  }, [editorFontFamily, extraExtensions, lineNumberMode, settings.editorFontSize, settings.editorTabSize, settings.editorWordWrap, settings.editorFormatPainterEnabled, settings.editorLineNumbers]);
 
   const applyHeadingScrollRequest = useCallback((editor: EditorView, request?: SourceHeadingScrollRequest) => {
     if (!request) return;
@@ -602,7 +611,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         spellCheck={settings.editorSpellCheck}
         theme="light"
         basicSetup={{
-          lineNumbers: settings.editorLineNumbers,
+          lineNumbers: settings.editorLineNumbers && lineNumberMode === 'source',
           searchKeymap: true,
           history: true,
         }}
@@ -623,6 +632,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         y={ctxMenu?.y ?? 0}
         hasSelection={ctxMenu?.hasSelection ?? false}
         hasImage={ctxMenu?.hasImage ?? false}
+        lineNumbersVisible={settings.editorLineNumbers}
+        onToggleLineNumbers={handleToggleLineNumbers}
         onPick={handleFormatPick}
         onClose={() => setCtxMenu(null)}
       />

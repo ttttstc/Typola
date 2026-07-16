@@ -6,6 +6,7 @@ import type { AgentProvider } from './provider';
 export type AgentSessionStartRequest = {
   provider?: AgentProvider;
   conversationId: string;
+  sessionUuid?: string;
   prompt: string;
   cwd?: string;
   agentPath?: string;

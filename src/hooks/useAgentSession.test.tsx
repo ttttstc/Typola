@@ -147,6 +147,49 @@ describe('useConversationManager', () => {
     expect(request.prompt).toContain('[Typola 产物写入规则]');
   });
 
+  it('重启后恢复当前对话并续用同一个 Provider Session', async () => {
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+    await act(async () => {
+      await api?.send('第一轮改稿');
+    });
+    const conversationId = api?.activeConvId;
+    expect(api?.activeConv?.sessionUuid).toBe('session-1');
+
+    act(() => root.unmount());
+    host.remove();
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    api = undefined;
+    act(() => {
+      root.render(
+        <Harness
+          workspaceRoot={String.raw`D:\md files`}
+          agentProvider="opencode"
+          expose={(next) => { api = next; }}
+        />,
+      );
+    });
+
+    expect(api?.activeConvId).toBe(conversationId);
+    expect(api?.activeConv?.messages.some((message) => message.content === '第一轮改稿')).toBe(true);
+    await act(async () => {
+      await api?.send('继续精炼');
+    });
+    expect(headlessMock.resumeAgentSession).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId,
+      sessionUuid: 'session-1',
+    }));
+  });
+
   it('drops late stdout from a cancelled run', async () => {
     act(() => {
       root.render(

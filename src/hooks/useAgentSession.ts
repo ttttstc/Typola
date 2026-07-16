@@ -4,7 +4,11 @@ import { diagnoseOpenCodeCliFailure } from '../services/agent/opencodeDiagnostic
 import { createClaudeStreamHandler } from '../services/agent/claudeStream';
 import { createOpenCodeStreamHandler } from '../services/agent/opencodeStream';
 import type { ConversationData, PendingInjection } from '../services/agent/conversationStore';
-import { createConversationData } from '../services/agent/conversationStore';
+import {
+  createConversationData,
+  loadConversationStore,
+  saveConversationStore,
+} from '../services/agent/conversationStore';
 import type { AgentProvider } from '../services/agent/provider';
 import { DEFAULT_AGENT_PROVIDER, getAgentProviderConfig } from '../services/agent/provider';
 import {
@@ -224,6 +228,26 @@ function outputCwdForConversation(workspaceRoot: string | undefined, convId: str
 
 let nextConvCounter = 1;
 
+function reserveRestoredConversationIds(conversations: Map<string, ConversationData>): void {
+  for (const id of conversations.keys()) {
+    const value = id.match(/^conv-(\d+)$/u)?.[1];
+    if (value) nextConvCounter = Math.max(nextConvCounter, Number.parseInt(value, 10) + 1);
+  }
+}
+
+function createInitialConversationStore(agentProvider: AgentProvider) {
+  const restored = loadConversationStore(agentProvider);
+  if (restored) {
+    reserveRestoredConversationIds(restored.conversations);
+    return restored;
+  }
+  const id = `conv-${nextConvCounter++}`;
+  return {
+    conversations: new Map([[id, createConversationData(id, '自由对话', undefined, agentProvider)]]),
+    activeConvId: id,
+  };
+}
+
 export function useConversationManager({
   workspaceRoot,
   agentProvider = DEFAULT_AGENT_PROVIDER,
@@ -234,11 +258,11 @@ export function useConversationManager({
   pluginDirs,
   onArtifactFile,
 }: UseConversationManagerOptions) {
-  const defaultId = `conv-${nextConvCounter++}`;
+  const [initialStore] = useState(() => createInitialConversationStore(agentProvider));
   const [conversations, setConversations] = useState<Map<string, ConversationData>>(
-    () => new Map([[defaultId, createConversationData(defaultId, '自由对话', undefined, agentProvider)]]),
+    initialStore.conversations,
   );
-  const [activeConvId, setActiveConvId] = useState(defaultId);
+  const [activeConvId, setActiveConvId] = useState(initialStore.activeConvId);
   const conversationsRef = useRef(conversations);
   const activeConvIdRef = useRef(activeConvId);
   const artifactFileRef = useRef(onArtifactFile);
@@ -271,6 +295,20 @@ export function useConversationManager({
   useEffect(() => {
     activeConvIdRef.current = activeConvId;
   }, [activeConvId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      saveConversationStore({ conversations, activeConvId });
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [activeConvId, conversations]);
+
+  useEffect(() => () => {
+    saveConversationStore({
+      conversations: conversationsRef.current,
+      activeConvId: activeConvIdRef.current,
+    });
+  }, []);
 
   const updateConv = useCallback((convId: string, patch: Partial<ConversationData>) => {
     const current = conversationsRef.current.get(convId);
@@ -485,6 +523,7 @@ export function useConversationManager({
     const request = {
       provider,
       conversationId: convId,
+      sessionUuid: conv.sessionUuid,
       prompt: withArtifactWriteGuard(trimmed, runCwd, appLocale),
       cwd: runCwd,
       agentPath: runtime.agentPath,
@@ -512,6 +551,7 @@ export function useConversationManager({
       // 同一路径的当前文档不重复注入；切换到新文档后由 Composer 传入新路径并更新这里。
       updateConv(convId, {
         sessionStarted: true,
+        sessionUuid: result.sessionUuid,
         runId: result.runId,
         fileContextInjected: true,
         ...(opts?.currentFileContextPath ? { currentFileContextPath: opts.currentFileContextPath } : {}),
@@ -564,6 +604,7 @@ export function useConversationManager({
       runState: 'idle',
       lastError: '',
       sessionStarted: false,
+      sessionUuid: undefined,
       cancelRequested: false,
       pendingInjection: undefined,
       lastDeliveredAnchor: undefined,

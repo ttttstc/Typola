@@ -18,6 +18,10 @@ export function pathBasename(path: string): string {
   return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
 }
 
+export function sameLocalPath(left: string, right: string): boolean {
+  return left.replace(/\\/gu, '/').toLowerCase() === right.replace(/\\/gu, '/').toLowerCase();
+}
+
 export function joinLocalPath(root: string, ...parts: string[]): string {
   const separator = root.includes('\\') ? '\\' : '/';
   return [

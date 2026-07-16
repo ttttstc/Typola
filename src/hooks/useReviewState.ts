@@ -1,19 +1,17 @@
-// 检视意见 hook —— per-document 包装 reviewState 的纯函数。
-//
-// 切换文档时:
-//   - 旧文档若 dirty → 由调用方决定提醒/丢弃(本 hook 不做提醒,见任务 #14)。
-//   - 切到新文档时,如果新文档在 docStates Map 里有记录,恢复;否则空状态。
-//
-// dirty 标记跟 ReviewStateSnapshot 走;markClean 用于导出后/明确丢弃后。
+// 检视意见 hook —— 同一列表管理人工与 AI 意见,按文档保留状态。
 
 import { useCallback, useMemo, useState } from 'react';
 import {
   EMPTY_REVIEW_STATE,
+  addAIReviewComment,
   addReviewComment,
   clearReviewState,
   markReviewClean,
   removeReviewComment,
+  setReviewCommentIgnored,
   updateReviewComment,
+  type ReviewBasis,
+  type ReviewComment,
   type ReviewStateSnapshot,
 } from '../services/review/reviewState';
 import type { SelectionAnchor } from '../services/agent/types';
@@ -21,18 +19,16 @@ import type { SelectionAnchor } from '../services/agent/types';
 type DocStates = Map<string, ReviewStateSnapshot>;
 
 type UseReviewStateResult = {
-  /** 当前文档的检视意见列表 + 脏标记 */
   state: ReviewStateSnapshot;
-  /** 加一条意见 */
   addComment: (anchor: SelectionAnchor, text: string) => void;
-  /** 改一条意见的正文 */
+  addAIComment: (anchor: SelectionAnchor, text: string, basis?: ReviewBasis) => void;
   updateComment: (commentId: string, text: string) => void;
-  /** 删一条 */
+  setIgnored: (commentId: string, ignored: boolean) => void;
   removeComment: (commentId: string) => void;
-  /** 清空当前文档所有意见(用于"丢弃") */
   clearAll: () => void;
-  /** 把当前文档标记为已保存(导出后调用) */
   markClean: () => void;
+  /** 从检视版恢复意见。已有内存状态时不覆盖用户本轮操作。 */
+  hydrateComments: (comments: ReviewComment[]) => void;
 };
 
 export function useReviewState(currentFilePath: string | undefined): UseReviewStateResult {
@@ -60,8 +56,17 @@ export function useReviewState(currentFilePath: string | undefined): UseReviewSt
     mutate((prev) => addReviewComment(prev, currentFilePath, anchor, text));
   }, [currentFilePath, mutate]);
 
+  const addAIComment = useCallback((anchor: SelectionAnchor, text: string, basis?: ReviewBasis) => {
+    if (!currentFilePath) return;
+    mutate((prev) => addAIReviewComment(prev, currentFilePath, anchor, text, basis));
+  }, [currentFilePath, mutate]);
+
   const updateComment = useCallback((commentId: string, text: string) => {
     mutate((prev) => updateReviewComment(prev, commentId, text));
+  }, [mutate]);
+
+  const setIgnored = useCallback((commentId: string, ignored: boolean) => {
+    mutate((prev) => setReviewCommentIgnored(prev, commentId, ignored));
   }, [mutate]);
 
   const removeComment = useCallback((commentId: string) => {
@@ -76,5 +81,25 @@ export function useReviewState(currentFilePath: string | undefined): UseReviewSt
     mutate((prev) => markReviewClean(prev));
   }, [mutate]);
 
-  return { state, addComment, updateComment, removeComment, clearAll, markClean };
+  const hydrateComments = useCallback((comments: ReviewComment[]) => {
+    if (!currentFilePath || comments.length === 0) return;
+    setDocStates((prev) => {
+      if (prev.has(currentFilePath)) return prev;
+      const map = new Map(prev);
+      map.set(currentFilePath, { comments, dirty: false });
+      return map;
+    });
+  }, [currentFilePath]);
+
+  return {
+    state,
+    addComment,
+    addAIComment,
+    updateComment,
+    setIgnored,
+    removeComment,
+    clearAll,
+    markClean,
+    hydrateComments,
+  };
 }
