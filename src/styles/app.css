@@ -335,16 +335,6 @@ html, body, #root {
   border: none;
 }
 
-/* 宸﹀彸鏍忓垏鎹㈢殑骞虫粦鏀舵斁(涓夋€佸垏鎹㈡椂鑱斿姩) */
-.workspace-panel,
-.flow-panel,
-.review-sidebar-panel,
-.right-rail-shell,
-.word-preview-panel,
-.wechat-preview-panel {
-  transition: width 0.46s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
 /* ===== Title Bar (Toolbar) ===== */
 
 .app-toolbar {
@@ -908,7 +898,6 @@ html[data-color-scheme='dark'] .export-menu {
 .left-rail-shell {
   flex: 0 0 auto;
   height: 100%;
-  min-width: 220px;
   max-width: 560px;
   display: flex;
   flex-direction: column;

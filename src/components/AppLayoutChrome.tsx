@@ -67,12 +67,22 @@ function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolea
       return undefined;
     }
 
+    let frameId: number | null = null;
     const update = () => {
-      const containerRect = container.getBoundingClientRect();
-      const activeRect = active.getBoundingClientRect();
-      setStyle({
-        transform: `translateX(${activeRect.left - containerRect.left}px)`,
-        width: `${activeRect.width}px`,
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        const currentContainer = containerRef.current;
+        if (!currentContainer || !active.isConnected) return;
+        const containerRect = currentContainer.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        const nextTransform = `translateX(${activeRect.left - containerRect.left}px)`;
+        const nextWidth = `${activeRect.width}px`;
+        setStyle((current) => (
+          current?.transform === nextTransform && current.width === nextWidth
+            ? current
+            : { transform: nextTransform, width: nextWidth }
+        ));
       });
     };
 
@@ -85,6 +95,7 @@ function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolea
     resizeObserver?.observe(active);
     window.addEventListener('resize', update);
     return () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', update);
     };
@@ -320,7 +331,7 @@ export function AppLayoutChrome({
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: rightPanelWidth, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              transition={calmTransition}
+              transition={resizing ? { duration: 0 } : calmTransition}
             >
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (
               <div ref={rightRailIndicator.containerRef} className="right-rail-tabs" role="tablist" aria-label="右侧预览切换">

@@ -288,11 +288,29 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
     onResizeStart();
     const startY = event.clientY;
     const startHeight = height;
+    let latestClientY = startY;
+    let frameId: number | null = null;
+    let finished = false;
 
+    const updateHeight = (clientY: number) => {
+      onHeightChange(clampHeight(startHeight - (clientY - startY)));
+    };
+    const flushHeight = () => {
+      frameId = null;
+      updateHeight(latestClientY);
+    };
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      onHeightChange(clampHeight(startHeight - (moveEvent.clientY - startY)));
+      latestClientY = moveEvent.clientY;
+      if (frameId === null) frameId = window.requestAnimationFrame(flushHeight);
     };
     const finishResize = () => {
+      if (finished) return;
+      finished = true;
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      updateHeight(latestClientY);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', finishResize);
       window.removeEventListener('pointercancel', finishResize);
