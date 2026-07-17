@@ -24,6 +24,7 @@ export type TerminalPanelHandle = {
   sendText: (text: string) => void;
   hasAgentTerminal: () => boolean;
   focusAgentTerminal: () => void;
+  fit: () => void;
 };
 
 type TerminalPanelProps = {
@@ -419,7 +420,11 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       const runtime = runtimesRef.current.get(agentTab.localId);
       runtime?.terminal.focus();
     },
-  }), [tabs, openNewTab, closeTab]);
+    fit: () => {
+      const runtime = getActiveRuntime();
+      if (runtime) fitRuntime(runtime);
+    },
+  }), [closeTab, fitRuntime, getActiveRuntime, openNewTab, tabs]);
 
   return (
     <section className="terminal-panel" style={{ height }} aria-label="终端">

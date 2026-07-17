@@ -1851,6 +1851,9 @@ export function AppLayout() {
               opacity: terminalVisible ? 1 : 0,
             }}
             transition={shouldReduceMotion || terminalResizing ? { duration: 0 } : calmTransition}
+            onAnimationComplete={() => {
+              if (terminalVisible && !terminalResizing) terminalPanelRef.current?.fit();
+            }}
             style={{ overflow: 'hidden' }}
             aria-hidden={!terminalVisible}
             inert={terminalVisible ? undefined : true}

@@ -173,7 +173,7 @@ export function AppLayoutChrome({
                   initial={{ width: 0, opacity: 0 }}
                   animate={{ width: workspacePanelWidth, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
-                  transition={calmTransition}
+                  transition={leftResizing === 'workspace' ? { duration: 0 } : calmTransition}
                 >
               <div ref={leftRailIndicator.containerRef} className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
                 {leftRailIndicator.indicatorStyle && (
