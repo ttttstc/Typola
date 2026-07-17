@@ -118,7 +118,19 @@ describe('buildReviewMarkdown', () => {
     // 文末汇总(双轨)
     expect(out).toContain('## 检视意见汇总');
     expect(out).toMatch(/### 1\. 第 1 行 · 针对片段「一二三段落。」\n\n改一/);
-    expect(out).toMatch(/### 2\. 第 1 行 · 针对片段「四五六段落。」\n\n改二/);
+    expect(out).toMatch(/### 2\. 第 3 行 · 针对片段「四五六段落。」\n\n改二/);
+  });
+
+  it('回读元数据统一置于检视意见汇总末尾,不打断可读内容', () => {
+    const src = '第一段。\n\n第二段。';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('第一段。'), '改一');
+    state = addReviewComment(state, 'a.md', mkAnchor('第二段。', '第一段。\n\n'), '改二');
+    const out = buildReviewMarkdown(src, state.comments);
+    const lastSummary = out.lastIndexOf('改二');
+    const firstMetadata = out.indexOf('<!-- typola-review:v2:');
+
+    expect(firstMetadata).toBeGreaterThan(lastSummary);
+    expect(out.slice(0, firstMetadata)).not.toContain('typola-review:v2:');
   });
 
   it('用 prefixHint 区分多处重复 originalText 的歧义', () => {
@@ -183,8 +195,8 @@ describe('buildReviewMarkdown 行号前缀', () => {
     const out = buildReviewMarkdown(src, evil.comments);
     expect(out).toContain('\\`伪\\#代码块\\`');
     expect(out).toContain('\\*星号\\*');
-    // ### N. 行仍保持完整标题结构,不被井号破坏(## → \#\#)
-    expect(out).toContain('### 1. 第 1 行 · 针对片段「伪 \\#\\# 标题」');
+    // ### N. 行仍保持完整标题结构,不被井号破坏(## → \#\#)；原文中不存在时明确标为定位失效。
+    expect(out).toContain('### 1. 定位失效 · 针对片段「伪 \\#\\# 标题」');
   });
 
   it('anchor.from 为负 → 文末汇总显示「定位失效」', () => {

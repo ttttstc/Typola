@@ -54,7 +54,7 @@ export function HtmlPreviewPane({
       if (dir) {
         try {
           const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('allow_html_preview_directory', { dir });
+          await invoke('allow_fs_directory', { dir });
         } catch (allowError) {
           // 允许 scope 失败不阻断主流程,后面真正 readTextFile 失败时再交给 error 态。
           console.warn('Failed to allow html preview directory:', allowError);

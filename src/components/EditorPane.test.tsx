@@ -12,6 +12,10 @@ vi.mock('../hooks/useSettings', () => ({
     editorFontSize: 14,
     editorTabSize: 4,
     editorWordWrap: true,
+    editorLineNumbers: true,
+    editorSpellCheck: false,
+    editorFormatPainterEnabled: true,
+    selectionFloatingBarEnabled: false,
   }),
 }));
 
@@ -82,5 +86,25 @@ describe('EditorPane.replaceRanges', () => {
 
     expect(ref.current!.replaceRanges([])).toBe(false);
     expect(ref.current!.getMarkdown()).toBe('alpha');
+  });
+});
+
+describe('EditorPane 行号右键', () => {
+  it('在行号沟槽右键打开统一菜单并提供关闭入口', async () => {
+    await mountEditor('第一行\n第二行');
+    const gutter = host!.querySelector<HTMLElement>('.cm-gutters');
+    expect(gutter).not.toBeNull();
+
+    await act(async () => {
+      gutter!.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 12,
+        clientY: 24,
+      }));
+    });
+
+    expect(host!.querySelector('.editor-ctx-menu')).not.toBeNull();
+    expect(host!.textContent).toContain('隐藏行号');
   });
 });

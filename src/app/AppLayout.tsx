@@ -32,30 +32,53 @@ import { SkillHubPanel } from '../components/SkillHubPanel';
 import { ArtifactCenterPanel } from '../components/artifacts/ArtifactCenterPanel';
 import { SelectionResultCard } from '../components/selection/SelectionResultCard';
 import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor';
-import { ReviewSidebarPanel } from '../components/review/ReviewSidebarPanel';
+import {
+  ReviewSidebarPanel,
+  type AIReviewSettings,
+  type ReviewCommentNavigation,
+  type ReviewSkillOption,
+} from '../components/review/ReviewSidebarPanel';
+import {
+  CandidateNavigationDialog,
+  type CandidateNavigationChoice,
+} from '../components/diff/CandidateNavigationDialog';
 import { runSkillOneshot } from '../services/agent/oneshotService';
 import { useReviewState } from '../hooks/useReviewState';
 import { useRevisionList } from '../hooks/useRevisionList';
-import { buildReviewMarkdown, type ReviewComment } from '../services/review/reviewState';
+import {
+  buildReviewMarkdown,
+  getActiveReviewComments,
+  parseReviewMarkdown,
+  type ReviewBasis,
+  type ReviewComment,
+} from '../services/review/reviewState';
 import { ensureArtifactManifest } from '../services/artifacts/manifest';
 import type { ArtifactRecord } from '../services/artifacts/types';
 import { saveFileDialog } from '../services/dialogService';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { SelectionAnchor } from '../services/agent/types';
 import { resolveWorkbenchWorkspaceRoot } from '../services/agent/workbenchWorkspace';
 import { useConversationManager } from '../hooks/useAgentSession';
 import { useArtifactLibrary } from '../hooks/useArtifactLibrary';
 import { useArtifactState } from '../hooks/useArtifactState';
 import { useEditorSelectionBridge } from '../hooks/useEditorSelectionBridge';
-import { useFileTabs } from '../hooks/useFileTabs';
-import { useDiffReview } from '../hooks/useDiffReview';
-import { readTextFile } from '@tauri-apps/plugin-fs';
+import { useFileTabs, type DocumentChangeIntent } from '../hooks/useFileTabs';
+import { useDiffReview, type CandidateSelfCheckStatus } from '../hooks/useDiffReview';
+import type { DiffFeedbackRequest } from '../components/diff/DiffReviewPane';
+import { useDocumentHistoryList } from '../hooks/useDocumentHistoryList';
+import { createDocumentHistoryVersion } from '../services/review/documentHistoryService';
+import { mergeDecisions } from '../services/diff/markdownDiff';
+import { parseAIReviewFindings, resolveAIReviewAnchor, resolveStoredReviewAnchor } from '../services/review/aiReviewResult';
 import { confirmDialog, messageDialog } from '../services/dialogService';
 import { useDocumentMode } from '../hooks/useDocumentMode';
 import { useLeftRail } from '../hooks/useLeftRail';
 import { useRightPanel, type RightPanelMode } from '../hooks/useRightPanel';
 import { useSkillHubState } from '../hooks/useSkillHubState';
-import { buildSkillPrefill, type SkillPickPayload } from '../services/agent/skillHub';
+import {
+  buildSkillPrefill,
+  SYSTEM_SKILL_SCENES,
+  type SkillPickPayload,
+} from '../services/agent/skillHub';
 import { useTocState } from '../hooks/useTocState';
 import { useWorkspaceWatch } from '../hooks/useWorkspaceWatch';
 import type { ImageInsertRequest, SourceHeadingScrollRequest } from '../components/EditorPane';
@@ -85,11 +108,13 @@ import {
   imageExtensionFromMime,
   isEditableShortcutTarget,
   joinLocalPath,
+  pathBasename,
   LEFT_PANEL_MAX_WIDTH,
   LEFT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   RIGHT_PANEL_RESIZER_GAP,
+  sameLocalPath,
   WORKSPACE_PANEL_DEFAULT_WIDTH,
   toUpdateErrorMessage,
 } from './appLayoutUtils';
@@ -138,6 +163,70 @@ type UpdateInstallState =
   | { phase: 'ready'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
+
+type CandidateSelfCheck = {
+  status: CandidateSelfCheckStatus;
+  summary: string;
+};
+
+type PendingInitialCandidate = {
+  name: string;
+  candidatePath: string;
+  conversationId: string;
+  documentPath: string;
+  started: boolean;
+};
+
+type PendingCandidateRun = {
+  candidatePath: string;
+  conversationId: string;
+  started: boolean;
+  resolve: () => void;
+  reject: (error: Error) => void;
+};
+
+type PendingAIReviewRun = {
+  conversationId: string;
+  documentPath: string;
+  basis: ReviewBasis;
+  started: boolean;
+};
+
+function candidateSelfCheckPath(candidatePath: string): string {
+  return `${candidatePath}.selfcheck.json`;
+}
+
+function safeOutputSegment(value: string): string {
+  return value.replace(/[^a-z0-9_-]+/giu, '-').replace(/^-+|-+$/gu, '') || 'conversation';
+}
+
+function documentContextBoundary(previousPath: string | undefined, currentPath: string): string {
+  if (!previousPath || previousPath.replace(/\\/gu, '/').toLowerCase() === currentPath.replace(/\\/gu, '/').toLowerCase()) {
+    return '';
+  }
+  return [
+    '当前活动文档已经切换。旧文档的正文、候选稿、锚点和局部修改要求全部失效，只保留通用写作偏好与讨论结论。',
+    `新的唯一源文档：${currentPath}`,
+  ].join('\n');
+}
+
+async function readCandidateSelfCheck(candidatePath: string): Promise<CandidateSelfCheck> {
+  try {
+    const value: unknown = JSON.parse(await readTextFile(candidateSelfCheckPath(candidatePath)));
+    if (!value || typeof value !== 'object') throw new Error('invalid self-check');
+    const record = value as { status?: unknown; summary?: unknown };
+    const status = record.status;
+    if (status !== 'fresh' && status !== 'warning' && status !== 'blocked') throw new Error('invalid status');
+    return {
+      status,
+      summary: typeof record.summary === 'string' && record.summary.trim()
+        ? record.summary.trim()
+        : '本轮自检已完成。',
+    };
+  } catch {
+    return { status: 'warning', summary: '候选稿已生成，但未收到有效的自检结果，请重点核对修改范围。' };
+  }
+}
 
 export function AppLayout() {
   const settings = useSettings();
@@ -209,6 +298,20 @@ export function AppLayout() {
   const [autoSaveError, setAutoSaveError] = useState('');
   const [diskChangeMessage, setDiskChangeMessage] = useState('');
   const [transientMessage, setTransientMessage] = useState('');
+  const candidateNavigationGuardRef = useRef<(intent: DocumentChangeIntent) => Promise<boolean>>(async () => true);
+  const candidateNavigationBypassRef = useRef(false);
+  const candidateNavigationResolverRef = useRef<((choice: CandidateNavigationChoice) => void) | null>(null);
+  const [candidateNavigationDialogOpen, setCandidateNavigationDialogOpen] = useState(false);
+  const requestCandidateNavigationChoice = useCallback(() => new Promise<CandidateNavigationChoice>((resolve) => {
+    candidateNavigationResolverRef.current = resolve;
+    setCandidateNavigationDialogOpen(true);
+  }), []);
+  const handleCandidateNavigationChoice = useCallback((choice: CandidateNavigationChoice) => {
+    setCandidateNavigationDialogOpen(false);
+    const resolve = candidateNavigationResolverRef.current;
+    candidateNavigationResolverRef.current = null;
+    resolve?.(choice);
+  }, []);
   const [tocOpenRequest, setTocOpenRequest] = useState(0);
   const {
     toc,
@@ -305,6 +408,7 @@ export function AppLayout() {
     setRightPanelMode,
     setEditorMode,
     extractToc,
+    beforeDocumentChangeRef: candidateNavigationGuardRef,
   });
   useEffect(() => {
     setFoldedHeadings(new Set());
@@ -386,6 +490,12 @@ export function AppLayout() {
 
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
   const reviewStateApi = useReviewState(file.path);
+  useEffect(() => {
+    if (!file.path) return;
+    const importedComments = parseReviewMarkdown(file.content, file.path);
+    reviewStateApi.hydrateComments(importedComments);
+  }, [file.content, file.path, reviewStateApi.hydrateComments]);
+
   const [reviewEditor, setReviewEditor] = useState<{
     x: number;
     y: number;
@@ -393,10 +503,29 @@ export function AppLayout() {
     initialText: string;
     /** 非 null = 编辑现有意见;null = 新增 */
     editingId: string | null;
+    navigationIds: string[];
   } | null>(null);
   const handleReviewRequested = useCallback((anchor: SelectionAnchor, origin: { x: number; y: number }) => {
-    setReviewEditor({ x: origin.x, y: origin.y, anchor, initialText: '', editingId: null });
+    setReviewEditor({ x: origin.x, y: origin.y, anchor, initialText: '', editingId: null, navigationIds: [] });
   }, []);
+  const navigateReviewEditor = useCallback((offset: -1 | 1) => {
+    setReviewEditor((current) => {
+      if (!current?.editingId) return current;
+      const currentIndex = current.navigationIds.indexOf(current.editingId);
+      const nextId = current.navigationIds[currentIndex + offset];
+      const nextComment = reviewStateApi.state.comments.find((comment) => comment.id === nextId);
+      if (!nextComment) return current;
+      return {
+        ...current,
+        anchor: nextComment.anchor,
+        initialText: nextComment.text,
+        editingId: nextComment.id,
+      };
+    });
+  }, [reviewStateApi.state.comments]);
+  const reviewEditorIndex = reviewEditor?.editingId
+    ? reviewEditor.navigationIds.indexOf(reviewEditor.editingId)
+    : -1;
 
   // 选区原地闭环用的 oneshot wrapper:绑好 settings 里的 claude 参数 + 工作区 dirs。
   // 不传 cwd(oneshot 不产文件,不需要落 .typola-output 子目录),让 claude 默认即可。
@@ -412,6 +541,27 @@ export function AppLayout() {
   }, [effectiveAiWorkspaceRoot, settings.aiClaudePath, settings.aiClaudeModel, settings.aiPluginDirs]);
 
   const { skillHub, skillHubError, handleSaveSkillHub, handleReloadSkillHub } = useSkillHubState();
+  const reviewSkillOptions = useMemo<ReviewSkillOption[]>(() => {
+    const options = new Map<string, ReviewSkillOption>();
+    for (const scene of SYSTEM_SKILL_SCENES) {
+      for (const skill of scene.skills) {
+        options.set(skill.name, { name: skill.name, label: skill.label || skill.name });
+      }
+    }
+    for (const skills of Object.values(skillHub.sceneAdditions)) {
+      for (const skill of skills) options.set(skill.name, { name: skill.name, label: skill.name });
+    }
+    return [...options.values()].sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
+  }, [skillHub.sceneAdditions]);
+  const handlePickReviewRuleFiles = useCallback(async (): Promise<string[]> => {
+    if (!isTauriRuntime) return [];
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const selected = await open({
+      multiple: true,
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+    });
+    return Array.isArray(selected) ? selected : selected ? [selected] : [];
+  }, [isTauriRuntime]);
   // 选 skill → 新建会话 + 切左栏 + 预填 composer 的桥梁;{tick, text} 防止同 text 重复触发。
   const [skillPrefill, setSkillPrefill] = useState<{ tick: number; text: string } | null>(null);
   const {
@@ -462,6 +612,19 @@ export function AppLayout() {
     outputBaseDir,
     currentFilePath: file.path,
     agentChangedPaths,
+  });
+  const [pendingInitialCandidate, setPendingInitialCandidate] = useState<PendingInitialCandidate | null>(null);
+  const pendingCandidateRunRef = useRef<PendingCandidateRun | null>(null);
+  const [candidateRunVersion, setCandidateRunVersion] = useState(0);
+  const pendingAIReviewRunRef = useRef<PendingAIReviewRun | null>(null);
+  const [aiReviewRunning, setAIReviewRunning] = useState(false);
+  const [aiReviewRunVersion, setAIReviewRunVersion] = useState(0);
+  const [revisionReturnPath, setRevisionReturnPath] = useState<string>();
+  const { histories: documentHistories, refresh: refreshDocumentHistories } = useDocumentHistoryList({
+    outputBaseDir,
+    conversationId: convManager.activeConvId,
+    documentPath: file.path,
+    refreshKey: `${agentChangedPaths.size}:${candidateRunVersion}`,
   });
 
   useEffect(() => {
@@ -518,8 +681,9 @@ export function AppLayout() {
       return;
     }
     const { state, markClean } = reviewStateApi;
-    if (state.comments.length === 0) return;
-    const reviewMd = buildReviewMarkdown(file.content, state.comments);
+    const activeComments = getActiveReviewComments(state.comments);
+    if (activeComments.length === 0) return;
+    const reviewMd = buildReviewMarkdown(file.content, activeComments);
     const baseName = file.path.replace(/\\/g, '/').split('/').pop() ?? 'document.md';
     const stem = baseName.replace(/\.[^.]+$/u, '');
     const sep = file.path.includes('\\') ? '\\' : '/';
@@ -545,6 +709,10 @@ export function AppLayout() {
     try {
       const target = await saveFileDialog(defaultPath);
       if (!target) return;
+      if (sameLocalPath(target, file.path)) {
+        await messageDialog('检视版不能覆盖当前源文档。请换一个文件名。', { title: '导出检视版' });
+        return;
+      }
       await writeTextFile(target, reviewMd);
       await ensureArtifactManifest({
         primaryFile: target,
@@ -566,15 +734,196 @@ export function AppLayout() {
     }
   }, [convManager.activeConvId, effectiveAiWorkspaceRoot, file.content, file.name, file.path, outputBaseDir, reviewStateApi]);
 
-  // 任务 #15 发 AI 改:把全文 + 所有意见拼成 prompt,新会话发送,走产物回流。
+  const handleStartAIReview = useCallback(async (options: AIReviewSettings) => {
+    if (!file.path) {
+      await messageDialog('请先打开并保存文档，再开始 AI 检视。', { title: 'AI 检视' });
+      return;
+    }
+    const conversationId = convManager.activeConvId;
+    const conversation = convManager.conversations.get(conversationId);
+    if (!conversation || conversation.runState === 'running' || conversation.runState === 'waitingForUser') {
+      await messageDialog('当前 AI Session 正在处理其他任务。', { title: 'AI 检视' });
+      return;
+    }
+    if (file.dirty) {
+      try {
+        await handleSave();
+      } catch (error) {
+        await messageDialog(`保存当前文档失败：${String(error)}`, { title: 'AI 检视' });
+        return;
+      }
+    }
+    const contextBoundary = documentContextBoundary(conversation.currentFileContextPath, file.path);
+    const rulePaths = [...new Set(options.rulePaths)];
+    const skillNames = [...new Set(options.skillNames)];
+    const basisLabels = [
+      ...rulePaths.map((path) => path.replace(/\\/gu, '/').split('/').pop() || path),
+      ...skillNames.map((name) => `Skill: ${name}`),
+      options.requirement ? `手工规则: ${options.requirement}` : '',
+    ].filter(Boolean);
+    const basis: ReviewBasis = {
+      kind: options.requirement ? 'request' : skillNames.length ? 'skill' : rulePaths.length ? 'style' : 'request',
+      label: basisLabels.join(' · ') || '通用检视',
+    };
+    const existingComments = reviewStateApi.state.comments.map((comment) => ({
+      originalText: truncate(comment.anchor.originalText, 200),
+      text: truncate(comment.text, 200),
+      source: comment.source,
+    }));
+    const prompt = [
+      contextBoundary,
+      '请对当前文档执行一轮检视，只提出可定位、可执行的意见，不修改任何文档。',
+      `当前文档：${file.path}`,
+      rulePaths.length ? `检视时必须同时遵循以下规则文件：\n${rulePaths.join('\n')}` : '',
+      ...skillNames.map((name) => `调用当前 Session 可用的 Skill「$${name}」执行检视；若 Provider 不支持 Skill 调用，则按该 Skill 的已知规则检视。`),
+      options.requirement ? `本次手工规则：${options.requirement}` : '本次没有手工规则，重点检查表达、结构和重复论证。',
+      `已有人工与 AI 意见如下，仅用于去重；不得改写、分类或覆盖：\n${JSON.stringify(existingComments)}`,
+      '每条意见必须引用文档中连续且可唯一定位的原文片段。重复原文时提供紧邻前缀 prefixHint 消歧。',
+      '直接返回以下 JSON，不调用文件写入工具，不创建任何文件。JSON 格式固定为：',
+      '{"comments":[{"originalText":"原文片段","prefixHint":"可选前缀","text":"检视意见"}]}',
+      '除 JSON 外不要输出其他内容。没有有效问题时返回 {"comments":[]}。执行一轮后停止，不要提问。',
+    ].filter(Boolean).join('\n\n');
+    pendingAIReviewRunRef.current = {
+      conversationId,
+      documentPath: file.path,
+      basis,
+      started: false,
+    };
+    setAIReviewRunning(true);
+    setAIReviewRunVersion((value) => value + 1);
+    try {
+      await convManager.send(prompt, {
+        conversationId,
+        currentFileContextPath: file.path,
+        referencePaths: [file.path, ...rulePaths],
+      });
+      if (pendingAIReviewRunRef.current?.conversationId === conversationId) {
+        pendingAIReviewRunRef.current.started = true;
+        setAIReviewRunVersion((value) => value + 1);
+      }
+    } catch (error) {
+      pendingAIReviewRunRef.current = null;
+      setAIReviewRunning(false);
+      await messageDialog(String(error), { title: 'AI 检视失败' });
+    }
+  }, [convManager, file.dirty, file.path, handleSave, reviewStateApi.state.comments, truncate]);
+
+  const handleStopAIReview = useCallback(() => {
+    pendingAIReviewRunRef.current = null;
+    setAIReviewRunning(false);
+    setAIReviewRunVersion((value) => value + 1);
+    void convManager.cancel();
+    setTransientMessage('已停止 AI 检视。');
+  }, [convManager]);
+
+  useEffect(() => {
+    const pending = pendingAIReviewRunRef.current;
+    if (!pending?.started) return;
+    const conversation = convManager.conversations.get(pending.conversationId);
+    if (!conversation || conversation.runState === 'running') return;
+    if (conversation.runState === 'waitingForUser') {
+      setLeftRailMode('aiWorkbench');
+      setTransientMessage('AI 检视需要补充信息，请在当前 Session 中回答。');
+      return;
+    }
+    pendingAIReviewRunRef.current = null;
+    setAIReviewRunning(false);
+    if (conversation.runState === 'error') {
+      void messageDialog(conversation.lastError || 'AI 检视失败。', { title: 'AI 检视失败' });
+      return;
+    }
+    if (file.path !== pending.documentPath) {
+      setTransientMessage('AI 检视已完成，但当前文档已切换；结果未加入当前列表。');
+      return;
+    }
+    try {
+      const assistant = [...conversation.messages].reverse().find((message) => message.role === 'assistant');
+      const raw = assistant?.role === 'assistant' ? assistant.content : '';
+      if (!raw.trim()) throw new Error('AI 未返回检视结果。');
+      const findings = parseAIReviewFindings(raw);
+      const existing = new Set(reviewStateApi.state.comments.map((comment) => (
+        `${comment.anchor.originalText}\n${comment.text}`
+      )));
+      let added = 0;
+      let unmatched = 0;
+      for (const finding of findings) {
+        const anchor = resolveAIReviewAnchor(file.content, file.path, finding);
+        if (!anchor) {
+          unmatched += 1;
+          continue;
+        }
+        const key = `${anchor.originalText}\n${finding.text}`;
+        if (existing.has(key)) continue;
+        existing.add(key);
+        reviewStateApi.addAIComment(anchor, finding.text, pending.basis);
+        added += 1;
+      }
+      setTransientMessage(unmatched > 0
+        ? `AI 检视新增 ${added} 条意见，${unmatched} 条因无法可靠定位已跳过。`
+        : `AI 检视完成，新增 ${added} 条意见。`);
+    } catch (error) {
+      void messageDialog(`读取 AI 检视结果失败：${String(error)}`, { title: 'AI 检视失败' });
+    }
+  }, [aiReviewRunVersion, convManager.conversations, file.content, file.path, reviewStateApi, setLeftRailMode]);
+
+  const startInitialCandidate = useCallback(async (
+    targetFileName: string,
+    prompt: string,
+    referencePaths: string[],
+  ) => {
+    if (!file.path || !outputBaseDir) throw new Error('请先打开并保存文档。');
+    const conversationId = convManager.activeConvId || convManager.createConversation('文档改稿');
+    const conversation = convManager.conversations.get(conversationId);
+    if (conversation?.runState === 'running' || conversation?.runState === 'waitingForUser') {
+      throw new Error('当前 AI Session 正在处理其他任务。');
+    }
+    const boundedPrompt = [
+      documentContextBoundary(conversation?.currentFileContextPath, file.path),
+      prompt,
+    ].filter(Boolean).join('\n\n');
+    setPendingInitialCandidate({
+      name: targetFileName,
+      candidatePath: joinLocalPath(outputBaseDir, safeOutputSegment(conversationId), targetFileName),
+      conversationId,
+      documentPath: file.path,
+      started: false,
+    });
+    try {
+      await convManager.send(boundedPrompt, {
+        conversationId,
+        currentFileContextPath: file.path,
+        referencePaths,
+      });
+      setPendingInitialCandidate((current) => (
+        current?.conversationId === conversationId && current.name === targetFileName
+          ? { ...current, started: true }
+          : current
+      ));
+      setTransientMessage(`AI 正在生成「${targetFileName}」，完成后自动进入对比。`);
+    } catch (error) {
+      setPendingInitialCandidate(null);
+      throw error;
+    }
+  }, [convManager, file.path, outputBaseDir]);
+
+  // 任务 #15 发 AI 改:把全文 + 所有意见拼成 prompt,沿用当前 Session,走产物回流。
   // 文件命名约定:{stem}.ai改{N}.md(N 递增),所以每次发送前先扫一遍现有 N,取 max+1。
   const handleSendReviewToAI = useCallback(async () => {
     if (!file.path) {
       await messageDialog('请先打开文档再发起 AI 修改。', { title: '发 AI 改' });
       return;
     }
+    if (file.dirty) {
+      try {
+        await handleSave();
+      } catch (error) {
+        await messageDialog(`保存当前文档失败：${String(error)}`, { title: '发 AI 改' });
+        return;
+      }
+    }
     const { state, markClean } = reviewStateApi;
-    if (state.comments.length === 0) return;
+    const activeComments = getActiveReviewComments(state.comments);
+    if (activeComments.length === 0) return;
     const fileName = file.path.replace(/\\/g, '/').split('/').pop() ?? 'document.md';
     const stem = fileName.replace(/\.[^.]+$/u, '');
     // 现有 N 取 max + 1;列表为空/扫不到 → 1。同步刷一次确保最新。
@@ -584,9 +933,10 @@ export function AppLayout() {
       .map((r: { version?: number }) => r.version ?? 0);
     const nextVersion = (existingVersions.length ? Math.max(...existingVersions) : 0) + 1;
     const targetFileName = `${stem}.ai改${nextVersion}.md`;
+    const selfCheckFileName = `${targetFileName}.selfcheck.json`;
     // 拼 prompt:只传当前文件路径 + 每条意见的锚点,不把全文塞进 prompt。
     // 找不到/多处重复 → 跳过;不要扩大修改范围。
-    const commentsBlock = state.comments.map((c, idx) => {
+    const commentsBlock = activeComments.map((c, idx) => {
       const original = c.anchor.originalText || '(空)';
       const hint = c.anchor.prefixHint
         ? `前缀「${truncate(c.anchor.prefixHint, 40)}」+ `
@@ -609,22 +959,22 @@ export function AppLayout() {
       '- 不要把意见本身留在结果里',
       `- 把修改后的完整 markdown 通过 Write 工具落到当前工作目录,文件名必须是:`,
       `  ${targetFileName}`,
+      `- 完成修改后执行一次自检，并把结果写入 ${selfCheckFileName}，JSON 格式固定为:`,
+      '  {"status":"fresh|warning|blocked","summary":"一句话说明是否完成要求、是否越界及是否存在高影响变化"}',
+      '- fresh 表示要求完成且未越界；warning 表示可审阅但存在范围或结构风险；blocked 表示不应直接应用',
+      '- 不要提问；信息不足时跳过无法安全处理的意见，并在自检 summary 中说明',
       '',
       '## 检视意见清单(每条带唯一锚点 prefixHint + originalText)',
       '',
       commentsBlock,
     ].join('\n');
-    // 创建新会话 + 切左栏,然后立即发送到该 conv(用 send 的 opts.conversationId 兜底 active ref 异步)
-    const newConvId = convManager.createConversation('检视修改');
-    setLeftRailMode('aiWorkbench');
     try {
-      await convManager.send(prompt, { conversationId: newConvId, referencePaths: [file.path] });
+      await startInitialCandidate(targetFileName, prompt, [file.path]);
       markClean();
-      setTransientMessage(`已交给 AI 修改,改后版本将作为「${targetFileName}」回到右栏列表`);
     } catch (error) {
       await messageDialog(String(error), { title: '发起 AI 修改失败' });
     }
-  }, [aiRevisions, convManager, file.path, refreshRevisions, reviewStateApi, setLeftRailMode, truncate]);
+  }, [aiRevisions, file.dirty, file.path, handleSave, refreshRevisions, reviewStateApi, startInitialCandidate, truncate]);
 
   const handleExportWord = useCallback(async () => {
     if (wordExporting) return;
@@ -711,34 +1061,63 @@ export function AppLayout() {
     })));
   }, []);
 
-  // AI Diff Preview 审阅态控制器。应用时把合并结果写回当前文档:
-  // P0-2 走编辑器的 commitAIReplacement,把整篇合并作为一条原子操作压入 AI 撤销栈,
-  // 一次 Ctrl+Z 整体回退。回退失败时退化为 replaceCurrentContent。
-  const diffReviewController = useDiffReview(useCallback((merged: string) => {
+  const candidatePersistenceKey = file.path
+    ? `${convManager.activeConvId}::${file.path.replace(/\\/gu, '/').toLowerCase()}`
+    : undefined;
+  // 应用候选稿前先保存基线快照，再以一次原子编辑写入当前文档。
+  const diffReviewController = useDiffReview(useCallback(async (merged: string, originalContent: string) => {
+    if (!file.path || !outputBaseDir) {
+      throw new Error('当前文档缺少可用路径，无法安全保存应用前历史版本。');
+    }
+    await createDocumentHistoryVersion({
+      outputBaseDir,
+      conversationId: convManager.activeConvId,
+      documentPath: file.path,
+      content: originalContent,
+    });
     const handle = editorCommandRef.current;
     if (handle?.commitAIReplacement) {
       handle.commitAIReplacement(merged);
     } else {
       replaceCurrentContent(merged);
     }
-    setTransientMessage('AI 改动已应用,一次 Ctrl+Z 可整体回退。');
-  }, [replaceCurrentContent]));
+    refreshDocumentHistories();
+    setTransientMessage('AI 改动已应用，并已保存应用前历史版本。');
+  }, [convManager.activeConvId, file.path, outputBaseDir, refreshDocumentHistories, replaceCurrentContent]), candidatePersistenceKey);
+  const diffReviewState = diffReviewController.state;
+  const markCandidateBaselineStale = diffReviewController.markBaselineStale;
 
-  // P0-1:切 tab / 切文档 / 关 tab 时若审阅态打开,先 close(SPEC §2.7
-  // "切 tab:先退审阅(丢 pending)再切")。监听 file.path 变化即可覆盖三入口。
-  const diffReviewIsOpenRef = useRef(diffReviewController.state.isOpen);
   useEffect(() => {
-    diffReviewIsOpenRef.current = diffReviewController.state.isOpen;
-  }, [diffReviewController.state.isOpen]);
-  useEffect(() => {
-    if (diffReviewIsOpenRef.current) {
-      diffReviewController.close();
+    const state = diffReviewState;
+    if (!state.isOpen || !state.documentPath) return;
+    const sameDocument = state.documentPath.replace(/\\/gu, '/').toLowerCase()
+      === file.path.replace(/\\/gu, '/').toLowerCase();
+    if (sameDocument && state.originalContent !== file.content) {
+      markCandidateBaselineStale(file.content);
     }
-  }, [file.path, diffReviewController]);
+  }, [diffReviewState, file.content, file.path, markCandidateBaselineStale]);
+
+  useEffect(() => {
+    if (!externalChangeConflict || !diffReviewState.isOpen) return;
+    const sameDocument = diffReviewState.documentPath?.replace(/\\/gu, '/').toLowerCase()
+      === externalChangeConflict.path.replace(/\\/gu, '/').toLowerCase();
+    if (!sameDocument) return;
+    let cancelled = false;
+    void import('../services/fileService')
+      .then(({ readTextWithEncoding }) => readTextWithEncoding(externalChangeConflict.path, settings.defaultEncoding))
+      .then((latestContent) => {
+        if (!cancelled) markCandidateBaselineStale(latestContent);
+      })
+      .catch((error) => console.warn('Failed to load externally changed source for candidate review:', error));
+    return () => { cancelled = true; };
+  }, [diffReviewState.documentPath, diffReviewState.isOpen, externalChangeConflict, markCandidateBaselineStale, settings.defaultEncoding]);
 
   // 检视面板的「以 Diff 审阅」入口:读改稿文件 → diff(当前文档,改稿)→ 开审阅态。
   // SPEC §2.1 A 类:检视产物已声明"是当前文档修订版",直接进。
-  const handleReviewRevision = useCallback(async (revisionPath: string) => {
+  const handleReviewRevision = useCallback(async (
+    revisionPath: string,
+    options?: { history?: boolean },
+  ) => {
     if (!file.path) {
       await messageDialog('请先打开原文档再审阅 AI 改稿。', { title: '以 Diff 审阅' });
       return;
@@ -746,16 +1125,268 @@ export function AppLayout() {
     try {
       const proposedContent = await readTextFile(revisionPath);
       const revisionName = revisionPath.replace(/\\/g, '/').split('/').pop() ?? '改稿';
+      const selfCheck = options?.history
+        ? { status: 'fresh' as const, summary: '这是应用前历史版本；确认 Diff 后才会恢复到当前文档。' }
+        : await readCandidateSelfCheck(revisionPath);
       diffReviewController.open({
         source: 'review',
-        title: `审阅 AI 改稿:${revisionName}`,
+        title: options?.history ? `审阅历史版本：${revisionName}` : `审阅 AI 改稿：${revisionName}`,
+        documentPath: file.path,
+        candidatePath: options?.history ? undefined : revisionPath,
         originalContent: file.content,
         proposedContent,
+        selfCheckStatus: selfCheck.status,
+        selfCheckSummary: selfCheck.summary,
       });
+      setLeftRailMode('none');
+      setRightPanelMode('none');
     } catch (error) {
       await messageDialog(`读取改稿失败:${String(error)}`, { title: '以 Diff 审阅' });
     }
-  }, [diffReviewController, file.content, file.path]);
+  }, [diffReviewController, file.content, file.path, setLeftRailMode, setRightPanelMode]);
+
+  const runCandidateAgent = useCallback(async (candidatePath: string, prompt: string): Promise<void> => {
+    const conversationId = convManager.activeConvId;
+    const conversation = convManager.conversations.get(conversationId);
+    if (!conversation || conversation.runState === 'running' || conversation.runState === 'waitingForUser') {
+      throw new Error('当前 AI Session 正在处理其他任务，请等待本轮结束。');
+    }
+    if (pendingCandidateRunRef.current) throw new Error('候选稿已有一轮修改正在进行。');
+
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    const completion = new Promise<void>((done, failed) => {
+      resolve = done;
+      reject = failed;
+    });
+    pendingCandidateRunRef.current = {
+      candidatePath,
+      conversationId,
+      started: false,
+      resolve,
+      reject,
+    };
+    setCandidateRunVersion((value) => value + 1);
+    try {
+      await convManager.send([
+        documentContextBoundary(conversation.currentFileContextPath, file.path),
+        prompt,
+      ].filter(Boolean).join('\n\n'), {
+        conversationId,
+        currentFileContextPath: file.path,
+        referencePaths: [file.path, candidatePath].filter(Boolean),
+      });
+      if (pendingCandidateRunRef.current?.conversationId === conversationId) {
+        pendingCandidateRunRef.current.started = true;
+        setCandidateRunVersion((value) => value + 1);
+      }
+    } catch (error) {
+      pendingCandidateRunRef.current = null;
+      const failure = error instanceof Error ? error : new Error(String(error));
+      reject(failure);
+      throw failure;
+    }
+    return completion;
+  }, [convManager, file.path]);
+
+  const handleCandidateFeedback = useCallback(async (request: DiffFeedbackRequest) => {
+    const state = diffReviewController.state;
+    if (!state.candidatePath) {
+      await messageDialog('当前候选稿不是可继续写入的 AI 改稿文件。', { title: '继续修改' });
+      return;
+    }
+    const focused = state.hunks[state.focusIndex];
+    const focusedText = focused
+      ? ('after' in focused ? focused.after : 'content' in focused ? focused.content : '')
+      : '';
+    const scopeInstruction = request.scope === 'current-diff'
+      ? `只修改包含以下当前差异的最小段落：\n${focusedText}`
+      : request.scope === 'current-section'
+        ? `只修改包含以下当前差异的 Markdown 章节，不要改动其他章节：\n${focusedText}`
+        : '可以修改整份候选稿，但只能响应本轮明确要求。';
+    const candidateName = pathBasename(state.candidatePath);
+    const selfCheckName = pathBasename(candidateSelfCheckPath(state.candidatePath));
+    await writeTextFile(state.candidatePath, request.candidateContent);
+    await writeTextFile(candidateSelfCheckPath(state.candidatePath), JSON.stringify({
+      status: 'warning',
+      summary: '本轮修改尚未完成自检。',
+    }));
+    const prompt = [
+      '继续修改当前候选稿。沿用本 Session 已有讨论，不重新创建文档或对话。',
+      `源文档只读：${file.path}`,
+      `候选稿文件：${candidateName}`,
+      `本轮要求：${request.text}`,
+      `本轮范围：${scopeInstruction}`,
+      `直接覆盖写回 ${candidateName}，不要创建新候选稿，不要修改源文档。`,
+      `完成后把自检写入 ${selfCheckName}，JSON 格式：`,
+      '{"status":"fresh|warning|blocked","summary":"一句话说明完成情况、越界风险和高影响变化"}',
+      '执行一轮修改和自检后停止，不要提问。',
+    ].join('\n\n');
+    try {
+      await runCandidateAgent(state.candidatePath, prompt);
+    } catch (error) {
+      await messageDialog(String(error), { title: '继续修改失败' });
+    }
+  }, [diffReviewController.state, file.path, runCandidateAgent]);
+
+  const handleCandidateRecheck = useCallback(async () => {
+    const state = diffReviewController.state;
+    if (!state.candidatePath) {
+      await messageDialog('当前候选稿没有可更新的 AI 改稿文件。', { title: '重新检视' });
+      return;
+    }
+    const candidateContent = state.hunks.length > 0
+      ? mergeDecisions(state.hunks, state.decisions)
+      : state.proposedContent;
+    const candidateName = pathBasename(state.candidatePath);
+    const selfCheckName = pathBasename(candidateSelfCheckPath(state.candidatePath));
+    await writeTextFile(state.candidatePath, candidateContent);
+    await writeTextFile(candidateSelfCheckPath(state.candidatePath), JSON.stringify({
+      status: 'warning',
+      summary: '重新检视尚未完成。',
+    }));
+    const prompt = [
+      `只重新检视 ${candidateName}，不要修改候选稿或源文档。`,
+      '检查本 Session 最近一轮要求是否完成、是否超出范围、是否有大范围结构变化或高影响修改。',
+      `把结果写入 ${selfCheckName}，JSON 格式：`,
+      '{"status":"fresh|warning|blocked","summary":"一句话自检结论"}',
+      '完成后停止，不要提问。',
+    ].join('\n\n');
+    try {
+      await runCandidateAgent(state.candidatePath, prompt);
+    } catch (error) {
+      await messageDialog(String(error), { title: '重新检视失败' });
+    }
+  }, [diffReviewController.state, runCandidateAgent]);
+
+  const handleSaveCandidateAs = useCallback(async (candidateContent: string) => {
+    if (!file.path) return;
+    const separator = file.path.includes('\\') ? '\\' : '/';
+    const normalized = file.path.replace(/\\/gu, '/');
+    const directoryEnd = normalized.lastIndexOf('/');
+    const directory = directoryEnd >= 0 ? file.path.slice(0, directoryEnd) : '';
+    const defaultName = `${pathBasenameWithoutExtension(file.path)}-改稿.md`;
+    const target = await saveFileDialog(directory ? `${directory}${separator}${defaultName}` : defaultName);
+    if (!target) return;
+    if (sameLocalPath(target, file.path)) {
+      await messageDialog('另存为不能覆盖当前源文档。请换一个文件名。', { title: '另存候选稿' });
+      return;
+    }
+    await writeTextFile(target, candidateContent);
+    diffReviewController.close();
+    candidateNavigationBypassRef.current = true;
+    try {
+      await handleOpenPath(target);
+    } finally {
+      candidateNavigationBypassRef.current = false;
+    }
+    setLeftRailMode('none');
+    setRightPanelMode('review');
+    setTransientMessage('候选稿已另存并成为当前文档，AI Session 保持不变。');
+  }, [diffReviewController, file.path, handleOpenPath, setLeftRailMode, setRightPanelMode]);
+
+  const handleResetCandidateToLatestSource = useCallback(async () => {
+    if (externalChangeConflict) await handleAcceptExternal();
+    diffReviewController.resetToLatestSource();
+  }, [diffReviewController, externalChangeConflict, handleAcceptExternal]);
+
+  const handleRebaseCandidateToLatestSource = useCallback(async () => {
+    if (externalChangeConflict) await handleAcceptExternal();
+    diffReviewController.rebaseCandidateToLatestSource();
+  }, [diffReviewController, externalChangeConflict, handleAcceptExternal]);
+
+  const candidateNavigationGuard = useCallback(async () => {
+    if (candidateNavigationBypassRef.current) {
+      candidateNavigationBypassRef.current = false;
+      return true;
+    }
+    const state = diffReviewController.state;
+    if (!state.isOpen) return true;
+    const choice = await requestCandidateNavigationChoice();
+    if (choice === 'cancel') return false;
+    if (choice === 'discard') {
+      diffReviewController.close();
+      return true;
+    }
+    const candidate = mergeDecisions(state.hunks, state.decisions);
+    if (choice === 'save-as') {
+      await handleSaveCandidateAs(candidate);
+      return false;
+    }
+    try {
+      const applied = await diffReviewController.apply();
+      if (!applied) {
+        const reason = state.baselineStatus === 'stale'
+          ? '源文档已在候选稿生成后发生变化，请重新对比或以最新文档重新开始。'
+          : state.selfCheckSummary || '候选稿自检未通过，请处理阻断项后再应用。';
+        await messageDialog(reason, { title: '暂不能应用候选稿' });
+      }
+      return applied;
+    } catch (error) {
+      await messageDialog(String(error), { title: '应用候选稿失败' });
+      return false;
+    }
+  }, [diffReviewController, handleSaveCandidateAs, requestCandidateNavigationChoice]);
+  useEffect(() => {
+    candidateNavigationGuardRef.current = candidateNavigationGuard;
+    return () => {
+      candidateNavigationGuardRef.current = async () => true;
+    };
+  }, [candidateNavigationGuard]);
+
+  useEffect(() => {
+    const pending = pendingCandidateRunRef.current;
+    if (!pending?.started) return;
+    const conversation = convManager.conversations.get(pending.conversationId);
+    if (!conversation || conversation.runState === 'running') return;
+    if (conversation.runState === 'waitingForUser') {
+      diffReviewController.setSelfCheckStatus('warning', 'AI 需要补充信息，本轮候选稿尚未完成。');
+      setLeftRailMode('aiWorkbench');
+      return;
+    }
+    pendingCandidateRunRef.current = null;
+    if (conversation.runState === 'error') {
+      diffReviewController.setSelfCheckStatus('warning', conversation.lastError || 'AI 本轮执行失败。');
+      pending.resolve();
+      return;
+    }
+    void Promise.all([
+      readTextFile(pending.candidatePath),
+      readCandidateSelfCheck(pending.candidatePath),
+    ]).then(([content, selfCheck]) => {
+      diffReviewController.updateCandidate(content, selfCheck.status, selfCheck.summary);
+      refreshRevisions();
+      setTransientMessage('候选稿已更新，可继续对比或反馈。');
+      pending.resolve();
+    }).catch((error) => {
+      diffReviewController.setSelfCheckStatus('warning', `读取更新后的候选稿失败：${String(error)}`);
+      pending.resolve();
+    });
+  }, [candidateRunVersion, convManager.conversations, diffReviewController, refreshRevisions, setLeftRailMode]);
+
+  const openingInitialCandidateRef = useRef(false);
+  useEffect(() => {
+    const pending = pendingInitialCandidate;
+    if (!pending?.started || openingInitialCandidateRef.current) return;
+    const conversation = convManager.conversations.get(pending.conversationId);
+    if (!conversation || conversation.runState === 'running') return;
+    if (conversation.runState === 'waitingForUser') {
+      setLeftRailMode('aiWorkbench');
+      setTransientMessage('AI 需要补充信息，请在当前 Session 中回答。');
+      return;
+    }
+    if (conversation.runState === 'error') {
+      setPendingInitialCandidate(null);
+      void messageDialog(conversation.lastError || 'AI 改稿失败。', { title: 'AI 改稿失败' });
+      return;
+    }
+    if (file.path !== pending.documentPath) return;
+    openingInitialCandidateRef.current = true;
+    refreshRevisions();
+    void handleReviewRevision(pending.candidatePath)
+      .then(() => setPendingInitialCandidate(null))
+      .finally(() => { openingInitialCandidateRef.current = false; });
+  }, [convManager.conversations, file.path, handleReviewRevision, pendingInitialCandidate, refreshRevisions, setLeftRailMode]);
 
   const handleSearchNavigate = useCallback((
     match: SearchMatch,
@@ -1555,6 +2186,7 @@ export function AppLayout() {
     rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
     rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
     rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
+    rightPanelMode === 'review' && !isDocx ? 'review-panel-open' : '',
     leftRailMode !== 'none' ? 'left-panel-open' : '',
     leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
@@ -1639,30 +2271,53 @@ export function AppLayout() {
       comments={reviewStateApi.state.comments}
       dirty={reviewStateApi.state.dirty}
       currentFilePath={file.path}
+      currentSource={file.content}
       onJump={(comment: ReviewComment) => {
-        // 用 anchor 保存的 from/to 直接定位 — 比 revealText(originalText) 更稳:
-        // 1) 不依赖文档未修改;2) 即使原文出现多次也跳到创建时的精确位置。
-        // preserveFocus 让检视面板保留焦点,用户可以连续点多个意见。
-        editorCommandRef.current?.revealRange(comment.anchor.from, comment.anchor.to, {
+        const hit = resolveStoredReviewAnchor(file.content, file.path, comment.anchor);
+        if (!hit) {
+          setTransientMessage('原文位置已变化，未执行跳转。');
+          return;
+        }
+        editorCommandRef.current?.revealRange(hit.from, hit.to, {
           preserveFocus: true,
         });
       }}
-      onEdit={(comment: ReviewComment) => {
+      onEdit={(comment: ReviewComment, navigation: ReviewCommentNavigation) => {
         setReviewEditor({
-          x: window.innerWidth / 2 - 180,
-          y: window.innerHeight / 2 - 140,
+          x: window.innerWidth / 2 - 320,
+          y: window.innerHeight / 2 - 250,
           anchor: comment.anchor,
           initialText: comment.text,
           editingId: comment.id,
+          navigationIds: navigation.ids,
         });
       }}
-      onRemove={(commentId) => reviewStateApi.removeComment(commentId)}
+      onSetIgnored={(commentId, ignored) => reviewStateApi.setIgnored(commentId, ignored)}
       onExport={() => void handleExportReviewMarkdown()}
       onSendToAI={() => void handleSendReviewToAI()}
       revisions={aiRevisions}
-      onOpenRevision={(path) => { void handleOpenPath(path).catch((e) => console.warn('Failed to open AI revision:', e)); }}
+      onOpenRevision={(path) => {
+        if (file.path && !sameLocalPath(file.path, path)) setRevisionReturnPath(file.path);
+        void handleOpenPath(path).catch((error) => console.warn('Failed to open AI revision:', error));
+      }}
       onReviewRevision={(path) => { void handleReviewRevision(path); }}
       onRefreshRevisions={refreshRevisions}
+      histories={documentHistories}
+      onReviewHistory={(path) => { void handleReviewRevision(path, { history: true }); }}
+      onRefreshHistories={refreshDocumentHistories}
+      reviewSkills={reviewSkillOptions}
+      aiReviewRunning={aiReviewRunning}
+      onStartAIReview={(options) => { void handleStartAIReview(options); }}
+      onStopAIReview={handleStopAIReview}
+      onPickRuleFiles={handlePickReviewRuleFiles}
+      aiRewriteRunning={Boolean(pendingInitialCandidate)}
+      revisionReturnPath={revisionReturnPath && !sameLocalPath(revisionReturnPath, file.path) ? revisionReturnPath : undefined}
+      onReturnFromRevision={() => {
+        if (!revisionReturnPath) return;
+        void handleOpenPath(revisionReturnPath)
+          .then(() => setRevisionReturnPath(undefined))
+          .catch((error) => console.warn('Failed to return from AI revision:', error));
+      }}
       onClose={() => setRightPanelMode('none')}
     />
   ) : rightPanelMode === 'artifacts' && !isDocx ? (
@@ -1885,8 +2540,19 @@ export function AppLayout() {
         )}
       />
       <Suspense fallback={null}>
-        <DiffReviewPane controller={diffReviewController} />
+        <DiffReviewPane
+          controller={diffReviewController}
+          onFeedback={handleCandidateFeedback}
+          onRecheck={handleCandidateRecheck}
+          onSaveAs={handleSaveCandidateAs}
+          onResetToLatestSource={handleResetCandidateToLatestSource}
+          onRebaseCandidateToLatestSource={handleRebaseCandidateToLatestSource}
+        />
       </Suspense>
+      <CandidateNavigationDialog
+        open={candidateNavigationDialogOpen}
+        onChoice={handleCandidateNavigationChoice}
+      />
       <AppLayoutOverlays
         findVisible={findVisible}
         findFocusTarget={findFocusTarget}
@@ -1987,16 +2653,25 @@ export function AppLayout() {
         y={reviewEditor?.y ?? 0}
         originalText={reviewEditor?.anchor.originalText ?? ''}
         initialText={reviewEditor?.initialText ?? ''}
+        currentIndex={reviewEditorIndex >= 0 ? reviewEditorIndex : undefined}
+        total={reviewEditor?.navigationIds.length || undefined}
+        onPrevious={reviewEditorIndex > 0 ? () => navigateReviewEditor(-1) : undefined}
+        onNext={reviewEditor && reviewEditorIndex >= 0 && reviewEditorIndex < reviewEditor.navigationIds.length - 1
+          ? () => navigateReviewEditor(1)
+          : undefined}
         onSave={(text) => {
           if (!reviewEditor) return;
           if (reviewEditor.editingId) {
             reviewStateApi.updateComment(reviewEditor.editingId, text);
+            setReviewEditor((current) => current?.editingId === reviewEditor.editingId
+              ? { ...current, initialText: text }
+              : current);
           } else {
             reviewStateApi.addComment(reviewEditor.anchor, text);
             // 新增检视意见后自动切到右栏 review 面板
             setRightPanelMode('review');
+            setReviewEditor(null);
           }
-          setReviewEditor(null);
         }}
         onCancel={() => setReviewEditor(null)}
       />

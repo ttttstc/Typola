@@ -302,7 +302,7 @@ export function AppLayoutChrome({
           {isDocx ? docxPane : editorPane}
         </section>
         <AnimatePresence initial={false}>
-          {rightPanelMode !== 'none' && !isDocx && (
+          {rightPanelMode !== 'none' && rightPanelMode !== 'review' && !isDocx && (
             <motion.div
               key="right-rail-resizer"
               className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
@@ -325,12 +325,12 @@ export function AppLayoutChrome({
         <AnimatePresence initial={false}>
           {rightPanelMode !== 'none' && !isDocx ? (
             <motion.aside
-              key="right-rail"
+              key={rightPanelMode === 'review' ? 'right-rail-review' : 'right-rail'}
               className="right-rail-shell"
-              style={{ width: rightPanelWidth, overflow: 'hidden' }}
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: rightPanelWidth, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
+              style={rightPanelMode === 'review' ? undefined : { width: rightPanelWidth, overflow: 'hidden' }}
+              initial={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
+              animate={rightPanelMode === 'review' ? { opacity: 1 } : { width: rightPanelWidth, opacity: 1 }}
+              exit={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
               transition={resizing ? { duration: 0 } : calmTransition}
             >
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countDecidableHunks,
+  diffInline,
   diffMarkdown,
   isDecidableHunk,
   mergeDecisions,
@@ -14,6 +15,11 @@ describe('splitParagraphs', () => {
 
   it('保留段内单个换行(如列表)', () => {
     expect(splitParagraphs('- 一\n- 二\n\n下一段')).toEqual(['- 一\n- 二', '下一段']);
+  });
+
+  it('统一 CRLF 和 LF，避免整篇被误判为变化', () => {
+    expect(splitParagraphs('a\r\n\r\nb')).toEqual(['a', 'b']);
+    expect(countDecidableHunks(diffMarkdown('a\r\n\r\nb', 'a\n\nb'))).toBe(0);
   });
 
   it('空字符串 → 空数组', () => {
@@ -71,6 +77,22 @@ describe('splitParagraphs', () => {
       '正文',
       '> 引用一\n> 引用二',
       '后段',
+    ]);
+  });
+});
+
+describe('diffInline', () => {
+  it('只标记句子里真正增删的词', () => {
+    const result = diffInline('流水线负责稳定执行工程动作', '流水线负责可靠执行工程动作');
+    expect(result.before).toEqual([
+      { kind: 'equal', text: '流水线负责' },
+      { kind: 'removed', text: '稳定' },
+      { kind: 'equal', text: '执行工程动作' },
+    ]);
+    expect(result.after).toEqual([
+      { kind: 'equal', text: '流水线负责' },
+      { kind: 'added', text: '可靠' },
+      { kind: 'equal', text: '执行工程动作' },
     ]);
   });
 });

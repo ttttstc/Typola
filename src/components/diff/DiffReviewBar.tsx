@@ -3,10 +3,12 @@
 
 import { ChevronDown, ChevronUp, Check, GitCompare, X } from 'lucide-react';
 import type { DiffReviewController } from '../../hooks/useDiffReview';
+import { messageDialog } from '../../services/dialogService';
 
 type Props = {
   controller: DiffReviewController;
   onClose: () => void;
+  onSaveAs?: () => void;
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -15,7 +17,7 @@ const SOURCE_LABEL: Record<string, string> = {
   'merge-artifact': '合并到当前文档',
 };
 
-export function DiffReviewBar({ controller, onClose }: Props) {
+export function DiffReviewBar({ controller, onClose, onSaveAs }: Props) {
   const { state, decidableCount, focusOrdinal, acceptAll, rejectAll, focusNext, focusPrev, apply } = controller;
   const headerLabel = state.title || SOURCE_LABEL[state.source] || '审阅 AI 改动';
 
@@ -67,10 +69,20 @@ export function DiffReviewBar({ controller, onClose }: Props) {
         >
           全部拒绝
         </button>
+        {onSaveAs && (
+          <button type="button" className="diff-review-bar-actionbtn" onClick={onSaveAs}>
+            另存为
+          </button>
+        )}
         <button
           type="button"
           className="diff-review-bar-applybtn"
-          onClick={apply}
+          onClick={() => {
+            void apply().catch((error) => messageDialog(`应用候选稿失败：${String(error)}`, {
+              title: '应用候选稿失败',
+            }));
+          }}
+          disabled={state.selfCheckStatus === 'blocked' || state.baselineStatus === 'stale'}
           data-tooltip="把当前选择写回当前文档"
         >
           <Check size={14} strokeWidth={1.8} /> 应用

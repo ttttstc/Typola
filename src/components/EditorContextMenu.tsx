@@ -32,6 +32,8 @@ type Props = {
   hasSelection: boolean;
   hasMermaidSvg?: boolean;
   hasImage?: boolean;
+  lineNumbersVisible?: boolean;
+  onToggleLineNumbers?: () => void;
   onPick: (action: FormatAction) => void;
   onCopyMermaidSvg?: () => void;
   onClose: () => void;
@@ -77,6 +79,8 @@ export function EditorContextMenu({
   hasSelection,
   hasMermaidSvg = false,
   hasImage = false,
+  lineNumbersVisible = false,
+  onToggleLineNumbers,
   onPick,
   onCopyMermaidSvg,
   onClose,
@@ -201,6 +205,15 @@ export function EditorContextMenu({
         <>
           <div className="editor-ctx-separator" />
           <MenuItem label="复制为 SVG" onClick={copyMermaidSvg} />
+        </>
+      )}
+      {onToggleLineNumbers && (
+        <>
+          <div className="editor-ctx-separator" />
+          <MenuItem
+            label={lineNumbersVisible ? '隐藏行号' : '显示行号'}
+            onClick={() => { onToggleLineNumbers(); onClose(); }}
+          />
         </>
       )}
 

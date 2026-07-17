@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractToc } from './appLayoutUtils';
+import { extractToc, sameLocalPath } from './appLayoutUtils';
 
 describe('extractToc', () => {
   it('ignores ATX-like headings inside fenced code blocks', () => {
@@ -23,5 +23,12 @@ describe('extractToc', () => {
       { level: 2, text: 'Real section', id: 'toc-1' },
       { level: 3, text: 'Next section', id: 'toc-2' },
     ]);
+  });
+});
+
+describe('sameLocalPath', () => {
+  it('统一 Windows 分隔符和大小写比较路径', () => {
+    expect(sameLocalPath(String.raw`D:\Docs\Article.md`, 'd:/docs/article.md')).toBe(true);
+    expect(sameLocalPath('D:/docs/article.md', 'D:/docs/review.md')).toBe(false);
   });
 });
