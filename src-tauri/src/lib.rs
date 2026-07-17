@@ -290,6 +290,7 @@ impl AgentProvider {
 struct AgentSessionStartRequest {
     provider: Option<AgentProvider>,
     conversation_id: String,
+    session_uuid: Option<String>,
     prompt: String,
     cwd: Option<String>,
     agent_path: Option<String>,
@@ -573,11 +574,10 @@ fn allow_asset_directory(app: tauri::AppHandle, dir: String) -> Result<(), Strin
         .map_err(|error| format!("failed to allow asset directory: {error}"))
 }
 
-// Issue #156 §10.5-§10.7:HTML 预览时需要把产物文件所在目录动态加进 fs scope,
-// 让 plugin-fs 可以读取 HTML 内引用的本地 CSS / JS / 图片等。
-// 不限制目录内容(整个目录递归允许),因为产物可能带 assets/ 子目录。
+// 将用户当前工作区的产物目录动态加入 fs scope。工作区由用户显式选择，
+// 目录内的候选稿、检视结果及 HTML 产物均需由 plugin-fs 读写。
 #[tauri::command]
-fn allow_html_preview_directory(app: tauri::AppHandle, dir: String) -> Result<(), String> {
+fn allow_fs_directory(app: tauri::AppHandle, dir: String) -> Result<(), String> {
     app.fs_scope()
         .allow_directory(&dir, true)
         .map_err(|error| format!("failed to allow html preview directory: {error}"))
@@ -1669,7 +1669,7 @@ pub fn run() {
             pending_opened_paths,
             force_close_main_window,
             allow_asset_directory,
-            allow_html_preview_directory,
+            allow_fs_directory,
             open_path_external,
             read_first_level_openable,
             read_opened_document,
@@ -1986,6 +1986,33 @@ fn normalize_agent_path(provider: AgentProvider, path: Option<&str>) -> String {
     provider.default_command()
 }
 
+fn resolve_agent_session(
+    registry: &mut AgentHeadlessRegistry,
+    conversation_id: &str,
+    requested_session_uuid: Option<&str>,
+    prefer_resume: bool,
+) -> (String, bool) {
+    let existing = registry.sessions.get(conversation_id).cloned().or_else(|| {
+        requested_session_uuid
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    });
+    if prefer_resume {
+        if let Some(session_uuid) = existing {
+            registry
+                .sessions
+                .insert(conversation_id.to_string(), session_uuid.clone());
+            return (session_uuid, true);
+        }
+    }
+    let session_uuid = uuid::Uuid::new_v4().to_string();
+    registry
+        .sessions
+        .insert(conversation_id.to_string(), session_uuid.clone());
+    (session_uuid, false)
+}
+
 fn start_agent_headless_run(
     app: tauri::AppHandle,
     state: tauri::State<'_, AgentHeadlessStore>,
@@ -2011,17 +2038,12 @@ fn start_agent_headless_run(
             .0
             .lock()
             .map_err(|_| "agent headless store poisoned".to_string())?;
-        let existing = registry.sessions.get(conversation_id).cloned();
-        match (prefer_resume, existing) {
-            (true, Some(session_uuid)) => (session_uuid, true),
-            _ => {
-                let session_uuid = uuid::Uuid::new_v4().to_string();
-                registry
-                    .sessions
-                    .insert(conversation_id.to_string(), session_uuid.clone());
-                (session_uuid, false)
-            }
-        }
+        resolve_agent_session(
+            &mut registry,
+            conversation_id,
+            request.session_uuid.as_deref(),
+            prefer_resume,
+        )
     };
 
     let command_spec = build_agent_headless_command(
@@ -3562,6 +3584,21 @@ mod tests {
             .windows(2)
             .any(|pair| pair == ["--resume", "session-123"]));
         assert!(!args.contains(&"--session-id".to_string()));
+    }
+
+    #[test]
+    fn restored_conversation_reuses_persisted_session_uuid() {
+        let mut registry = AgentHeadlessRegistry::default();
+
+        let (session_uuid, resumed) =
+            resolve_agent_session(&mut registry, "conv-7", Some("session-7"), true);
+
+        assert_eq!(session_uuid, "session-7");
+        assert!(resumed);
+        assert_eq!(
+            registry.sessions.get("conv-7").map(String::as_str),
+            Some("session-7")
+        );
     }
 
     #[test]

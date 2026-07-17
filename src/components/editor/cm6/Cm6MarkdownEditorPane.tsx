@@ -206,6 +206,7 @@ export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownE
               editorRef.current = instance;
             }}
             {...rest}
+            lineNumberMode={mode === 'source' ? 'source' : 'blocks'}
             onRequestImageInsert={onRequestImageInsert}
             onEditorReady={handleEditorReady}
             extraExtensions={livePreviewExtensions}

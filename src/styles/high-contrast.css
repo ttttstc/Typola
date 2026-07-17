@@ -1,0 +1,48 @@
+/* 普通文本统一使用最高对比度；状态背景和差异底色仍保留语义。 */
+:root,
+html[data-color-scheme='light'] {
+  --theme-text-primary: #000;
+  --theme-text-secondary: #000;
+  --theme-text-muted: #000;
+  --theme-editor-gutter-text: #000;
+  --theme-terminal-foreground: #000;
+}
+
+html[data-color-scheme='dark'] {
+  --theme-text-primary: #fff;
+  --theme-text-secondary: #fff;
+  --theme-text-muted: #fff;
+  --theme-editor-gutter-text: #fff;
+  --theme-terminal-foreground: #fff;
+}
+
+body,
+body :where(*) {
+  color: #000 !important;
+}
+
+body :where(input, textarea)::placeholder {
+  color: #000 !important;
+  opacity: 1;
+}
+
+body :where(button, input, select, textarea):disabled {
+  opacity: 1;
+}
+
+html[data-color-scheme='dark'] body,
+html[data-color-scheme='dark'] body :where(*) {
+  color: #fff !important;
+}
+
+html[data-color-scheme='dark'] body :where(input, textarea)::placeholder {
+  color: #fff !important;
+}
+
+/* Tooltip 使用反色表面，不能继承正文的强制前景色。 */
+body .typola-floating-tooltip,
+body .typola-floating-tooltip :where(*),
+html[data-color-scheme='dark'] body .typola-floating-tooltip,
+html[data-color-scheme='dark'] body .typola-floating-tooltip :where(*) {
+  color: var(--theme-canvas) !important;
+}

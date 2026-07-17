@@ -6,7 +6,7 @@
 // 都用同一组件:initialText 不空 → 编辑态(标题改"修改检视意见")。
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 type Props = {
   open: boolean;
@@ -16,6 +16,10 @@ type Props = {
   originalText: string;
   /** 现有意见文本(编辑模式);空字符串=新增模式 */
   initialText?: string;
+  currentIndex?: number;
+  total?: number;
+  onPrevious?: () => void;
+  onNext?: () => void;
   onSave: (text: string) => void;
   onCancel: () => void;
 };
@@ -26,6 +30,10 @@ export function ReviewCommentEditor({
   y,
   originalText,
   initialText = '',
+  currentIndex,
+  total,
+  onPrevious,
+  onNext,
   onSave,
   onCancel,
 }: Props) {
@@ -72,7 +80,9 @@ export function ReviewCommentEditor({
   if (!open) return null;
 
   const isEditing = initialText.length > 0;
-  const canSave = text.trim().length > 0;
+  const dirty = text !== initialText;
+  const canSave = text.trim().length > 0 && (!isEditing || dirty);
+  const navigationDisabledReason = dirty ? '请先保存或取消当前修改' : undefined;
 
   return (
     <div
@@ -83,7 +93,12 @@ export function ReviewCommentEditor({
       style={{ left: x, top: y }}
     >
       <div className="review-comment-editor-header">
-        <span className="review-comment-editor-title">{isEditing ? '修改检视意见' : '加检视意见'}</span>
+        <span className="review-comment-editor-title">
+          {isEditing ? '修改检视意见' : '加检视意见'}
+          {isEditing && currentIndex !== undefined && total !== undefined && (
+            <span className="review-comment-editor-position">{currentIndex + 1} / {total}</span>
+          )}
+        </span>
         <button
           type="button"
           className="review-comment-editor-close"
@@ -117,19 +132,43 @@ export function ReviewCommentEditor({
             rows={3}
           />
         </div>
-        <div className="review-comment-editor-actions">
-          <button
-            type="button"
-            className="review-comment-editor-primary"
-            onClick={() => onSave(text)}
-            disabled={!canSave}
-            title="保存 Ctrl+Enter"
-          >
-            <Check size={13} /> 保存
-          </button>
-          <button type="button" className="review-comment-editor-secondary" onClick={onCancel}>
-            取消
-          </button>
+        <div className="review-comment-editor-footer">
+          {isEditing && total !== undefined && total > 1 && (
+            <div className="review-comment-editor-navigation" aria-label="检视意见导航">
+              <button
+                type="button"
+                onClick={onPrevious}
+                disabled={!onPrevious || dirty}
+                title={navigationDisabledReason || '上一条检视意见'}
+                aria-label="上一条检视意见"
+              >
+                <ChevronLeft size={14} /> 上一条
+              </button>
+              <button
+                type="button"
+                onClick={onNext}
+                disabled={!onNext || dirty}
+                title={navigationDisabledReason || '下一条检视意见'}
+                aria-label="下一条检视意见"
+              >
+                下一条 <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+          <div className="review-comment-editor-actions">
+            <button type="button" className="review-comment-editor-secondary" onClick={onCancel}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="review-comment-editor-primary"
+              onClick={() => onSave(text)}
+              disabled={!canSave}
+              title="保存 Ctrl+Enter"
+            >
+              <Check size={13} /> 保存
+            </button>
+          </div>
         </div>
       </div>
     </div>

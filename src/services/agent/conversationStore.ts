@@ -1,6 +1,8 @@
 import type { AgentMessage, AgentRunState, SelectionAnchor } from './types';
 import type { AgentProvider } from './provider';
-import { DEFAULT_AGENT_PROVIDER } from './provider';
+import { DEFAULT_AGENT_PROVIDER, isAgentProvider } from './provider';
+
+const CONVERSATION_STORAGE_KEY = 'typola.conversations.v1';
 
 export type PendingInjection = {
   text: string;
@@ -16,7 +18,8 @@ export type ConversationData = {
   messages: AgentMessage[];
   runState: AgentRunState;
   lastError: string;
-  sessionStarted: boolean; // 首轮后置 true → send 改走 resume；session UUID 不在前端存，由 Rust 按 conversationId 维护(registry)
+  sessionStarted: boolean; // 首轮后置 true → send 改走 resume。
+  sessionUuid?: string; // 与 conversationId 一起持久化，应用重启后仍可恢复 Provider 原生 Session。
   runId?: string;
   cancelRequested?: boolean;
   pendingInjection?: PendingInjection;
@@ -57,4 +60,98 @@ export function createConversationData(
     lastError: '',
     sessionStarted: false,
   };
+}
+
+function restoreMessage(value: unknown): AgentMessage | null {
+  if (!value || typeof value !== 'object') return null;
+  const message = value as Partial<AgentMessage>;
+  if (
+    typeof message.id !== 'string'
+    || typeof message.content !== 'string'
+    || typeof message.createdAt !== 'number'
+  ) return null;
+  if (message.role === 'user') return value as AgentMessage;
+  if (message.role !== 'assistant') return null;
+  return {
+    ...(value as Extract<AgentMessage, { role: 'assistant' }>),
+    thinking: typeof message.thinking === 'string' ? message.thinking : '',
+    tools: Array.isArray(message.tools) ? message.tools : [],
+  };
+}
+
+function restoreConversation(value: unknown, fallbackProvider: AgentProvider): ConversationData | null {
+  if (!value || typeof value !== 'object') return null;
+  const stored = value as Partial<ConversationData>;
+  if (typeof stored.id !== 'string' || typeof stored.title !== 'string') return null;
+  const sessionUuid = typeof stored.sessionUuid === 'string' && stored.sessionUuid.trim()
+    ? stored.sessionUuid
+    : undefined;
+  const restored: ConversationData = {
+    ...createConversationData(
+      stored.id,
+      stored.title,
+      typeof stored.skillRef === 'string' ? stored.skillRef : undefined,
+      isAgentProvider(stored.provider) ? stored.provider : fallbackProvider,
+    ),
+    messages: Array.isArray(stored.messages)
+      ? stored.messages.map(restoreMessage).filter((message): message is AgentMessage => message !== null)
+      : [],
+    sessionStarted: stored.sessionStarted === true && Boolean(sessionUuid),
+    ...(sessionUuid ? { sessionUuid } : {}),
+    ...(stored.fileContextInjected === true ? { fileContextInjected: true } : {}),
+    ...(typeof stored.currentFileContextPath === 'string' ? { currentFileContextPath: stored.currentFileContextPath } : {}),
+    ...(typeof stored.currentModel === 'string' ? { currentModel: stored.currentModel } : {}),
+    ...(stored.submittedQuestionForms && typeof stored.submittedQuestionForms === 'object'
+      ? { submittedQuestionForms: stored.submittedQuestionForms }
+      : {}),
+  };
+  return restored;
+}
+
+export function loadConversationStore(fallbackProvider: AgentProvider): ConversationStoreState | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(CONVERSATION_STORAGE_KEY) ?? 'null');
+    if (!value || typeof value !== 'object') return null;
+    const stored = value as { version?: unknown; activeConvId?: unknown; conversations?: unknown };
+    if (stored.version !== 1 || !Array.isArray(stored.conversations)) return null;
+    const conversations = new Map<string, ConversationData>();
+    for (const item of stored.conversations) {
+      const conversation = restoreConversation(item, fallbackProvider);
+      if (conversation) conversations.set(conversation.id, conversation);
+    }
+    if (conversations.size === 0) return null;
+    const activeConvId = typeof stored.activeConvId === 'string' && conversations.has(stored.activeConvId)
+      ? stored.activeConvId
+      : conversations.keys().next().value as string;
+    return { conversations, activeConvId };
+  } catch {
+    return null;
+  }
+}
+
+export function saveConversationStore(state: ConversationStoreState): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const conversations = [...state.conversations.values()].map((conversation) => ({
+      id: conversation.id,
+      title: conversation.title,
+      provider: conversation.provider,
+      ...(conversation.skillRef ? { skillRef: conversation.skillRef } : {}),
+      messages: conversation.messages,
+      sessionStarted: conversation.sessionStarted,
+      ...(conversation.sessionUuid ? { sessionUuid: conversation.sessionUuid } : {}),
+      ...(conversation.fileContextInjected ? { fileContextInjected: true } : {}),
+      ...(conversation.currentFileContextPath ? { currentFileContextPath: conversation.currentFileContextPath } : {}),
+      ...(conversation.currentModel ? { currentModel: conversation.currentModel } : {}),
+      ...(conversation.submittedQuestionForms ? { submittedQuestionForms: conversation.submittedQuestionForms } : {}),
+    }));
+    localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      activeConvId: state.activeConvId,
+      conversations,
+    }));
+  } catch {
+    // localStorage 不可用或容量不足时，不阻断当前会话。
+  }
 }
