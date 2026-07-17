@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { X } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
@@ -26,6 +27,7 @@ import type { EditorMode } from '../components/Toolbar';
 import { StatusBar } from '../components/StatusBar';
 import { AppLayoutChrome } from '../components/AppLayoutChrome';
 import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
+import { calmTransition } from '../components/motion/MotionProvider';
 import { SkillHubPanel } from '../components/SkillHubPanel';
 import { ArtifactCenterPanel } from '../components/artifacts/ArtifactCenterPanel';
 import { SelectionResultCard } from '../components/selection/SelectionResultCard';
@@ -228,6 +230,7 @@ async function readCandidateSelfCheck(candidatePath: string): Promise<CandidateS
 
 export function AppLayout() {
   const settings = useSettings();
+  const shouldReduceMotion = useReducedMotion();
   const isTauriRuntime = '__TAURI_INTERNALS__' in window;
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const reopenAttempted = useRef(false);
@@ -280,6 +283,7 @@ export function AppLayout() {
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(300);
+  const [terminalResizing, setTerminalResizing] = useState(false);
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
   const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
@@ -2493,18 +2497,37 @@ export function AppLayout() {
         rightPanel={rightPanel}
         onSetRightPanelMode={setRightPanelMode}
         terminalNode={(
-          <Suspense fallback={null}>
-            <TerminalPanel
-              ref={terminalPanelRef}
-              visible={terminalVisible}
-              height={terminalHeight}
-              currentFilePath={file.path}
-              workspaceRoot={workspaceRoot || undefined}
-              createRequest={terminalCreateRequest}
-              onHeightChange={setTerminalHeight}
-              onHide={() => setTerminalVisible(false)}
-            />
-          </Suspense>
+          <motion.div
+            className="terminal-shell"
+            data-visible={terminalVisible ? 'true' : 'false'}
+            initial={false}
+            animate={{
+              height: terminalVisible ? terminalHeight : 0,
+              opacity: terminalVisible ? 1 : 0,
+            }}
+            transition={shouldReduceMotion || terminalResizing ? { duration: 0 } : calmTransition}
+            onAnimationComplete={() => {
+              if (terminalVisible && !terminalResizing) terminalPanelRef.current?.fit();
+            }}
+            style={{ overflow: 'hidden' }}
+            aria-hidden={!terminalVisible}
+            inert={terminalVisible ? undefined : true}
+          >
+            <Suspense fallback={null}>
+              <TerminalPanel
+                ref={terminalPanelRef}
+                visible={terminalVisible}
+                height={terminalHeight}
+                currentFilePath={file.path}
+                workspaceRoot={workspaceRoot || undefined}
+                createRequest={terminalCreateRequest}
+                onHeightChange={setTerminalHeight}
+                onResizeStart={() => setTerminalResizing(true)}
+                onResizeEnd={() => setTerminalResizing(false)}
+                onHide={() => setTerminalVisible(false)}
+              />
+            </Suspense>
+          </motion.div>
         )}
         statusBarNode={(
           <StatusBar

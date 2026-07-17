@@ -69,7 +69,10 @@ function TreeNode({
   onOpenExternal,
   styleIndex = 0,
 }: TreeNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [{ expanded, childrenMounted }, setExpansion] = useState({
+    expanded: false,
+    childrenMounted: false,
+  });
   const [children, setChildren] = useState<WorkspaceEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -108,9 +111,23 @@ function TreeNode({
     }
   };
 
+  const toggleExpanded = () => {
+    const reduceMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    setExpansion((current) => {
+      const nextExpanded = !current.expanded;
+      return {
+        expanded: nextExpanded,
+        childrenMounted: nextExpanded || (!reduceMotion && current.childrenMounted),
+      };
+    });
+  };
+
   return (
     <div
       className="file-tree-node"
+      data-expanded={expanded ? 'true' : 'false'}
       style={{ '--file-tree-stagger-index': Math.min(styleIndex, 8) } as CSSProperties}
     >
       <button
@@ -118,7 +135,7 @@ function TreeNode({
         className={`file-tree-item ${active ? 'active' : ''} ${isAgentChanged ? 'agent-changed' : ''} ${dirtyPaths.has(entry.path) ? 'dirty' : ''}`}
         style={{ paddingLeft: `${10 + depth * 14}px` }}
         onClick={() => {
-          if (entry.isDir) setExpanded((value) => !value);
+          if (entry.isDir) toggleExpanded();
           else onOpenFile(entry.path);
         }}
         onContextMenu={(event) => {
@@ -154,7 +171,7 @@ function TreeNode({
           onPointerDown={(event) => event.stopPropagation()}
         >
           {entry.isDir ? (
-            <button type="button" role="menuitem" onClick={() => { setExpanded((value) => !value); setMenu(null); }}>
+            <button type="button" role="menuitem" onClick={() => { toggleExpanded(); setMenu(null); }}>
               {expanded ? '收起文件夹' : '展开文件夹'}
             </button>
           ) : (
@@ -179,25 +196,35 @@ function TreeNode({
           </button>
         </div>
       )}
-      {expanded && (
-        <div className="file-tree-children">
-          {loading && <div className="file-tree-loading" style={{ paddingLeft: `${24 + depth * 14}px` }}>{loadingHint}</div>}
-          {!loading && children.map((child, index) => (
-            <TreeNode
-              key={child.path}
-              entry={child}
-              depth={depth + 1}
-              activePath={activePath}
-              dirtyPaths={dirtyPaths}
-              agentChangedPaths={agentChangedPaths}
-              refreshKey={refreshKey}
-              loadingHint={loadingHint}
-              onOpenFile={onOpenFile}
-              onRevealInFolder={onRevealInFolder}
-              onOpenExternal={onOpenExternal}
-              styleIndex={index}
-            />
-          ))}
+      {childrenMounted && (
+        <div
+          className="file-tree-children"
+          onTransitionEnd={(event) => {
+            if (event.target !== event.currentTarget || event.propertyName !== 'grid-template-rows') return;
+            setExpansion((current) => current.expanded
+              ? current
+              : { ...current, childrenMounted: false });
+          }}
+        >
+          <div className="file-tree-children-inner">
+            {loading && <div className="file-tree-loading" style={{ paddingLeft: `${24 + depth * 14}px` }}>{loadingHint}</div>}
+            {!loading && children.map((child, index) => (
+              <TreeNode
+                key={child.path}
+                entry={child}
+                depth={depth + 1}
+                activePath={activePath}
+                dirtyPaths={dirtyPaths}
+                agentChangedPaths={agentChangedPaths}
+                refreshKey={refreshKey}
+                loadingHint={loadingHint}
+                onOpenFile={onOpenFile}
+                onRevealInFolder={onRevealInFolder}
+                onOpenExternal={onOpenExternal}
+                styleIndex={index}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

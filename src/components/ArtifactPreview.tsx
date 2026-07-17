@@ -1,3 +1,5 @@
+import { useAutoAnimate } from '@formkit/auto-animate/react';
+import { useReducedMotion } from 'motion/react';
 import { FileText, FolderInput, GitCompare, Presentation, Trash2, X } from 'lucide-react';
 
 export type ArtifactItem = {
@@ -24,6 +26,14 @@ function iconFor(kind: ArtifactItem['kind']) {
 }
 
 export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onDeleteFile, onMergeIntoDocument, onClose }: ArtifactPreviewProps) {
+  const shouldReduceMotion = useReducedMotion();
+  const [chipsRef] = useAutoAnimate<HTMLDivElement>({
+    duration: shouldReduceMotion ? 0 : 180,
+    easing: 'ease-out',
+  });
+  const supportsWebAnimations = typeof Element !== 'undefined'
+    && typeof Element.prototype.animate === 'function';
+
   if (artifacts.length === 0) return null;
 
   return (
@@ -39,7 +49,7 @@ export function ArtifactPreview({ artifacts, onOpenFile, onArchiveFile, onDelete
           </button>
         )}
       </div>
-      <div className="artifact-chips">
+      <div ref={supportsWebAnimations ? chipsRef : undefined} className="artifact-chips">
         {artifacts.map((item) => (
           <div key={item.path} className="artifact-chip-row">
             <button

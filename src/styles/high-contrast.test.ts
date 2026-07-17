@@ -10,6 +10,6 @@ const stylesheet = readFileSync(
 
 describe('high contrast tooltip exceptions', () => {
   it('keeps tooltip labels contrasted against their dark surface', () => {
-    expect(stylesheet).toMatch(/\.typola-floating-tooltip(?:.|\n)*color:\s*var\(--theme-canvas\)\s*!important;/u);
+    expect(stylesheet).toMatch(/\.typola-floating-tooltip[\s\S]*color:\s*var\(--theme-canvas\)\s*!important;/u);
   });
 });

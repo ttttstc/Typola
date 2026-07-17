@@ -23,10 +23,12 @@
   --status-neutral-border: var(--theme-border-soft);
   --motion-duration-press: 60ms;
   --motion-duration-fast: 120ms;
+  --motion-duration-modal: 140ms;
   --motion-duration-base: 180ms;
   --motion-duration-slow: 220ms;
   --motion-duration-ring: 600ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
+  --motion-ease-modal: cubic-bezier(0.2, 0.8, 0.2, 1);
   --motion-ease-pop: cubic-bezier(0.2, 0.9, 0.3, 1.1);
 
   /* Font stacks */
@@ -331,16 +333,6 @@ html, body, #root {
   /* 宸ュ叿鏍?.toolbar-group 榛樿鏈?2px padding 鍜?border;mode 娈典笉闇€瑕佽繖浜?缁?瑁呴グ */
   padding: 0;
   border: none;
-}
-
-/* 宸﹀彸鏍忓垏鎹㈢殑骞虫粦鏀舵斁(涓夋€佸垏鎹㈡椂鑱斿姩) */
-.workspace-panel,
-.flow-panel,
-.review-sidebar-panel,
-.right-rail-shell,
-.word-preview-panel,
-.wechat-preview-panel {
-  transition: width 0.46s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* ===== Title Bar (Toolbar) ===== */
@@ -906,7 +898,6 @@ html[data-color-scheme='dark'] .export-menu {
 .left-rail-shell {
   flex: 0 0 auto;
   height: 100%;
-  min-width: 220px;
   max-width: 560px;
   display: flex;
   flex-direction: column;
@@ -1128,7 +1119,10 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 0;
   visibility: hidden;
   transform: translateX(-8px);
-  transition: opacity 0.15s, transform 0.15s, visibility 0.15s;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    visibility 0s linear var(--motion-duration-fast);
   pointer-events: none;
 }
 
@@ -1136,6 +1130,7 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
+  transition-delay: 0s;
   pointer-events: auto;
 }
 
@@ -1152,6 +1147,7 @@ html[data-color-scheme='dark'] .export-menu {
   opacity: 1;
   visibility: visible;
   transform: none;
+  transition-delay: 0s;
   pointer-events: auto;
 }
 
@@ -1348,6 +1344,18 @@ html[data-color-scheme='dark'] .export-menu {
   cursor: pointer;
   border-radius: 3px;
   transition: color 0.1s, background 0.1s;
+}
+
+.floating-toc-chevron-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(0deg);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.floating-toc-row > .floating-toc-chevron[aria-expanded="true"] .floating-toc-chevron-icon {
+  transform: rotate(90deg);
 }
 
 .floating-toc-chevron.is-leaf {
@@ -3359,11 +3367,9 @@ html[data-theme-id='brutalist'] .editor-tab-close,
 html[data-theme-id='brutalist'] .editor-tab-indicator,
 html[data-theme-id='brutalist'] .file-tree-list,
 html[data-theme-id='brutalist'] .file-tree-node,
-html[data-theme-id='brutalist'] .file-tree-children,
 html[data-theme-id='brutalist'] .file-tree-item,
 html[data-theme-id='brutalist'] .file-tree-folder,
 html[data-theme-id='brutalist'] .file-tree-action,
-html[data-theme-id='brutalist'] .file-tree-folder-chevron,
 html[data-theme-id='brutalist'] .file-tree-icon,
 html[data-theme-id='brutalist'] .file-tree-name,
 html[data-theme-id='brutalist'] .skill-hub-item,
@@ -4550,8 +4556,15 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   }
 
   .tab-motion-indicator,
-  .file-tree-folder-chevron {
+  .file-tree-folder-chevron,
+  .file-tree-children,
+  .terminal-shell {
     transition: none !important;
+  }
+
+  .floating-toc-panel,
+  .floating-toc-chevron-icon {
+    transition: none;
   }
 }
 
@@ -4752,8 +4765,29 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .file-tree-children {
-  animation: file-tree-children-in var(--motion-duration-base) var(--motion-ease-standard) both;
-  transform-origin: top left;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--motion-duration-base) var(--motion-ease-standard),
+    opacity var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.file-tree-node[data-expanded='true'] > .file-tree-children {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+@starting-style {
+  .file-tree-node[data-expanded='true'] > .file-tree-children {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.file-tree-children-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workspace-empty {
@@ -4795,7 +4829,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   height: 13px;
   flex-shrink: 0;
   color: color-mix(in oklch, var(--theme-text-secondary) 92%, var(--theme-text-primary));
-  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .file-tree-folder-chevron[data-expanded='true'] {
@@ -4849,17 +4883,6 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes file-tree-children-in {
-  from {
-    opacity: 0;
-    transform: translateY(-3px) scaleY(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scaleY(1);
   }
 }
 
@@ -7035,8 +7058,14 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   justify-content: center;
   z-index: 2000;
+}
+
+.settings-overlay,
+.rename-dialog-overlay,
+.diff-preview-overlay,
+.unsaved-dialog-overlay {
   /* Start from a visible opacity so the first paint is non-blank. */
-  animation: settings-overlay-in 120ms ease-out both;
+  animation: settings-overlay-in var(--motion-duration-fast) ease-out both;
 }
 
 .settings-modal {
@@ -7048,8 +7077,14 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   border-radius: 5px;
   overflow: hidden;
   box-shadow: 0 6px 32px var(--theme-shadow-soft);
+}
+
+.settings-modal,
+.rename-dialog,
+.diff-preview-modal,
+.unsaved-dialog {
   /* Transform-only entrance so the first frame is fully visible. */
-  animation: settings-modal-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: settings-modal-in var(--motion-duration-modal) var(--motion-ease-modal) both;
   will-change: transform;
 }
 
@@ -7134,7 +7169,13 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 @media (prefers-reduced-motion: reduce) {
   .settings-overlay,
-  .settings-modal {
+  .rename-dialog-overlay,
+  .diff-preview-overlay,
+  .unsaved-dialog-overlay,
+  .settings-modal,
+  .rename-dialog,
+  .diff-preview-modal,
+  .unsaved-dialog {
     animation: none;
     will-change: auto;
   }
@@ -8670,6 +8711,20 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
 }
 
 /* ===== Terminal Panel ===== */
+
+.terminal-shell {
+  flex: 0 0 auto;
+  min-height: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear var(--motion-duration-base);
+}
+
+.terminal-shell[data-visible='true'] {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
 
 .terminal-panel {
   position: relative;
