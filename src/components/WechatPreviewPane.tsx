@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { PreviewScrollHandle } from '../types/previewScroll';
-import { ClipboardCopy, FileOutput, X } from 'lucide-react';
+import { ClipboardCopy, FileCode2, FileOutput, LoaderCircle, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import {
@@ -234,12 +234,12 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
           : t('wechatPreviewEmpty'));
 
   return (
-    <aside className="wechat-preview-panel" aria-label={t('wechatPreviewAria')}>
+    <aside className="wechat-preview-panel" aria-label={t('wechatPreviewAria')} aria-busy={effectiveStatus === 'loading'}>
       <style>{createHtmlExportPreviewStyles(htmlExportPreset)}</style>
       <div className="wechat-preview-header">
         <div className="wechat-preview-heading">
           <div className="wechat-preview-title-row">
-            <h2>{t('wechatPreviewTitle')}</h2>
+            <h2><FileCode2 size={15} aria-hidden="true" />{t('wechatPreviewTitle')}</h2>
             <select
               className="wechat-preview-preset-select"
               aria-label="HTML 导出预设"
@@ -297,11 +297,23 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
       )}
       <div ref={scrollRef} className="wechat-preview-scroll">
         {effectiveStatus === 'empty' ? (
-          <div className="wechat-preview-empty">{t('wechatPreviewEmpty')}</div>
+          <div className="wechat-preview-empty">
+            <FileCode2 size={22} aria-hidden="true" />
+            <strong>{t('wechatPreviewEmpty')}</strong>
+            <span>{t('wechatPreviewEmptyHint')}</span>
+          </div>
         ) : effectiveStatus === 'loading' && !previewResult ? (
-          <div className="wechat-preview-loading">{t('wechatPreviewLoading')}</div>
+          <div className="wechat-preview-loading">
+            <LoaderCircle size={20} aria-hidden="true" />
+            <strong>{t('wechatPreviewLoading')}</strong>
+            <div className="wechat-preview-loading-lines" aria-hidden="true"><span /><span /><span /></div>
+          </div>
         ) : effectiveStatus === 'error' ? (
-          <div className="wechat-preview-empty">{t('wechatPreviewError')}</div>
+          <div className="wechat-preview-empty wechat-preview-empty-error">
+            <FileCode2 size={22} aria-hidden="true" />
+            <strong>{t('wechatPreviewError')}</strong>
+            <span>{t('wechatPreviewErrorHint')}</span>
+          </div>
         ) : (
           <div
             className="wechat-preview-article-shell"

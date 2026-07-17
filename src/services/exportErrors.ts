@@ -12,9 +12,6 @@ export function humanizeExportError(error: unknown, kind: 'PDF' | 'Word'): strin
   if (/PDF 导出需要安装|PDF.*需要安装.*Chrome|PDF.*需要安装.*浏览器/i.test(raw)) {
     return `${kind} 导出失败：未检测到 Chrome / Chromium / Edge 浏览器。请安装后重试。`;
   }
-  if (/Pandoc 可执行文件未找到|Pandoc.*未找到|需要安装 Pandoc/i.test(raw)) {
-    return `${kind} 导出失败：未检测到 Pandoc。请安装后重试，或在设置中指定 Pandoc 路径。`;
-  }
   if (/not allowed by ACL/i.test(raw)) {
     return `权限被拒绝(${kind} 导出未被 Tauri capability 授权)。请联系开发者排查 fs:scope 配置。`;
   }

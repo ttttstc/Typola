@@ -66,6 +66,8 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     expect(host.textContent).toContain('人工意见');
     expect(host.textContent).toContain('AI 意见');
     expect(host.textContent).toContain('style.md');
+    expect(host.querySelector('.review-sidebar-comments-section')).not.toBeNull();
+    expect(host.querySelector('.review-sidebar-comments-heading')?.textContent).toContain('检视意见');
     expect(host.textContent).not.toContain('已忽略意见');
 
     const showIgnored = Array.from(host.querySelectorAll<HTMLButtonElement>('.review-sidebar-filter'))
@@ -74,6 +76,16 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     expect(host.textContent).toContain('已忽略意见');
     expect(host.textContent).not.toContain('人工意见');
     expect(host.querySelector('[aria-label="接纳意见"]')).toBeNull();
+  });
+
+  it('检视界面字号跟随编辑器设置，并默认放大一级', async () => {
+    const values = props([]);
+    await act(async () => root.render(
+      <ReviewSidebarPanel {...values} editorFontSize={16} />,
+    ));
+
+    expect(host.querySelector<HTMLElement>('.review-sidebar-panel')?.style.getPropertyValue('--review-font-size'))
+      .toBe('17px');
   });
 
   it('点击意见卡打开编辑器，独立按钮用于定位和忽略', async () => {

@@ -293,6 +293,7 @@ export function AppLayout() {
     type: 'running' | 'success' | 'error';
     title: string;
     detail?: string;
+    progress?: number;
   } | null>(null);
   const exportToastTimerRef = useRef<number | null>(null);
   const [autoSaveError, setAutoSaveError] = useState('');
@@ -486,7 +487,11 @@ export function AppLayout() {
   useEffect(() => {
     document.documentElement.dataset.docMode = docMode;
     document.documentElement.dataset.reviewEnhanceMarks = settings.themeOptions.reviewEnhanceMarks ? 'true' : 'false';
-  }, [docMode, settings.themeOptions.reviewEnhanceMarks]);
+    document.documentElement.style.setProperty(
+      '--app-ui-font-size',
+      `${Math.max(12, settings.editorFontSize + 1)}px`,
+    );
+  }, [docMode, settings.editorFontSize, settings.themeOptions.reviewEnhanceMarks]);
 
   // 检视意见状态 + 输入浮卡 state(任务 #12 浮条入口) ===
   const reviewStateApi = useReviewState(file.path);
@@ -501,6 +506,7 @@ export function AppLayout() {
     y: number;
     anchor: SelectionAnchor;
     initialText: string;
+    basis?: ReviewBasis;
     /** 非 null = 编辑现有意见;null = 新增 */
     editingId: string | null;
     navigationIds: string[];
@@ -519,6 +525,7 @@ export function AppLayout() {
         ...current,
         anchor: nextComment.anchor,
         initialText: nextComment.text,
+        basis: nextComment.basis,
         editingId: nextComment.id,
       };
     });
@@ -643,6 +650,7 @@ export function AppLayout() {
     type: 'running' | 'success' | 'error';
     title: string;
     detail?: string;
+    progress?: number;
   }) => {
     if (exportToastTimerRef.current !== null) {
       window.clearTimeout(exportToastTimerRef.current);
@@ -977,7 +985,7 @@ export function AppLayout() {
   }, [aiRevisions, file.dirty, file.path, handleSave, refreshRevisions, reviewStateApi, startInitialCandidate, truncate]);
 
   const handleExportWord = useCallback(async () => {
-    if (wordExporting) return;
+    if (wordExporting || pdfExporting) return;
     if (file.fileType === 'docx') {
       showExportToast({
         type: 'error',
@@ -987,12 +995,20 @@ export function AppLayout() {
       return;
     }
     setWordExporting(true);
-    showExportToast({ type: 'running', title: '正在后台导出 Word', detail: file.name });
+    showExportToast({ type: 'running', title: '正在导出 Word', detail: '准备导出', progress: 0 });
     try {
       const { exportToWord } = await import('../services/wordExportService');
-      const savePath = await exportToWord(file.content, file.name, file.path || undefined, getExportPresetConfig());
+      const savePath = await exportToWord(
+        file.content,
+        file.name,
+        file.path || undefined,
+        getExportPresetConfig(),
+        (progress, detail) => showExportToast({ type: 'running', title: '正在导出 Word', detail, progress }),
+      );
       if (savePath) {
         showExportToast({ type: 'success', title: 'Word 导出完成', detail: savePath });
+      } else {
+        setExportToast(null);
       }
     } catch (e) {
       console.error('Export failed:', e);
@@ -1001,10 +1017,10 @@ export function AppLayout() {
     } finally {
       setWordExporting(false);
     }
-  }, [file.content, file.fileType, file.name, file.path, showExportToast, wordExporting]);
+  }, [file.content, file.fileType, file.name, file.path, pdfExporting, showExportToast, wordExporting]);
 
   const handleExportPdf = useCallback(async () => {
-    if (pdfExporting) return;
+    if (pdfExporting || wordExporting) return;
     if (file.fileType === 'docx') {
       showExportToast({
         type: 'error',
@@ -1014,7 +1030,7 @@ export function AppLayout() {
       return;
     }
     setPdfExporting(true);
-    showExportToast({ type: 'running', title: '正在后台导出 PDF', detail: file.name });
+    showExportToast({ type: 'running', title: '正在导出 PDF', detail: '准备导出', progress: 0 });
     try {
       const { exportToPdf } = await import('../services/pdfExport');
       const savePath = await exportToPdf({
@@ -1025,9 +1041,11 @@ export function AppLayout() {
         resolvedPreviewHeadingFontFamily: resolvePreviewHeadingFontFamily(settings),
         previewFontSize: settings.previewFontSize,
         previewLineHeight: settings.previewLineHeight,
-      });
+      }, (progress, detail) => showExportToast({ type: 'running', title: '正在导出 PDF', detail, progress }));
       if (savePath) {
         showExportToast({ type: 'success', title: 'PDF 导出完成', detail: savePath });
+      } else {
+        setExportToast(null);
       }
     } catch (error) {
       console.error('PDF export failed:', error);
@@ -1036,7 +1054,7 @@ export function AppLayout() {
     } finally {
       setPdfExporting(false);
     }
-  }, [file.content, file.fileType, file.name, file.path, pdfExporting, settings, showExportToast]);
+  }, [file.content, file.fileType, file.name, file.path, pdfExporting, settings, showExportToast, wordExporting]);
 
   const replaceCurrentContent = useCallback((value: string) => {
     handleContentChange(value);
@@ -2234,6 +2252,7 @@ export function AppLayout() {
         source={file.content}
         previewWidth={rightPanelWidth}
         canExport={Boolean(file.path)}
+        exporting={wordExporting || pdfExporting}
         onExportWord={handleExportWord}
         onClose={() => setRightPanelMode('none')}
         filePath={file.path}
@@ -2288,6 +2307,7 @@ export function AppLayout() {
           y: window.innerHeight / 2 - 250,
           anchor: comment.anchor,
           initialText: comment.text,
+          basis: comment.basis,
           editingId: comment.id,
           navigationIds: navigation.ids,
         });
@@ -2311,6 +2331,7 @@ export function AppLayout() {
       onStopAIReview={handleStopAIReview}
       onPickRuleFiles={handlePickReviewRuleFiles}
       aiRewriteRunning={Boolean(pendingInitialCandidate)}
+      editorFontSize={settings.editorFontSize}
       revisionReturnPath={revisionReturnPath && !sameLocalPath(revisionReturnPath, file.path) ? revisionReturnPath : undefined}
       onReturnFromRevision={() => {
         if (!revisionReturnPath) return;
@@ -2612,6 +2633,18 @@ export function AppLayout() {
               {exportToast.detail && <span>{exportToast.detail}</span>}
             </div>
           </div>
+          {exportToast.type === 'running' && typeof exportToast.progress === 'number' && (
+            <div
+              className="export-toast-progress"
+              role="progressbar"
+              aria-label={exportToast.title}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={exportToast.progress}
+            >
+              <span style={{ '--export-progress': exportToast.progress / 100 } as CSSProperties} />
+            </div>
+          )}
           <button
             type="button"
             className="export-toast-close"
@@ -2653,6 +2686,8 @@ export function AppLayout() {
         y={reviewEditor?.y ?? 0}
         originalText={reviewEditor?.anchor.originalText ?? ''}
         initialText={reviewEditor?.initialText ?? ''}
+        basis={reviewEditor?.basis}
+        editorFontSize={settings.editorFontSize}
         currentIndex={reviewEditorIndex >= 0 ? reviewEditorIndex : undefined}
         total={reviewEditor?.navigationIds.length || undefined}
         onPrevious={reviewEditorIndex > 0 ? () => navigateReviewEditor(-1) : undefined}

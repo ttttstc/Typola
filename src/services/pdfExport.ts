@@ -42,8 +42,12 @@ async function renderExportHtml(options: PdfExportOptions): Promise<string> {
 /**
  * 导出 PDF：渲染 markdown 后让用户选择目标文件夹和文件名，再调用系统浏览器导出。
  */
-export async function exportToPdf(options: PdfExportOptions): Promise<string | null> {
+export async function exportToPdf(
+  options: PdfExportOptions,
+  onProgress?: (progress: number, detail: string) => void,
+): Promise<string | null> {
   // 先确认目标位置，取消时不做昂贵的 Mermaid/图片渲染。
+  onProgress?.(5, '选择保存位置');
   const defaultPath = await resolveDefaultExportPath({
     fileName: createExportFileName(options.fileName, 'pdf'),
     filePath: options.filePath,
@@ -55,9 +59,13 @@ export async function exportToPdf(options: PdfExportOptions): Promise<string | n
   });
   if (!targetPath) return null;
 
+  onProgress?.(18, '解析 Markdown 与本地资源');
   const html = await renderExportHtml(options);
+  onProgress?.(62, '完成页面排版');
 
   // 交给 Rust 后端用系统浏览器导出。
+  onProgress?.(72, '生成 PDF 页面');
   await invoke('export_pdf_file', { path: targetPath, html });
+  onProgress?.(100, 'PDF 文件已写入');
   return targetPath;
 }

@@ -7,6 +7,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import type { ReviewBasis } from '../../services/review/reviewState';
 
 type Props = {
   open: boolean;
@@ -16,6 +18,8 @@ type Props = {
   originalText: string;
   /** 现有意见文本(编辑模式);空字符串=新增模式 */
   initialText?: string;
+  basis?: ReviewBasis;
+  editorFontSize?: number;
   currentIndex?: number;
   total?: number;
   onPrevious?: () => void;
@@ -30,6 +34,8 @@ export function ReviewCommentEditor({
   y,
   originalText,
   initialText = '',
+  basis,
+  editorFontSize = 13,
   currentIndex,
   total,
   onPrevious,
@@ -90,7 +96,11 @@ export function ReviewCommentEditor({
       className="review-comment-editor"
       role="dialog"
       aria-label={isEditing ? '修改检视意见' : '添加检视意见'}
-      style={{ left: x, top: y }}
+      style={{
+        left: x,
+        top: y,
+        '--review-font-size': `${Math.max(12, editorFontSize + 1)}px`,
+      } as CSSProperties}
     >
       <div className="review-comment-editor-header">
         <span className="review-comment-editor-title">
@@ -115,6 +125,10 @@ export function ReviewCommentEditor({
           <div className="review-comment-editor-original">{originalText}</div>
         </div>
         <div className="review-comment-editor-section">
+          <div className="review-comment-editor-label">依据</div>
+          <div className="review-comment-editor-basis">{basis?.label || '暂无依据'}</div>
+        </div>
+        <div className="review-comment-editor-section is-opinion">
           <div className="review-comment-editor-label">意见</div>
           <textarea
             ref={textareaRef}

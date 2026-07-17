@@ -1,36 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
-// ── Pandoc format ──────────────────────────────────────────────────────────
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PandocExportFormat {
-    Docx,
-}
-
-impl PandocExportFormat {
-    pub fn extension(self) -> &'static str {
-        match self {
-            Self::Docx => "docx",
-        }
-    }
-
-    pub fn pandoc_writer(self) -> &'static str {
-        match self {
-            Self::Docx => "docx",
-        }
-    }
-}
-
 // ── Path helpers ───────────────────────────────────────────────────────────
-
-fn path_to_string(path: &Path) -> String {
-    path.to_string_lossy().to_string()
-}
 
 fn encode_file_url_path(path: &str) -> String {
     let mut encoded = String::new();
@@ -130,7 +105,10 @@ fn pdf_renderer_candidates() -> Vec<PathBuf> {
 }
 
 fn find_pdf_renderer() -> Option<PathBuf> {
-    pdf_renderer_candidates().into_iter().find(|p| p.is_file())
+    static PDF_RENDERER: OnceLock<Option<PathBuf>> = OnceLock::new();
+    PDF_RENDERER
+        .get_or_init(|| pdf_renderer_candidates().into_iter().find(|p| p.is_file()))
+        .clone()
 }
 
 fn pdf_output_file_size(path: &Path) -> Option<u64> {
@@ -150,7 +128,7 @@ fn run_pdf_renderer(binary: &Path, args: &[String], target: &Path) -> Result<boo
     let started = Instant::now();
     let timeout = Duration::from_secs(45);
     let poll = Duration::from_millis(100);
-    let stable_duration = Duration::from_millis(700);
+    let stable_duration = Duration::from_millis(350);
     let mut last_size = 0u64;
     let mut stable_since: Option<Instant> = None;
 
@@ -238,150 +216,6 @@ fn export_pdf_blocking(path: String, html: String) -> Result<(), String> {
     result
 }
 
-// ── Pandoc export ──────────────────────────────────────────────────────────
-
-fn find_pandoc(explicit_path: &str) -> Result<PathBuf, String> {
-    let trimmed = explicit_path.trim();
-    if !trimmed.is_empty() {
-        let candidate = PathBuf::from(trimmed);
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-        return Err(format!("Pandoc 可执行文件未找到: {trimmed}"));
-    }
-
-    // Auto-detect
-    for name in ["pandoc"] {
-        if let Some(p) = find_executable(name) {
-            return Ok(p);
-        }
-    }
-
-    Err("Word 导出需要安装 Pandoc。请安装后重试，或在设置中指定 Pandoc 路径。".to_string())
-}
-
-fn parse_pandoc_extra_args(args: &str) -> Result<Vec<String>, String> {
-    let mut parsed = Vec::new();
-    let mut current = String::new();
-    let mut quote: Option<char> = None;
-    let mut escaped = false;
-
-    for ch in args.chars() {
-        if escaped {
-            current.push(ch);
-            escaped = false;
-            continue;
-        }
-        if ch == '\\' {
-            escaped = true;
-            continue;
-        }
-        if let Some(q) = quote {
-            if ch == q {
-                quote = None;
-            } else {
-                current.push(ch);
-            }
-            continue;
-        }
-        if ch == '\'' || ch == '"' {
-            quote = Some(ch);
-            continue;
-        }
-        if ch.is_whitespace() {
-            if !current.is_empty() {
-                parsed.push(current);
-                current = String::new();
-            }
-            continue;
-        }
-        current.push(ch);
-    }
-
-    if escaped {
-        current.push('\\');
-    }
-    if quote.is_some() {
-        return Err("Pandoc 参数包含未闭合的引号".to_string());
-    }
-    if !current.is_empty() {
-        parsed.push(current);
-    }
-
-    Ok(parsed)
-}
-
-fn export_pandoc_blocking(
-    path: String,
-    markdown: String,
-    format: PandocExportFormat,
-    document_path: Option<String>,
-    pandoc_path: String,
-    pandoc_args: String,
-) -> Result<(), String> {
-    if markdown.trim().is_empty() {
-        return Err("导出内容为空".to_string());
-    }
-
-    let target = PathBuf::from(&path);
-    let pandoc_binary = find_pandoc(&pandoc_path)?;
-    let temp_root = unique_temp_dir("typola-pandoc-export");
-    let source_path = temp_root.join("input.md");
-    let output_path = temp_root.join(format!("output.{}", format.extension()));
-
-    let working_dir = document_path
-        .as_deref()
-        .and_then(|p| PathBuf::from(p).parent().map(Path::to_path_buf))
-        .or_else(|| target.parent().map(Path::to_path_buf))
-        .unwrap_or_else(std::env::temp_dir);
-
-    fs::create_dir_all(&temp_root).map_err(|e| e.to_string())?;
-    fs::write(&source_path, &markdown).map_err(|e| e.to_string())?;
-
-    let result = (|| {
-        let mut args = parse_pandoc_extra_args(&pandoc_args)?;
-
-        if let Some(resource_path) = document_path
-            .as_deref()
-            .and_then(|p| PathBuf::from(p).parent().map(|p| path_to_string(&p)))
-        {
-            args.push(format!("--resource-path={resource_path}"));
-        }
-
-        args.extend([
-            "--from".to_string(),
-            "gfm+tex_math_dollars".to_string(),
-            "--to".to_string(),
-            format.pandoc_writer().to_string(),
-            "--output".to_string(),
-            output_path.to_string_lossy().to_string(),
-            source_path.to_string_lossy().to_string(),
-        ]);
-
-        let status = Command::new(&pandoc_binary)
-            .current_dir(&working_dir)
-            .args(&args)
-            .status()
-            .map_err(|e| format!("启动 Pandoc 失败: {e}"))?;
-
-        if !status.success() {
-            return Err("Pandoc 导出失败".to_string());
-        }
-
-        let meta = fs::metadata(&output_path)
-            .map_err(|_| "Pandoc 未生成输出文件".to_string())?;
-        if meta.len() == 0 {
-            return Err("Pandoc 生成的输出文件为空".to_string());
-        }
-
-        fs::copy(&output_path, &target).map_err(|e| e.to_string())?;
-        Ok(())
-    })();
-
-    let _ = fs::remove_dir_all(&temp_root);
-    result
-}
-
 // ── Tauri commands ─────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -389,31 +223,4 @@ pub async fn export_pdf_file(path: String, html: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || export_pdf_blocking(path, html))
         .await
         .map_err(|e| format!("PDF 导出任务失败: {e}"))?
-}
-
-#[tauri::command]
-pub async fn export_pandoc_file(
-    path: String,
-    markdown: String,
-    format: PandocExportFormat,
-    document_path: Option<String>,
-    pandoc_path: String,
-    pandoc_args: String,
-) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        export_pandoc_blocking(path, markdown, format, document_path, pandoc_path, pandoc_args)
-    })
-    .await
-    .map_err(|e| format!("Pandoc 导出任务失败: {e}"))?
-}
-
-#[tauri::command]
-pub async fn detect_pandoc_path() -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        find_pandoc("")
-            .ok()
-            .map(|p| path_to_string(&p))
-    })
-    .await
-    .map_err(|e| format!("Pandoc 检测失败: {e}"))
 }

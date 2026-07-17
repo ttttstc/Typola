@@ -18,7 +18,7 @@ import {
   Square,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import {
   getActiveReviewComments,
   type ReviewComment,
@@ -68,6 +68,7 @@ type Props = {
   onStopAIReview?: () => void;
   onPickRuleFiles?: () => Promise<string[]>;
   aiRewriteRunning?: boolean;
+  editorFontSize?: number;
   revisionReturnPath?: string;
   onReturnFromRevision?: () => void;
 };
@@ -115,6 +116,7 @@ export function ReviewSidebarPanel({
   onStopAIReview,
   onPickRuleFiles,
   aiRewriteRunning = false,
+  editorFontSize = 13,
   revisionReturnPath,
   onReturnFromRevision,
 }: Props) {
@@ -125,7 +127,11 @@ export function ReviewSidebarPanel({
   const [view, setView] = useState<View>('review');
 
   return (
-    <aside className="review-sidebar-panel" aria-label="检视意见">
+    <aside
+      className="review-sidebar-panel"
+      aria-label="检视意见"
+      style={{ '--review-font-size': `${Math.max(12, editorFontSize + 1)}px` } as CSSProperties}
+    >
       <div className="review-sidebar-header">
         <div className="review-sidebar-title">
           <MessageSquare size={14} />
@@ -380,8 +386,13 @@ function ReviewListView({
         </details>
       )}
 
-        <div className="review-sidebar-filter-row" role="tablist" aria-label="检视意见筛选">
-        {([
+        <section className="review-sidebar-comments-section" aria-label="检视意见列表">
+          <div className="review-sidebar-comments-heading">
+            <span><MessageSquare size={12} /> 检视意见</span>
+            <span>{activeComments.length} 条</span>
+          </div>
+          <div className="review-sidebar-filter-row" role="tablist" aria-label="检视意见筛选">
+          {([
           ['all', '全部'],
           ['human', '人工'],
           ['ai', 'AI'],
@@ -397,22 +408,22 @@ function ReviewListView({
             {label}
           </button>
         ))}
-        </div>
+          </div>
 
-        {!currentFilePath && <div className="review-sidebar-empty">请先打开一个文档</div>}
-        {currentFilePath && visibleComments.length === 0 && filter !== 'ignored' && (
-        <div className="review-sidebar-empty">
-          <p>{activeComments.length === 0 ? '当前文档暂无有效检视意见' : '当前筛选下暂无意见'}</p>
-          <p className="review-sidebar-empty-hint">选中正文 → 浮条「加检视意见」即可加批注。</p>
-        </div>
-      )}
-        {currentFilePath && filter === 'ignored' && visibleComments.length === 0 && (
-        <div className="review-sidebar-empty">暂无已忽略意见</div>
-      )}
+          {!currentFilePath && <div className="review-sidebar-empty">请先打开一个文档</div>}
+          {currentFilePath && visibleComments.length === 0 && filter !== 'ignored' && (
+          <div className="review-sidebar-empty">
+            <p>{activeComments.length === 0 ? '当前文档暂无有效检视意见' : '当前筛选下暂无意见'}</p>
+            <p className="review-sidebar-empty-hint">选中正文 → 浮条「加检视意见」即可加批注。</p>
+          </div>
+        )}
+          {currentFilePath && filter === 'ignored' && visibleComments.length === 0 && (
+          <div className="review-sidebar-empty">暂无已忽略意见</div>
+        )}
 
-        {visibleComments.length > 0 && (
-        <ol className="review-sidebar-list">
-          {visibleComments.map((comment, index) => {
+          {visibleComments.length > 0 && (
+          <ol className="review-sidebar-list">
+            {visibleComments.map((comment, index) => {
             const ignored = comment.status === 'ignored';
             const anchorHit = findUniqueAnchor(currentSource, comment.anchor.originalText, comment.anchor.prefixHint);
             const line = anchorHit ? lineNumberForAnchor(currentSource, anchorHit.start) : null;
@@ -475,8 +486,9 @@ function ReviewListView({
               </li>
             );
           })}
-        </ol>
-        )}
+          </ol>
+          )}
+        </section>
       </div>
 
       <div className="review-sidebar-actions review-sidebar-actions-bottom">

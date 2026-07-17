@@ -33,6 +33,11 @@ import {
 } from './chart-handler';
 import { findHtmlTableBlocks } from '../htmlTableBlockService';
 
+type WordParserContext = {
+  imageData?: Map<string, Promise<Uint8Array | undefined>>;
+  documentDir?: string;
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -47,16 +52,24 @@ import { findHtmlTableBlocks } from '../htmlTableBlockService';
 export async function markdownToDocx(
   content: string,
   preset?: PresetConfig,
-  options?: { fileName?: string },
+  options?: {
+    fileName?: string;
+    filePath?: string;
+    onProgress?: (progress: number, detail: string) => void;
+  },
 ): Promise<Blob> {
-  void options;
+  void options?.fileName;
+  void options?.filePath;
   const config = preset ?? getPreset(DEFAULT_PRESET_ID);
 
   // 1. 预处理：去除 HTML 注释
   const processed = content.replace(/<!--[\s\S]*?-->/g, '');
+  const context = createWordParserContext(processed, options?.filePath);
+  options?.onProgress?.(28, '解析 Markdown 结构');
 
   // 2. 状态机 → 段落
-  const paragraphs = await parseLines(processed, config);
+  const paragraphs = await parseLines(processed, config, context);
+  options?.onProgress?.(62, '生成 Word 版式');
 
   // 3. 组装文档
   const doc = new Document({
@@ -95,7 +108,11 @@ export async function markdownToDocx(
     ],
   });
 
-  return Packer.toBlob(doc);
+  options?.onProgress?.(76, '打包 Word 文档');
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const blob = await Packer.toBlob(doc);
+  options?.onProgress?.(88, '完成 Word 打包');
+  return blob;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,14 +122,18 @@ export async function markdownToDocx(
 type ParserState = 'normal' | 'code_block' | 'mermaid_block';
 
 // Exported for Word export parser regression tests.
-export async function parseLines(content: string, config: PresetConfig): Promise<FileChild[]> {
+export async function parseLines(
+  content: string,
+  config: PresetConfig,
+  context: WordParserContext = {},
+): Promise<FileChild[]> {
   const paragraphs: FileChild[] = [];
   const tableBlocks = findHtmlTableBlocks(content);
   let cursor = 0;
 
   for (const block of tableBlocks) {
     if (block.start > cursor) {
-      paragraphs.push(...await parseMarkdownLines(content.slice(cursor, block.start), config));
+      paragraphs.push(...await parseMarkdownLines(content.slice(cursor, block.start), config, context));
     }
 
     paragraphs.push(createHtmlTable(block.html, config));
@@ -120,13 +141,17 @@ export async function parseLines(content: string, config: PresetConfig): Promise
   }
 
   if (cursor < content.length) {
-    paragraphs.push(...await parseMarkdownLines(content.slice(cursor), config));
+    paragraphs.push(...await parseMarkdownLines(content.slice(cursor), config, context));
   }
 
   return paragraphs;
 }
 
-async function parseMarkdownLines(content: string, config: PresetConfig): Promise<FileChild[]> {
+async function parseMarkdownLines(
+  content: string,
+  config: PresetConfig,
+  context: WordParserContext,
+): Promise<FileChild[]> {
   const paragraphs: FileChild[] = [];
   const lines = content.split('\n');
 
@@ -264,7 +289,7 @@ async function parseMarkdownLines(content: string, config: PresetConfig): Promis
     const imgMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imgMatch) {
       flushTable();
-      const imgParagraphs = await addImage(imgMatch[2], imgMatch[1], config);
+      const imgParagraphs = await addImage(imgMatch[2], imgMatch[1], config, context);
       paragraphs.push(...imgParagraphs);
       continue;
     }
@@ -716,6 +741,7 @@ async function addImage(
   url: string,
   alt: string,
   config: PresetConfig,
+  context: WordParserContext,
 ): Promise<Paragraph[]> {
   const caption = createImageCaption(alt, config);
   // 创建文本占位符（降级方案）
@@ -763,9 +789,9 @@ async function addImage(
       imageType = extToDocxType(ext);
 
       // 解析路径：支持相对路径（以 ./ 开头的）
-      const filePath = url.startsWith('./') ? url.slice(2) : url;
-
-      data = await readFile(filePath);
+      const filePath = resolveWordImagePath(url, context.documentDir);
+      data = await context.imageData?.get(filePath) ?? await readFile(filePath);
+      if (!data) throw new Error(`图片读取失败: ${filePath}`);
     }
 
     // 解析原始图片尺寸（像素）
@@ -802,6 +828,38 @@ async function addImage(
     // 读取或解析失败时优雅降级为文本占位符
     return [createPlaceholder(), ...caption];
   }
+}
+
+function createWordParserContext(content: string, documentPath?: string): WordParserContext {
+  const documentDir = documentPath ? dirname(documentPath) : undefined;
+  const imageData = new Map<string, Promise<Uint8Array | undefined>>();
+  const imagePattern = /!\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/gu;
+
+  for (const match of content.matchAll(imagePattern)) {
+    const url = match[1];
+    if (/^(?:https?:|data:)/iu.test(url)) continue;
+    const path = resolveWordImagePath(url, documentDir);
+    if (!imageData.has(path)) {
+      imageData.set(path, readFile(path).catch(() => undefined));
+    }
+  }
+
+  return { documentDir, imageData };
+}
+
+function dirname(path: string): string | undefined {
+  const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return index > 0 ? path.slice(0, index) : undefined;
+}
+
+// Exported for deterministic path regression tests.
+export function resolveWordImagePath(url: string, documentDir?: string): string {
+  if (!documentDir || /^(?:[A-Za-z]:[\\/]|[\\/]{2}|\/)/u.test(url)) return url;
+  const separator = documentDir.includes('\\') ? '\\' : '/';
+  const relative = url
+    .replace(/^\.\/[\\/]?/u, '')
+    .replace(/[\\/]/gu, separator);
+  return `${documentDir}${separator}${relative}`;
 }
 
 function createImageCaption(alt: string, config: PresetConfig): Paragraph[] {

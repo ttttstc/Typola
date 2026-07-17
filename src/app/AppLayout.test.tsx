@@ -147,6 +147,15 @@ describe('AppLayout update flow', () => {
     vi.clearAllMocks();
   });
 
+  it('publishes the configured global UI font size', async () => {
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+
+    expect(document.documentElement.style.getPropertyValue('--app-ui-font-size')).toBe('14px');
+  });
+
   it('downloads detected updates silently before showing the restart button', async () => {
     let resolveDownload: () => void = () => {};
     const availableUpdate = {
