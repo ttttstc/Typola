@@ -1684,8 +1684,6 @@ pub fn run() {
             process_inserted_image,
             upload_image_via_command,
             export::export_pdf_file,
-            export::export_pandoc_file,
-            export::detect_pandoc_path,
             agent_detect,
             agent_session_start,
             agent_session_resume,

@@ -32,17 +32,25 @@ describe('createPdfExportFileName', () => {
 
   it('uses a save dialog so users can choose the PDF destination folder', async () => {
     vi.mocked(save).mockResolvedValueOnce('D:\\exports\\draft.pdf');
+    const stages: Array<[number, string]> = [];
 
     await expect(exportToPdf({
       content: '# 标题', fileName: 'draft.md', filePath: 'D:\\docs\\draft.md',
       resolvedPreviewFontFamily: 'Arial', resolvedPreviewHeadingFontFamily: 'Arial',
       previewFontSize: 16, previewLineHeight: 1.6,
-    })).resolves.toBe('D:\\exports\\draft.pdf');
+    }, (progress, detail) => stages.push([progress, detail]))).resolves.toBe('D:\\exports\\draft.pdf');
 
     expect(save).toHaveBeenCalledWith(expect.objectContaining({
       filters: [{ name: 'PDF', extensions: ['pdf'] }],
     }));
     expect(invoke).toHaveBeenCalledWith('export_pdf_file', expect.objectContaining({ path: 'D:\\exports\\draft.pdf' }));
+    expect(stages).toEqual([
+      [5, '选择保存位置'],
+      [18, '解析 Markdown 与本地资源'],
+      [62, '完成页面排版'],
+      [72, '生成 PDF 页面'],
+      [100, 'PDF 文件已写入'],
+    ]);
   });
 
   it('does not render when the user cancels the destination dialog', async () => {

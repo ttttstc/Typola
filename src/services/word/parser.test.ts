@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PRESET_ID, getPreset } from './config';
-import { parseLines } from './parser';
+import { parseLines, resolveWordImagePath } from './parser';
 
 function findDocxAttribute(node: unknown, name: string): unknown {
   if (!node || typeof node !== 'object') return undefined;
@@ -58,5 +58,17 @@ describe('parseLines', () => {
     const children = await parseLines(['- 列表项', '> 引用段落'].join('\n'), getPreset(DEFAULT_PRESET_ID));
 
     expect(children.map((child) => findDocxAttribute(child, 'left'))).toEqual([480, 480]);
+  });
+});
+
+describe('resolveWordImagePath', () => {
+  it('resolves relative images beside the source document', () => {
+    expect(resolveWordImagePath('./assets/chart.png', 'D:\\docs')).toBe('D:\\docs\\assets\\chart.png');
+    expect(resolveWordImagePath('../shared/chart.png', '/home/demo/docs')).toBe('/home/demo/docs/../shared/chart.png');
+  });
+
+  it('preserves absolute image paths', () => {
+    expect(resolveWordImagePath('C:\\images\\chart.png', 'D:\\docs')).toBe('C:\\images\\chart.png');
+    expect(resolveWordImagePath('/images/chart.png', '/home/demo/docs')).toBe('/images/chart.png');
   });
 });
