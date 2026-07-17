@@ -56,25 +56,47 @@ export function useLeftRail({
     const startX = event.clientX;
     const startWidth = workspacePanelWidth;
     setLeftResizing('workspace');
+    let latestClientX = startX;
+    let frameId: number | null = null;
+    let finished = false;
 
-    const handlePointerMove = (moveEvent: PointerEvent) => {
+    const updateWidth = (clientX: number) => {
       const nextWidth = Math.min(
         maxWidth,
-        Math.max(minWidth, startWidth + moveEvent.clientX - startX),
+        Math.max(minWidth, startWidth + clientX - startX),
       );
       setWorkspacePanelWidth(nextWidth);
     };
 
-    const handlePointerUp = () => {
+    const flushWidth = () => {
+      frameId = null;
+      updateWidth(latestClientX);
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      latestClientX = moveEvent.clientX;
+      if (frameId === null) frameId = window.requestAnimationFrame(flushWidth);
+    };
+
+    const finishResize = () => {
+      if (finished) return;
+      finished = true;
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      updateWidth(latestClientX);
       setLeftResizing('none');
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('pointerup', finishResize);
+      window.removeEventListener('pointercancel', finishResize);
+      window.removeEventListener('blur', finishResize);
     };
 
     window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
+    window.addEventListener('pointerup', finishResize);
+    window.addEventListener('pointercancel', finishResize);
+    window.addEventListener('blur', finishResize);
   }, [leftRailMode, maxWidth, minWidth, workspacePanelWidth]);
 
   return {
