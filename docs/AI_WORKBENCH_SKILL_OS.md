@@ -7,6 +7,8 @@
 - **依据**：CEO review 重新框定 vision + **OpenDesign 0.11.0 真源码**（`D:\AI\workspace\open-design`，Apache 2.0）拆解 + claude headless stream-json 实测
 - **取代**：旧 spec 的"场景卡注入终端"形态、plan `binary-petting-avalanche`（output_type 路由 + skill 拷贝）。以本 spec 为准。
 
+> **实现状态（2026-07-19）**：本文是 2026-06-18 的设计快照，保留当时的布局和交互推导。当前实现已采用 CM6 主编辑链路、provider-aware headless AI Workbench（Claude Code / OpenCode）与独立产物中心；请以 [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) 作为现行实现说明。
+
 ---
 
 ## 0. 背景与定位

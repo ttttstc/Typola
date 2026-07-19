@@ -1,8 +1,10 @@
 # AI Workbench OpenCode Provider PRD
 
+> **实现状态（2026-07-19）**：本文记录 OpenCode Provider 的原始产品决策。Provider 已接入当前 AI Workbench：支持路径/模型检测、`opencode run --format json` 会话、上下文文件、产物回流、取消与诊断；当前实现细节以 [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) 为准。下文中的“第一版需要实现”均是历史规划语境。
+
 ## Problem Statement
 
-Typola 当前 AI Workbench 只支持 Claude Code CLI。用户已经在左侧工作台、Composer、AI 工作区、Artifact Return 等流程里形成了稳定心智，但如果想使用 OpenCode，就必须离开 Typola 或走独立终端，导致 AI 工作台不再是统一的文档协作入口。
+本 PRD 起草时，Typola 的 AI Workbench 只支持 Claude Code CLI。用户已经在左侧工作台、Composer、AI 工作区、Artifact Return 等流程里形成了稳定心智，但如果想使用 OpenCode，就必须离开 Typola 或走独立终端，导致 AI 工作台不再是统一的文档协作入口。
 
 目标不是新增一个 OpenCode 专用工作台，而是在同一个 AI Workbench 中增加 OpenCode 这个 AI Provider，让用户可以在 Claude Code 和 OpenCode 之间切换，同时保留当前文档中心、左侧草稿区、产物回流和设置页 AI CLI 配置体验。
 

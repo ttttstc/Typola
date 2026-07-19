@@ -4,7 +4,7 @@
 
 ## 项目定位
 
-Typola 是轻量桌面 Markdown 编辑器，聚焦所见即所得写作、源码编辑、Word/HTML 预览导出，以及集成终端。项目强调少而克制：能不加的功能不加；能收敛的入口先收敛。
+Typola 是轻量桌面 Markdown 编辑器，聚焦 CM6 写作与源码编辑、Word/HTML/PDF 预览导出，以及集成终端。Vditor 只作为既有兼容预览资源保留。项目强调少而克制：能不加的功能不加；能收敛的入口先收敛。
 
 大型或偏离定位的功能，例如双栏对比、外部 localhost 服务集成、恢复旧 Electron 工作区模型、批量预设等，请先开 Issue 讨论，再开 PR。
 
@@ -58,5 +58,5 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ├── src-tauri/                  Tauri 桌面工程
 ├── e2e/                        Playwright 端到端测试
 ├── config/                     ESLint / Playwright / Vite / tsconfig
-└── public/vditor/              本地化 Vditor 静态资源
+└── public/vditor/              既有兼容预览所需的本地化 Vditor 静态资源
 ```

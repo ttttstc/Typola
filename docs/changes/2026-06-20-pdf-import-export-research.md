@@ -1,5 +1,7 @@
 # PDF 双向流能力调研与设计草案
 
+> **实现状态更新（2026-07-19）**：本文是 2026-06-20 的方案调研快照，保留当时对 Typst、WebView2 和多格式路线的比较。当前已采用系统 Chrome/Chromium/Edge headless 打印 PDF；Word 使用内置 TypeScript `docx` 生成器且不依赖 Pandoc。当前实现与验收以 [`docs/PDF_EXPORT_SPEC.md`](../PDF_EXPORT_SPEC.md) 和 [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) 为准；下文的“待决策/当前路径”不代表现行实现。
+
 - **日期**：2026-06-20
 - **目的**：在动手实现前对齐两个目标能力的方案、技术栈与工作量
 - **目标读者**：Claude Code / Coder / Codex（下一阶段实施）
