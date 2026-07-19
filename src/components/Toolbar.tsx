@@ -19,7 +19,6 @@ import {
   ListTree,
   Newspaper,
   PanelLeft,
-  RefreshCw,
   Save,
   SaveAll,
   SlidersHorizontal,
@@ -49,11 +48,6 @@ import type { FormatAction } from './EditorContextMenu';
 import { DefineColorToolbarButton } from './defineColor/DefineColorToolbarButton';
 
 export type EditorMode = 'wysiwyg' | 'source';
-
-type UpdateToolbarStatus = {
-  phase: 'ready' | 'installing';
-  version: string;
-};
 
 type ToolbarProps = {
   editorMode: EditorMode;
@@ -85,8 +79,6 @@ type ToolbarProps = {
   wordExporting?: boolean;
   onOpenSettings: () => void;
   onPreloadSettings?: () => void;
-  updateStatus?: UpdateToolbarStatus;
-  onRestartUpdate?: () => void;
 };
 
 export function Toolbar({
@@ -95,7 +87,7 @@ export function Toolbar({
   onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
   onToggleTerminal, onOpenToc, onSetDocMode,
   onNew, onOpen, onOpenFolder, onSave, onSaveAs, onInsertImage, onExportPdf, onExportWord,
-  pdfExporting, wordExporting, onOpenSettings, onPreloadSettings, updateStatus, onRestartUpdate,
+  pdfExporting, wordExporting, onOpenSettings, onPreloadSettings,
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -281,35 +273,6 @@ export function Toolbar({
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-right">
         <div className="toolbar-group toolbar-view-actions" aria-label={t('toolbarViewGroup')}>
-          {updateStatus && (
-            <button
-              className={`toolbar-update-button ${updateStatus.phase === 'installing' ? 'installing' : ''}`}
-              onClick={onRestartUpdate}
-              disabled={updateStatus.phase === 'installing'}
-              data-no-window-drag="true"
-              data-tooltip={
-                updateStatus.phase === 'installing'
-                  ? t('toolbarUpdateInstallingLabel')
-                  : `${t('toolbarRestartUpdateTitle')} ${updateStatus.version}`
-              }
-              aria-label={
-                updateStatus.phase === 'installing'
-                  ? t('toolbarUpdateInstallingLabel')
-                  : `${t('toolbarRestartUpdateLabel')} ${updateStatus.version}`
-              }
-            >
-              <RefreshCw
-                size={14}
-                strokeWidth={strokeWidth}
-                className={updateStatus.phase === 'installing' ? 'spinning' : ''}
-              />
-              <span>
-                {updateStatus.phase === 'installing'
-                  ? t('toolbarUpdateInstallingLabel')
-                  : t('toolbarRestartUpdateLabel')}
-              </span>
-            </button>
-          )}
           <button
             className={editorMode === 'source' ? 'active' : ''}
             title={t('toolbarSourceTitle')}

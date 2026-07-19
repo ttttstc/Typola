@@ -4,26 +4,23 @@ import { useSettings } from '../../hooks/useSettings';
 import { translate } from '../../services/i18n';
 import { updateSettings } from '../../services/settingsService';
 import {
-  checkForAppUpdate,
-  FALLBACK_APP_VERSION,
+  DEVELOPMENT_APP_VERSION,
   getCurrentAppVersion,
   type UpdateCheckResult,
 } from '../../services/updateService';
 
-type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
-
 type AboutSectionProps = {
-  onUpdateAvailable: (update: AvailableUpdate) => void;
+  onCheckForUpdate: () => Promise<UpdateCheckResult>;
 };
 
 type CheckState = 'idle' | 'checking' | 'latest' | 'available' | 'unsupported' | 'error';
 
 const appIconUrl = new URL('../../assets/typola-icon.png', import.meta.url).href;
 
-export function AboutSection({ onUpdateAvailable }: AboutSectionProps) {
+export function AboutSection({ onCheckForUpdate }: AboutSectionProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
-  const [version, setVersion] = useState(FALLBACK_APP_VERSION);
+  const [version, setVersion] = useState(DEVELOPMENT_APP_VERSION);
   const [checkState, setCheckState] = useState<CheckState>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const displayMessage = checkState === 'idle' ? t('updateIdle') : message ?? t('updateIdle');
@@ -40,11 +37,10 @@ export function AboutSection({ onUpdateAvailable }: AboutSectionProps) {
     setCheckState('checking');
     setMessage(t('updateCheckingRemote'));
 
-    const result = await checkForAppUpdate();
+    const result = await onCheckForUpdate();
     if (result.status === 'available') {
       setCheckState('available');
-      setMessage(`${t('updateAvailable')} ${result.version} · ${t('updateDownloadingBackground')}`);
-      onUpdateAvailable(result);
+      setMessage(`${t('updateAvailable')} ${result.version}`);
       return;
     }
 

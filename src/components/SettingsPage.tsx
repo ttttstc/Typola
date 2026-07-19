@@ -15,7 +15,6 @@ import {
   preloadTerminalSection,
 } from './settings/preloadSections';
 
-type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 type SettingsSection =
   | 'general'
   | 'editor'
@@ -45,7 +44,7 @@ const AboutSection = lazy(preloadAboutSection);
 
 interface SettingsPageProps {
   onClose: () => void;
-  onUpdateAvailable: (update: AvailableUpdate) => void;
+  onCheckForUpdate: () => Promise<UpdateCheckResult>;
   // P1-E:从外部指定打开的初始段(例如场景卡「未找到 Claude」→ 'aiCli')
   initialSection?: SettingsSection;
 }
@@ -74,7 +73,7 @@ function SectionFallback() {
   );
 }
 
-export function SettingsPage({ onClose, onUpdateAvailable, initialSection }: SettingsPageProps) {
+export function SettingsPage({ onClose, onCheckForUpdate, initialSection }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection ?? 'general');
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -125,7 +124,7 @@ export function SettingsPage({ onClose, onUpdateAvailable, initialSection }: Set
             {activeSection === 'htmlExport' && <HtmlExportSection />}
             {activeSection === 'terminal' && <TerminalSection />}
             {activeSection === 'aiCli' && <AiCliSection />}
-            {activeSection === 'about' && <AboutSection onUpdateAvailable={onUpdateAvailable} />}
+            {activeSection === 'about' && <AboutSection onCheckForUpdate={onCheckForUpdate} />}
           </Suspense>
         </div>
       </div>

@@ -66,6 +66,7 @@ function buildWindowsPortable(releaseDir, assetLabel) {
   mkdirSync(stagingDir, { recursive: true });
 
   copyFileSync(exePath, join(stagingDir, `${productName}.exe`));
+  writeFileSync(join(stagingDir, '.typola-portable'), `${version}\n`, 'utf8');
   const webview2Setup = join(projectRoot, 'src-tauri', 'resources', 'MicrosoftEdgeWebview2Setup.exe');
   if (existsSync(webview2Setup)) {
     copyFileSync(webview2Setup, join(stagingDir, 'MicrosoftEdgeWebview2Setup.exe'));

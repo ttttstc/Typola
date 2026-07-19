@@ -17,7 +17,11 @@ import { useSettings } from '../hooks/useSettings';
 import {
   checkForAppUpdate,
   downloadAppUpdate,
+  getDistributionKind,
   installDownloadedAppUpdate,
+  openReleaseForVersion,
+  type AppUpdateState,
+  type DistributionKind,
   type UpdateCheckResult,
   type UpdateSource,
 } from '../services/updateService';
@@ -27,6 +31,7 @@ import type { EditorMode } from '../components/Toolbar';
 import { StatusBar } from '../components/StatusBar';
 import { AppLayoutChrome } from '../components/AppLayoutChrome';
 import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
+import { UpdateCard } from '../components/UpdateCard';
 import { calmTransition } from '../components/motion/MotionProvider';
 import { SkillHubPanel } from '../components/SkillHubPanel';
 import { ArtifactCenterPanel } from '../components/artifacts/ArtifactCenterPanel';
@@ -157,12 +162,6 @@ const DiffReviewPane = lazy(() =>
 );
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
-type UpdateInstallState =
-  | { phase: 'idle' }
-  | { phase: 'downloading'; source: UpdateSource; update: AvailableUpdate }
-  | { phase: 'ready'; source: UpdateSource; update: AvailableUpdate }
-  | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
-  | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
 
 type CandidateSelfCheck = {
   status: CandidateSelfCheckStatus;
@@ -235,7 +234,7 @@ export function AppLayout() {
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const reopenAttempted = useRef(false);
   const autoUpdateCheckStarted = useRef(false);
-  const updateDownloadVersionRef = useRef<string | null>(null);
+  const updateOperationRef = useRef(false);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const editorCommandRef = useRef<TypolaEditorKernel | null>(null);
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
@@ -286,7 +285,8 @@ export function AppLayout() {
   const [terminalResizing, setTerminalResizing] = useState(false);
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
   const [systemOpenChecked, setSystemOpenChecked] = useState(!isTauriRuntime);
-  const [updateState, setUpdateState] = useState<UpdateInstallState>({ phase: 'idle' });
+  const [updateState, setUpdateState] = useState<AppUpdateState>({ phase: 'idle' });
+  const [distributionKind, setDistributionKind] = useState<DistributionKind>('installed');
   const [pdfExporting, setPdfExporting] = useState(false);
   const [wordExporting, setWordExporting] = useState(false);
   const [exportToast, setExportToast] = useState<{
@@ -371,6 +371,7 @@ export function AppLayout() {
     openTabs,
     activeTabId,
     fileRef,
+    documentRevisionRef,
     lastSelfWriteRef,
     dirtyPaths,
     saveVisualState,
@@ -382,6 +383,7 @@ export function AppLayout() {
     diffPreview,
     setDiffPreview,
     handleUnsavedChoice,
+    confirmCloseWithDirtyFiles,
     handleOpen,
     handleOpenFolder,
     handleNewFile,
@@ -1692,39 +1694,103 @@ export function AppLayout() {
     }
   }, [insertImageFromSource, resolveInsertPosition]);
 
-  const startBackgroundUpdateDownload = useCallback((source: UpdateSource, update: AvailableUpdate) => {
-    if (updateDownloadVersionRef.current === update.version) return;
-
-    updateDownloadVersionRef.current = update.version;
-    setUpdateState({ phase: 'downloading', source, update });
-
-    void downloadAppUpdate(update.update)
-      .then(() => {
-        setUpdateState((current) => {
-          if (current.phase !== 'downloading' || current.update.version !== update.version) return current;
-          return { phase: 'ready', source, update };
-        });
-      })
-      .catch((error) => {
-        updateDownloadVersionRef.current = null;
-        setUpdateState({ phase: 'error', source, update, message: toUpdateErrorMessage(error) });
-      });
+  const showUpdateAvailable = useCallback((source: UpdateSource, update: AvailableUpdate) => {
+    setUpdateState((current) => {
+      if ('update' in current && current.update?.version === update.version && current.phase !== 'error') return current;
+      return { phase: 'available', source, update };
+    });
   }, []);
 
-  const handleRestartUpdate = useCallback(async () => {
-    if (updateState.phase !== 'ready') return;
+  const checkForUpdateManually = useCallback(async () => {
+    if ('update' in updateState && updateState.update && updateState.phase !== 'error') {
+      return updateState.update;
+    }
+    setUpdateState({ phase: 'checking', source: 'manual' });
+    const result = await checkForAppUpdate();
+    if (result.status === 'available') showUpdateAvailable('manual', result);
+    else if (result.status === 'error') setUpdateState({ phase: 'error', source: 'manual', message: result.message });
+    else setUpdateState({ phase: 'idle' });
+    return result;
+  }, [showUpdateAvailable, updateState]);
 
-    const readyUpdate = updateState.update;
-    const source = updateState.source;
-    setUpdateState({ phase: 'installing', source, update: readyUpdate });
+  const installUpdate = useCallback(async (source: UpdateSource, update: AvailableUpdate) => {
+    setUpdateState({ phase: 'installing', source, update });
+    try {
+      await installDownloadedAppUpdate(update.update);
+    } catch (error) {
+      updateOperationRef.current = false;
+      setUpdateState({ phase: 'error', source, update, message: toUpdateErrorMessage(error) });
+    }
+  }, []);
+
+  const handleUpdateAction = useCallback(async () => {
+    if (updateOperationRef.current) return;
+    if (updateState.phase === 'error' && !updateState.update) {
+      await checkForUpdateManually();
+      return;
+    }
+    if (!('update' in updateState) || !updateState.update) return;
+    const { source, update } = updateState;
+    updateOperationRef.current = true;
+
+    let currentDistribution: DistributionKind;
+    try {
+      currentDistribution = await getDistributionKind();
+      setDistributionKind(currentDistribution);
+    } catch (error) {
+      updateOperationRef.current = false;
+      setUpdateState({ phase: 'error', source, update, message: toUpdateErrorMessage(error) });
+      return;
+    }
+
+    if (currentDistribution === 'portable') {
+      try {
+        await openReleaseForVersion(update.version);
+      } catch (error) {
+        setUpdateState({ phase: 'error', source, update, message: toUpdateErrorMessage(error) });
+      } finally {
+        updateOperationRef.current = false;
+      }
+      return;
+    }
+
+    if (updateState.phase === 'ready') {
+      if (!await confirmCloseWithDirtyFiles()) {
+        updateOperationRef.current = false;
+        return;
+      }
+      await installUpdate(source, update);
+      return;
+    }
+
+    if (!await confirmCloseWithDirtyFiles()) {
+      updateOperationRef.current = false;
+      return;
+    }
+    const approvedRevision = documentRevisionRef.current;
+    setUpdateState({
+      phase: 'downloading',
+      source,
+      update,
+      progress: { status: 'downloading', downloadedBytes: 0, percent: 0 },
+    });
 
     try {
-      await installDownloadedAppUpdate(readyUpdate.update);
+      await downloadAppUpdate(update.update, (progress) => {
+        if (progress.status !== 'downloading') return;
+        setUpdateState({ phase: 'downloading', source, update, progress });
+      });
+      if (documentRevisionRef.current !== approvedRevision && !await confirmCloseWithDirtyFiles()) {
+        updateOperationRef.current = false;
+        setUpdateState({ phase: 'ready', source, update });
+        return;
+      }
+      await installUpdate(source, update);
     } catch (error) {
-      updateDownloadVersionRef.current = null;
-      setUpdateState({ phase: 'error', source, update: readyUpdate, message: toUpdateErrorMessage(error) });
+      updateOperationRef.current = false;
+      setUpdateState({ phase: 'error', source, update, message: toUpdateErrorMessage(error) });
     }
-  }, [updateState]);
+  }, [checkForUpdateManually, confirmCloseWithDirtyFiles, documentRevisionRef, installUpdate, updateState]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1974,6 +2040,13 @@ export function AppLayout() {
   }, [file.path, handleOpenPath, settings.reopenLastFile, systemOpenChecked]);
 
   useEffect(() => {
+    if (!isTauriRuntime) return;
+    void getDistributionKind()
+      .then(setDistributionKind)
+      .catch((error) => console.warn('Failed to detect distribution kind:', error));
+  }, [isTauriRuntime]);
+
+  useEffect(() => {
     if (!settings.autoUpdateCheck || autoUpdateCheckStarted.current || !isTauriRuntime) return;
 
     return scheduleDelayedAutoUpdateCheck({
@@ -1982,9 +2055,9 @@ export function AppLayout() {
         autoUpdateCheckStarted.current = true;
       },
       checkForAppUpdate,
-      onUpdateAvailable: (result) => startBackgroundUpdateDownload('auto', result),
+      onUpdateAvailable: (result) => showUpdateAvailable('auto', result),
     });
-  }, [isTauriRuntime, settings.autoUpdateCheck, startBackgroundUpdateDownload]);
+  }, [isTauriRuntime, settings.autoUpdateCheck, showUpdateAvailable]);
 
   const { artifactItems, handleArchiveArtifact } = useArtifactState({
     agentChangedPaths,
@@ -2193,9 +2266,6 @@ export function AppLayout() {
   }, [file.dirty, file.name, isTauriRuntime]);
 
   const isDocx = file.fileType === 'docx';
-  const updateToolbarStatus = updateState.phase === 'ready' || updateState.phase === 'installing'
-    ? { phase: updateState.phase, version: updateState.update.version }
-    : undefined;
   const shouldShowHtmlPresentation = htmlPresentationVisible && file.fileType === 'html' && !isDocx;
   const mainContentClassName = [
     'main-content',
@@ -2422,8 +2492,6 @@ export function AppLayout() {
             setSettingsVisible(true);
           },
           onPreloadSettings: preloadSettingsPageInBackground,
-          updateStatus: updateToolbarStatus,
-          onRestartUpdate: handleRestartUpdate,
         }}
         mainContentRef={mainContentRef}
         mainContentClassName={mainContentClassName}
@@ -2611,7 +2679,7 @@ export function AppLayout() {
                 setSettingsVisible(false);
                 setSettingsInitialSection(undefined);
               }}
-              onUpdateAvailable={(update) => startBackgroundUpdateDownload('manual', update)}
+              onCheckForUpdate={checkForUpdateManually}
               initialSection={settingsInitialSection}
             />
           </Suspense>
@@ -2623,6 +2691,11 @@ export function AppLayout() {
         onConfirmRename={() => void handleConfirmRename()}
         diffPreview={diffPreview}
         setDiffPreview={setDiffPreview}
+      />
+      <UpdateCard
+        state={updateState}
+        distributionKind={distributionKind}
+        onAction={() => { void handleUpdateAction(); }}
       />
       {exportToast && (
         <div className={`export-toast export-toast-${exportToast.type}`} role="status" aria-live="polite">
