@@ -31,7 +31,7 @@ Write, review, collaborate with AI, and ship a document without shuttling betwee
 ### Deliverables return to local files
 
 - Reports, slide drafts, HTML, and other AI outputs are collected under `.typola-output/`. Open, compare, archive, overwrite the source, or undo an overwrite.
-- Export the same Markdown document to PDF, Word, or HTML, or copy rich HTML for publishing workflows.
+- Export the same Markdown document to PDF, Word, or HTML, or copy rich HTML for publishing workflows. Word uses the bundled TypeScript `docx` generator and does not require Pandoc or another external converter.
 
 ## Start in 60 seconds
 
@@ -51,7 +51,7 @@ Download `Typola_*_x64-setup.exe` or `.msi`. Use an installer for long-term use,
 
 Download `Typola_*_windows-x64_portable.zip`, fully extract it, and run `Typola.exe`. This is intended for evaluation and portable use.
 
-> Typola requires Microsoft Edge WebView2 Runtime. Release packages provide guidance when it is missing. Distribute the installer or portable zip, not the inner `Typola.exe` by itself.
+> Typola requires Microsoft Edge WebView2 Runtime. Release packages provide guidance when it is missing. Distribute the installer or portable zip, not the inner `Typola.exe` by itself. PDF export also requires an installed Google Chrome, Chromium, or Microsoft Edge browser; Word export does not require Pandoc.
 
 ## Before using AI
 
@@ -113,6 +113,7 @@ npm run tauri:build:update     # release build with updater artifacts
 
 Implementation detail and architecture decisions:
 
+- [User Guide (Chinese)](./docs/USER_GUIDE.md)
 - [Architecture](./docs/ARCHITECTURE.md)
 - [AI Workbench Skill OS](./docs/AI_WORKBENCH_SKILL_OS.md)
 - [AI Editing and Review](./docs/AI_EDIT_AND_REVIEW_SPEC.md)

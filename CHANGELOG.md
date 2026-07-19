@@ -13,6 +13,8 @@
 - 动效性能优化：移除右侧面板重复的宽度过渡，左右侧栏与终端拖拽按动画帧合并更新，修复左栏最小宽度阻塞展开首帧，并合并右栏 tab 指示器的重复测量与渲染。
 - 检视意见编辑框新增依据展示，人工意见明确显示暂无依据；AI 检视配置与意见列表增加清晰分区，全局界面文案字号默认放大一级并跟随设置中的字号调整。
 - 优化 PDF / Word 导出：新增分阶段进度条，PDF 缓存浏览器定位并缩短安全输出等待；Word 改用内置 `docx` 生成器，不再依赖 Pandoc。同步精修 Word 纸张预览与 HTML 产物预览的排版、加载态、错误态和键盘焦点。
+- 同步 README、贡献指南、PDF 导出规格及图片/Mermaid/AI Workbench 设计文档的实现状态，明确当前浏览器打印 PDF 与内置 Word 生成链路，并标注历史方案快照。
+- 新增面向小白用户的《用户指导手册》，覆盖写作、AI 工作台、SkillHub、产物中心、检视改稿、图片、主题及 PDF/Word/HTML 交付，并从 README 提供直达入口。
 - 检视模式改为正文与检视工作台 1:1 分屏；人工和 AI 意见均可编辑或忽略，AI 改稿默认使用全部未忽略意见；改稿历史支持打开版本、返回前一篇及差异对比。
 - AI 检视面板默认展开；支持通过紧凑下拉同时导入多个 Markdown 规则文件、选择多个写作规范 Skill 和输入手工规则，并在运行中显示动态进度或随时停止。
 - 检视意见列表按“原文 / 意见”分区并收敛为摘要；点击卡片打开更大的意见编辑器，可保存、取消及连续查看上一条/下一条，定位原文与忽略保持为独立操作。检视模式顶部导航、内容滚动区和底部改稿操作同步分层固定。
@@ -52,9 +54,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- 完成 #183 / #184：CM6 数学与 Mermaid 块预览改为带 source-hash / theme 缓存的原生 widget，光标进入块即回到 Markdown 源码；渲染仅在块被 CM6 物化到可视区域时发生，异步错误以卡片展示且不改写 source。HTML、PDF、Word 纸张预览与微信预览的 Markdown→HTML 基座改为 remark/rehype，支持 GFM、代码高亮、KaTeX、Mermaid、本地图片解析与 HTML sanitize，不再依赖 Vditor preview renderer；Word `.docx` 保持原有 fallback。
+- 完成 #183 / #184：CM6 数学与 Mermaid 块预览改为带 source-hash / theme 缓存的原生 widget，光标进入块即回到 Markdown 源码；渲染仅在块被 CM6 物化到可视区域时发生，异步错误以卡片展示且不改写 source。HTML、PDF、Word 纸张预览与微信预览的 Markdown→HTML 基座改为 remark/rehype，支持 GFM、代码高亮、KaTeX、Mermaid、本地图片解析与 HTML sanitize，不再依赖 Vditor preview renderer；Word `.docx` 由内置 `docx` 生成器直接打包，不依赖外部转换器。
 - PDF 导出改为与 Word 一致的保存对话框：默认 Downloads 路径和 `.pdf` 文件名，用户可选择目标文件夹或取消导出。
-- 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 继续只用于既有预览与导出渲染链路。
+- 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 仅保留既有兼容预览链路，统一导出走 remark/rehype。
 - 查找替换改为通过 `TypolaEditorKernel.replaceRanges` 提交 CM6 transaction；单个和全部替换都会进入同一 history，支持一次 `Ctrl/Cmd+Z` 撤销。
 - 工具栏、`Ctrl/Cmd+B` / `I` / `Shift+7` / `Shift+8` 快捷键和右键菜单统一调用 CM6 格式命令；补齐引用层级、编辑链接、清除格式与代码块语言编辑的 transaction 实现。
 - 源码模式保留 CM6 标题折叠、缩放和预览同步核心扩展；仅关闭 Markdown live preview widget，搜索命中折叠内容会自动展开。

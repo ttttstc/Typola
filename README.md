@@ -31,7 +31,7 @@
 ### 交付物回到本地文件
 
 - AI 生成的报告、PPT 草稿、HTML 等文件统一收纳在 `.typola-output/`，可打开、对比、归档、覆盖原文或撤销覆盖。
-- 同一份 Markdown 可导出 PDF、Word、HTML，也可复制富文本 HTML 用于发布。
+- 同一份 Markdown 可导出 PDF、Word、HTML，也可复制富文本 HTML 用于发布。Word 使用内置 TypeScript `docx` 生成器，不依赖 Pandoc 或其他外部转换器。
 
 ## 60 秒开始
 
@@ -51,7 +51,7 @@
 
 下载 `Typola_*_windows-x64_portable.zip`，完整解压后运行 `Typola.exe`。适合测试和便携使用。
 
-> Typola 依赖 Microsoft Edge WebView2 Runtime。发布包会在缺失时给出安装引导；请分发安装包或 portable zip，而不是单独分发内部 `Typola.exe`。
+> Typola 依赖 Microsoft Edge WebView2 Runtime。发布包会在缺失时给出安装引导；请分发安装包或 portable zip，而不是单独分发内部 `Typola.exe`。PDF 导出还需要系统已安装 Google Chrome、Chromium 或 Microsoft Edge；Word 导出无需安装 Pandoc。
 
 ## 使用 AI 前
 
@@ -113,6 +113,7 @@ npm run tauri:build:update     # 带更新签名的发布构建
 
 详细实现与架构决策请见：
 
+- [用户指导手册](./docs/USER_GUIDE.md)
 - [架构说明](./docs/ARCHITECTURE.md)
 - [AI 工作台 Skill OS](./docs/AI_WORKBENCH_SKILL_OS.md)
 - [AI 编辑与检视](./docs/AI_EDIT_AND_REVIEW_SPEC.md)
