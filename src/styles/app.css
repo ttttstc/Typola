@@ -148,6 +148,116 @@ html, body, #root {
   to { opacity: 1; transform: translateY(0); }
 }
 
+.update-card {
+  position: fixed;
+  top: 54px;
+  right: 18px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: min(342px, calc(100vw - 36px));
+  min-height: 66px;
+  padding: 11px 10px 11px 13px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--theme-panel-bg) 96%, transparent);
+  box-shadow: 0 10px 28px color-mix(in oklch, var(--theme-text-primary) 14%, transparent);
+  animation: export-toast-in 180ms ease-out;
+  backdrop-filter: blur(14px);
+}
+
+.update-card-error {
+  border-color: color-mix(in oklch, var(--theme-danger) 48%, var(--theme-border-soft));
+}
+
+.update-card-icon {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--theme-text-primary);
+  background: var(--theme-control-bg);
+}
+
+.update-card-error .update-card-icon {
+  color: var(--theme-danger);
+}
+
+.update-card-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+}
+
+.update-card-copy strong {
+  overflow: hidden;
+  color: var(--theme-text-primary);
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-card-copy > span {
+  overflow: hidden;
+  color: var(--theme-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-card > button {
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  border: none;
+  border-radius: 10px;
+  color: var(--theme-text-primary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.update-card > button:hover:not(:disabled) {
+  background: var(--theme-control-hover-bg);
+}
+
+.update-card > button:disabled {
+  cursor: default;
+}
+
+.update-card-progress {
+  height: 3px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--theme-accent) 14%, var(--theme-control-bg));
+}
+
+.update-card-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--theme-accent);
+  transition: width 180ms ease-out;
+}
+
+.update-card-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--theme-border-soft);
+  border-top-color: var(--theme-accent);
+  border-radius: 50%;
+  animation: export-toast-spin 700ms linear infinite;
+}
+
 .export-toast-body {
   display: flex;
   align-items: flex-start;
@@ -448,33 +558,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .app-toolbar .toolbar-nav-actions > button.active {
   background: transparent;
   border-color: transparent;
-}
-
-.app-toolbar button.toolbar-update-button {
-  width: auto;
-  min-width: 0;
-  gap: 5px;
-  padding: 0 10px;
-  color: var(--theme-text-primary);
-  background: var(--theme-paper);
-  border-color: var(--theme-border-hover);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.app-toolbar button.toolbar-update-button:hover {
-  color: var(--theme-text-primary);
-  background: var(--theme-control-hover-bg);
-  border-color: var(--theme-border-hover);
-}
-
-.app-toolbar button.toolbar-update-button:disabled {
-  opacity: 0.72;
-}
-
-.toolbar-update-button span {
-  white-space: nowrap;
-  line-height: 1;
 }
 
 .app-toolbar button:disabled {
@@ -2581,6 +2664,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] .cm-line.typola-c
 @media (prefers-reduced-motion: reduce) {
   .export-toast,
   .export-toast-spinner,
+  .update-card,
+  .update-card-spinner,
   .html-preview-state-icon,
   .html-preview-refreshing,
   .word-preview-button-spinner,
@@ -2589,7 +2674,8 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] .cm-line.typola-c
     animation: none;
   }
 
-  .export-toast .export-toast-progress > span {
+  .export-toast .export-toast-progress > span,
+  .update-card-progress > span {
     transition: none;
   }
 }

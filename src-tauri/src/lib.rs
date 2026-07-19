@@ -565,6 +565,21 @@ fn force_close_main_window(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|error| format!("failed to close main window: {error}"))
 }
 
+fn distribution_kind_for_executable(executable: &Path) -> &'static str {
+    let is_portable = executable
+        .parent()
+        .map(|directory| directory.join(".typola-portable").is_file())
+        .unwrap_or(false);
+    if is_portable { "portable" } else { "installed" }
+}
+
+#[tauri::command]
+fn get_distribution_kind() -> String {
+    std::env::current_exe()
+        .map(|path| distribution_kind_for_executable(&path).to_string())
+        .unwrap_or_else(|_| "installed".to_string())
+}
+
 // 动态把目录加入 asset protocol scope:每次打开/另存文档时调,允许 webview 通过
 // convertFileSrc() 读取该目录(递归)的本地图片。幂等;重复 allow 无害。
 #[tauri::command]
@@ -1668,6 +1683,7 @@ pub fn run() {
             set_title_bar_color,
             pending_opened_paths,
             force_close_main_window,
+            get_distribution_kind,
             allow_asset_directory,
             allow_fs_directory,
             open_path_external,
@@ -3311,6 +3327,19 @@ mod tests {
 
         assert_eq!(bytes, b"# opened");
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn distribution_kind_uses_portable_marker_next_to_executable() {
+        let directory = temp_path("portable-distribution");
+        std::fs::create_dir_all(&directory).unwrap();
+        let executable = directory.join("Typola.exe");
+
+        assert_eq!(distribution_kind_for_executable(&executable), "installed");
+        std::fs::write(directory.join(".typola-portable"), b"2.0.5\n").unwrap();
+        assert_eq!(distribution_kind_for_executable(&executable), "portable");
+
+        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[test]

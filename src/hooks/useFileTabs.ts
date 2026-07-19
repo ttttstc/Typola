@@ -49,6 +49,7 @@ type UseFileTabsResult = {
   openTabs: OpenFileTab[];
   activeTabId: string;
   fileRef: MutableRefObject<OpenedFile>;
+  documentRevisionRef: MutableRefObject<number>;
   lastSelfWriteRef: MutableRefObject<{ path: string; at: number }>;
   autoSaveFailureRef: MutableRefObject<{ key: string; count: number; suspended: boolean }>;
   dirtyPaths: Set<string>;
@@ -61,6 +62,7 @@ type UseFileTabsResult = {
   diffPreview: DiffPreview;
   setDiffPreview: Dispatch<SetStateAction<DiffPreview>>;
   handleUnsavedChoice: (decision: UnsavedDecision) => void;
+  confirmCloseWithDirtyFiles: () => Promise<boolean>;
   handleOpen: () => Promise<void>;
   handleOpenFolder: () => Promise<void>;
   handleNewFile: () => void;
@@ -123,6 +125,7 @@ export function useFileTabs({
   beforeDocumentChangeRef,
 }: UseFileTabsOptions): UseFileTabsResult {
   const fileRef = useRef<OpenedFile>(createEmptyFile());
+  const documentRevisionRef = useRef(0);
   const openTabsRef = useRef<OpenFileTab[]>([]);
   const activeTabIdRef = useRef('');
   const defaultEncodingRef = useRef(defaultEncoding);
@@ -567,6 +570,7 @@ export function useFileTabs({
       content: value,
       dirty: value !== fileRef.current.lastSavedContent,
     };
+    if (value !== fileRef.current.content) documentRevisionRef.current += 1;
     fileRef.current = nextFile;
     const activeTabId = activeTabIdRef.current;
     if (activeTabId) {
@@ -576,6 +580,7 @@ export function useFileTabs({
       openTabsRef.current = nextTabs;
       setOpenTabs(nextTabs);
     }
+    dirtyFilesRef.current = nextFile.dirty || openTabsRef.current.some((tab) => tab.file.dirty);
     setFile(nextFile);
     setSaveVisualState(nextFile.dirty ? 'dirty' : 'idle');
   }, [clearSaveVisualTimer, setAutoSaveError, setDiskChangeMessage, setTransientMessage]);
@@ -749,6 +754,7 @@ export function useFileTabs({
     openTabs,
     activeTabId,
     fileRef,
+    documentRevisionRef,
     lastSelfWriteRef,
     autoSaveFailureRef,
     dirtyPaths,
@@ -761,6 +767,7 @@ export function useFileTabs({
     diffPreview,
     setDiffPreview,
     handleUnsavedChoice,
+    confirmCloseWithDirtyFiles,
     handleOpen,
     handleOpenFolder,
     handleNewFile,

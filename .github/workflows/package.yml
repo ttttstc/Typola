@@ -4,22 +4,57 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 0.4.0'
+        description: 'VERSION value, e.g. 2.0.6'
         required: true
         type: string
+      publish:
+        description: 'Create an immutable public GitHub Release from main'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: package-${{ github.sha }}
-  cancel-in-progress: true
+  group: release-v${{ inputs.version }}
+  cancel-in-progress: false
 
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.publish && 'main' || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate requested version
+        shell: pwsh
+        run: |
+          if ('${{ inputs.publish }}' -eq 'true' -and '${{ github.ref }}' -ne 'refs/heads/main') {
+            throw 'Formal publishing must be dispatched from the main branch'
+          }
+          node scripts/sync-version.mjs --tag "v${{ inputs.version }}"
+          if ('${{ inputs.publish }}' -eq 'true') {
+            node scripts/sync-version.mjs --check --tag "v${{ inputs.version }}" --require-version-change "HEAD^"
+          } else {
+            node scripts/sync-version.mjs --check --tag "v${{ inputs.version }}"
+          }
+
+      - name: Reject an existing published version
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "v${{ inputs.version }}"
+          $remoteTag = git ls-remote --tags origin "refs/tags/$tag"
+          if ($remoteTag) { throw "Tag already exists: $tag" }
+          gh release view $tag *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          $global:LASTEXITCODE = 0
+          if ($releaseExists) { throw "Release already exists: $tag" }
 
       - uses: pnpm/action-setup@v4
         with:
@@ -31,43 +66,102 @@ jobs:
         with:
           workdir: src-tauri
 
-      - name: Set version in manifests
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build unsigned local bundles
+        if: ${{ !inputs.publish }}
+        run: npm run tauri:build:local
+
+      - name: Build signed draft release
+        if: inputs.publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: 'v${{ inputs.version }}'
+          releaseName: 'Typola v${{ inputs.version }}'
+          releaseCommitish: main
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: false
+          args: '--config src-tauri/tauri.updater.conf.json'
+
+      - name: Create and upload updater manifest
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          $v = "${{ inputs.version }}"
-          $pj = Get-Content package.json -Raw | ConvertFrom-Json
-          $pj.version = $v
-          $pj | ConvertTo-Json -Depth 32 | Set-Content package.json -Encoding utf8NoBOM
-          $tc = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-          $tc.version = $v
-          $tc | ConvertTo-Json -Depth 32 | Set-Content src-tauri/tauri.conf.json -Encoding utf8NoBOM
+          node scripts/create-updater-manifest.mjs
+          gh release upload "v${{ inputs.version }}" "src-tauri/target/release/bundle/updater/latest.json"
 
-      - name: Install frontend dependencies
-        run: pnpm install
+      - name: Build and upload portable release asset
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REF_NAME: v${{ inputs.version }}
+        run: node scripts/upload-portable-release.mjs
 
-      - name: Build Tauri bundle
-        run: pnpm tauri build
+      - name: Validate draft assets and publish
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "v${{ inputs.version }}"
+          $release = gh release view $tag --json assets,isDraft | ConvertFrom-Json
+          if (!$release.isDraft) { throw 'Release must remain draft until validation completes' }
+          $names = @($release.assets.name)
+          foreach ($pattern in @('latest.json', '*-setup.exe', '*.msi', '*portable.zip', '*.sig')) {
+            if (!($names | Where-Object { $_ -like $pattern })) { throw "Missing release asset: $pattern" }
+          }
+          gh release edit $tag --draft=false
 
-      - name: Build portable ZIP
-        run: node scripts/build-portable.mjs
+      - name: Smoke test public updater endpoint
+        if: inputs.publish
+        shell: pwsh
+        run: |
+          $endpoint = 'https://github.com/ttttstc/Typola/releases/latest/download/latest.json'
+          for ($attempt = 1; $attempt -le 6; $attempt++) {
+            try {
+              $manifest = Invoke-RestMethod $endpoint
+              if ($manifest.version -ne '${{ inputs.version }}') { throw "latest.json version mismatch: $($manifest.version)" }
+              $entry = $manifest.platforms.'windows-x86_64'
+              if (!$entry.signature -or !$entry.url) { throw 'latest.json Windows entry is incomplete' }
+              Invoke-WebRequest -Method Head -Uri $entry.url -UseBasicParsing | Out-Null
+              exit 0
+            } catch {
+              if ($attempt -eq 6) { throw }
+              Start-Sleep -Seconds 10
+            }
+          }
 
       - name: Upload MSI installer
+        if: ${{ !inputs.publish }}
         uses: actions/upload-artifact@v4
         with:
           name: Typola_${{ inputs.version }}_windows-x64_msi
           path: src-tauri/target/release/bundle/msi/*.msi
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload NSIS installer
+        if: ${{ !inputs.publish }}
         uses: actions/upload-artifact@v4
         with:
           name: Typola_${{ inputs.version }}_windows-x64_nsis
           path: src-tauri/target/release/bundle/nsis/*.exe
-          if-no-files-found: warn
+          if-no-files-found: error
+
+      - name: Build portable ZIP
+        if: ${{ !inputs.publish }}
+        run: npm run portable:package
 
       - name: Upload portable ZIP
+        if: ${{ !inputs.publish }}
         uses: actions/upload-artifact@v4
         with:
           name: Typola_${{ inputs.version }}_windows-x64_portable
           path: src-tauri/target/release/bundle/portable/*.zip
-          if-no-files-found: warn
+          if-no-files-found: error

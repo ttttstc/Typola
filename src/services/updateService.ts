@@ -1,9 +1,11 @@
 import type { DownloadEvent, Update } from '@tauri-apps/plugin-updater';
 
 const UPDATE_CHECK_TIMEOUT_MS = 12_000;
-export const FALLBACK_APP_VERSION = '0.3.7';
+export const DEVELOPMENT_APP_VERSION = 'dev';
+export const TYPOLA_RELEASES_URL = 'https://github.com/ttttstc/Typola/releases';
 
 export type UpdateSource = 'auto' | 'manual';
+export type DistributionKind = 'installed' | 'portable';
 
 export type UpdateProgress = {
   status: 'downloading' | 'ready' | 'installing' | 'relaunching';
@@ -18,6 +20,18 @@ export type UpdateCheckResult =
   | { status: 'available'; update: Update; version: string; date?: string; body?: string }
   | { status: 'error'; message: string };
 
+type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
+let pendingUpdateCheck: Promise<UpdateCheckResult> | null = null;
+
+export type AppUpdateState =
+  | { phase: 'idle' }
+  | { phase: 'checking'; source: UpdateSource }
+  | { phase: 'available'; source: UpdateSource; update: AvailableUpdate }
+  | { phase: 'downloading'; source: UpdateSource; update: AvailableUpdate; progress: UpdateProgress }
+  | { phase: 'ready'; source: UpdateSource; update: AvailableUpdate }
+  | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }
+  | { phase: 'error'; source: UpdateSource; update?: AvailableUpdate; message: string };
+
 export function isTauriRuntime(): boolean {
   return '__TAURI_INTERNALS__' in window;
 }
@@ -29,18 +43,27 @@ function toErrorMessage(error: unknown): string {
 }
 
 export async function getCurrentAppVersion(): Promise<string> {
-  if (!isTauriRuntime()) return FALLBACK_APP_VERSION;
+  if (!isTauriRuntime()) return DEVELOPMENT_APP_VERSION;
   try {
     const { getVersion } = await import('@tauri-apps/api/app');
     return await getVersion();
   } catch {
-    return FALLBACK_APP_VERSION;
+    return DEVELOPMENT_APP_VERSION;
   }
 }
 
-export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
-  if (!isTauriRuntime()) return { status: 'unsupported' };
+export async function getDistributionKind(): Promise<DistributionKind> {
+  if (!isTauriRuntime()) return 'installed';
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<DistributionKind>('get_distribution_kind');
+}
 
+export async function openReleaseForVersion(version: string): Promise<void> {
+  const { openUrl } = await import('@tauri-apps/plugin-opener');
+  await openUrl(`${TYPOLA_RELEASES_URL}/tag/v${encodeURIComponent(version)}`);
+}
+
+async function performUpdateCheck(): Promise<UpdateCheckResult> {
   try {
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check({ timeout: UPDATE_CHECK_TIMEOUT_MS });
@@ -55,6 +78,15 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
   } catch (error) {
     return { status: 'error', message: toErrorMessage(error) };
   }
+}
+
+export function checkForAppUpdate(): Promise<UpdateCheckResult> {
+  if (!isTauriRuntime()) return Promise.resolve({ status: 'unsupported' });
+  if (pendingUpdateCheck) return pendingUpdateCheck;
+  pendingUpdateCheck = performUpdateCheck().finally(() => {
+    pendingUpdateCheck = null;
+  });
+  return pendingUpdateCheck;
 }
 
 export async function downloadAppUpdate(

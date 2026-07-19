@@ -15,6 +15,6 @@ if (!tag) {
 }
 
 const assetPath = resolvePortableAsset();
-execFileSync('gh', ['release', 'upload', tag, assetPath, '--clobber'], {
+execFileSync('gh', ['release', 'upload', tag, assetPath], {
   stdio: 'inherit',
 });
