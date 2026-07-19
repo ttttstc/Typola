@@ -113,6 +113,7 @@ npm run tauri:build:update     # release build with updater artifacts
 
 Implementation detail and architecture decisions:
 
+- [User Guide (Chinese)](./docs/USER_GUIDE.md)
 - [Architecture](./docs/ARCHITECTURE.md)
 - [AI Workbench Skill OS](./docs/AI_WORKBENCH_SKILL_OS.md)
 - [AI Editing and Review](./docs/AI_EDIT_AND_REVIEW_SPEC.md)

@@ -113,6 +113,7 @@ npm run tauri:build:update     # 带更新签名的发布构建
 
 详细实现与架构决策请见：
 
+- [用户指导手册](./docs/USER_GUIDE.md)
 - [架构说明](./docs/ARCHITECTURE.md)
 - [AI 工作台 Skill OS](./docs/AI_WORKBENCH_SKILL_OS.md)
 - [AI 编辑与检视](./docs/AI_EDIT_AND_REVIEW_SPEC.md)
