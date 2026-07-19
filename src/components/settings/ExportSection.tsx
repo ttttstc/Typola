@@ -18,6 +18,7 @@ import { getPreset, listPresets } from '../../services/word/config';
 import { createPresetTemplateText, importPresetFromJson, PresetImportError } from '../../services/word';
 import type { PresetId } from '../../services/word/types';
 import { createWordPreviewStyle } from '../../services/wordPreviewStyle';
+import { SettingsToggle } from './SettingsToggle';
 
 function PresetPreviewSample() {
   return (
@@ -168,13 +169,11 @@ export function ExportSection() {
             {!options.compact && <span className="settings-preset-desc">{preset.description}</span>}
           </span>
         </button>
-        <button
-          type="button"
-          className={`toggle-switch ${enabled ? 'on' : ''}`}
-          onClick={() => handleTogglePreset(preset.id, !enabled)}
+        <SettingsToggle
+          checked={enabled}
+          label={`${enabled ? '停用' : '启用'}${preset.name}`}
+          onChange={() => handleTogglePreset(preset.id, !enabled)}
           disabled={!canDisable}
-          aria-label={`${enabled ? '停用' : '启用'}${preset.name}`}
-          aria-pressed={enabled}
         />
         {preset.source === 'custom' && !enabled && (
           <button

@@ -3,27 +3,42 @@ import { useEffect, useState } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import { translate } from '../../services/i18n';
 import { updateSettings } from '../../services/settingsService';
+import { SettingsToggle } from './SettingsToggle';
 import {
   DEVELOPMENT_APP_VERSION,
   getCurrentAppVersion,
+  type AppUpdateState,
   type UpdateCheckResult,
 } from '../../services/updateService';
 
 type AboutSectionProps = {
   onCheckForUpdate: () => Promise<UpdateCheckResult>;
+  updateState: AppUpdateState;
+  onUpdateAction: () => void;
+  onIgnoreUpdate: () => void;
 };
 
-type CheckState = 'idle' | 'checking' | 'latest' | 'available' | 'unsupported' | 'error';
+type CheckState = 'idle' | 'checking' | 'latest' | 'available' | 'ignored' | 'unsupported' | 'error';
+type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 
 const appIconUrl = new URL('../../assets/typola-icon.png', import.meta.url).href;
 
-export function AboutSection({ onCheckForUpdate }: AboutSectionProps) {
+export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, onIgnoreUpdate }: AboutSectionProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const [version, setVersion] = useState(DEVELOPMENT_APP_VERSION);
   const [checkState, setCheckState] = useState<CheckState>('idle');
   const [message, setMessage] = useState<string | null>(null);
-  const displayMessage = checkState === 'idle' ? t('updateIdle') : message ?? t('updateIdle');
+  const [localAvailableUpdate, setLocalAvailableUpdate] = useState<AvailableUpdate | null>(null);
+  const availableUpdate = ('update' in updateState ? updateState.update : undefined) ?? localAvailableUpdate;
+  const canChooseUpdate = Boolean(
+    availableUpdate
+      && (updateState.phase === 'available'
+        || updateState.phase === 'ready'
+        || (localAvailableUpdate !== null && updateState.phase === 'idle')),
+  );
+  const displayMessage = message
+    ?? (availableUpdate ? `${t('updateAvailable')} v${availableUpdate.version}` : '');
 
   useEffect(() => {
     void getCurrentAppVersion().then(setVersion);
@@ -39,25 +54,36 @@ export function AboutSection({ onCheckForUpdate }: AboutSectionProps) {
 
     const result = await onCheckForUpdate();
     if (result.status === 'available') {
+      setLocalAvailableUpdate(result);
       setCheckState('available');
       setMessage(`${t('updateAvailable')} ${result.version}`);
       return;
     }
 
     if (result.status === 'not-available') {
+      setLocalAvailableUpdate(null);
       setCheckState('latest');
       setMessage(t('updateLatest'));
       return;
     }
 
     if (result.status === 'unsupported') {
+      setLocalAvailableUpdate(null);
       setCheckState('unsupported');
       setMessage(t('updateUnsupported'));
       return;
     }
 
+    setLocalAvailableUpdate(null);
     setCheckState('error');
     setMessage(result.message || t('updateError'));
+  };
+
+  const handleIgnoreUpdate = () => {
+    onIgnoreUpdate();
+    setLocalAvailableUpdate(null);
+    setCheckState('ignored');
+    setMessage(t('updateIgnored'));
   };
 
   return (
@@ -91,17 +117,27 @@ export function AboutSection({ onCheckForUpdate }: AboutSectionProps) {
         <div className="about-info-row about-update-row">
           <div>
             <div className="about-info-label">{t('updateLabel')}</div>
-            <div className={`settings-desc update-check-message ${checkState}`}>{displayMessage}</div>
+            {displayMessage && (
+              <div className={`settings-desc update-check-message ${checkState}`}>{displayMessage}</div>
+            )}
+            {canChooseUpdate && availableUpdate && (
+              <div className="about-update-choice">
+                <button type="button" className="primary-action-button" onClick={onUpdateAction}>
+                  {updateState.phase === 'ready' ? t('updateCardRelaunchAction') : t('updateApply')}
+                </button>
+                <button type="button" className="secondary-action-button" onClick={handleIgnoreUpdate}>
+                  {t('updateIgnore')}
+                </button>
+              </div>
+            )}
           </div>
           <div className="about-update-actions">
             <span className="about-auto-update">
               <span>{t('autoUpdateLabel')}</span>
-              <button
-                type="button"
-                className={`toggle-switch ${settings.autoUpdateCheck ? 'on' : ''}`}
-                onClick={handleAutoUpdateToggle}
-                aria-label={t('autoUpdateLabel')}
-                aria-pressed={settings.autoUpdateCheck}
+              <SettingsToggle
+                checked={settings.autoUpdateCheck}
+                label={t('autoUpdateLabel')}
+                onChange={handleAutoUpdateToggle}
               />
             </span>
             <button

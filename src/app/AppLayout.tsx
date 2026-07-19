@@ -2680,6 +2680,9 @@ export function AppLayout() {
                 setSettingsInitialSection(undefined);
               }}
               onCheckForUpdate={checkForUpdateManually}
+              updateState={updateState}
+              onUpdateAction={() => { void handleUpdateAction(); }}
+              onIgnoreUpdate={() => setUpdateState({ phase: 'idle' })}
               initialSection={settingsInitialSection}
             />
           </Suspense>

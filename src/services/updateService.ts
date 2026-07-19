@@ -1,6 +1,8 @@
 import type { DownloadEvent, Update } from '@tauri-apps/plugin-updater';
 
-const UPDATE_CHECK_TIMEOUT_MS = 12_000;
+// GitHub release metadata may cross two redirects and have a slow first TLS
+// connection, especially on Windows networks with a system proxy.
+const UPDATE_CHECK_TIMEOUT_MS = 30_000;
 export const DEVELOPMENT_APP_VERSION = 'dev';
 export const TYPOLA_RELEASES_URL = 'https://github.com/ttttstc/Typola/releases';
 

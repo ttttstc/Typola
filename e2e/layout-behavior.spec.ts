@@ -605,7 +605,7 @@ test('settings about section exposes update controls', async ({ page }) => {
   await page.getByRole('button', { name: '关于' }).click();
 
   await expect(page.getByRole('button', { name: '检查更新', exact: true })).toBeVisible();
-  await expect(page.getByText('面向知识工作者的 Markdown 阅读与 Word 导出工具')).toBeVisible();
+  await expect(page.getByText('面向 Windows 的 Markdown 写作、AI 改稿与文档交付桌面工作台')).toBeVisible();
   await expect(page.getByText('稳定预览包含 HTML 表格的 Markdown 文档，并支持 Word 纸张预览与导出。')).toHaveCount(0);
   await expect(page.getByText(/法律、财税/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: '自动检查更新' })).toHaveAttribute('aria-pressed', 'true');

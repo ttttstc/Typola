@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getSettings, updateSettings, type AppSettings } from '../../services/settingsService';
 import type { AppLocale, DefaultEncoding } from '../../services/settingsService';
 import { LOCALE_OPTIONS, translate } from '../../services/i18n';
+import { SettingsToggle } from './SettingsToggle';
 
 const ENCODINGS: DefaultEncoding[] = ['UTF-8', 'GBK', 'GB18030'];
 
@@ -39,9 +40,10 @@ export function GeneralSection() {
           <div className="settings-label">{t('autoSaveLabel')}</div>
           <div className="settings-desc">{t('autoSaveDesc')}</div>
         </div>
-        <button
-          className={`toggle-switch ${settings.autoSave ? 'on' : ''}`}
-          onClick={() => handleChange({ autoSave: !settings.autoSave })}
+        <SettingsToggle
+          checked={settings.autoSave}
+          label="自动保存"
+          onChange={() => handleChange({ autoSave: !settings.autoSave })}
         />
       </div>
 
@@ -65,9 +67,10 @@ export function GeneralSection() {
           <div className="settings-label">{t('reopenLastFileLabel')}</div>
           <div className="settings-desc">{t('reopenLastFileDesc')}</div>
         </div>
-        <button
-          className={`toggle-switch ${settings.reopenLastFile ? 'on' : ''}`}
-          onClick={() => handleChange({ reopenLastFile: !settings.reopenLastFile })}
+        <SettingsToggle
+          checked={settings.reopenLastFile}
+          label="重新打开上次文件"
+          onChange={() => handleChange({ reopenLastFile: !settings.reopenLastFile })}
         />
       </div>
     </div>
