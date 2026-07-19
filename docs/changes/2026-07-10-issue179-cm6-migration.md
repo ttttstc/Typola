@@ -12,11 +12,11 @@
 ## 保留的工程 fallback
 
 - `WysiwygEditorPane` 与 Vditor 相关格式服务未进入用户可见编辑分支，仅保留为工程内部遗留实现；`AppLayout` 不再导入或渲染它。
-- Vditor 继续服务既有 Markdown 预览与导出 renderer，不承担写作编辑职责。
+- Vditor 仅保留既有兼容预览，不承担写作编辑职责；HTML、PDF、Word 与公众号导出统一使用 remark/rehype renderer。
 
 ## 后续独立范围
 
-- Review Decoration、MarkdownAnalysisService、复杂表格编辑、Mermaid/KaTeX block widget 深化和导出 renderer 去 Vditor 化，按 Issue #179 的拆分建议另行实施。
+- Review Decoration、MarkdownAnalysisService、复杂表格编辑和 Mermaid/KaTeX block widget 深化已在后续变更中完成；导出 renderer 去 Vditor 化也已完成，当前实现详见 `docs/ARCHITECTURE.md`。
 
 ## 回归入口
 

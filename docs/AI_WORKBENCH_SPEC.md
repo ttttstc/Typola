@@ -1,6 +1,6 @@
 # Typola AI 文档工作台 Spec（终端方向 · 心流模式）
 
-> **状态**：设计已收敛（2026-06-16 评审 OpenDesign mock 后定稿），待 codex 实施。
+> **状态**：历史设计快照（2026-06-16）。心流模式与 AI Workbench 已在后续迭代落地并继续演进；当前布局、Provider、导出和文件流以 [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) 与 README 为准。
 > **配套文档**：
 > - [brief.md](changes/2026-06-14-work-package/brief.md) — 方向 / 范围 / 验收
 
@@ -11,7 +11,7 @@
 - 文件树（`FileTreePanel`）+ 多 tab + 未保存改动三按钮对话框（`UnsavedChangesDialog`）+ 编辑器→预览同步滚动 + WYSIWYG 代码块焦点态 + 右键菜单（`EditorContextMenu`）+ 自定义 tooltip + 新建文件按钮
 - 跑通 `npm run typecheck` / `npm test`(222) / `cargo test`(9) / `cargo check`
 
-🚧 **本期 MVP**（codex 接力实施，按本 spec §4–§9）：心流模式布局（最大化 + 三块面板独立开关 + ⌘⇧A 宏）+ **单场景卡（HTML 生成）** + 写盘刷新 + 改动可见（预览顶部「本次产物」chips，HTML 用 sandboxed iframe 渲染）+ agent 终端（懒启动）。
+✅ **历史 MVP**（按本 spec §4–§9）：心流模式布局（最大化 + 三块面板独立开关 + ⌘⇧A 宏）+ **单场景卡（HTML 生成）** + 写盘刷新 + 改动可见（预览顶部「本次产物」chips，HTML 用 sandboxed iframe 渲染）+ agent 终端（懒启动）。后续实现已扩展为 provider-aware 的 AI Workbench。
 
 ## 0. 方案与定位
 
@@ -50,7 +50,7 @@
 - **不做 App 级权限开关 / 不读 TUI 模式**（权限全在终端 Shift+Tab，§8、§0.1）。
 - **不做会话重起按钮**（单 session 长驻，§8.1）。
 - 不做场景的图形化编辑器（直接编辑 JSON 文件即可）；MVP 不做多卡/分组管理（Phase 1.5 再加 polish/wechat/daily）。
-- 不做多引擎（codex/opencode）适配（Phase 3）。
+- **原始 MVP 非目标**：不做多引擎（codex/opencode）适配；该范围已由后续 provider-aware AI Workbench 实现覆盖。
 - 不做跟随模式、拖文件进终端、可点击路径、git diff 视图、会话回放、undo 快照、skills 透视、用量面板、行级 diff 高亮（Phase 2+）。
 
 ## 2. 现有可复用资产

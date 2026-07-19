@@ -4,6 +4,8 @@
 - **目标**:让 Typola 像 Typora 一样把 ` ```mermaid ` 代码块**渲染成图**——三态(阅读/心流/检视)统一,编辑光标进出有正确的「显图 ↔ 显源」切换,实时预览,语法错误可见,支持复制为 SVG/PNG,导出 HTML/微信预览/Word 预览时图嵌入。
 - **关系**:跟 [IMAGE_DISPLAY_SPEC](./IMAGE_DISPLAY_SPEC.md) / [IMAGE_INSERT_SPEC](./IMAGE_INSERT_SPEC.md) 一起,凑齐 Typora 风格「图」能力。
 
+> **实现状态（2026-07-19）**：本文前半部分的“现状”是 2026-06-22 的历史诊断。当前已由 `src/services/mermaidRenderer.ts` 统一为惰性加载、主题感知、SVG 预览/导出和错误卡片；HTML、PDF、Word 纸张预览与公众号导出复用该渲染器，`.docx` 导出使用自己的文本/结构化回退解析。未实现的复制为 PNG 等条目仍保持为后续范围。
+
 ---
 
 ## 一、现状(实测)
@@ -63,7 +65,7 @@
 - **右键菜单**新增「复制为 SVG」「复制为 PNG」(Typora 同款,**MVP 可仅做 SVG**,PNG 留下一期)
 - 复制 SVG:取 mermaid 输出的 `<svg>` 元素,序列化为字符串,写剪贴板(`navigator.clipboard.write` + `image/svg+xml` blob)
 - **导出 HTML**:现有 `wordPreviewArtifactService` / `htmlExport` 链路里,mermaid 块输出已是 SVG,**只要预览渲染图,导出就自动含图**(免新做)
-- **导出 PDF**:Typola 当前无 PDF 导出,不在范围
+- **导出 PDF**:当前 PDF 通过统一 Markdown export renderer 生成 Mermaid SVG 后交给系统 Chrome/Chromium/Edge 打印；不依赖编辑器 DOM。
 
 ### 6. 应用范围(全图类型)
 
