@@ -68,4 +68,51 @@ describe('AboutSection', () => {
     expect(onIgnoreUpdate).toHaveBeenCalledTimes(1);
     expect(host.textContent).toContain('已忽略此版本');
   });
+
+  it('keeps an ignored update ignored when an earlier check finishes', async () => {
+    let resolveCheck: ((result: UpdateCheckResult) => void) | undefined;
+    const onCheckForUpdate = vi.fn(() => new Promise<UpdateCheckResult>((resolve) => {
+      resolveCheck = resolve;
+    }));
+    const onIgnoreUpdate = vi.fn();
+
+    const update = {} as Extract<UpdateCheckResult, { status: 'available' }>['update'];
+    const render = (updateState: AppUpdateState) => root.render(
+      <AboutSection
+        onCheckForUpdate={onCheckForUpdate}
+        updateState={updateState}
+        onUpdateAction={vi.fn()}
+        onIgnoreUpdate={onIgnoreUpdate}
+      />,
+    );
+
+    await act(async () => {
+      render({
+        phase: 'available',
+        source: 'auto',
+        update: { status: 'available', version: '2.0.6', update },
+      });
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.settings-action-button')?.click();
+    });
+    const ignoreButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('忽略此版本'));
+    await act(async () => ignoreButton?.click());
+    expect(onIgnoreUpdate).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      render({ phase: 'idle' });
+    });
+    await act(async () => {
+      resolveCheck?.({
+        status: 'available',
+        version: '2.0.6',
+        update,
+      });
+    });
+    expect(host.textContent).toContain('已忽略此版本');
+    expect(host.textContent).not.toContain('发现新版本 2.0.6');
+  });
 });

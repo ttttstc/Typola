@@ -609,17 +609,15 @@ test('settings about section exposes update controls', async ({ page }) => {
   await expect(page.getByText('稳定预览包含 HTML 表格的 Markdown 文档，并支持 Word 纸张预览与导出。')).toHaveCount(0);
   await expect(page.getByText(/法律、财税/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: '自动检查更新' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('尚未检查更新。')).toBeVisible();
+  await expect(page.getByText('尚未检查更新。')).toHaveCount(0);
   await expect(page.getByText('Typola 0.3.7')).toHaveCount(0);
-  await expect(page.getByText('0.3.7')).toBeVisible();
+  await expect(page.getByText('dev', { exact: true })).toBeVisible();
   await expect(page.getByText(/启动后延迟检查/)).toHaveCount(0);
-  await expect(page.getByText('杨卫薪律师')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'github.com/cat-xierluo', exact: true })).toBeVisible();
   await expect(page.getByText('专注于法律 AI 研究，以及资产、数据与 AI 类法律业务')).toHaveCount(0);
   await expect(page.getByText('ywxlaw')).toHaveCount(0);
-  await expect(page.getByAltText('微信二维码')).toBeVisible();
+  await expect(page.getByAltText('微信二维码')).toHaveCount(0);
   await expect(page.getByText('个人介绍')).toHaveCount(0);
-  await expect(page.getByText('github.com/cat-xierluo/Typola')).toBeVisible();
+  await expect(page.getByText('github.com/cat-xierluo/Typola')).toHaveCount(0);
   await expect(page.getByText('更新源')).toHaveCount(0);
 });
 

@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import { translate } from '../../services/i18n';
 import { updateSettings } from '../../services/settingsService';
@@ -30,12 +30,16 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
   const [checkState, setCheckState] = useState<CheckState>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [localAvailableUpdate, setLocalAvailableUpdate] = useState<AvailableUpdate | null>(null);
+  const updateCheckRequestRef = useRef(0);
   const availableUpdate = ('update' in updateState ? updateState.update : undefined) ?? localAvailableUpdate;
+  // The parent state update is scheduled by the same check callback. Keep this
+  // local fallback only until that state is visible through props.
+  const hasLocalPendingUpdate = localAvailableUpdate !== null && updateState.phase === 'idle';
   const canChooseUpdate = Boolean(
     availableUpdate
       && (updateState.phase === 'available'
         || updateState.phase === 'ready'
-        || (localAvailableUpdate !== null && updateState.phase === 'idle')),
+        || hasLocalPendingUpdate),
   );
   const displayMessage = message
     ?? (availableUpdate ? `${t('updateAvailable')} v${availableUpdate.version}` : '');
@@ -49,10 +53,14 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
   };
 
   const handleCheckUpdate = async () => {
+    const requestId = updateCheckRequestRef.current + 1;
+    updateCheckRequestRef.current = requestId;
     setCheckState('checking');
     setMessage(t('updateCheckingRemote'));
 
     const result = await onCheckForUpdate();
+    if (requestId !== updateCheckRequestRef.current) return;
+
     if (result.status === 'available') {
       setLocalAvailableUpdate(result);
       setCheckState('available');
@@ -80,6 +88,8 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
   };
 
   const handleIgnoreUpdate = () => {
+    // Invalidate a still-running check so its result cannot restore the prompt.
+    updateCheckRequestRef.current += 1;
     onIgnoreUpdate();
     setLocalAvailableUpdate(null);
     setCheckState('ignored');
@@ -123,7 +133,7 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
             {canChooseUpdate && availableUpdate && (
               <div className="about-update-choice">
                 <button type="button" className="primary-action-button" onClick={onUpdateAction}>
-                  {updateState.phase === 'ready' ? t('updateCardRelaunchAction') : t('updateApply')}
+                  {updateState.phase === 'ready' ? t('updateRelaunch') : t('updateApply')}
                 </button>
                 <button type="button" className="secondary-action-button" onClick={handleIgnoreUpdate}>
                   {t('updateIgnore')}

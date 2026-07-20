@@ -8696,8 +8696,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .toggle-switch.on {
-  background: var(--theme-success);
-  border-color: var(--theme-success);
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
 }
 
 .toggle-switch::after {
@@ -8740,7 +8740,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .settings-toggle-state.on {
-  color: var(--theme-success);
+  color: var(--theme-accent);
   font-weight: 600;
 }
 
