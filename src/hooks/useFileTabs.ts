@@ -55,7 +55,7 @@ type UseFileTabsResult = {
   dirtyPaths: Set<string>;
   saveVisualState: SaveVisualState;
   shouldShowTabbar: boolean;
-  unsavedDialog: { message: string } | null;
+  unsavedDialog: { message: string; allowDiscardAll?: boolean } | null;
   renameDialog: { tabId: string; name: string; error?: string } | null;
   setRenameDialog: Dispatch<SetStateAction<{ tabId: string; name: string; error?: string } | null>>;
   externalChangeConflict: { path: string; ts: number } | null;
@@ -73,7 +73,7 @@ type UseFileTabsResult = {
   handleConfirmRename: () => Promise<void>;
   handleSave: () => Promise<void>;
   handleSaveAs: () => Promise<void>;
-  handleContentChange: (value: string) => void;
+  handleContentChange: (value: string, origin?: 'table-format') => void;
   handleViewDiff: () => Promise<void>;
   handleAcceptExternal: () => Promise<void>;
   handleKeepMine: () => void;
@@ -141,7 +141,7 @@ export function useFileTabs({
   const [file, setFile] = useState<OpenedFile>(createEmptyFile());
   const [openTabs, setOpenTabs] = useState<OpenFileTab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
-  const [unsavedDialog, setUnsavedDialog] = useState<{ message: string } | null>(null);
+  const [unsavedDialog, setUnsavedDialog] = useState<{ message: string; allowDiscardAll?: boolean } | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ tabId: string; name: string; error?: string } | null>(null);
   const [externalChangeConflict, setExternalChangeConflict] = useState<{ path: string; ts: number } | null>(null);
   const [diffPreview, setDiffPreview] = useState<DiffPreview>(null);
@@ -205,21 +205,24 @@ export function useFileTabs({
   }, [clearSaveVisualTimer]);
 
   const applyOpenedFile = useCallback((opened: OpenedFile, path?: string) => {
+    clearSaveVisualTimer();
     const id = fileTabId(opened, path);
-    setOpenTabs((tabs) => {
-      const existingIndex = tabs.findIndex((tab) => (
-        opened.path && tab.file.path && sameDocumentPath(opened.path, tab.file.path)
-      ));
-      if (existingIndex >= 0) {
-        return tabs.map((tab, index) => index === existingIndex ? { id: tab.id, file: opened } : tab);
-      }
-      return [...tabs, { id, file: opened }];
-    });
-    setActiveTabId(() => {
-      const existing = openTabsRef.current.find((tab) => opened.path && tab.file.path && sameDocumentPath(opened.path, tab.file.path));
-      return existing?.id ?? id;
-    });
+    const existingIndex = openTabsRef.current.findIndex((tab) => (
+      opened.path && tab.file.path && sameDocumentPath(opened.path, tab.file.path)
+    ));
+    const activeId = existingIndex >= 0 ? openTabsRef.current[existingIndex]!.id : id;
+    const nextTabs = existingIndex >= 0
+      ? openTabsRef.current.map((tab, index) => index === existingIndex ? { id: tab.id, file: opened } : tab)
+      : [...openTabsRef.current, { id, file: opened }];
+
+    // 先更新 ref，避免文档切换期间的编辑器回调把新正文写回旧标签身份。
+    fileRef.current = opened;
+    openTabsRef.current = nextTabs;
+    activeTabIdRef.current = activeId;
+    setOpenTabs(nextTabs);
+    setActiveTabId(activeId);
     setFile(opened);
+    setSaveVisualState(opened.dirty ? 'dirty' : 'idle');
     setToc(opened.fileType === 'docx' ? [] : extractToc(opened.content));
     const openedPath = opened.path || path || '';
     if (openedPath) {
@@ -236,6 +239,7 @@ export function useFileTabs({
       setEditorMode('wysiwyg');
     }
   }, [
+    clearSaveVisualTimer,
     extractToc,
     setDiskChangeMessage,
     setEditorMode,
@@ -295,8 +299,12 @@ export function useFileTabs({
     if (!tab || tab.id === activeTabIdRef.current) return;
     void canChangeDocument({ kind: 'switch-tab', targetPath: tab.file.path }).then((allowed) => {
       if (!allowed) return;
+      activeTabIdRef.current = tab.id;
+      fileRef.current = tab.file;
+      clearSaveVisualTimer();
       setActiveTabId(tab.id);
       setFile(tab.file);
+      setSaveVisualState(tab.file.dirty ? 'dirty' : 'idle');
       setToc(tab.file.fileType === 'docx' ? [] : extractToc(tab.file.content));
       setDiskChangeMessage('');
       setTransientMessage('');
@@ -308,6 +316,7 @@ export function useFileTabs({
     });
   }, [
     canChangeDocument,
+    clearSaveVisualTimer,
     extractToc,
     setDiskChangeMessage,
     setFindVisible,
@@ -330,39 +339,11 @@ export function useFileTabs({
     });
   }, []);
 
-  const saveDirtyFilesBeforeClose = useCallback(async () => {
-    const { saveFile } = await import('../services/fileService');
-    const activeId = activeTabIdRef.current;
-    const tabs = openTabsRef.current.map((tab) => (
-      tab.id === activeId ? { ...tab, file: fileRef.current } : tab
-    ));
-    const dirtyTabs = tabs.filter((tab) => tab.file.dirty && tab.file.fileType !== 'docx');
-
-    for (const tab of dirtyTabs) {
-      const updated = await saveFile(tab.file);
-      if (updated.dirty) return false;
-      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
-      setOpenTabs((currentTabs) => currentTabs.map((candidate) => (
-        candidate.id === tab.id ? { ...candidate, file: updated } : candidate
-      )));
-      if (tab.id === activeId) {
-        setFile(updated);
-        if (updated.path) setLastOpenedPath(updated.path);
-      }
-    }
-
-    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
-    setAutoSaveError('');
-    setDiskChangeMessage('');
-    dirtyFilesRef.current = false;
-    return true;
-  }, [setAutoSaveError, setDiskChangeMessage]);
-
-  const requestUnsavedChoice = useCallback((message: string) => {
+  const requestUnsavedChoice = useCallback((message: string, allowDiscardAll = false) => {
     return new Promise<UnsavedDecision>((resolve) => {
       unsavedResolverRef.current?.('cancel');
       unsavedResolverRef.current = resolve;
-      setUnsavedDialog({ message });
+      setUnsavedDialog({ message, allowDiscardAll });
     });
   }, []);
 
@@ -375,24 +356,52 @@ export function useFileTabs({
 
   const confirmCloseWithDirtyFiles = useCallback(async () => {
     if (!dirtyFilesRef.current) return true;
-    const dirtyTabs = openTabsRef.current.filter((tab) => tab.file.dirty && tab.file.fileType !== 'docx');
+    const activeId = activeTabIdRef.current;
     const liveActive = fileRef.current;
-    const liveActiveDirty = liveActive.dirty && liveActive.fileType !== 'docx';
-    const dirtyCount = Math.max(dirtyTabs.length, liveActiveDirty ? 1 : 0);
-    const message = dirtyCount > 1
-      ? `有 ${dirtyCount} 个文档存在未保存的修改，是否保存后关闭？`
-      : `“${liveActive.name}” 有未保存的修改，是否保存后关闭？`;
-    const choice = await requestUnsavedChoice(message);
-    if (choice === 'cancel') return false;
-    if (choice === 'discard') return true;
-    try {
-      return await saveDirtyFilesBeforeClose();
-    } catch (error) {
-      console.warn('Failed to save before closing:', error);
-      await messageDialog('保存失败，已取消关闭。请检查文件权限或磁盘状态后重试。', { title: '保存失败' });
-      return false;
+    const tabs = openTabsRef.current.map((tab) => (
+      tab.id === activeId ? { ...tab, file: liveActive } : tab
+    ));
+    const dirtyTabs = tabs.filter((tab) => tab.file.dirty && tab.file.fileType !== 'docx');
+    if (!activeId && liveActive.dirty && liveActive.fileType !== 'docx') {
+      dirtyTabs.push({ id: '', file: liveActive });
     }
-  }, [requestUnsavedChoice, saveDirtyFilesBeforeClose]);
+
+    const { saveFile } = await import('../services/fileService');
+    for (const [index, tab] of dirtyTabs.entries()) {
+      const choice = await requestUnsavedChoice(
+        `“${tab.file.name}” 有未保存的修改（${index + 1} / ${dirtyTabs.length}），是否保存后关闭？`,
+        index < dirtyTabs.length - 1,
+      );
+      if (choice === 'cancel') return false;
+      if (choice === 'discard-all') return true;
+      if (choice === 'discard') continue;
+      try {
+        const updated = await saveFile(tab.file);
+        if (updated.dirty) return false;
+        lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+        const nextTabs = openTabsRef.current.map((candidate) => (
+          candidate.id === tab.id ? { ...candidate, file: updated } : candidate
+        ));
+        openTabsRef.current = nextTabs;
+        setOpenTabs(nextTabs);
+        if (tab.id === activeId || (!tab.id && !activeId)) {
+          fileRef.current = updated;
+          setFile(updated);
+          if (updated.path) setLastOpenedPath(updated.path);
+        }
+      } catch (error) {
+        console.warn('Failed to save before closing:', error);
+        await messageDialog('保存失败，已取消关闭。请检查文件权限或磁盘状态后重试。', { title: '保存失败' });
+        return false;
+      }
+    }
+
+    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+    setAutoSaveError('');
+    setDiskChangeMessage('');
+    dirtyFilesRef.current = false;
+    return true;
+  }, [requestUnsavedChoice, setAutoSaveError, setDiskChangeMessage]);
 
   const confirmCloseTabWithDirtyFile = useCallback(async (targetFile: OpenedFile) => {
     if (!targetFile.dirty || targetFile.fileType === 'docx') return true;
@@ -447,20 +456,30 @@ export function useFileTabs({
       if (!shouldClose) return;
       const removedIndex = openTabsRef.current.findIndex((candidate) => candidate.id === tabId);
       const nextTabs = openTabsRef.current.filter((candidate) => candidate.id !== tabId);
+      openTabsRef.current = nextTabs;
       setOpenTabs(nextTabs);
       if (activeTabIdRef.current !== tabId) return;
       const nextActive = nextTabs[Math.max(0, removedIndex - 1)] ?? nextTabs[0];
       if (nextActive) {
+        activeTabIdRef.current = nextActive.id;
+        fileRef.current = nextActive.file;
         setActiveTabId(nextActive.id);
         setFile(nextActive.file);
+        clearSaveVisualTimer();
+        setSaveVisualState(nextActive.file.dirty ? 'dirty' : 'idle');
         setToc(nextActive.file.fileType === 'docx' ? [] : extractToc(nextActive.file.content));
       } else {
+        const emptyFile = createEmptyFile();
+        activeTabIdRef.current = '';
+        fileRef.current = emptyFile;
         setActiveTabId('');
-        setFile(createEmptyFile());
+        setFile(emptyFile);
+        clearSaveVisualTimer();
+        setSaveVisualState('idle');
         setToc([]);
       }
     })();
-  }, [canChangeDocument, confirmCloseTabWithDirtyFile, extractToc, setToc]);
+  }, [canChangeDocument, clearSaveVisualTimer, confirmCloseTabWithDirtyFile, extractToc, setToc]);
 
   const handleRequestRename = useCallback((tabId = activeTabIdRef.current) => {
     const target = openTabsRef.current.find((tab) => tab.id === tabId);
@@ -560,15 +579,17 @@ export function useFileTabs({
     }
   }, [clearSaveVisualTimer, file, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
 
-  const handleContentChange = useCallback((value: string) => {
+  const handleContentChange = useCallback((value: string, origin?: 'table-format') => {
     setAutoSaveError('');
     setDiskChangeMessage('');
     setTransientMessage('');
     clearSaveVisualTimer();
+    const acceptAutomaticFormat = origin === 'table-format' && !fileRef.current.dirty;
     const nextFile = {
       ...fileRef.current,
       content: value,
-      dirty: value !== fileRef.current.lastSavedContent,
+      lastSavedContent: acceptAutomaticFormat ? value : fileRef.current.lastSavedContent,
+      dirty: acceptAutomaticFormat ? false : value !== fileRef.current.lastSavedContent,
     };
     if (value !== fileRef.current.content) documentRevisionRef.current += 1;
     fileRef.current = nextFile;

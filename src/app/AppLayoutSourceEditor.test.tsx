@@ -80,8 +80,64 @@ describe('AppLayout source editor', () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    localStorage.removeItem('typola-last-opened-file');
     delete (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     vi.clearAllMocks();
+  });
+
+  it('keeps the startup-reopened Markdown file clean', async () => {
+    const path = 'D:\\docs\\startup.md';
+    const content = '| Column A | Column B |\r\n| --- | --- |\r\n| value | value |\r\n';
+    localStorage.setItem('typola-last-opened-file', path);
+    fileServiceMock.openPath.mockResolvedValue({
+      path,
+      name: 'startup.md',
+      content,
+      dirty: false,
+      lastSavedContent: content,
+      fileType: 'markdown',
+    });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 750));
+      await vi.dynamicImportSettled();
+      await flushPromises();
+      await waitForMacrotask();
+    });
+
+    expect(fileServiceMock.openPath).toHaveBeenCalledWith(path, 'UTF-8');
+    expect(host.querySelector('.status-save-state')).toBeNull();
+    expect(tauriWindowMock.setTitle).toHaveBeenLastCalledWith('startup.md');
+  });
+
+  it('keeps a newly opened Markdown file clean in the real CodeMirror editor', async () => {
+    fileServiceMock.openFile.mockResolvedValue({
+      path: 'D:\\docs\\clean.md',
+      name: 'clean.md',
+      content: '# Clean document',
+      dirty: false,
+      lastSavedContent: '# Clean document',
+      fileType: 'markdown',
+    });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true }));
+      await vi.dynamicImportSettled();
+      await flushPromises();
+      await waitForMacrotask();
+    });
+
+    expect(host.querySelector('.cm-content')?.textContent).toContain('Clean document');
+    expect(host.querySelector('.status-save-state')).toBeNull();
+    expect(tauriWindowMock.setTitle).toHaveBeenLastCalledWith('clean.md');
   });
 
   it('renders the original HTML file source in CodeMirror after switching from the WYSIWYG pane', async () => {

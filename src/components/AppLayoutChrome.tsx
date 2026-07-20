@@ -55,7 +55,7 @@ type AppLayoutChromeProps = {
   statusBarNode: ReactNode;
 };
 
-function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolean) {
+function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolean, layoutKey = activeKey) {
   const containerRef = useRef<T | null>(null);
   const [style, setStyle] = useState<CSSProperties | null>(null);
 
@@ -99,7 +99,7 @@ function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolea
       resizeObserver?.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [activeKey]);
+  }, [activeKey, layoutKey]);
 
   return { containerRef, indicatorStyle: style };
 }
@@ -157,7 +157,7 @@ export function AppLayoutChrome({
   const supportsWebAnimations = typeof Element !== 'undefined'
     && typeof Element.prototype.animate === 'function';
   const leftRailIndicator = useActiveTabIndicator<HTMLDivElement>(leftRailMode);
-  const editorTabIndicator = useActiveTabIndicator<HTMLDivElement>(activeTabId);
+  const editorTabIndicator = useActiveTabIndicator<HTMLDivElement>(activeTabId, openTabs.map((tab) => tab.id).join('\u0000'));
   const rightRailIndicator = useActiveTabIndicator<HTMLDivElement>(rightPanelMode);
   const editorTabContainerRef = editorTabIndicator.containerRef;
   const setEditorTabbarRef = useCallback((node: HTMLDivElement | null) => {

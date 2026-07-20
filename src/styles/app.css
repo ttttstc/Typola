@@ -211,10 +211,15 @@ html, body, #root {
   white-space: nowrap;
 }
 
-.update-card > button {
+.update-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.update-card-action,
+.update-card-ignore {
   display: grid;
-  flex: 0 0 36px;
-  width: 36px;
   height: 36px;
   padding: 0;
   place-items: center;
@@ -225,11 +230,25 @@ html, body, #root {
   cursor: pointer;
 }
 
-.update-card > button:hover:not(:disabled) {
+.update-card-action {
+  flex: 0 0 36px;
+  width: 36px;
+}
+
+.update-card-ignore {
+  padding: 0 8px;
+  color: var(--theme-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.update-card-action:hover:not(:disabled),
+.update-card-ignore:hover:not(:disabled) {
   background: var(--theme-control-hover-bg);
 }
 
-.update-card > button:disabled {
+.update-card-action:disabled,
+.update-card-ignore:disabled {
   cursor: default;
 }
 

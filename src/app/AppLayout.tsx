@@ -2699,6 +2699,7 @@ export function AppLayout() {
         state={updateState}
         distributionKind={distributionKind}
         onAction={() => { void handleUpdateAction(); }}
+        onIgnore={() => setUpdateState({ phase: 'idle' })}
       />
       {exportToast && (
         <div className={`export-toast export-toast-${exportToast.type}`} role="status" aria-live="polite">
