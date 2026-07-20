@@ -41,7 +41,7 @@ export function UpdateCard({ state, distributionKind, onAction }: UpdateCardProp
   const action = state.phase === 'error'
     ? t('updateCardRetry')
     : state.phase === 'ready'
-      ? t('updateCardRelaunchAction')
+      ? t('updateRelaunch')
       : distributionKind === 'portable'
         ? t('updateCardPortableAction')
         : t('updateCardInstalledAction');

@@ -59,6 +59,7 @@ describe('updateService', () => {
     const second = checkForAppUpdate();
     expect(second).toBe(first);
     await vi.waitFor(() => expect(updaterMock.check).toHaveBeenCalledTimes(1));
+    expect(updaterMock.check).toHaveBeenCalledWith({ timeout: 30_000 });
     resolveCheck?.(null);
     await expect(first).resolves.toEqual({ status: 'not-available' });
   });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { getSettings, updateSettings, type AppSettings, type ImageInsertAction } from '../../services/settingsService';
+import { SettingsToggle } from './SettingsToggle';
 
 type UploadResult = {
   urls: string[];
@@ -105,10 +106,10 @@ export function ImageSection() {
         <div>
           <div className="settings-label">优先使用相对路径</div>
         </div>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.imagePreferRelative ? 'on' : ''}`}
-          onClick={() => handleChange({ imagePreferRelative: !settings.imagePreferRelative })}
+        <SettingsToggle
+          checked={settings.imagePreferRelative}
+          label="优先使用相对路径"
+          onChange={() => handleChange({ imagePreferRelative: !settings.imagePreferRelative })}
         />
       </div>
 
@@ -116,10 +117,10 @@ export function ImageSection() {
         <div>
           <div className="settings-label">相对路径加 ./ 前缀</div>
         </div>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.imageEnsureDotPrefix ? 'on' : ''}`}
-          onClick={() => handleChange({ imageEnsureDotPrefix: !settings.imageEnsureDotPrefix })}
+        <SettingsToggle
+          checked={settings.imageEnsureDotPrefix}
+          label="相对路径加 ./ 前缀"
+          onChange={() => handleChange({ imageEnsureDotPrefix: !settings.imageEnsureDotPrefix })}
         />
       </div>
 
@@ -128,10 +129,10 @@ export function ImageSection() {
           <div className="settings-label">插入时转义路径</div>
           <div className="settings-description">例如把空格写成 %20。</div>
         </div>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.imageEscapeUrl ? 'on' : ''}`}
-          onClick={() => handleChange({ imageEscapeUrl: !settings.imageEscapeUrl })}
+        <SettingsToggle
+          checked={settings.imageEscapeUrl}
+          label="插入时转义路径"
+          onChange={() => handleChange({ imageEscapeUrl: !settings.imageEscapeUrl })}
         />
       </div>
 
@@ -139,10 +140,10 @@ export function ImageSection() {
         <div>
           <div className="settings-label">对本地图片应用上述规则</div>
         </div>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.imageApplyToLocal ? 'on' : ''}`}
-          onClick={() => handleChange({ imageApplyToLocal: !settings.imageApplyToLocal })}
+        <SettingsToggle
+          checked={settings.imageApplyToLocal}
+          label="对本地图片应用上述规则"
+          onChange={() => handleChange({ imageApplyToLocal: !settings.imageApplyToLocal })}
         />
       </div>
 
@@ -151,10 +152,10 @@ export function ImageSection() {
           <div className="settings-label">允许 YAML 自动上传</div>
           <div className="settings-description">front matter 写 typora-copy-images-to: upload 时启用上传。</div>
         </div>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.imageAllowYamlUpload ? 'on' : ''}`}
-          onClick={() => handleChange({ imageAllowYamlUpload: !settings.imageAllowYamlUpload })}
+        <SettingsToggle
+          checked={settings.imageAllowYamlUpload}
+          label="允许 YAML 自动上传"
+          onChange={() => handleChange({ imageAllowYamlUpload: !settings.imageAllowYamlUpload })}
         />
       </div>
 
@@ -189,11 +190,19 @@ export function ImageSection() {
 
       <div className="settings-row">
         <div><div className="settings-label">折叠 YAML frontmatter</div></div>
-        <button type="button" className={`toggle-switch ${settings.editorFrontmatterFoldEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFrontmatterFoldEnabled: !settings.editorFrontmatterFoldEnabled })} />
+        <SettingsToggle
+          checked={settings.editorFrontmatterFoldEnabled}
+          label="折叠 YAML frontmatter"
+          onChange={() => handleChange({ editorFrontmatterFoldEnabled: !settings.editorFrontmatterFoldEnabled })}
+        />
       </div>
       <div className="settings-row">
         <div><div className="settings-label">启用格式刷</div></div>
-        <button type="button" className={`toggle-switch ${settings.editorFormatPainterEnabled ? 'on' : ''}`} onClick={() => handleChange({ editorFormatPainterEnabled: !settings.editorFormatPainterEnabled })} />
+        <SettingsToggle
+          checked={settings.editorFormatPainterEnabled}
+          label="启用格式刷"
+          onChange={() => handleChange({ editorFormatPainterEnabled: !settings.editorFormatPainterEnabled })}
+        />
       </div>
     </div>
   );

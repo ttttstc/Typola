@@ -8688,15 +8688,16 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   width: 34px;
   height: 18px;
   border-radius: 9px;
-  background: var(--theme-border);
+  background: color-mix(in oklch, var(--theme-border) 72%, var(--theme-surface));
   position: relative;
   cursor: pointer;
   transition: background 0.2s;
-  border: none;
+  border: 1px solid var(--theme-border-hover);
 }
 
 .toggle-switch.on {
   background: var(--theme-accent);
+  border-color: var(--theme-accent);
 }
 
 .toggle-switch::after {
@@ -8709,10 +8710,42 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   top: 2px;
   left: 2px;
   transition: transform 0.2s;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--theme-text-primary) 12%, transparent);
 }
 
 .toggle-switch.on::after {
   transform: translateX(16px);
+}
+
+.toggle-switch:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+.settings-toggle-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.settings-toggle-state {
+  min-width: 36px;
+  color: var(--theme-text-secondary);
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1;
+  text-align: left;
+}
+
+.settings-toggle-state.on {
+  color: var(--theme-accent);
+  font-weight: 600;
+}
+
+.settings-toggle-state.off {
+  color: var(--theme-text-tertiary, var(--theme-text-secondary));
 }
 
 .settings-value {
@@ -8857,6 +8890,13 @@ a.about-info-value:hover {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.about-update-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .about-auto-update {

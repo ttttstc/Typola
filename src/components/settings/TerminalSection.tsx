@@ -4,6 +4,7 @@ import {
   type TerminalCursorStyle,
   type TerminalShortcutPreset,
 } from '../../services/settingsService';
+import { SettingsToggle } from './SettingsToggle';
 
 const cursorOptions: { value: TerminalCursorStyle; label: string }[] = [
   { value: 'block', label: '块状光标' },
@@ -73,11 +74,10 @@ export function TerminalSection() {
           <span className="settings-label">光标闪烁</span>
           <span className="settings-desc">关闭后光标保持静止，长时间写作时更稳。</span>
         </span>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.terminalCursorBlink ? 'on' : ''}`}
-          onClick={() => updateSettings({ terminalCursorBlink: !settings.terminalCursorBlink })}
-          aria-pressed={settings.terminalCursorBlink}
+        <SettingsToggle
+          checked={settings.terminalCursorBlink}
+          label="光标闪烁"
+          onChange={() => updateSettings({ terminalCursorBlink: !settings.terminalCursorBlink })}
         />
       </label>
 
@@ -101,13 +101,12 @@ export function TerminalSection() {
           <span className="settings-label">多行粘贴确认</span>
           <span className="settings-desc">防止把整段命令误粘贴进终端直接执行。</span>
         </span>
-        <button
-          type="button"
-          className={`toggle-switch ${settings.terminalConfirmMultilinePaste ? 'on' : ''}`}
-          onClick={() => updateSettings({
+        <SettingsToggle
+          checked={settings.terminalConfirmMultilinePaste}
+          label="多行粘贴确认"
+          onChange={() => updateSettings({
             terminalConfirmMultilinePaste: !settings.terminalConfirmMultilinePaste,
           })}
-          aria-pressed={settings.terminalConfirmMultilinePaste}
         />
       </label>
     </div>

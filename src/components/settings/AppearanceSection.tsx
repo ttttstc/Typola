@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { getSettings, updateSettings, type AppSettings } from '../../services/settingsService';
 import { listThemeDefinitions, type ThemeDefinition, type ThemeId } from '../../services/themeRegistry';
+import { SettingsToggle } from './SettingsToggle';
 
 const ZOOM_LEVELS = [80, 90, 100, 110, 120];
 const THEMES = listThemeDefinitions();
@@ -158,13 +159,11 @@ export function AppearanceSection() {
           <div className="settings-help">
             为编辑器纸张添加静态纹理；深海与抽象主题不启用此效果。
           </div>
-          <button
-            type="button"
-            className={`toggle-switch ${settings.editorPaperBackground ? 'on' : ''}`}
-            aria-label="编辑器纸纹"
-            aria-pressed={settings.editorPaperBackground}
+          <SettingsToggle
+            checked={settings.editorPaperBackground}
+            label="编辑器纸纹"
             disabled={PAPER_TEXTURE_UNSUPPORTED_THEMES.has(settings.themeId)}
-            onClick={() => handleChange({ editorPaperBackground: !settings.editorPaperBackground })}
+            onChange={() => handleChange({ editorPaperBackground: !settings.editorPaperBackground })}
           />
         </div>
       </div>
