@@ -1,18 +1,85 @@
 # Changelog
 
+## [2.0.5] - 2026-07-13
+
+- CM6 表格交互切换为 `codemirror-markdown-tables`：支持连续单元格选择、行列操作菜单、对齐、移动、复制/剪切/粘贴、Tab/Enter 导航与原生撤销；保留 Typola 中文右键菜单并补齐行列插入方向和三种对齐方式。
+- 清理旧 Atomic 表格样式，并补充右键点击指定列后的真实对齐回归测试。
+- 补齐 `codemirror-markdown-tables` 的运行时依赖 `@mobily/ts-belt`，确保 pnpm 严格安装后的测试与构建可解析。
+
+## Unreleased
+
+- 修复 GitHub 更新清单首次连接较慢时的误报：检查超时从 12 秒提高到 30 秒；关于页移除空检查占位文案，发现新版本时可直接选择更新并重启或忽略；设置页所有开关显示明确的开/关状态；同步更新关于页的 Typola 产品定位文案。
+- Issue #199：新增右上角应用更新卡片；自动检查只提示，安装版点击一次后下载、安装并重启，期间保护未保存文档，Portable 则打开 GitHub Releases。根目录 `VERSION` 成为唯一人工版本源，推送 Tag 后 CI 自动同步派生版本；正式发布要求提交相对父提交修改 `VERSION`，并校验稳定版本、生成 Tauri updater 签名和 `latest.json`，在 Draft 资源完整后公开。
+- 全量动效优化：统一使用 MotionProvider 的时长/easing token，补齐侧栏、列表、模态框、冲突提示、文件树、大纲与终端的可中断进入/退出过渡；所有新增动效尊重 Reduced Motion，终端拖拽期间保持即时响应且不增加 bundle 预算。
+- 修复动效审查发现的交互细节：左侧栏拖拽时宽度即时跟手，终端展开动画完成后重新 fit xterm，避免恢复隐藏状态下的列宽与行高。
+- 动效性能优化：移除右侧面板重复的宽度过渡，左右侧栏与终端拖拽按动画帧合并更新，修复左栏最小宽度阻塞展开首帧，并合并右栏 tab 指示器的重复测量与渲染。
+- 检视意见编辑框新增依据展示，人工意见明确显示暂无依据；AI 检视配置与意见列表增加清晰分区，全局界面文案字号默认放大一级并跟随设置中的字号调整。
+- 优化 PDF / Word 导出：新增分阶段进度条，PDF 缓存浏览器定位并缩短安全输出等待；Word 改用内置 `docx` 生成器，不再依赖 Pandoc。同步精修 Word 纸张预览与 HTML 产物预览的排版、加载态、错误态和键盘焦点。
+- 同步 README、贡献指南、PDF 导出规格及图片/Mermaid/AI Workbench 设计文档的实现状态，明确当前浏览器打印 PDF 与内置 Word 生成链路，并标注历史方案快照。
+- 新增面向小白用户的《用户指导手册》，覆盖写作、AI 工作台、SkillHub、产物中心、检视改稿、图片、主题及 PDF/Word/HTML 交付，并从 README 提供直达入口。
+- 检视模式改为正文与检视工作台 1:1 分屏；人工和 AI 意见均可编辑或忽略，AI 改稿默认使用全部未忽略意见；改稿历史支持打开版本、返回前一篇及差异对比。
+- AI 检视面板默认展开；支持通过紧凑下拉同时导入多个 Markdown 规则文件、选择多个写作规范 Skill 和输入手工规则，并在运行中显示动态进度或随时停止。
+- 检视意见列表按“原文 / 意见”分区并收敛为摘要；点击卡片打开更大的意见编辑器，可保存、取消及连续查看上一条/下一条，定位原文与忽略保持为独立操作。检视模式顶部导航、内容滚动区和底部改稿操作同步分层固定。
+- 改稿差异对比统一换行符，只将真实增删改列为待确认项；折叠远处未变化内容，并在句内突出具体增删文字。
+- 全应用普通文字在浅色模式统一为纯黑、深色模式统一为纯白，提升编辑区、工作台和弹窗的可读性。
+- 修复高对比度文字规则导致工具栏 Tooltip 黑底黑字的问题；行号改为逐源码行显示，行号区域右键复用正文菜单并提供“隐藏行号”；进入检视模式时默认收起左侧文件树。
+- AI 检视结果直接写入当前文档的意见列表，不再生成中间产物；仅“导出检视版”会创建检视文件。
+- 导出检视版时，Typola 回读元数据统一放在文件末尾，不再打断正文或检视意见汇总。
+- 检视版回读元数据改用紧凑编码，缩短外部编辑器未隐藏注释时显示的内容。
+- 修复非默认目录中的工作区产物无法读写：当前 `.typola-output` 会在读写前动态加入文件权限范围。
+- Issue #241：修复候选稿“应用后切换”时标签内容可能未同步的问题；恢复重复原文人工意见的精确跳转，并增强候选稿持久化配额保护与阻断提示。
+- Issue #241：检视模式新增统一人工/AI 意见列表与可恢复忽略状态；AI 可按 `style.md`、Skill 或自然语言要求检视，也可针对选区、当前章节或全文生成候选稿。改稿沿用当前 AI Session，在左右 Diff 中逐处接受、拒绝或手动编辑，关闭并重开应用后可恢复当前对话和候选稿，应用前自动保存历史版本；切换文档、外部改动、另存和恢复均经过候选稿保护流程。正文右键可显示 Markdown 源行号，检视版导出不覆盖原文并可由 Typola 回读。
+- 素笺主题的默认正文文字改为更深的暖黑色，提升长文写作时的阅读对比度。
+- 重构中英文 README：发布页优先说明适用场景、核心能力、安装与快速开始；实现细节收敛到架构文档。
+
+- CM6 表格右键删除行/列现在可从任意单元格直接触发，操作仍转发给 `codemirror-markdown-tables` 的上游手柄；表格后的退格改为 Obsidian 式“两步删除”。正文右键菜单按“格式 / 段落 / 插入”收纳为二级菜单，并移除右键 AI 入口；加粗、斜体、行内代码、链接、引用与三类列表作为常用按钮直接展示。
+- CM6 表格右键行为对齐 Obsidian：表格内只显示中文表格操作，统一提供行列插入、移动、复制、清空、删除、排序、对齐及整表删除；行列事务继续复用 `codemirror-markdown-tables`，整表删除由 CM6 GFM 语法树定位源码范围并进入原生撤销历史。
+
+- 修复 CM6 表格内右键点击单个空格时误落到通用编辑器菜单的问题；文本节点现在统一归一到表格单元格，空白处与单元格其他区域复用同一套上游表格菜单、样式和操作能力。
+- 工具栏中央不再显示当前文件名，保留窗口拖拽区与编辑器标签页文件名。
+- CM6 表格操作收敛为上游 `codemirror-markdown-tables`：表格右键转交上游行/列菜单，中文界面由轻量适配层翻译；移除 Typola 自研表格行列事务、表格快捷键拦截和重复 Markdown 解析，工具栏与非表格区域右键插入继续调用上游 `insertEmptyMarkdownTable()`。
+- Issue #224：自托管 Source Han Serif SC 可变字体子集（OFL 1.1），全局普通文本与文件树/AI 工作台统一使用思源宋体；编辑器字体设置新增思源宋体并设为默认，保留等宽字体切换；新增主题对比度审计与 CM6「编辑器纸纹」持久化开关，纸纹仅用于素笺、墨韵、粗野主题，深海与抽象主题不启用；补充 3 张代表性视觉基线。
+- Issue #223：CM6 性能路径优化：预览滚动同步缓存 heading 并独立节流；编辑器视图改用 ref；live-preview 扩展按 Compartment 局部 reconfigure；数学、heading 折叠、Markdown 分析缓存与本地图片观察路径减少重复全篇扫描。
+- CM6 格式快捷键补齐标题、行内代码、清除格式与引用层级；多行引用升级/降级现在作为单笔撤销记录。链接与代码语言编辑改为可键盘操作的 React 浮层，删除 CM6 路径中的浏览器 prompt。
+- 修复多个 CM6 编辑器实例共享预览同步帧和 Mermaid SVG 编号的问题；搜索替换在写入前验证当前文档，拒绝陈旧坐标。
+- Markdown 分析与统一导出识别并剥离文首 YAML frontmatter，避免将其误作正文内容或导出产物。
+- 修复 CM6 写作预览中新插入的本地 Markdown 图片未转换为 Tauri asset URL、因而无法显示的问题；右键插入/替换现与工具栏、拖拽、粘贴统一遵循图像设置，外部目录和绝对路径图片可获 asset scope 后显示。
+- 修复自定义配色首次打开时调色盘被遮罩隐藏；未选颜色时改为使用素笺主题，调整后的颜色在关闭应用后仍会保留，并在应用启动时重新应用。
+- CM6 新增 frontmatter 折叠、脚注跳转、raw HTML 安全预览、格式刷和图片 Alt/Title/宽度编辑；图片目录模板支持 `{filename}`、`{year}`、`{month}`。
+- HTML 导出会复制本地图片至导出文件同级资源目录并重写引用；远程与 data URL 保持原样，缺失文件不阻断导出。
+- CM6 右键格式菜单新增下划线、上标、下标与 `==高亮==`；导出将高亮语法渲染为安全的 `<mark>`。
+- 修复 PR #222 审查发现的本地图片路径越界、图片元数据转义、heading 路径和浮层关闭问题，并补充 HTML/脚注/frontmatter 安全回归测试。
+
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- 完成 #183 / #184：CM6 数学与 Mermaid 块预览改为带 source-hash / theme 缓存的原生 widget，光标进入块即回到 Markdown 源码；渲染仅在块被 CM6 物化到可视区域时发生，异步错误以卡片展示且不改写 source。HTML、PDF、Word 纸张预览与微信预览的 Markdown→HTML 基座改为 remark/rehype，支持 GFM、代码高亮、KaTeX、Mermaid、本地图片解析与 HTML sanitize，不再依赖 Vditor preview renderer；Word `.docx` 由内置 `docx` 生成器直接打包，不依赖外部转换器。
+- PDF 导出改为与 Word 一致的保存对话框：默认 Downloads 路径和 `.pdf` 文件名，用户可选择目标文件夹或取消导出。
+- 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 仅保留既有兼容预览链路，统一导出走 remark/rehype。
+- 查找替换改为通过 `TypolaEditorKernel.replaceRanges` 提交 CM6 transaction；单个和全部替换都会进入同一 history，支持一次 `Ctrl/Cmd+Z` 撤销。
+- 工具栏、`Ctrl/Cmd+B` / `I` / `Shift+7` / `Shift+8` 快捷键和右键菜单统一调用 CM6 格式命令；补齐引用层级、编辑链接、清除格式与代码块语言编辑的 transaction 实现。
+- 源码模式保留 CM6 标题折叠、缩放和预览同步核心扩展；仅关闭 Markdown live preview widget，搜索命中折叠内容会自动展开。
+- 修复 CM6 写作模式的检视标记与大纲联动：检视意见以 CM6 decoration 标注对应源码行，atomic-editor 标题行可正确驱动悬浮大纲的跳转与当前项。
+- 修复 CM6 格式快捷键与批量替换边界：`Ctrl/Cmd+B`、`Ctrl/Cmd+I` 在已有标记内改为取消格式；重叠替换范围会被拒绝，避免生成不可预期的文稿内容。
+
 ### Added
 
+- 新增与静态主题完全隔离的 Define 动态配色系统（Issue #192）：工具栏画笔入口打开 1:1 Theme Color Editor，支持固定半径 Hue Wheel、Solid / Gradient、垂直 Saturation、50 个 Preset、9 种 Pattern、Pattern Opacity 与 Surprise me；`--dc-*` Token 从 OKLCH 基色实时推导，拖动仅在 rAF 中预览、释放后持久化，重载恢复且不改变 Markdown 内容或 Word / HTML / PDF 导出外观。
+- 外观设置新增“自定义模式 / 主题模式”切换，默认进入纯白自定义模式；选择圆环颜色后，工具栏、面板、控件、编辑器辅助界面与 Windows 原生标题栏统一跟随动态配色。
 - 选区菜单窄化对齐 Typora/Obsidian(`width: max-content; max-width: 240px`,kbd 间距收紧 16→10px);右键菜单新增 5 个基础编辑能力:升级引用 / 降级引用 / 编辑链接 / 清除格式 / 编辑代码块语言,均走 `applyVditorFormat` 现有分发,Vditor IR 模式直接操作选中/选区 + `updateValue` 重渲染;新增 i18n keys `contextMenuQuoteUp / contextMenuQuoteDown / contextMenuLinkEdit / contextMenuClearFormat / contextMenuCodeblockLang` 中英日三译。
 - 选区浮条右端加 `⋯` 子按钮 + hover tooltip,mini menu 暴露两项:「本页不再展示」(filePath 维度 session suppress,直到切文档)与「全局隐藏」(直接写 `selectionFloatingBarEnabled=false`,与设置页 toggle 同步);新增 keys `floatingBarHideThisPage / floatingBarHideGlobal / floatingBarTooltip` 中英日三译;tooltip 用现有 Tooltip 组件浮显。
 - 工具栏新增「打开文件夹」按钮(Cmd+Shift+O),选夹后走新增 Tauri cmd `read_first_level_openable` 仅列一层 md/html/docx(不递归,跳过隐藏文件与节点_modules/dist/target/.git),批量入 tab(last active),单文件打开失败不阻塞其他(#170);新增 keys `toolbarOpenFolderTitle / toolbarOpenFolderLabel` 中英日三译;fileService 加 `openFolder` 函数,useFileTabs 加 `handleOpenFolder` 回调。
+- 写作模块图片资源管理基础能力(issue #185 P0):`markdownAnalysisService` 新增 `MarkdownImage` 类型、`scanImages` 解析与 `findMarkdownImageAt` 命中接口;CM6 编辑器右键图片新增「替换图片 / 打开文件 / 复制路径」三项,菜单任意位置新增「插入图片」,四项均走单笔 CM6 transaction,替换与插入复用 `formatImageSrc` 处理相对路径,打开文件走 Tauri `open_path_external` 命令绕开 opener scope 限制,复制路径走 `clipboardService.writeText`;远端 URL 仅作预览不下载。Vditor 模式与 alt 编辑 / 宽度 / 资源目录策略 / ExportAssetResolver 暂不做,留待 P1。
 
 ### Fixed
 
-- 新增第五套主题「粗野」(id: `brutalist`)：新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
+- 修复 CM6 任务复选框切换会移除 Markdown 列表标记的问题；新增任务过滤 API；AI 与检视 anchor 现在共享受限的结构化上下文和恢复规则。
+- 修复 AI 会话停止竞态：启动尚未返回 runId 时停止会立即恢复输入；取消后重发不会再被旧进程退出事件中断。
+- 修复源码编辑器选区浮条在缺少隐藏回调时仍展示无效「本文档不再展示／全局隐藏」按钮的问题。
+- 修复 IR 表格编辑在文档包含同内容表格时可能误改第一张表的问题：定位不唯一时拒绝操作；删除整表同步采用同一保护。新粗野主义 (Neo-brutalism) × 复古网格纸 —— 纸张底色 `#f3f0ec`、鼠尾草绿 `#4ECDC4` 为主色、珊瑚粉 `#E64A2E` 为危险、芥末黄 `#D9C688` 为选中/警告、灰蓝 `#8E9CB0` 为次要；强制 0 圆角、1px 纯黑高对比度边框、交互元素硬阴影 `5px 5px 0 0 #000`、hover/active 时 translate 位移产生压感反馈，整页 30px 坐标网格背景；字体优先用 Noto Serif SC（标题）/ JetBrains Mono（代码）/ Outfit（正文），无外网时回退到系统衬线 / 无衬线栈。设置 → 外观 → 主题卡片可直接切换。
 - 新增第四套主题「抽象」(id: `abstract`)：采用蒙德里安 De Stijl 经典配色 —— 白底 (`#ffffff`) + 黑色网格 (`#1a1a1a`) + 蒙德里安红 (`#c8311b`) / 蓝 (`#1e5a8a`) / 黄 (`#e8b810`) 三原色强调。accent 用红、aiInserted 用蓝、aiDeleted 用红、warning 用黄；终端 ANSI 也按红 / 蓝 / 黄 / 黑 / 白体系对齐，不再出现绿色映射。设置 → 外观 → 主题卡片可直接切换。
 - 新增主题系统（issue #70）：设置页提供“素笺 / 深海 / 墨韵”三套完整主题，默认素笺；主题通过 `data-theme-id` 静态 CSS 变量块驱动，并覆盖编辑器、AI 浮层、检视标注与终端配色。
 - 修复 PR #146 主题系统检视意见：补齐旧 `theme: "dark"` 到 `night-current` 的迁移、`npm run build:themes` 生成主题 CSS、主题卡片键盘导航、Vditor / Mermaid / xterm 主题同步，以及 PDF 导出不跟随应用主题的残留清理。
@@ -40,8 +107,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-<<<<<<< HEAD
-- 修复 Windows MSI 安装到受限目录时可能报 “verify that you have access to that directory” 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
+- 修复 Windows MSI 安装到受限目录时可能报 "verify that you have access to that directory" 的问题：MSI 改用自定义 WiX 模板，保留安装目录选择页面，并显式声明 elevated per-machine 安装权限；NSIS 明确保持 current-user 安装模式。
 - 修复缺少 Microsoft Edge WebView2 Runtime 时可能还没显示引导就启动失败的问题：Windows 启动预检前移到 `main()`，早于 Tauri WebView 初始化；缺失时先运行随包 bootstrapper，失败后提示用户安装并打开官方页面。
 - 修复 Vditor WYSIWYG 代码块拖选多行时选区容易被异步渲染/折叠重排打断的问题；代码块正文显式允许文本选择，拖选期间暂停 mermaid/katex/折叠等会改 DOM 的 idle 重排。
 - 补充文件内搜索/替换多行匹配回归测试，确认代码块内外的多行内容可查找、单次替换和全部替换。

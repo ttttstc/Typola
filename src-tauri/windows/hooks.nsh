@@ -1,4 +1,15 @@
 !macro NSIS_HOOK_POSTINSTALL
+  ; Keep a direct Explorer context-menu entry even when Windows does not make Typola the default app.
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.md\shell\Typola.open" "" "用 Typola 打开"
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.md\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.markdown\shell\Typola.open" "" "用 Typola 打开"
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.markdown\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.html\shell\Typola.open" "" "用 Typola 打开"
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.html\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.htm\shell\Typola.open" "" "用 Typola 打开"
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.htm\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.docx\shell\Typola.open" "" "用 Typola 打开"
+  WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.docx\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
   DetailPrint "Checking Microsoft Edge WebView2 Runtime..."
 
   ClearErrors
@@ -28,4 +39,12 @@
   ${EndIf}
 
   webview2_done:
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+  DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.md\shell\Typola.open"
+  DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.markdown\shell\Typola.open"
+  DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.html\shell\Typola.open"
+  DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.htm\shell\Typola.open"
+  DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.docx\shell\Typola.open"
 !macroend

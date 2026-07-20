@@ -10,13 +10,30 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release source and version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Release tag must point to a commit in main history' }
+          gh release view "${{ github.ref_name }}" *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          $global:LASTEXITCODE = 0
+          if ($releaseExists) { throw 'Release already exists; published versions are immutable' }
+          node scripts/sync-version.mjs --tag "${{ github.ref_name }}"
+          node scripts/sync-version.mjs --check --tag "${{ github.ref_name }}" --require-version-change "HEAD^"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -28,21 +45,63 @@ jobs:
         with:
           workdir: src-tauri
 
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Typola ${{ github.ref_name }}'
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
-          args: ''
+          args: '--config src-tauri/tauri.updater.conf.json'
+
+      - name: Create and upload updater manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          node scripts/create-updater-manifest.mjs
+          gh release upload "${{ github.ref_name }}" "src-tauri/target/release/bundle/updater/latest.json"
 
       - name: Upload portable asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: node scripts/upload-portable-release.mjs
+
+      - name: Validate draft assets and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $assets = gh release view "${{ github.ref_name }}" --json assets,isDraft | ConvertFrom-Json
+          if (!$assets.isDraft) { throw 'Release must remain draft until validation completes' }
+          $names = @($assets.assets.name)
+          foreach ($pattern in @('latest.json', '*-setup.exe', '*.msi', '*portable.zip', '*.sig')) {
+            if (!($names | Where-Object { $_ -like $pattern })) { throw "Missing release asset: $pattern" }
+          }
+          gh release edit "${{ github.ref_name }}" --draft=false
+
+      - name: Smoke test public updater endpoint
+        shell: pwsh
+        run: |
+          $expected = (Get-Content VERSION -Raw).Trim()
+          $endpoint = 'https://github.com/ttttstc/Typola/releases/latest/download/latest.json'
+          for ($attempt = 1; $attempt -le 6; $attempt++) {
+            try {
+              $manifest = Invoke-RestMethod $endpoint
+              if ($manifest.version -ne $expected) { throw "latest.json version mismatch: $($manifest.version)" }
+              $entry = $manifest.platforms.'windows-x86_64'
+              if (!$entry.signature -or !$entry.url) { throw 'latest.json Windows entry is incomplete' }
+              Invoke-WebRequest -Method Head -Uri $entry.url -UseBasicParsing | Out-Null
+              exit 0
+            } catch {
+              if ($attempt -eq 6) { throw }
+              Start-Sleep -Seconds 10
+            }
+          }

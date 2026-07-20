@@ -12,6 +12,7 @@ export default defineConfig([
     'playwright-report/**',
     '.worktrees/**',
     '.claude/worktrees/**',
+    '.review-*/**',
     'public/vditor/dist/**',
     'src-tauri/gen/**',
     'src-tauri/target/**',

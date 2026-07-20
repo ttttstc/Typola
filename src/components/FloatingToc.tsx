@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Pin, PinOff, X } from 'lucide-react';
+import { ChevronRight, Pin, PinOff, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import type { TocItem } from '../types/document';
 import { useSettings } from '../hooks/useSettings';
@@ -14,6 +14,7 @@ type FloatingTocProps = {
   activeIndex: number;
   pinned: boolean;
   alwaysPinned: boolean;
+  openRequest?: number;
   onPinnedChange: (pinned: boolean) => void;
   onAlwaysPinnedChange: (alwaysPinned: boolean) => void;
   onNavigate: (item: TocItem, index: number) => void;
@@ -24,6 +25,7 @@ export function FloatingToc({
   activeIndex,
   pinned,
   alwaysPinned,
+  openRequest,
   onPinnedChange,
   onAlwaysPinnedChange,
   onNavigate,
@@ -31,8 +33,7 @@ export function FloatingToc({
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const [expanded, setExpanded] = useState(false);
-  const railRef = useRef<HTMLButtonElement>(null);
-  const suppressRailFocusRef = useRef(false);
+  const lastOpenRequestRef = useRef(openRequest);
   // Collapsed subtree roots, keyed by TocItem.flatIndex. Transient per
   // session: switching files clears the set (effect below) and unmounting
   // the panel drops it on the floor.
@@ -45,7 +46,6 @@ export function FloatingToc({
   // user switches documents (see review #2).
   const lastItemsRef = useRef(items);
   const panelVisible = pinned || expanded;
-  const railLabel = t('openTocHint');
   const pinLabel = pinned ? t('unpinTocHint') : t('pinTocHint');
   const closeLabel = t('closeTocHint');
   const alwaysPinnedLabel = t('tocAlwaysPinnedLabel');
@@ -104,24 +104,13 @@ export function FloatingToc({
     setCollapsed(new Set());
   }, [items]);
 
-  if (items.length === 0) return null;
-
-  const handleRailFocus = () => {
-    if (suppressRailFocusRef.current) {
-      suppressRailFocusRef.current = false;
-      return;
-    }
+  useEffect(() => {
+    if (openRequest === undefined || lastOpenRequestRef.current === openRequest) return;
+    lastOpenRequestRef.current = openRequest;
     setExpanded(true);
-  };
+  }, [openRequest]);
 
-  const focusRailAfterCollapse = () => {
-    suppressRailFocusRef.current = true;
-    if (typeof window === 'undefined') return;
-
-    window.requestAnimationFrame(() => {
-      railRef.current?.focus({ preventScroll: true });
-    });
-  };
+  if (items.length === 0) return null;
 
   const handlePinToggle = () => {
     if (pinned) {
@@ -137,7 +126,6 @@ export function FloatingToc({
   const handleClose = () => {
     setExpanded(false);
     if (pinned) onPinnedChange(false);
-    focusRailAfterCollapse();
   };
 
   const toggleCollapsed = (flatIndex: number) => {
@@ -159,28 +147,11 @@ export function FloatingToc({
       onPointerLeave={() => {
         if (!pinned) setExpanded(false);
       }}
+      onPointerEnter={() => {
+        if (!pinned) setExpanded(true);
+      }}
     >
-      <button
-        ref={railRef}
-        type="button"
-        className="floating-toc-rail"
-        aria-label={railLabel}
-        aria-controls="floating-toc-panel"
-        aria-expanded={panelVisible}
-        title={railLabel}
-        onPointerEnter={() => setExpanded(true)}
-        onFocus={handleRailFocus}
-        onClick={() => setExpanded(true)}
-      >
-        {items.map((item, index) => (
-          <span
-            key={`${item.id}-rail`}
-            className={`floating-toc-tick level-${Math.min(item.level, 6)} ${index === activeIndex ? 'active' : ''}`}
-            style={{ '--toc-depth': Math.min(Math.max(item.level - 1, 0), 5) } as CSSProperties}
-            aria-hidden="true"
-          />
-        ))}
-      </button>
+      {!pinned && <div className="floating-toc-edge-trigger" aria-hidden="true" />}
 
       <div id="floating-toc-panel" className="floating-toc-panel" aria-hidden={!panelVisible}>
         <div className="floating-toc-header">
@@ -244,9 +215,9 @@ export function FloatingToc({
                     aria-controls={itemId}
                     onClick={() => toggleCollapsed(flatIndex)}
                   >
-                    {isCollapsed
-                      ? <ChevronRight size={12} aria-hidden="true" />
-                      : <ChevronDown size={12} aria-hidden="true" />}
+                    <span className="floating-toc-chevron-icon" aria-hidden="true">
+                      <ChevronRight size={12} aria-hidden="true" />
+                    </span>
                   </button>
                 ) : (
                   // Leaf placeholder: preserves the chevron column width so

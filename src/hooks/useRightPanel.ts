@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, MutableRefObject, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 
-export type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow' | 'review' | 'artifacts';
+export type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow' | 'review' | 'artifacts' | 'toc';
 
 type UseRightPanelOptions = {
   containerRef: MutableRefObject<HTMLDivElement | null>;
@@ -50,28 +50,49 @@ export function useRightPanel({
 
     event.preventDefault();
     setResizing(true);
+    const containerRect = container.getBoundingClientRect();
+    const rightEdge = containerRect.right;
+    const maxAllowedWidth = Math.min(maxWidth, Math.round(containerRect.width * 0.5));
+    let latestClientX = event.clientX;
+    let frameId: number | null = null;
+    let finished = false;
 
     const updateWidth = (clientX: number) => {
-      const rect = container.getBoundingClientRect();
-      const maxAllowedWidth = Math.min(maxWidth, Math.round(rect.width * 0.5));
-      const nextWidth = rect.right - clientX;
+      const nextWidth = rightEdge - clientX;
       setRightPanelWidth(Math.min(maxAllowedWidth, Math.max(minWidth, nextWidth)));
     };
 
     updateWidth(event.clientX);
 
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      updateWidth(moveEvent.clientX);
+    const flushWidth = () => {
+      frameId = null;
+      updateWidth(latestClientX);
     };
 
-    const handlePointerUp = () => {
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      latestClientX = moveEvent.clientX;
+      if (frameId === null) frameId = window.requestAnimationFrame(flushWidth);
+    };
+
+    const finishResize = () => {
+      if (finished) return;
+      finished = true;
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      updateWidth(latestClientX);
       setResizing(false);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointerup', finishResize);
+      window.removeEventListener('pointercancel', finishResize);
+      window.removeEventListener('blur', finishResize);
     };
 
     window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointerup', finishResize);
+    window.addEventListener('pointercancel', finishResize);
+    window.addEventListener('blur', finishResize);
   }, [containerRef, maxWidth, minWidth]);
 
   return {

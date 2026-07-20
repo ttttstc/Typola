@@ -2,14 +2,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EditorContextMenu } from './EditorContextMenu';
-import { translate, type I18nKey } from '../services/i18n';
+import { EditorContextMenu, TableContextMenu } from './EditorContextMenu';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-function t(key: I18nKey): string {
-  return translate('zh-CN', key);
-}
 
 describe('EditorContextMenu new actions (quote-up/down, link-edit, clear-format, codeblock-lang)', () => {
   let host: HTMLDivElement;
@@ -41,9 +36,30 @@ describe('EditorContextMenu new actions (quote-up/down, link-edit, clear-format,
     });
     const items = host.querySelectorAll('.editor-ctx-item');
     const labelTexts = new Set(Array.from(items).map((b: Element) => (b.firstChild as HTMLElement)?.textContent ?? ''));
-    for (const expected of ['编辑链接', '升级引用', '降级引用', '清除格式', '编辑语言']) {
+    for (const expected of ['编辑链接', '升级引用', '降级引用', '清除格式', '编辑语言', '插入表格']) {
       expect(labelTexts.has(expected)).toBe(true);
     }
+  });
+
+  it('click 插入表格 → onPick default 2×3 table action', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          onPick={onPick}
+          onClose={() => {}}
+        />,
+      );
+    });
+    const insert = Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((button) => (button.firstChild as HTMLElement)?.textContent === '插入表格') as HTMLButtonElement;
+    expect(insert).toBeTruthy();
+    act(() => { insert.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'table-insert', rows: 2, cols: 3 });
   });
 
   it('click 升级引用 → onPick({type:"quote-up"})', () => {
@@ -124,5 +140,167 @@ describe('EditorContextMenu new actions (quote-up/down, link-edit, clear-format,
     });
     const headingBtns = host.querySelectorAll('.editor-ctx-heading-row button');
     expect(headingBtns).toHaveLength(7);
+  });
+});
+
+describe('EditorContextMenu image actions (insert / replace / open / copy-path)', () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  const clickLabel = (label: string): HTMLButtonElement => {
+    const target = Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((b) => (b.firstChild as HTMLElement)?.textContent === label) as HTMLButtonElement;
+    expect(target).toBeTruthy();
+    return target;
+  };
+
+  it('插入图片 always shown when menu opens', () => {
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} onPick={() => {}} onClose={() => {}} />,
+      );
+    });
+    expect(clickLabel('插入图片')).toBeTruthy();
+  });
+
+  it('替换/打开文件/复制路径 only shown when hasImage', () => {
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          hasImage={false}
+          onPick={() => {}}
+          onClose={() => {}}
+        />,
+      );
+    });
+    for (const label of ['替换图片', '打开文件', '复制路径']) {
+      const found = Array.from(host.querySelectorAll('.editor-ctx-item'))
+        .find((b) => (b.firstChild as HTMLElement)?.textContent === label);
+      expect(found).toBeUndefined();
+    }
+
+    act(() => root.unmount());
+    host.innerHTML = '';
+    root = createRoot(host);
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          hasImage
+          onPick={() => {}}
+          onClose={() => {}}
+        />,
+      );
+    });
+    expect(clickLabel('替换图片')).toBeTruthy();
+    expect(clickLabel('打开文件')).toBeTruthy();
+    expect(clickLabel('复制路径')).toBeTruthy();
+  });
+
+  it('click 插入图片 → onPick({type:"image-insert"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('插入图片').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-insert' });
+  });
+
+  it('click 替换图片 → onPick({type:"image-replace"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} hasImage onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('替换图片').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-replace' });
+  });
+
+  it('click 打开文件 → onPick({type:"image-open"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} hasImage onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('打开文件').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-open' });
+  });
+
+  it('click 复制路径 → onPick({type:"image-copy-path"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu open x={0} y={0} hasSelection={false} hasImage onPick={onPick} onClose={() => {}} />,
+      );
+    });
+    act(() => { clickLabel('复制路径').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'image-copy-path' });
+  });
+});
+describe('TableContextMenu', () => {
+  it('shows only table actions and exposes complete table deletion', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onPick = vi.fn();
+    act(() => {
+      root.render(<TableContextMenu open x={0} y={0} onPick={onPick} onClose={() => {}} />);
+    });
+
+    const labels = Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .map((item) => item.textContent?.trim());
+    expect(labels).toContain('在上方插入行');
+    expect(labels).toContain('删除列');
+    expect(labels).toContain('删除表格');
+    expect(labels).not.toContain('加粗');
+
+    const deleteTable = Array.from(host.querySelectorAll<HTMLButtonElement>('.editor-ctx-item'))
+      .find((item) => item.textContent?.trim() === '删除表格');
+    act(() => deleteTable?.click());
+    expect(onPick).toHaveBeenCalledWith('table-delete');
+    act(() => root.unmount());
+    host.remove();
+  });
+});
+
+describe('EditorContextMenu quick format actions', () => {
+  it('exposes common formatting commands and dispatches them directly', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onPick = vi.fn();
+    act(() => {
+      root.render(<EditorContextMenu open x={0} y={0} hasSelection onPick={onPick} onClose={() => {}} />);
+    });
+
+    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.editor-ctx-quick-format-button'));
+    expect(buttons).toHaveLength(8);
+    expect(buttons.map((button) => button.textContent)).toEqual(['B', 'I', '</>', '↗', '❝', '1.', '•', '☑']);
+    act(() => { buttons[0].click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'bold' });
+    act(() => root.unmount());
+    host.remove();
   });
 });

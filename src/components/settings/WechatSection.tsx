@@ -13,6 +13,7 @@ import {
   setHtmlExportPreset,
   setHtmlExportPresetEnabled,
 } from '../../services/settingsService';
+import { SettingsToggle } from './SettingsToggle';
 import {
   HtmlExportPresetImportError,
   createHtmlExportPreviewStyles,
@@ -284,13 +285,11 @@ export function HtmlExportSection() {
             {!options.compact && <span className="settings-preset-desc">{preset.description}</span>}
           </span>
         </button>
-        <button
-          type="button"
-          className={`toggle-switch ${enabled ? 'on' : ''}`}
-          onClick={() => handleTogglePreset(preset.id, !enabled)}
+        <SettingsToggle
+          checked={enabled}
+          label={`${enabled ? '停用' : '启用'}${preset.name}`}
+          onChange={() => handleTogglePreset(preset.id, !enabled)}
           disabled={!canDisable}
-          aria-label={`${enabled ? '停用' : '启用'}${preset.name}`}
-          aria-pressed={enabled}
         />
         {preset.kind === 'custom' && (
           <button

@@ -5,6 +5,8 @@
 - **范围**:插入图片时的自动处理(复制到文件夹 / 上传图床自定义命令 / 路径格式),覆盖拖拽 / 粘贴 / 选本地文件三条入口。
 - **不做**(范围红线,见末尾):移动到文件夹、PicGo/uPic 等 GUI 工具集成、图片右键管理(删除/重命名/缩放/对齐/下载全部)。
 
+> **实现状态（2026-07-19）**：三入口（粘贴、拖拽、选择本地文件）和本节主要 settings/YAML 规则已落地；上传失败回退本地复制。本文后续“现状 + 差距”保留为设计演进记录，当前行为以 `src/app/AppLayout.tsx`、`src/services/imageInsert.ts` 和设置页源码为准。
+
 ---
 
 ## 一、Typora 行为规格(实现依据,必须严格一致)
@@ -70,12 +72,11 @@
 
 ## 二、Typola 现状 + 差距
 
-现状(`src/app/AppLayout.tsx:580` `handlePasteImage` + Rust `write_attachment_file`):
-- **只有粘贴**剪贴板图片一条入口。
-- 写死复制到文档同级 `assets/`,返回 `./assets/<name>`。
-- settings 零图片配置,无 UI。
-
-差距:拖拽 / 选文件入口缺失;目标文件夹、路径格式、图床全部缺失;无设置 UI;无 YAML 覆盖。
+当前实现(`src/app/AppLayout.tsx` `insertImageFromSource` + Rust `process_inserted_image`):
+- 粘贴、拖拽和工具栏/菜单选择本地文件三条入口统一经过 `insertImageFromSource`。
+- `imageInsertAction` 支持保持原路径、复制到目标目录和自定义上传命令；上传失败自动回退本地复制。
+- 支持 `${filename}` / `{year}` / `{month}` 目录占位符、相对路径/`./` 前缀/URL 转义，以及 `typora-copy-images-to` YAML 覆盖。
+- 设置页提供图片动作、目标目录、相对路径和上传命令配置；默认复制到 `assets`，本地图片规则默认开启，网络图片规则默认关闭。
 
 ---
 

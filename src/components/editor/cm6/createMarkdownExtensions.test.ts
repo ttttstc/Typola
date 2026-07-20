@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { createMarkdownExtensions } from './createMarkdownExtensions';
-import { createLivePreviewExtensions } from './createLivePreviewExtensions';
+import {
+  createLivePreviewCompartments,
+  createLivePreviewExtensions,
+  reconfigureLivePreviewExtensions,
+} from './createLivePreviewExtensions';
+import { reviewMarkExtension } from './reviewMarkExtension';
 
 vi.mock('mermaid', () => ({
   default: {
@@ -88,8 +93,27 @@ describe('createMarkdownExtensions live preview', () => {
     moveCursorToEnd(view);
 
     expect(view.contentDOM.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
-    expect(view.contentDOM.querySelector('.cm-atomic-table')).not.toBeNull();
+    expect(view.contentDOM.querySelector('.tbl-table-widget .tbl-table')).not.toBeNull();
     expect(view.contentDOM.querySelector<HTMLImageElement>('.cm-atomic-image img')?.src).toBe('https://example.com/a.png');
+  });
+
+  it('sanitizes inline raw HTML widgets', () => {
+    view = createView('<mark onclick="alert(1)">重点</mark> <sup>2</sup>', true);
+    moveCursorToEnd(view);
+    const html = view.contentDOM.querySelector('.typola-cm6-html');
+    expect(html?.querySelector('mark')?.textContent).toBe('重点');
+    expect(html?.querySelector('[onclick]')).toBeNull();
+  });
+
+  it.each([
+    '<details><summary>x</summary><script>alert(1)</script></details>',
+    '<mark onerror="alert(1)">x</mark>',
+    '<mark><a href="javascript:alert(1)">x</a></mark>',
+  ])('does not expose dangerous HTML nodes: %s', (source) => {
+    view = createView(`${source}\nAfter`, true);
+    moveCursorToEnd(view);
+    const html = view.contentDOM.querySelector('.typola-cm6-html');
+    expect(html?.querySelector('script, iframe, [onerror], [onclick], a[href^="javascript:"]')).toBeNull();
   });
 
   it('renders bare inline math with KaTeX outside the cursor range', async () => {
@@ -100,6 +124,18 @@ describe('createMarkdownExtensions live preview', () => {
     expect(inlineMath).not.toBeNull();
     await waitForElement('.katex');
     expect(inlineMath?.querySelector('.katex')).not.toBeNull();
+  });
+
+  it('restores inline math after the cursor leaves its source range', () => {
+    const source = 'Energy $E=mc^2$ here';
+    view = createView(source, true);
+    const mathStart = source.indexOf('$');
+    view.dispatch({ selection: { anchor: mathStart + 3 } });
+    expect(view.contentDOM.querySelector('.typola-cm6-math-inline')).toBeNull();
+
+    moveCursorToEnd(view);
+
+    expect(view.contentDOM.querySelector('.typola-cm6-math-inline')).not.toBeNull();
   });
 
   it('renders dollar block math and fenced math blocks', () => {
@@ -119,6 +155,18 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelectorAll('.typola-cm6-math-block').length).toBe(2);
   });
 
+  it('restores dollar block math after the cursor leaves its source range', () => {
+    const source = ['$$', 'a^2+b^2=c^2', '$$', '', 'After'].join('\n');
+    view = createView(source, true);
+    const bodyStart = source.indexOf('a^2');
+    view.dispatch({ selection: { anchor: bodyStart + 2 } });
+    expect(view.contentDOM.querySelector('.typola-cm6-math-block')).toBeNull();
+
+    moveCursorToEnd(view);
+
+    expect(view.contentDOM.querySelector('.typola-cm6-math-block')).not.toBeNull();
+  });
+
   it('renders and sanitizes mermaid fenced blocks as widgets', async () => {
     view = createView([
       '```mermaid',
@@ -133,5 +181,62 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelector('.typola-cm6-mermaid')).not.toBeNull();
     await waitForElement('[data-testid="mermaid-svg"]');
     expect(view.contentDOM.querySelector('.typola-cm6-mermaid script')).toBeNull();
+  });
+
+  it('marks the CM6 lines containing active review anchors', () => {
+    const doc = '# 标题\n\n需要检视的正文\n\n结尾';
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        extensions: [reviewMarkExtension({
+          filePath: '/tmp/review.md',
+          comments: [{
+            id: 'review-1',
+            filePath: '/tmp/review.md',
+            anchor: { filePath: '/tmp/review.md', from: 4, to: 10, originalText: '需要检视的正文' },
+            text: '请补充来源',
+            createdAt: 0,
+          }],
+        })],
+      }),
+      parent,
+    });
+
+    expect(view.contentDOM.querySelector('.cm-line.typola-cm-review-mark')?.textContent).toContain('需要检视的正文');
+  });
+
+  it('reconfigures live preview compartments without replacing the EditorView', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const compartments = createLivePreviewCompartments();
+    view = new EditorView({
+      state: EditorState.create({
+        doc: '# 标题\n\n正文',
+        extensions: [
+          ...createMarkdownExtensions({
+            fontFamily: 'monospace',
+            fontSize: 14,
+            tabSize: 4,
+            wordWrap: true,
+            extraExtensions: createLivePreviewExtensions({ baseSize: 14, compartments }),
+          }),
+        ],
+      }),
+      parent,
+    });
+    const originalView = view;
+
+    reconfigureLivePreviewExtensions(view, {
+      livePreview: false,
+      baseSize: 16,
+      themeId: 'night-current',
+      frontmatterFold: false,
+    }, compartments);
+
+    expect(view).toBe(originalView);
+    expect(view.state.doc.toString()).toBe('# 标题\n\n正文');
+    expect(view.destroyed).toBe(false);
   });
 });

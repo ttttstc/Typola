@@ -4825,7 +4825,7 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "typola"
-version = "2.0.4"
+version = "2.0.5"
 dependencies = [
  "base64 0.22.1",
  "log",
@@ -4846,6 +4846,7 @@ dependencies = [
  "uuid",
  "wait-timeout",
  "webview2-com",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

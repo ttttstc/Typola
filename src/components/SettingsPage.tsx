@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import type { UpdateCheckResult } from '../services/updateService';
+import type { AppUpdateState, UpdateCheckResult } from '../services/updateService';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import {
@@ -15,7 +15,6 @@ import {
   preloadTerminalSection,
 } from './settings/preloadSections';
 
-type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 type SettingsSection =
   | 'general'
   | 'editor'
@@ -45,7 +44,10 @@ const AboutSection = lazy(preloadAboutSection);
 
 interface SettingsPageProps {
   onClose: () => void;
-  onUpdateAvailable: (update: AvailableUpdate) => void;
+  onCheckForUpdate: () => Promise<UpdateCheckResult>;
+  updateState: AppUpdateState;
+  onUpdateAction: () => void;
+  onIgnoreUpdate: () => void;
   // P1-E:从外部指定打开的初始段(例如场景卡「未找到 Claude」→ 'aiCli')
   initialSection?: SettingsSection;
 }
@@ -74,7 +76,14 @@ function SectionFallback() {
   );
 }
 
-export function SettingsPage({ onClose, onUpdateAvailable, initialSection }: SettingsPageProps) {
+export function SettingsPage({
+  onClose,
+  onCheckForUpdate,
+  updateState,
+  onUpdateAction,
+  onIgnoreUpdate,
+  initialSection,
+}: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection ?? 'general');
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -125,7 +134,14 @@ export function SettingsPage({ onClose, onUpdateAvailable, initialSection }: Set
             {activeSection === 'htmlExport' && <HtmlExportSection />}
             {activeSection === 'terminal' && <TerminalSection />}
             {activeSection === 'aiCli' && <AiCliSection />}
-            {activeSection === 'about' && <AboutSection onUpdateAvailable={onUpdateAvailable} />}
+            {activeSection === 'about' && (
+              <AboutSection
+                onCheckForUpdate={onCheckForUpdate}
+                updateState={updateState}
+                onUpdateAction={onUpdateAction}
+                onIgnoreUpdate={onIgnoreUpdate}
+              />
+            )}
           </Suspense>
         </div>
       </div>

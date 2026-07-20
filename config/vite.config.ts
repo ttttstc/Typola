@@ -5,12 +5,24 @@ import { perfStub } from './vite-plugin-perf-stub'
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const nodeModule = String.raw`node_modules[\\/]`
+const tsBeltCjs = fileURLToPath(new URL('../node_modules/@mobily/ts-belt/dist/cjs/index.js', import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
   root: projectRoot,
   base: './',
   plugins: [react(), perfStub()],
+  resolve: {
+    // 上游依赖的 ESM 产物引用了无扩展名目录,改用同包 CJS 入口;
+    // 表格包本身仍使用 ESM,避免产生第二份 CodeMirror 单例。
+    alias: {
+      '@mobily/ts-belt': tsBeltCjs,
+    },
+  },
+  // 实验候选仓库包含独立 demo HTML 与未安装依赖；开发服务器只扫描应用入口。
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
   server: {
     watch: {
       ignored: ['**/src-tauri/target/**'],
@@ -75,7 +87,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setupVitest.ts'],
     server: {
       deps: {
-        inline: ['@atomic-editor/editor'],
+        inline: ['@atomic-editor/editor', 'codemirror-markdown-tables', '@mobily/ts-belt'],
       },
     },
     deps: {

@@ -40,6 +40,7 @@ export function findSearchMatches(source: string, query: string, options: Search
   if (!regex) return [];
 
   const matches: SearchMatch[] = [];
+  const frontmatter = detectFrontmatter(source);
   let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {
     const text = match[0];
@@ -47,7 +48,7 @@ export function findSearchMatches(source: string, query: string, options: Search
       regex.lastIndex += 1;
       continue;
     }
-    if (!options.wholeWord || isWholeWordMatch(source, match.index, text.length)) {
+    if ((!frontmatter || match.index >= frontmatter.to) && (!options.wholeWord || isWholeWordMatch(source, match.index, text.length))) {
       matches.push({ index: match.index, length: text.length, text });
     }
     if (matches.length >= 5000) break;
@@ -105,3 +106,4 @@ export function getSearchMatchOccurrenceIndex(
   }
   return count;
 }
+import { detectFrontmatter } from './markdownAnalysisService';

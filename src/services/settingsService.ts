@@ -43,12 +43,15 @@ import {
   type LicenseActivationResult,
   type LicenseState,
 } from './licenseService';
+import { DEFAULT_DEFINE_COLOR_SETTINGS } from './defineColorSystem/constants';
+import { normalizeDefineColorSettings } from './defineColorSystem/normalizeDefineColorSettings';
+import type { AppearanceColorSystem, DefineColorSettings } from './defineColorSystem/types';
 
 const STORAGE_KEY = 'typola-settings';
 const LEGACY_KEY = 'typola-export-settings';
 const LAST_FILE_KEY = 'typola-last-opened-file';
 const LAST_WORKSPACE_ROOT_KEY = 'typola-last-workspace-root';
-const FONT_DEFAULTS_VERSION = 3;
+const FONT_DEFAULTS_VERSION = 4;
 
 export const SETTINGS_CHANGED_EVENT = 'typola-settings-changed';
 export const STANDARD_CUSTOM_EXPORT_PRESET_LIMIT = STANDARD_PRESET_SLOT_LIMIT;
@@ -72,7 +75,18 @@ export class CustomHtmlExportPresetLimitError extends Error {
   }
 }
 
-export type EditorFontFamily = 'IBM Plex Mono' | 'JetBrains Mono' | 'SF Mono' | 'System Default';
+export type EditorFontFamily = 'Source Han Serif SC VF' | 'IBM Plex Mono' | 'JetBrains Mono' | 'SF Mono' | 'System Default';
+
+export const EDITOR_FONT_FAMILY_OPTIONS: ReadonlyArray<{
+  value: EditorFontFamily;
+  label: string;
+}> = [
+  { value: 'Source Han Serif SC VF', label: '思源宋体' },
+  { value: 'IBM Plex Mono', label: 'IBM Plex Mono' },
+  { value: 'JetBrains Mono', label: 'JetBrains Mono' },
+  { value: 'SF Mono', label: 'SF Mono' },
+  { value: 'System Default', label: '系统默认' },
+];
 export type PreviewFontFamily =
   | 'Default'
   | 'System Sans'
@@ -197,6 +211,9 @@ export interface AppSettings {
   editorSpellCheck: boolean;
   /** 选区浮条(选中即现)开关。关掉后右键菜单 / Ctrl+K 仍在,只是不自动浮现。 */
   selectionFloatingBarEnabled: boolean;
+  editorFrontmatterFoldEnabled: boolean;
+  editorFormatPainterEnabled: boolean;
+  editorPaperBackground: boolean;
   // 图像
   imageInsertAction: ImageInsertAction;
   imageCopyDestination: string;
@@ -240,6 +257,8 @@ export interface AppSettings {
   aiWorkspaceRecents: string[];
   aiPluginDirs: string[];
   // 外观
+  appearanceColorSystem: AppearanceColorSystem;
+  defineColorSettings: DefineColorSettings;
   themeId: ThemeId;
   themeOptions: AppThemeOptions;
   zoomLevel: number;
@@ -259,13 +278,16 @@ const defaults: AppSettings = {
   disabledHtmlExportPresetIds: [],
   license: DEFAULT_LICENSE_STATE,
   wechatCustomCss: '',
-  editorFontFamily: 'IBM Plex Mono',
+  editorFontFamily: 'Source Han Serif SC VF',
   editorFontSize: 13,
   editorTabSize: 4,
   editorWordWrap: true,
   editorLineNumbers: true,
   editorSpellCheck: false,
   selectionFloatingBarEnabled: true,
+  editorFrontmatterFoldEnabled: true,
+  editorFormatPainterEnabled: true,
+  editorPaperBackground: false,
   imageInsertAction: 'copy',
   imageCopyDestination: 'assets',
   imageApplyToLocal: true,
@@ -303,6 +325,8 @@ const defaults: AppSettings = {
   aiWorkspaceRoot: '',
   aiWorkspaceRecents: [],
   aiPluginDirs: [],
+  appearanceColorSystem: 'define-color',
+  defineColorSettings: DEFAULT_DEFINE_COLOR_SETTINGS,
   themeId: DEFAULT_THEME_ID,
   themeOptions: {
     reviewEnhanceMarks: true,
@@ -336,6 +360,12 @@ function normalizeCustomExportPresets(value: unknown): CustomPresetRegistry {
 
 function normalizeLocale(value: unknown): AppLocale {
   return value === 'en-US' || value === 'ja-JP' ? value : 'zh-CN';
+}
+
+function normalizeEditorFontFamily(value: unknown): EditorFontFamily {
+  return EDITOR_FONT_FAMILY_OPTIONS.some((option) => option.value === value)
+    ? value as EditorFontFamily
+    : 'Source Han Serif SC VF';
 }
 
 function normalizePreviewFontFamily(value: unknown): PreviewFontFamily {
@@ -447,6 +477,10 @@ function normalizeThemeOptions(value: unknown): AppThemeOptions {
   };
 }
 
+function normalizeAppearanceColorSystem(value: unknown): AppearanceColorSystem {
+  return value === 'static-theme' ? 'static-theme' : 'define-color';
+}
+
 function quoteFontName(name: string): string {
   if (!name || /^-/.test(name) || /^[a-z-]+$/i.test(name)) return name;
   return `"${name}"`;
@@ -474,7 +508,7 @@ function previewLatinFontStack(settings: Pick<PreviewFontSettings, 'previewLatin
     case 'Custom':
       return customFontStack(settings.previewLatinCustomFont);
     case 'Default':
-      return ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"Helvetica Neue"', 'Arial'];
+      return ['var(--font-body)'];
   }
 }
 
@@ -493,15 +527,7 @@ function previewChineseFontStack(settings: Pick<PreviewFontSettings, 'previewChi
     case 'Custom':
       return customFontStack(settings.previewChineseCustomFont);
     case 'Default':
-      return [
-        '"PingFang SC"',
-        '"Hiragino Sans GB"',
-        '"Microsoft YaHei UI"',
-        '"Microsoft YaHei"',
-        '"Noto Sans CJK SC"',
-        '"Source Han Sans SC"',
-        '"Noto Sans SC"',
-      ];
+      return ['var(--font-body)'];
   }
 }
 
@@ -537,7 +563,7 @@ function previewBaseFontStack(fontFamily: PreviewFontFamily): string[] {
       return ['Georgia', 'var(--font-serif-reading)'];
     case 'Chinese Optimized':
     case 'Default':
-      return ['var(--font-reading)'];
+      return ['var(--font-body)'];
   }
 }
 
@@ -686,6 +712,9 @@ function normalizeHtmlExportPresetId(
 
 function migratePreviewFontSettings(stored: Partial<AppSettings>): Partial<AppSettings> {
   const next = { ...stored };
+  if (next.editorFontFamily === undefined || next.editorFontFamily === 'IBM Plex Mono') {
+    next.editorFontFamily = 'Source Han Serif SC VF';
+  }
   const legacyFontFamily = typeof next.previewFontFamily === 'string'
     ? next.previewFontFamily
     : undefined;
@@ -847,6 +876,7 @@ export function getSettings(): AppSettings {
       disabledHtmlExportPresetIds,
       license,
       wechatCustomCss: normalizeWechatCustomCss(stored.wechatCustomCss),
+      editorFontFamily: normalizeEditorFontFamily(stored.editorFontFamily),
       previewFontFamily: normalizePreviewFontFamily(stored.previewFontFamily),
       previewChineseFontFamily: normalizePreviewChineseFontFamily(stored.previewChineseFontFamily),
       previewLatinFontFamily: normalizePreviewLatinFontFamily(stored.previewLatinFontFamily),
@@ -872,6 +902,9 @@ export function getSettings(): AppSettings {
       imageEscapeUrl: stored.imageEscapeUrl === true,
       imageAllowYamlUpload: stored.imageAllowYamlUpload === true,
       imageUploadCommand: normalizeImageUploadCommand(stored.imageUploadCommand),
+      editorFrontmatterFoldEnabled: stored.editorFrontmatterFoldEnabled !== false,
+      editorFormatPainterEnabled: stored.editorFormatPainterEnabled !== false,
+      editorPaperBackground: stored.editorPaperBackground === true,
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
       aiClaudeModel: normalizeModelString(stored.aiClaudeModel),
       aiOpenCodePath: normalizeExecutablePath(stored.aiOpenCodePath),
@@ -880,6 +913,8 @@ export function getSettings(): AppSettings {
       aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
       aiWorkspaceRecents: normalizePathList(stored.aiWorkspaceRecents).slice(0, 8),
       aiPluginDirs: normalizePathList(stored.aiPluginDirs),
+      appearanceColorSystem: normalizeAppearanceColorSystem(stored.appearanceColorSystem),
+      defineColorSettings: normalizeDefineColorSettings(stored.defineColorSettings),
       themeId: normalizeThemeId(stored.themeId),
       themeOptions: normalizeThemeOptions(stored.themeOptions),
     };
@@ -916,6 +951,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     ...current,
     ...patch,
     locale: normalizeLocale(patch.locale ?? current.locale),
+    editorFontFamily: normalizeEditorFontFamily(patch.editorFontFamily ?? current.editorFontFamily),
     fontDefaultsVersion: FONT_DEFAULTS_VERSION,
     previewFontFamily: normalizePreviewFontFamily(patch.previewFontFamily ?? current.previewFontFamily),
     previewChineseFontFamily: normalizePreviewChineseFontFamily(
@@ -949,6 +985,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     ),
     license,
     tocAlwaysPinned: (patch.tocAlwaysPinned ?? current.tocAlwaysPinned) === true,
+    editorPaperBackground: (patch.editorPaperBackground ?? current.editorPaperBackground) === true,
     terminalShellPath: normalizeTerminalShellPath(patch.terminalShellPath ?? current.terminalShellPath),
     terminalFontFamily: normalizeTerminalFontFamily(patch.terminalFontFamily ?? current.terminalFontFamily),
     terminalFontSize: normalizeTerminalFontSize(patch.terminalFontSize ?? current.terminalFontSize),
@@ -969,6 +1006,12 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     aiWorkspaceRoot: normalizeExecutablePath(patch.aiWorkspaceRoot ?? current.aiWorkspaceRoot),
     aiWorkspaceRecents: normalizePathList(patch.aiWorkspaceRecents ?? current.aiWorkspaceRecents).slice(0, 8),
     aiPluginDirs: normalizePathList(patch.aiPluginDirs ?? current.aiPluginDirs),
+    appearanceColorSystem: normalizeAppearanceColorSystem(
+      patch.appearanceColorSystem ?? current.appearanceColorSystem,
+    ),
+    defineColorSettings: normalizeDefineColorSettings(
+      patch.defineColorSettings ?? current.defineColorSettings,
+    ),
     themeId: normalizeThemeId(patch.themeId ?? current.themeId),
     themeOptions: normalizeThemeOptions(patch.themeOptions ?? current.themeOptions),
   };

@@ -31,6 +31,8 @@ const updateServiceMock = vi.hoisted(() => ({
   checkForAppUpdate: vi.fn<() => Promise<UpdateCheckResult>>(),
   downloadAppUpdate: vi.fn<() => Promise<void>>(),
   installDownloadedAppUpdate: vi.fn<() => Promise<void>>(),
+  getDistributionKind: vi.fn().mockResolvedValue('installed'),
+  openReleaseForVersion: vi.fn<() => Promise<void>>(),
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
@@ -47,6 +49,8 @@ vi.mock('../services/updateService', () => ({
   checkForAppUpdate: updateServiceMock.checkForAppUpdate,
   downloadAppUpdate: updateServiceMock.downloadAppUpdate,
   installDownloadedAppUpdate: updateServiceMock.installDownloadedAppUpdate,
+  getDistributionKind: updateServiceMock.getDistributionKind,
+  openReleaseForVersion: updateServiceMock.openReleaseForVersion,
 }));
 
 function flushPromises(): Promise<void> {

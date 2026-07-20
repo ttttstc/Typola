@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { getSettings, updateSettings, type AppSettings } from '../../services/settingsService';
+import { EDITOR_FONT_FAMILY_OPTIONS, getSettings, updateSettings, type AppSettings } from '../../services/settingsService';
 import type { EditorFontFamily } from '../../services/settingsService';
+import { SettingsToggle } from './SettingsToggle';
 
 const FONT_SIZES = [12, 13, 14, 15, 16, 18];
 const TAB_SIZES = [2, 4, 8];
-const FONT_FAMILIES: EditorFontFamily[] = ['IBM Plex Mono', 'JetBrains Mono', 'SF Mono', 'System Default'];
-
 export function EditorSection() {
   const [settings, setSettings] = useState(() => getSettings());
 
@@ -27,8 +26,8 @@ export function EditorSection() {
           value={settings.editorFontFamily}
           onChange={(e) => handleChange({ editorFontFamily: e.target.value as EditorFontFamily })}
         >
-          {FONT_FAMILIES.map((f) => (
-            <option key={f} value={f}>{f}</option>
+          {EDITOR_FONT_FAMILY_OPTIONS.map((font) => (
+            <option key={font.value} value={font.value}>{font.label}</option>
           ))}
         </select>
       </div>
@@ -67,9 +66,10 @@ export function EditorSection() {
         <div>
           <div className="settings-label">行号显示</div>
         </div>
-        <button
-          className={`toggle-switch ${settings.editorLineNumbers ? 'on' : ''}`}
-          onClick={() => handleChange({ editorLineNumbers: !settings.editorLineNumbers })}
+        <SettingsToggle
+          checked={settings.editorLineNumbers}
+          label="行号显示"
+          onChange={() => handleChange({ editorLineNumbers: !settings.editorLineNumbers })}
         />
       </div>
 
@@ -77,9 +77,10 @@ export function EditorSection() {
         <div>
           <div className="settings-label">自动换行</div>
         </div>
-        <button
-          className={`toggle-switch ${settings.editorWordWrap ? 'on' : ''}`}
-          onClick={() => handleChange({ editorWordWrap: !settings.editorWordWrap })}
+        <SettingsToggle
+          checked={settings.editorWordWrap}
+          label="自动换行"
+          onChange={() => handleChange({ editorWordWrap: !settings.editorWordWrap })}
         />
       </div>
 
@@ -87,20 +88,22 @@ export function EditorSection() {
         <div>
           <div className="settings-label">拼写检查</div>
         </div>
-        <button
-          className={`toggle-switch ${settings.editorSpellCheck ? 'on' : ''}`}
-          onClick={() => handleChange({ editorSpellCheck: !settings.editorSpellCheck })}
+        <SettingsToggle
+          checked={settings.editorSpellCheck}
+          label="拼写检查"
+          onChange={() => handleChange({ editorSpellCheck: !settings.editorSpellCheck })}
         />
       </div>
 
       <div className="settings-row">
         <div>
-          <div className="settings-label">选区浮条</div>
-          <div className="settings-help">关掉后选中文字不自动浮现工具条;右键菜单与 Ctrl+K 仍可用。浮条右端「⋯」按钮可选「本页不再展示」(当前文档不弹)或「全局隐藏」(写入同一开关)。</div>
+          <div className="settings-label">浮条可见性</div>
+          <div className="settings-help">开启后，选中文字会自动浮现工具条；右键菜单与 Ctrl+K 不受影响。浮条内可选择“本文档隐藏”或“全局隐藏”。</div>
         </div>
-        <button
-          className={`toggle-switch ${settings.selectionFloatingBarEnabled ? 'on' : ''}`}
-          onClick={() => handleChange({ selectionFloatingBarEnabled: !settings.selectionFloatingBarEnabled })}
+        <SettingsToggle
+          checked={settings.selectionFloatingBarEnabled}
+          label="浮条可见性"
+          onChange={() => handleChange({ selectionFloatingBarEnabled: !settings.selectionFloatingBarEnabled })}
         />
       </div>
     </div>

@@ -1,17 +1,26 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { EditorView } from '@codemirror/view';
 import '@atomic-editor/editor/styles.css';
 import 'katex/dist/katex.min.css';
-import { EditorPane, type SourceHeadingScrollRequest } from '../../EditorPane';
+import { EditorPane, type ImageInsertRequest, type SourceHeadingScrollRequest } from '../../EditorPane';
 import type { SelectionActionId } from '../../../services/agent/selectionActions';
 import type { SelectionAnchor } from '../../../services/agent/types';
-import type { EditorCoreHandle } from '../../../types/editorCore';
+import type { TypolaEditorKernel } from '../../../types/editorCore';
 import { useSettings } from '../../../hooks/useSettings';
 import { updateSettings } from '../../../services/settingsService';
-import { createLivePreviewExtensions } from './createLivePreviewExtensions';
+import {
+  createLivePreviewCompartments,
+  createLivePreviewExtensions,
+  reconfigureLivePreviewExtensions,
+} from './createLivePreviewExtensions';
 import type { PreviewHeadingChange } from './previewSyncExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
+import type { ReviewComment } from '../../../services/review/reviewState';
+import type { MarkdownLink, MarkdownTask } from '../../../services/markdownAnalysisService';
+import { EditorPanePaperBackground } from './EditorPanePaperBackground';
 
 type Cm6MarkdownEditorPaneProps = {
+  mode?: 'source' | 'wysiwyg';
   source: string;
   onChange: (value: string) => void;
   headingScrollRequest?: SourceHeadingScrollRequest;
@@ -23,6 +32,12 @@ type Cm6MarkdownEditorPaneProps = {
    *  若不传,组件内部用 useState 自管,行为与之前保持一致。 */
   foldedHeadings?: ReadonlySet<FoldKey>;
   onFoldChange?: (next: ReadonlySet<FoldKey>) => void;
+  reviewComments?: readonly ReviewComment[];
+  /** Ctrl/Cmd+click 命中链接时回调;由 EditorPane 注入并包装 Tauri/相对路径打开。 */
+  onOpenLink?: (link: MarkdownLink) => void;
+  /** Task 切换后回调;埋点或外部状态同步用。 */
+  onTaskToggle?: (task: MarkdownTask, nextChecked: boolean) => void;
+  onRequestImageInsert?: (request?: ImageInsertRequest) => void;
 };
 
 /** 以 atomic-editor 默认 14px 为 100% 参考,滚轮缩放比例都换算到这个基准。 */
@@ -40,15 +55,25 @@ function zoomPercent(size: number): number {
  * 搜索 reveal、撤销等命令契约不变。Phase 2 再在这里替换为 Typora-like live preview
  * extension 组合。
  */
-export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEditorPaneProps>(
+export const Cm6MarkdownEditorPane = forwardRef<TypolaEditorKernel, Cm6MarkdownEditorPaneProps>(
   function Cm6MarkdownEditorPane(props, ref) {
-    const { onPreviewHeadingChange, foldedHeadings: foldedHeadingsProp, onFoldChange, ...rest } = props;
+    const {
+      mode = 'wysiwyg',
+      onPreviewHeadingChange,
+      foldedHeadings: foldedHeadingsProp,
+      onFoldChange,
+      reviewComments,
+      onOpenLink,
+      onTaskToggle,
+      onRequestImageInsert,
+      ...rest
+    } = props;
     const settings = useSettings();
     const [zoomIndicator, setZoomIndicator] = useState<{ percent: number; restored: boolean } | null>(null);
     const [internalFoldedHeadings, setInternalFoldedHeadings] = useState<ReadonlySet<FoldKey>>(() => new Set());
     const foldedHeadings = foldedHeadingsProp ?? internalFoldedHeadings;
     const hideTimerRef = useRef<number | null>(null);
-    const editorRef = useRef<EditorCoreHandle | null>(null);
+    const editorRef = useRef<TypolaEditorKernel | null>(null);
 
     const handleFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
       if (onFoldChange) {
@@ -78,7 +103,7 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
     const handleZoomIndicatorClick = useCallback(() => {
       const editor = editorRef.current;
       if (!editor) return;
-      // 走 EditorCoreHandle.setZoom 触发 wheelZoomExtension 的 reconfigure,
+      // 走 TypolaEditorKernel.setZoom 触发 wheelZoomExtension 的 reconfigure,
       // 避免 React 重挂载 / StateField 不同步。
       editor.setZoom(ZOOM_BASE_PX);
       updateSettings({ editorFontSize: ZOOM_BASE_PX });
@@ -97,30 +122,96 @@ export const Cm6MarkdownEditorPane = forwardRef<EditorCoreHandle, Cm6MarkdownEdi
       }
     }, []);
 
-    // headingFoldExtension 始终传空 initial 集合 — React → editor 的同步走
-    // editorRef.current?.setFoldedHeadings?.(...) 命令式推送(见上面的 useEffect),
-    // 这样 livePreviewExtensions 不依赖 foldedHeadings,折叠切换不再触发整组扩展重建。
-    const livePreviewExtensions = useMemo(
-      () => createLivePreviewExtensions({
+    // 动态参数通过 Compartment reconfigure;稳定扩展数组避免 EditorPane 重建编辑器。
+    const livePreviewCompartments = useMemo(createLivePreviewCompartments, []);
+    const editorViewRef = useRef<EditorView | null>(null);
+    const previewHeadingChangeRef = useRef(onPreviewHeadingChange);
+    const foldChangeRef = useRef(handleFoldChange);
+    const zoomChangeRef = useRef(handleZoomChange);
+    const openLinkRef = useRef(onOpenLink);
+    const taskToggleRef = useRef(onTaskToggle);
+    previewHeadingChangeRef.current = onPreviewHeadingChange;
+    foldChangeRef.current = handleFoldChange;
+    zoomChangeRef.current = handleZoomChange;
+    openLinkRef.current = onOpenLink;
+    taskToggleRef.current = onTaskToggle;
+
+    const stablePreviewHeadingChange = useCallback((change: PreviewHeadingChange) => {
+      previewHeadingChangeRef.current?.(change);
+    }, []);
+    const stableFoldChange = useCallback((next: ReadonlySet<FoldKey>) => {
+      foldChangeRef.current(next);
+    }, []);
+    const stableZoomChange = useCallback((size: number) => {
+      zoomChangeRef.current(size);
+    }, []);
+    const stableOpenLink = useCallback((link: MarkdownLink) => {
+      openLinkRef.current?.(link);
+    }, []);
+    const stableTaskToggle = useCallback((task: MarkdownTask, nextChecked: boolean) => {
+      taskToggleRef.current?.(task, nextChecked);
+    }, []);
+
+    const reconfigureLivePreview = useCallback(() => {
+      const view = editorViewRef.current;
+      if (!view) return;
+      reconfigureLivePreviewExtensions(view, {
+        livePreview: mode !== 'source',
         baseSize: settings.editorFontSize,
-        onZoomChange: handleZoomChange,
-        onPreviewHeadingChange,
-        onFoldChange: handleFoldChange,
-      }),
-      [settings.editorFontSize, handleZoomChange, onPreviewHeadingChange, handleFoldChange],
-    );
+        onZoomChange: stableZoomChange,
+        onPreviewHeadingChange: stablePreviewHeadingChange,
+        onFoldChange: stableFoldChange,
+        reviewComments,
+        filePath: rest.filePath,
+        onOpenLink: stableOpenLink,
+        onTaskToggle: stableTaskToggle,
+        themeId: settings.themeId,
+        locale: settings.locale,
+        frontmatterFold: settings.editorFrontmatterFoldEnabled,
+      }, livePreviewCompartments);
+    }, [livePreviewCompartments, mode, reviewComments, rest.filePath, settings.editorFontSize, settings.editorFrontmatterFoldEnabled, settings.locale, settings.themeId, stableFoldChange, stableOpenLink, stablePreviewHeadingChange, stableTaskToggle, stableZoomChange]);
+
+    const handleEditorReady = useCallback((view: EditorView) => {
+      editorViewRef.current = view;
+      reconfigureLivePreview();
+    }, [reconfigureLivePreview]);
+
+    useEffect(() => {
+      reconfigureLivePreview();
+    }, [reconfigureLivePreview]);
+
+    const [livePreviewExtensions] = useState(() => createLivePreviewExtensions({
+      livePreview: mode !== 'source',
+      baseSize: settings.editorFontSize,
+      onZoomChange: stableZoomChange,
+      onPreviewHeadingChange: stablePreviewHeadingChange,
+      onFoldChange: stableFoldChange,
+      reviewComments,
+      filePath: rest.filePath,
+      onOpenLink: stableOpenLink,
+      onTaskToggle: stableTaskToggle,
+      themeId: settings.themeId,
+      locale: settings.locale,
+      frontmatterFold: settings.editorFrontmatterFoldEnabled,
+      compartments: livePreviewCompartments,
+    }));
     return (
       <div className="cm6-markdown-editor-pane">
-        <EditorPane
-          ref={(instance) => {
-            // 同时支持外部 ref + 内部 editorRef(点击重置需要)
-            if (typeof ref === 'function') ref(instance);
-            else if (ref) ref.current = instance;
-            editorRef.current = instance;
-          }}
-          {...rest}
-          extraExtensions={livePreviewExtensions}
-        />
+        <EditorPanePaperBackground>
+          <EditorPane
+            ref={(instance) => {
+              // 同时支持外部 ref + 内部 editorRef(点击重置需要)
+              if (typeof ref === 'function') ref(instance);
+              else if (ref) ref.current = instance;
+              editorRef.current = instance;
+            }}
+            {...rest}
+            lineNumberMode={mode === 'source' ? 'source' : 'blocks'}
+            onRequestImageInsert={onRequestImageInsert}
+            onEditorReady={handleEditorReady}
+            extraExtensions={livePreviewExtensions}
+          />
+        </EditorPanePaperBackground>
         {zoomIndicator && (
           <button
             type="button"

@@ -1,16 +1,18 @@
-import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { DEFAULT_PRESET_ID, getPreset, markdownToDocx, type PresetConfig, type PresetId } from './word';
 import { createExportFileName, resolveDefaultExportPath } from './exportPathService';
-import { detectPandocPath } from './pandocDetect';
+
+export type ExportProgressCallback = (progress: number, detail: string) => void;
 
 export async function exportToWord(
   content: string,
   fileName: string,
   filePath: string | undefined,
   preset: PresetId | PresetConfig = DEFAULT_PRESET_ID,
+  onProgress?: ExportProgressCallback,
 ): Promise<string | null> {
+  onProgress?.(5, '选择保存位置');
   const defaultPath = await resolveDefaultExportPath({
     fileName: createExportFileName(fileName, 'docx'),
     filePath,
@@ -24,23 +26,16 @@ export async function exportToWord(
 
   if (!targetPath) return null;
 
-  const pandoc = await detectPandocPath();
-  if (pandoc) {
-    await invoke('export_pandoc_file', {
-      path: targetPath,
-      markdown: content,
-      format: 'docx',
-      documentPath: filePath ?? null,
-      pandocPath: pandoc,
-      pandocArgs: '',
-    });
-    return targetPath;
-  }
-
-  // 回退到前端 WASM 渲染
+  onProgress?.(15, '准备 Word 排版');
   const presetConfig = typeof preset === 'string' ? getPreset(preset) : preset;
-  const blob = await markdownToDocx(content, presetConfig, { fileName });
+  const blob = await markdownToDocx(content, presetConfig, {
+    fileName,
+    filePath,
+    onProgress,
+  });
+  onProgress?.(92, '写入 Word 文件');
   const buffer = await blob.arrayBuffer();
   await writeFile(targetPath, new Uint8Array(buffer));
+  onProgress?.(100, 'Word 文件已写入');
   return targetPath;
 }

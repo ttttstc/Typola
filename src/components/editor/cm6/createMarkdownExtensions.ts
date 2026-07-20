@@ -2,6 +2,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { recordCm6InputToPaint } from '../../../perf/index';
+import type { FormatAction } from '../../EditorContextMenu';
 
 type CreateMarkdownExtensionsOptions = {
   fontFamily: string;
@@ -10,6 +11,7 @@ type CreateMarkdownExtensionsOptions = {
   wordWrap: boolean;
   extraExtensions?: Extension[];
   onModK?: () => boolean;
+  onFormat?: (action: FormatAction) => boolean;
 };
 
 export function createMarkdownExtensions(options: CreateMarkdownExtensionsOptions): Extension[] {
@@ -35,11 +37,27 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
     }]));
   }
 
+  if (options.onFormat) {
+    const headingKey = (level: 1 | 2 | 3 | 4 | 5 | 6) =>
+      ({ key: `${navigator.platform.includes('Mac') ? 'Mod-Alt' : 'Ctrl'}-${level}`, preventDefault: true, run: () => options.onFormat?.({ type: 'heading', level }) ?? false });
+    extensions.push(keymap.of([
+      { key: 'Mod-b', preventDefault: true, run: () => options.onFormat?.({ type: 'bold' }) ?? false },
+      { key: 'Mod-i', preventDefault: true, run: () => options.onFormat?.({ type: 'italic' }) ?? false },
+      { key: 'Mod-Shift-7', preventDefault: true, run: () => options.onFormat?.({ type: 'ol' }) ?? false },
+      { key: 'Mod-Shift-8', preventDefault: true, run: () => options.onFormat?.({ type: 'ul' }) ?? false },
+      headingKey(1), headingKey(2), headingKey(3), headingKey(4), headingKey(5), headingKey(6),
+      { key: 'Mod-g', preventDefault: true, run: () => options.onFormat?.({ type: 'inline-code' }) ?? false },
+      { key: 'Mod-\\', preventDefault: true, run: () => options.onFormat?.({ type: 'clear-format' }) ?? false },
+      { key: 'Mod-.', preventDefault: true, run: () => options.onFormat?.({ type: 'quote-up' }) ?? false },
+      { key: 'Mod-,', preventDefault: true, run: () => options.onFormat?.({ type: 'quote-down' }) ?? false },
+    ]));
+  }
+
   extensions.push(
     EditorView.theme({
       '&': {
         fontFamily: options.fontFamily,
-        backgroundColor: 'var(--theme-paper)',
+        backgroundColor: 'transparent',
         color: 'var(--theme-text-primary)',
       },
       '.cm-content': {
@@ -48,7 +66,7 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
         caretColor: 'var(--theme-accent)',
       },
       '.cm-scroller': {
-        backgroundColor: 'var(--theme-paper)',
+        backgroundColor: 'transparent',
       },
       '.cm-gutters': {
         fontFamily: options.fontFamily,

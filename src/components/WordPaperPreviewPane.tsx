@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useDeferredValue, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { PreviewScrollHandle } from '../types/previewScroll';
-import { Check, ChevronDown, FileOutput, X } from 'lucide-react';
+import { Check, ChevronDown, FileOutput, LoaderCircle, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
 import { listEnabledExportPresets, setExportPreset } from '../services/settingsService';
@@ -16,6 +16,7 @@ type WordPaperPreviewPaneProps = {
   source: string;
   previewWidth: number;
   canExport: boolean;
+  exporting?: boolean;
   onExportWord: () => void;
   onClose: () => void;
   filePath?: string;
@@ -398,6 +399,7 @@ export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPre
   source,
   previewWidth,
   canExport,
+  exporting = false,
   onExportWord,
   onClose,
   filePath,
@@ -487,6 +489,8 @@ export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPre
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const [isPresetPickerOpen, setIsPresetPickerOpen] = useState(false);
   const [activePresetId, setActivePresetId] = useState<PresetId>(settings.exportPresetId);
+  const [previewStatus, setPreviewStatus] = useState<'rendering' | 'ready' | 'error'>('rendering');
+  const [pageCount, setPageCount] = useState(1);
   const debouncedSource = useDebouncedValue(source, 260);
   const deferredSource = useDeferredValue(debouncedSource);
 
@@ -567,15 +571,25 @@ export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPre
     const measureEl = measureRef.current;
     const pagesEl = pagesRef.current;
     if (!measureEl || !pagesEl) return;
+    let cancelled = false;
 
     if (deferredSource.trim() === '') {
       measureEl.replaceChildren();
       pagesEl.replaceChildren();
       makePage(pagesEl, 1);
-      return;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setPageCount(1);
+        setPreviewStatus('ready');
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setPreviewStatus('rendering');
+    });
     measureEl.replaceChildren();
     pagesEl.replaceChildren();
     makePage(pagesEl, 1);
@@ -590,12 +604,16 @@ export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPre
         window.requestAnimationFrame(() => {
           if (cancelled || !measureRef.current || !pagesRef.current) return;
           paginateRenderedContent(measureRef.current, pagesRef.current, contentHeightPx);
+          setPageCount(pagesRef.current.childElementCount || 1);
+          setPreviewStatus('ready');
         });
       });
     }).catch(() => {
       if (cancelled || !pagesRef.current) return;
       pagesRef.current.replaceChildren();
       makePage(pagesRef.current, 1);
+      setPageCount(1);
+      setPreviewStatus('error');
     });
 
     return () => {
@@ -650,7 +668,7 @@ export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPre
   };
 
   return (
-    <aside className="word-preview-panel" aria-label={t('wordPreviewAria')}>
+    <aside className="word-preview-panel" aria-label={t('wordPreviewAria')} aria-busy={previewStatus === 'rendering'}>
       <div className="word-preview-header">
         <div className="word-preview-preset-picker" ref={presetPickerRef}>
           <button
@@ -717,16 +735,20 @@ export const WordPaperPreviewPane = forwardRef<PreviewScrollHandle, WordPaperPre
           type="button"
           className="word-preview-export-button"
           onClick={onExportWord}
-          disabled={!canExport}
+          disabled={!canExport || exporting}
           title={t('exportWordTitle')}
           aria-label={t('exportWordLabel')}
         >
-          <FileOutput size={15} />
-          {t('exportWordLabel')}
+          {exporting ? <LoaderCircle className="word-preview-button-spinner" size={15} /> : <FileOutput size={15} />}
+          {exporting ? '导出中' : t('exportWordLabel')}
         </button>
         <button type="button" className="word-preview-close-button" onClick={onClose} title={t('closePreviewTitle')} aria-label={t('closePreviewLabel')}>
           <X size={15} />
         </button>
+      </div>
+      <div className={`word-preview-meta word-preview-meta-${previewStatus}`} role="status" aria-live="polite">
+        <span>{previewStatus === 'rendering' ? '正在重新排版' : previewStatus === 'error' ? '预览排版失败' : `${pageCount} 页`}</span>
+        <span>{preset.page.width.toFixed(1)} × {preset.page.height.toFixed(1)} cm</span>
       </div>
       <div ref={scrollRef} className="word-preview-scroll">
         <div className="word-preview-stage" style={style as React.CSSProperties}>

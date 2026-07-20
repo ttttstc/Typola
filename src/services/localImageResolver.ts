@@ -4,6 +4,7 @@ type ConvertFileSrcFn = (filePath: string, protocol?: string) => string;
 
 const NOT_AVAILABLE = Symbol('not-available');
 let convertFileSrcFn: ConvertFileSrcFn | typeof NOT_AVAILABLE | null = null;
+const allowedAssetDirectories = new Set<string>();
 
 async function ensureConvertFileSrc(): Promise<ConvertFileSrcFn | null> {
   if (convertFileSrcFn !== null) {
@@ -64,11 +65,51 @@ export async function resolveLocalImages(
     const convertFn = await ensureConvertFileSrc();
     if (!convertFn) return;
 
-    const absolutePath = resolveLocalResourcePath(filePath, rawSrc);
+    const directAbsolutePath = absoluteLocalPath(rawSrc);
+    const absolutePath = resolveLocalResourcePath(filePath, rawSrc) ?? directAbsolutePath;
     if (!absolutePath) continue;
+    const documentDir = dirname(filePath);
+    if (directAbsolutePath && documentDir && !isWithinDirectory(absolutePath, documentDir)) continue;
 
+    await allowAssetDirectory(absolutePath);
     const assetUrl = convertFn(absolutePath);
     img.src = assetUrl;
+  }
+}
+
+function dirname(path: string): string {
+  const normalized = path.replaceAll('/', '\\');
+  const index = normalized.lastIndexOf('\\');
+  return index >= 0 ? normalized.slice(0, index) : '';
+}
+
+function isWithinDirectory(filePath: string, directory: string): boolean {
+  const file = filePath.replaceAll('/', '\\').toLowerCase();
+  const dir = directory.replaceAll('/', '\\').replace(/[\\]+$/u, '').toLowerCase();
+  return file === dir || file.startsWith(`${dir}\\`);
+}
+
+function absoluteLocalPath(src: string): string | undefined {
+  const path = src.split(/[?#]/u, 1)[0];
+  if (!/^(?:[A-Za-z]:[\\/]|[\\/]{2}|\/)/u.test(path)) return undefined;
+  try {
+    return decodeURIComponent(path).replaceAll('/', '\\');
+  } catch {
+    return path.replaceAll('/', '\\');
+  }
+}
+
+async function allowAssetDirectory(filePath: string): Promise<void> {
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+  const slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  const directory = slash >= 0 ? filePath.slice(0, slash) : '';
+  if (!directory || allowedAssetDirectories.has(directory)) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('allow_asset_directory', { dir: directory });
+    allowedAssetDirectories.add(directory);
+  } catch {
+    // 已打开文档目录通常已在 scope 内；scope 扩展失败不阻断其它可显示图片。
   }
 }
 

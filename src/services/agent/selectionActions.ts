@@ -1,9 +1,11 @@
 // 选区右键 AI 动作定义 + 注入文本构造。
 // M3 选区注入最小入口：5 个固定模板 + 1 个自定义（空模板）+ 1 个检视(走 reviewState,不调 AI)。
 import {
+  Ban,
   BookOpen,
   ChevronsDownUp,
   ChevronsUpDown,
+  EyeOff,
   MessageSquare,
   PenLine,
   SpellCheck,
@@ -12,7 +14,7 @@ import {
 } from 'lucide-react';
 
 // 改写已砍:跟"润色"语义重叠,润色加自定义要求后基本覆盖改写场景。
-export type SelectionActionId = 'polish' | 'shorten' | 'expand' | 'explain' | 'custom' | 'review' | 'proofread';
+export type SelectionActionId = 'polish' | 'shorten' | 'expand' | 'explain' | 'custom' | 'review' | 'proofread' | 'dismiss-session' | 'hide-globally';
 
 // icon 改为 lucide 组件,跟工具栏视觉语言统一(原 emoji 视觉过乱)。
 export const SELECTION_ACTIONS: Record<SelectionActionId, { label: string; icon: LucideIcon; template: string }> = {
@@ -51,6 +53,16 @@ export const SELECTION_ACTIONS: Record<SelectionActionId, { label: string; icon:
     label: '校对',
     icon: SpellCheck,
     template: '请检查以下文字中的错别字、语法错误和标点误用。如有错误，输出修正后的版本；如果没有错误，输出原文。只输出结果，不要任何解释。',
+  },
+  'dismiss-session': {
+    label: '本页不再展示',
+    icon: EyeOff,
+    template: '',
+  },
+  'hide-globally': {
+    label: '全局隐藏',
+    icon: Ban,
+    template: '',
   },
 };
 
@@ -291,4 +303,132 @@ export function buildInjectionText(action: SelectionActionId, filePath: string, 
   }
   // 明确告诉 AI：这是选区靶向操作，只替换选中部分，输出即替换结果
   return `${header}\n${quote}\n\n${tpl}\n\n请直接输出替换后的文字，我会用它精确替换原文中选中的那一段。\n\n`;
+}
+
+// ============================================================
+// 结构化上下文 / anchor 共享规则（#189）
+// ------------------------------------------------------------
+// 复用 markdownAnalysisService 的 headingPathAt / markdownBlockAt /
+// isRangeWithinSingleMarkdownBlock,避免 AI/Review 走两套恢复逻辑。
+// 只引入纯函数,不动 UI/Provider。
+// ============================================================
+
+import {
+  headingPathAt,
+  isRangeWithinSingleMarkdownBlock,
+  markdownBlockAt,
+} from '../markdownAnalysisService';
+import type { SelectionAnchor } from './types';
+
+const DEFAULT_CONTEXT_BUDGET = 4000;
+
+export type AnchorContext = {
+  /** 选区所在 heading 路径,根标题在外 */
+  headingPath: string[];
+  /** 选区所属最小结构块(kind/from/to) */
+  block: { kind: 'code' | 'table' | 'math' | 'mermaid' | 'section' | 'paragraph'; from: number; to: number };
+  /** 受 budget 限制的最近块截断文本,选区文本始终完整保留 */
+  excerpt: string;
+};
+
+export function buildAnchorContext(source: string, anchor: SelectionAnchor, budget = DEFAULT_CONTEXT_BUDGET): AnchorContext {
+  const headingPath = headingPathAt(source, anchor.from);
+  const block = markdownBlockAt(source, anchor.from, anchor.to);
+  const blockSource = source.slice(block.from, block.to);
+  const limit = Math.max(budget, anchor.originalText.length);
+  const selectionStart = Math.max(0, anchor.from - block.from);
+  const selectionEnd = Math.min(blockSource.length, selectionStart + anchor.originalText.length);
+  const selected = blockSource.slice(selectionStart, selectionEnd) || anchor.originalText;
+  const remaining = Math.max(0, limit - selected.length);
+  const beforeLength = Math.min(selectionStart, Math.floor(remaining / 2));
+  const afterLength = Math.min(blockSource.length - selectionEnd, remaining - beforeLength);
+  const omittedBefore = selectionStart > beforeLength;
+  const omittedAfter = selectionEnd + afterLength < blockSource.length;
+  const excerpt = blockSource.length <= limit
+    ? blockSource
+    : `${omittedBefore ? '…' : ''}${blockSource.slice(selectionStart - beforeLength, selectionStart)}${selected}${blockSource.slice(selectionEnd, selectionEnd + afterLength)}${omittedAfter ? '…' : ''}`;
+  return {
+    headingPath,
+    block: { kind: block.kind, from: block.from, to: block.to },
+    excerpt,
+  };
+}
+
+export function formatAnchorContextLines(context: AnchorContext, fileName: string): string {
+  const headingLine = context.headingPath.length ? context.headingPath.join(' / ') : '(无标题)';
+  return [
+    `所在标题:${headingLine}`,
+    `所在结构块:${context.block.kind}`,
+    `文件:${fileName}`,
+  ].join('\n');
+}
+
+// 共享 anchor 校验:沿用 findUniqueAnchor 行为,失败后要求恢复点必须落在同一 block。
+// 返回 { start, length } 或 null 表示无可用 anchor。
+export function recoverAnchorInBlock(
+  source: string,
+  anchor: SelectionAnchor,
+  block?: AnchorContext['block'],
+): UniqueAnchorHit | null {
+  const hit = findUniqueAnchor(source, anchor.originalText, anchor.prefixHint);
+  if (!hit) return null;
+  if (!block) return hit;
+  const recoveredStart = hit.start;
+  const recoveredEnd = hit.start + hit.length;
+  const recoveredBlock = markdownBlockAt(source, recoveredStart, recoveredEnd);
+  // 原 offset 会随文档插入而失效；按当前文档重新计算结构块，再比较 block kind/heading path。
+  if (recoveredBlock.kind !== block.kind) return null;
+  if (anchor.headingPath && recoveredBlock.headingPath.join('\u0000') !== anchor.headingPath.join('\u0000')) return null;
+  return hit;
+}
+
+// 给 useEditorSelectionBridge.acceptResultCard 用:
+// 1) anchor.from/to 与 originalText 完全一致 → valid;
+// 2) findUniqueAnchor 能找到且 recoverAnchorInBlock 不跨块 → valid (新 from/to);
+// 3) 否则 stale/ambiguous。
+export type AnchorValidation = {
+  status: 'valid' | 'stale' | 'wrong-file';
+  recovered?: { from: number; to: number };
+};
+
+export function validateSelectionAnchor(
+  source: string,
+  anchor: SelectionAnchor,
+  options: { fallbackBlock?: AnchorContext['block'] } = {},
+): AnchorValidation {
+  const exactFrom = source.slice(anchor.from, anchor.to) === anchor.originalText;
+  if (exactFrom && isRangeWithinSingleMarkdownBlock(source, anchor.from, anchor.to)) {
+    return { status: 'valid' };
+  }
+  const recovered = recoverAnchorInBlock(source, anchor, options.fallbackBlock ?? anchor.block);
+  if (!recovered) return { status: 'stale' };
+  return {
+    status: 'valid',
+    recovered: { from: recovered.start, to: recovered.start + recovered.length },
+  };
+}
+
+// 把结构上下文拼到 oneshot prompt 头部:仅在 anchor 提供时启用,旧调用点保持不变。
+export function buildStructuredOneshotPrompt(
+  action: SelectionActionId,
+  anchor: SelectionAnchor,
+  options: { source?: string; fileName?: string; budget?: number } = {},
+): string {
+  const base = buildOneshotPrompt(action, anchor.originalText);
+  if (!options.source) return base;
+  const context = buildAnchorContext(options.source, anchor, options.budget);
+  const lines = formatAnchorContextLines(context, options.fileName ?? '');
+  return `${lines}\n\n上下文（可能已截断）：\n---\n${context.excerpt}\n---\n\n${base}`;
+}
+
+export function buildStructuredInjectionText(
+  action: SelectionActionId,
+  anchor: SelectionAnchor,
+  options: { source?: string; fileName?: string; budget?: number } = {},
+): string {
+  const base = buildInjectionText(action, anchor.filePath, anchor.originalText);
+  if (!options.source) return base;
+  const context = buildAnchorContext(options.source, anchor, options.budget);
+  const lines = formatAnchorContextLines(context, options.fileName ?? '');
+  return `${lines}\n\n上下文（可能已截断）：\n---\n${context.excerpt}\n---\n\n${base}`;
 }

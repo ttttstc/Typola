@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, ExternalLink, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileCode2, LoaderCircle, RefreshCw, X } from 'lucide-react';
 import { buildHtmlPreviewDocumentWithLocalResources } from '../services/htmlPreviewService';
 
 export type HtmlPreviewPaneProps = {
@@ -54,7 +54,7 @@ export function HtmlPreviewPane({
       if (dir) {
         try {
           const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('allow_html_preview_directory', { dir });
+          await invoke('allow_fs_directory', { dir });
         } catch (allowError) {
           // 允许 scope 失败不阻断主流程,后面真正 readTextFile 失败时再交给 error 态。
           console.warn('Failed to allow html preview directory:', allowError);
@@ -83,7 +83,7 @@ export function HtmlPreviewPane({
   }, [filePath]);
 
   useEffect(() => {
-    void loadPreview();
+    queueMicrotask(() => void loadPreview());
   }, [loadPreview]);
 
   const handleOpenInBrowser = useCallback(async () => {
@@ -104,7 +104,7 @@ export function HtmlPreviewPane({
   const statusText = STATUS_LABELS[state.status];
 
   return (
-    <aside className="html-preview-pane" aria-label="HTML 预览">
+    <aside className="html-preview-pane" aria-label="HTML 预览" aria-busy={state.status === 'loading'}>
       <div className="html-preview-toolbar">
         <button
           type="button"
@@ -117,7 +117,7 @@ export function HtmlPreviewPane({
           <span>产物中心</span>
         </button>
         <div className="html-preview-heading">
-          <span>HTML 预览</span>
+          <span><FileCode2 size={14} aria-hidden="true" />HTML 预览</span>
           <small>{displayName}</small>
         </div>
         <div className="html-preview-actions">
@@ -129,7 +129,7 @@ export function HtmlPreviewPane({
             aria-label="刷新"
             title="重新读取 HTML 文件并刷新预览"
           >
-            <RefreshCw size={13} />
+            <RefreshCw className={state.status === 'loading' ? 'html-preview-refreshing' : undefined} size={13} />
             <span>刷新</span>
           </button>
           <button
@@ -154,27 +154,39 @@ export function HtmlPreviewPane({
           </button>
         </div>
       </div>
-      <div
-        className={`html-preview-status html-preview-status-${state.status}`}
-        role="status"
-        aria-live="polite"
-      >
-        {statusText}
-        {state.status === 'error' && state.errorMessage && (
-          <div className="html-preview-error-detail" title={state.errorMessage}>
-            {state.errorMessage}
+      <div className="html-preview-content">
+        {state.status !== 'ready' && (
+          <div
+            className={`html-preview-status html-preview-status-${state.status}`}
+            role="status"
+            aria-live="polite"
+          >
+            {state.status === 'loading' && <LoaderCircle className="html-preview-state-icon" size={18} aria-hidden="true" />}
+            <strong>{statusText}</strong>
+            {state.status === 'loading' && (
+              <div className="html-preview-skeleton" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            )}
+            {state.status === 'error' && state.errorMessage && (
+              <div className="html-preview-error-detail" title={state.errorMessage}>
+                {state.errorMessage}
+              </div>
+            )}
           </div>
         )}
+        {state.status === 'ready' && (
+          <iframe
+            key={state.lastLoadedAt ?? 0}
+            className="html-preview-frame"
+            title={`HTML 预览:${displayName}`}
+            sandbox={IFRAME_SANDBOX}
+            srcDoc={state.srcDoc}
+          />
+        )}
       </div>
-      {state.status === 'ready' && (
-        <iframe
-          key={state.lastLoadedAt ?? 0}
-          className="html-preview-frame"
-          title={`HTML 预览:${displayName}`}
-          sandbox={IFRAME_SANDBOX}
-          srcDoc={state.srcDoc}
-        />
-      )}
     </aside>
   );
 }

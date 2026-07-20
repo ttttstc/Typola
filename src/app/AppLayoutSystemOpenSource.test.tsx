@@ -30,7 +30,11 @@ const updateServiceMock = vi.hoisted(() => ({
   checkForAppUpdate: vi.fn<() => Promise<UpdateCheckResult>>(),
   downloadAppUpdate: vi.fn<() => Promise<void>>(),
   installDownloadedAppUpdate: vi.fn<() => Promise<void>>(),
+  getDistributionKind: vi.fn().mockResolvedValue('installed'),
+  openReleaseForVersion: vi.fn<() => Promise<void>>(),
 }));
+
+const cm6EditorMock = vi.hoisted(() => ({ source: '' }));
 
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => tauriWindowMock,
@@ -46,6 +50,15 @@ vi.mock('../services/updateService', () => ({
   checkForAppUpdate: updateServiceMock.checkForAppUpdate,
   downloadAppUpdate: updateServiceMock.downloadAppUpdate,
   installDownloadedAppUpdate: updateServiceMock.installDownloadedAppUpdate,
+  getDistributionKind: updateServiceMock.getDistributionKind,
+  openReleaseForVersion: updateServiceMock.openReleaseForVersion,
+}));
+
+vi.mock('../components/editor/cm6/Cm6MarkdownEditorPane', () => ({
+  Cm6MarkdownEditorPane: ({ source }: { source: string }) => {
+    cm6EditorMock.source = source;
+    return null;
+  },
 }));
 
 function bytesOf(value: string): number[] {
@@ -87,6 +100,7 @@ describe('AppLayout system open source editing', () => {
     tauriEventMock.listen.mockResolvedValue(vi.fn());
     tauriWindowMock.onDragDropEvent.mockResolvedValue(vi.fn());
     tauriWindowMock.setTitle.mockResolvedValue(undefined);
+    cm6EditorMock.source = '';
   });
 
   afterEach(() => {
@@ -149,10 +163,8 @@ describe('AppLayout system open source editing', () => {
       await waitForMacrotask();
     });
 
-    const sourceContent = host.querySelector('.cm-content');
-
-    expect(sourceContent?.textContent).toContain('<!doctype html>');
-    expect(sourceContent?.textContent).toContain('<h1 align="right">材料清单</h1>');
-    expect(sourceContent?.textContent).toContain('white-space: pre-wrap');
+    expect(cm6EditorMock.source).toContain('<!doctype html>');
+    expect(cm6EditorMock.source).toContain('<h1 align="right">材料清单</h1>');
+    expect(cm6EditorMock.source).toContain('white-space: pre-wrap');
   });
 });

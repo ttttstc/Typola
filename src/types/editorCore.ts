@@ -1,15 +1,18 @@
 import type { AnchorStatus } from '../services/agent/types';
+import type { FormatAction } from '../components/EditorContextMenu';
+import type { SearchMatch, SearchOptions } from '../services/documentSearchService';
 
-export type EditorEngine = 'vditor' | 'cm6';
 export type EditorSelection = { text: string; from: number; to: number };
+export type EditorTextChange = { from: number; to: number; insert: string };
 
 /**
- * 编辑器运行时核心接口。
- * CM6 和 Vditor 过渡期都实现这份契约；调用方优先面向 Markdown source。
+ * 写作模块对外的稳定编辑器内核契约。
+ * 调用方只面向 Markdown source 与 transaction 命令，不依赖具体编辑器实现。
  */
-export type EditorCoreHandle = {
+export type TypolaEditorKernel = {
   focus: () => void;
   getMarkdown: () => string;
+  findSearchMatches: (query: string, options: SearchOptions) => SearchMatch[];
   setMarkdown: (markdown: string) => void;
   insertText: (text: string) => void;
   /** 按指定 doc 位置插入;text 插入后光标停在插入内容尾部,继续输入位置正确。
@@ -21,6 +24,9 @@ export type EditorCoreHandle = {
   replaceSelection: (text: string) => void;
   /** 按 Markdown source 坐标替换；Vditor 过渡期可退化为文本定位。 */
   replaceRange: (from: number, to: number, text: string) => boolean;
+  /** 将一组不重叠的 source 替换作为同一笔 CM6 history transaction 提交。 */
+  replaceRanges: (changes: readonly EditorTextChange[]) => boolean;
+  format: (action: FormatAction) => void;
   /** 校验 AI anchor 是否仍可安全替换。 */
   validateAnchor: (filePath: string, from: number, to: number, originalText: string, prefixHint?: string) => AnchorStatus;
   /** 滚动并选中范围；搜索导航应传 preserveFocus，避免焦点被抢回编辑器。 */
@@ -42,3 +48,6 @@ export type EditorCoreHandle = {
   /** CM6 heading 折叠:外部(React state)把折叠集合同步进编辑器。 */
   setFoldedHeadings?: (keys: ReadonlySet<string>) => void;
 };
+
+/** @deprecated 使用 TypolaEditorKernel。 */
+export type EditorCoreHandle = TypolaEditorKernel;

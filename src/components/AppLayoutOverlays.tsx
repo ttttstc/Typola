@@ -16,7 +16,7 @@ type AppLayoutOverlaysProps = {
   source: string;
   readOnly: boolean;
   onCloseFind: () => void;
-  onReplaceSource: (value: string) => void;
+  onReplace: (matches: readonly SearchMatch[], replacement: string) => void;
   onNavigate: (match: SearchMatch, query: string, options: SearchOptions, backwards?: boolean) => void;
   quickOpenVisible: boolean;
   recentFiles: RecentFile[];
@@ -42,7 +42,7 @@ export function AppLayoutOverlays({
   source,
   readOnly,
   onCloseFind,
-  onReplaceSource,
+  onReplace,
   onNavigate,
   quickOpenVisible,
   recentFiles,
@@ -66,7 +66,7 @@ export function AppLayoutOverlays({
         source={source}
         readOnly={readOnly}
         onClose={onCloseFind}
-        onReplaceSource={onReplaceSource}
+        onReplace={onReplace}
         onNavigate={onNavigate}
       />
       <QuickOpenPanel

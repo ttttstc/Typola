@@ -1,5 +1,5 @@
 import type { TocItem } from '../types/document';
-import { collectMarkdownHeadings } from '../services/markdownHeadings';
+import { analyzeMarkdown } from '../services/markdownAnalysisService';
 
 export const RIGHT_PANEL_MIN_WIDTH = 320;
 export const RIGHT_PANEL_MAX_WIDTH = 760;
@@ -16,6 +16,10 @@ export const RIGHT_PANEL_DEFAULT_RATIO = 0.45;
 
 export function pathBasename(path: string): string {
   return path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
+}
+
+export function sameLocalPath(left: string, right: string): boolean {
+  return left.replace(/\\/gu, '/').toLowerCase() === right.replace(/\\/gu, '/').toLowerCase();
 }
 
 export function joinLocalPath(root: string, ...parts: string[]): string {
@@ -50,7 +54,7 @@ export function imageExtensionFromMime(type: string): string {
 }
 
 export function extractToc(content: string): TocItem[] {
-  return collectMarkdownHeadings(content).map(({ level, text, id }) => ({ level, text, id }));
+  return analyzeMarkdown(content).headings.map(({ level, text }, index) => ({ level, text, id: `toc-${index}` }));
 }
 
 export function toUpdateErrorMessage(error: unknown): string {

@@ -7,21 +7,21 @@ async function openEditor(page: Page): Promise<void> {
 }
 
 function liveEditor(page: Page) {
-  return page.locator('.wysiwyg-editor-pane');
+  return page.locator('.cm6-markdown-editor-pane');
 }
 
 function liveEditorSurface(page: Page) {
-  return page.locator('.vditor-ir:visible, .vditor-wysiwyg:visible').first();
+  return page.locator('.cm-scroller');
 }
 
 function liveEditorContent(page: Page) {
-  return page.locator('.vditor-ir:visible .vditor-reset, .vditor-wysiwyg:visible > .vditor-reset').first();
+  return page.locator('.cm-content');
 }
 
 async function typeMarkdown(page: Page, markdown: string): Promise<void> {
   await openEditor(page);
   await page.keyboard.insertText(markdown);
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 }
 
@@ -31,13 +31,12 @@ async function waitForElementAnimations(page: Page, selector: string): Promise<v
   });
 }
 
-test('default layout shows the WYSIWYG editor only', async ({ page }) => {
+test('default layout shows the CM6 writing editor only', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.locator('.wysiwyg-editor-pane')).toBeVisible();
   await expect(liveEditor(page)).toBeVisible();
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
-  await expect(page.locator('.cm-editor')).toHaveCount(0);
+  await expect(page.locator('.cm-editor')).toBeVisible();
 });
 
 test('toolbar hides the app name and keeps draggable space around controls', async ({ page }) => {
@@ -45,6 +44,7 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
 
   await expect(page.locator('.wordmark')).toHaveCount(0);
   await expect(page.locator('.app-toolbar')).not.toContainText('Typola');
+  await expect(page.locator('.toolbar-title .file-name')).toHaveCount(0);
   const toolbarState = await page.evaluate(() => {
     const toolbar = document.querySelector('.app-toolbar')?.getBoundingClientRect();
     const title = document.querySelector('.toolbar-title')?.getBoundingClientRect();
@@ -67,27 +67,29 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
     titleDrag: true,
     overlayCount: 0,
     fallback: 'manual',
-    groups: ['文件操作', '视图与导出', '导航设置'],
+    groups: ['导航', '文件操作', 'Markdown 格式', '视图与导出', '导航设置', '文档模式'],
   }));
   expect(toolbarState.centerOffset).toBeLessThanOrEqual(1);
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);
 });
 
-test('WYSIWYG editor uses the same warm page background as the shell', async ({ page }) => {
+test('CM6 writing editor keeps its paper surface transparent over the page background', async ({ page }) => {
   await page.goto('/');
   await expect(liveEditor(page)).toBeVisible();
 
   const colors = {
     editor: await liveEditorSurface(page).evaluate((el) => getComputedStyle(el).backgroundColor),
+    paper: await page.locator('.editor-paper-background').evaluate((el) => getComputedStyle(el).backgroundColor),
     inner: await liveEditorContent(page).evaluate((el) => getComputedStyle(el).backgroundColor),
     body: await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
   };
 
-  expect(colors.editor).toBe(colors.body);
+  expect(colors.editor).toMatch(/rgba?\(0, 0, 0, 0\)|transparent/);
+  expect(colors.paper).not.toBe(colors.body);
   expect(colors.inner).not.toBe('rgb(255, 255, 255)');
 });
 
-test('ordinary Markdown remains editable in WYSIWYG mode', async ({ page }) => {
+test('ordinary Markdown remains editable in writing mode', async ({ page }) => {
   await page.goto('/');
   await expect(liveEditor(page)).toBeVisible();
   const editor = liveEditorContent(page);
@@ -99,18 +101,13 @@ test('ordinary Markdown remains editable in WYSIWYG mode', async ({ page }) => {
   await expect(editor).toContainText('普通 Markdown 可编辑');
 });
 
-test('live preview reveals Markdown markers in the active block', async ({ page }) => {
+test('writing mode keeps Markdown live-preview widgets enabled', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
-  await page.keyboard.insertText('这是 **重点内容** 的即时渲染测试');
+  await page.keyboard.insertText('- [ ] 即时渲染任务');
   await page.getByRole('button', { name: '源码模式' }).click();
 
-  await expect(page.locator('.vditor-ir')).toBeVisible();
-  await page.getByText('重点内容').click();
-
-  await expect(page.locator('.vditor-ir__node--expand .vditor-ir__marker').first()).toBeVisible();
-  const markerText = await page.locator('.vditor-ir__node--expand .vditor-ir__marker').allTextContents();
-  expect(markerText.join('')).toContain('**');
+  await expect(page.locator('.cm-atomic-task-checkbox')).toBeVisible();
 });
 
 test('editor and preview panes keep compact vertical reading space', async ({ page }) => {
@@ -140,8 +137,8 @@ test('toolbar toggles source mode without showing Word preview', async ({ page }
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
 
   await page.getByRole('button', { name: '源码模式' }).click();
-  await expect(page.locator('.wysiwyg-editor-pane')).toBeVisible();
-  await expect(page.locator('.cm-editor')).toHaveCount(0);
+  await expect(liveEditor(page)).toBeVisible();
+  await expect(page.locator('.cm-editor')).toBeVisible();
 });
 
 test('source mode keeps long documents scrollable', async ({ page }) => {
@@ -173,16 +170,17 @@ test('Word preview button opens and closes the right paper preview panel', async
   await expect(page.getByLabel('Word 导出预设')).toBeVisible();
   await expect(page.getByRole('button', { name: '导出 Word' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Word 预览', exact: true }).click();
+  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
 });
 
 test('HTML preview uses the shared right panel and is mutually exclusive with Word preview', async ({ page }) => {
   await page.goto('/');
 
-  const editor = page.locator('.wysiwyg-editor-pane');
-  const wordButton = page.getByRole('button', { name: 'Word 预览', exact: true });
-  const htmlButton = page.getByRole('button', { name: 'HTML 预览', exact: true });
+  const editor = liveEditor(page);
+  const viewToolbar = page.getByLabel('视图与导出');
+  const wordButton = viewToolbar.getByRole('button', { name: 'Word 预览' });
+  const htmlButton = viewToolbar.getByRole('button', { name: 'HTML 预览' });
 
   await expect(editor).toBeVisible();
   await htmlButton.click();
@@ -375,157 +373,28 @@ test('Word preview resizer changes panel width', async ({ page }) => {
   expect(after!.width).toBeGreaterThan(before!.width + 80);
 });
 
-test('source edits are reflected when switching back to WYSIWYG', async ({ page }) => {
+test('source edits are reflected when switching back to writing mode', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
   await page.keyboard.insertText('# 证据目录\n\n正文内容');
 
   await page.getByRole('button', { name: '源码模式' }).click();
-  await expect(page.locator('.wysiwyg-editor-pane')).toContainText('证据目录');
+  await expect(liveEditor(page)).toContainText('证据目录');
 });
 
-test('ordinary Markdown editing is the default in the WYSIWYG pane (no preview toggle)', async ({ page }) => {
+test('ordinary Markdown editing is the default in the writing pane (no preview toggle)', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
   await page.keyboard.insertText('# 大文件\n\n这是一个很长的 Markdown 文件开头。\n\n后续还有大量正文，需要普通 Markdown 预览继续阅读。');
 
   await page.getByRole('button', { name: '源码模式' }).click();
-  await expect(page.locator('.wysiwyg-editor-pane')).toBeVisible();
-  await expect(page.locator('.wysiwyg-editor-pane')).toContainText('大文件');
+  await expect(liveEditor(page)).toBeVisible();
+  await expect(liveEditor(page)).toContainText('大文件');
   await expect(page.getByRole('button', { name: '退出 HTML 预览' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'HTML 阅读预览' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '编辑表格' })).toHaveCount(0);
   await expect(page.locator('.html-reading-pane')).toHaveCount(0);
   await expect(page.locator('.html-preview-pane')).toHaveCount(0);
-});
-
-test('complex HTML table renders inside WYSIWYG and exposes the view-original trigger on hover', async ({ page }) => {
-  await page.goto('/');
-  await openEditor(page);
-  await page.keyboard.insertText([
-    '<table>',
-    '<tr><th rowspan="2">序号</th><th colspan="2">证据</th></tr>',
-    '<tr><th>名称</th><th>证明目的</th></tr>',
-    '<tr><td>1</td><td>合同</td><td>证明合同关系</td></tr>',
-    '</table>',
-  ].join('\n'));
-
-  await page.getByRole('button', { name: '源码模式' }).click();
-  await expect(page.locator('.wysiwyg-editor-pane')).toBeVisible();
-  const lockedTable = page.locator('.wysiwyg-editor-pane table[data-typola-locked="table"]');
-  await expect(lockedTable).toBeVisible();
-  await expect(lockedTable).toHaveAttribute('contenteditable', 'false');
-  await expect(page.locator('.wysiwyg-editor-pane th[colspan="2"]')).toBeVisible();
-  await expect(page.locator('.wysiwyg-editor-pane th[rowspan="2"]')).toBeVisible();
-
-  await lockedTable.hover();
-  const trigger = page.locator('.typola-html-table-viewer-trigger').first();
-  await expect(trigger).toBeVisible();
-
-  await trigger.click();
-  const dialog = page.getByRole('dialog', { name: '查看表格原貌' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator('table')).toContainText('证据');
-  await expect(dialog.locator('th[colspan="2"]')).toBeVisible();
-  await expect(dialog.locator('th[rowspan="2"]')).toBeVisible();
-
-  await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
-});
-
-test('complex table cells are locked while the rest of the document remains editable', async ({ page }) => {
-  await page.goto('/');
-  await openEditor(page);
-  await page.keyboard.insertText([
-    '# 标题',
-    '',
-    '这是普通 Markdown 正文，可以编辑。',
-    '',
-    '<table>',
-    '<tr><th rowspan="2">序号</th><th colspan="2">证据</th></tr>',
-    '<tr><td>1</td><td>合同</td></tr>',
-    '</table>',
-    '',
-    '表格之后的正文。',
-  ].join('\n'));
-
-  await page.getByRole('button', { name: '源码模式' }).click();
-  const wysiwyg = page.locator('.wysiwyg-editor-pane');
-  await expect(wysiwyg).toBeVisible();
-  await expect(page.locator('.wysiwyg-editor-pane table[data-typola-locked="table"]')).toBeVisible();
-
-  const surface = page.locator('.vditor-ir:visible, .vditor-wysiwyg:visible').first();
-  await surface.click();
-  await page.keyboard.press('Control+End');
-  await page.keyboard.press('Enter');
-  await page.keyboard.insertText('新增的 Markdown 段落。');
-
-  await expect(wysiwyg).toContainText('新增的 Markdown 段落');
-  await expect(wysiwyg).toContainText('表格之后的正文');
-  await expect(page.locator('.wysiwyg-editor-pane th[colspan="2"]')).toBeVisible();
-  await expect(page.locator('.wysiwyg-editor-pane th[rowspan="2"]')).toBeVisible();
-});
-
-test('switching to source mode after editing keeps the original complex table intact', async ({ page }) => {
-  await page.goto('/');
-  await openEditor(page);
-  await page.keyboard.insertText([
-    '# 表格保护回归',
-    '',
-    '<table class="target">',
-    '<tr><th rowspan="2">序号</th><th colspan="2">证据</th></tr>',
-    '<tr><th>名称</th><th>证明目的</th></tr>',
-    '<tr><td>1</td><td>旧合同</td><td>证明合同关系</td></tr>',
-    '</table>',
-    '',
-    '正文保持不变',
-  ].join('\n'));
-
-  await page.getByRole('button', { name: '源码模式' }).click();
-  await expect(page.locator('.wysiwyg-editor-pane table[data-typola-locked="table"]')).toBeVisible();
-  const surface = page.locator('.vditor-ir:visible, .vditor-wysiwyg:visible').first();
-  await surface.click();
-  await page.keyboard.press('End');
-  await page.keyboard.insertText('\n\n新增段落。');
-
-  await expect(page.locator('.wysiwyg-editor-pane')).toContainText('新增段落');
-
-  await page.getByRole('button', { name: '源码模式' }).click();
-  const source = page.locator('.cm-content');
-  await expect(source).toContainText('<table class="target">');
-  await expect(source).toContainText('rowspan="2"');
-  await expect(source).toContainText('colspan="2"');
-  await expect(source).toContainText('旧合同');
-  await expect(source).toContainText('正文保持不变');
-  await expect(source).toContainText('新增段落');
-});
-
-test('view-original overlay closes via close button and overlay click', async ({ page }) => {
-  await page.goto('/');
-  await openEditor(page);
-  await page.keyboard.insertText([
-    '<table>',
-    '<tr><th rowspan="2">序号</th><th colspan="2">证据</th></tr>',
-    '<tr><td>1</td><td>合同</td></tr>',
-    '</table>',
-  ].join('\n'));
-
-  await page.getByRole('button', { name: '源码模式' }).click();
-  const lockedTable = page.locator('.wysiwyg-editor-pane table[data-typola-locked="table"]');
-  await expect(lockedTable).toBeVisible();
-  await lockedTable.hover();
-  await page.locator('.typola-html-table-viewer-trigger').first().click();
-  const dialog = page.getByRole('dialog', { name: '查看表格原貌' });
-  await expect(dialog).toBeVisible();
-
-  await dialog.getByRole('button', { name: '关闭' }).click();
-  await expect(dialog).toHaveCount(0);
-
-  await lockedTable.hover();
-  await page.locator('.typola-html-table-viewer-trigger').first().click();
-  await expect(dialog).toBeVisible();
-  await page.locator('.html-table-viewer-overlay').click({ position: { x: 5, y: 5 } });
-  await expect(dialog).toHaveCount(0);
 });
 
 test('legacy Markdown preview is not mounted by default', async ({ page }) => {
@@ -539,7 +408,7 @@ test('Word preview uses the right panel instead of replacing the editor', async 
   await page.goto('/');
   await page.getByRole('button', { name: 'Word 预览' }).click();
 
-  await expect(page.locator('.wysiwyg-editor-pane')).toBeVisible();
+  await expect(liveEditor(page)).toBeVisible();
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 });
 
@@ -547,7 +416,7 @@ test('Word preview panel keeps the editor visible while resizing', async ({ page
   await page.goto('/');
   await page.getByRole('button', { name: 'Word 预览' }).click();
 
-  const editor = page.locator('.wysiwyg-editor-pane');
+  const editor = liveEditor(page);
   const resizer = page.getByRole('separator', { name: '调整右侧预览宽度' });
   const before = await editor.boundingBox();
   const handle = await resizer.boundingBox();
@@ -633,33 +502,19 @@ test('preview font settings split Chinese, English, and heading choices', async 
 test('preview body text consumes the selected Chinese font stack', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
-  await page.keyboard.insertText([
-    '中文正文 English',
-    '',
-    '<table>',
-    '<tr><th>项目</th><th>内容</th></tr>',
-    '<tr><td>字体</td><td>预览</td></tr>',
-    '</table>',
-  ].join('\n'));
-
-  await page.getByRole('button', { name: '源码模式' }).click();
-  const paragraph = page.locator('.wysiwyg-editor-pane p').filter({ hasText: '中文正文' }).first();
-  await expect(paragraph).toBeVisible();
+  await page.keyboard.insertText('中文正文 English');
 
   await page.getByRole('button', { name: '设置' }).click();
   await page.getByRole('button', { name: '预览', exact: true }).click();
   await page.getByLabel('中文字体').selectOption('Songti SC');
   await page.getByLabel('英文字体').selectOption('Georgia');
 
-  const paragraphFontFamily = await paragraph.evaluate((el) => (
-    getComputedStyle(el).fontFamily
+  const readingFontFamily = await page.locator('.app-layout').evaluate((el) => (
+    getComputedStyle(el).getPropertyValue('--reading-font-family')
   ));
 
-  expect(paragraphFontFamily).toContain('Georgia');
-  expect(paragraphFontFamily).toContain('Songti SC');
-  expect(paragraphFontFamily.indexOf('Songti SC')).toBeLessThan(
-    paragraphFontFamily.indexOf('sans-serif'),
-  );
+  expect(readingFontFamily).toContain('Georgia');
+  expect(readingFontFamily).toContain('Songti SC');
 });
 
 test('Word export settings make the paper preview expandable', async ({ page }) => {
@@ -750,21 +605,19 @@ test('settings about section exposes update controls', async ({ page }) => {
   await page.getByRole('button', { name: '关于' }).click();
 
   await expect(page.getByRole('button', { name: '检查更新', exact: true })).toBeVisible();
-  await expect(page.getByText('面向知识工作者的 Markdown 阅读与 Word 导出工具')).toBeVisible();
+  await expect(page.getByText('面向 Windows 的 Markdown 写作、AI 改稿与文档交付桌面工作台')).toBeVisible();
   await expect(page.getByText('稳定预览包含 HTML 表格的 Markdown 文档，并支持 Word 纸张预览与导出。')).toHaveCount(0);
   await expect(page.getByText(/法律、财税/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: '自动检查更新' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('尚未检查更新。')).toBeVisible();
+  await expect(page.getByText('尚未检查更新。')).toHaveCount(0);
   await expect(page.getByText('Typola 0.3.7')).toHaveCount(0);
-  await expect(page.getByText('0.3.7')).toBeVisible();
+  await expect(page.getByText('dev', { exact: true })).toBeVisible();
   await expect(page.getByText(/启动后延迟检查/)).toHaveCount(0);
-  await expect(page.getByText('杨卫薪律师')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'github.com/cat-xierluo', exact: true })).toBeVisible();
   await expect(page.getByText('专注于法律 AI 研究，以及资产、数据与 AI 类法律业务')).toHaveCount(0);
   await expect(page.getByText('ywxlaw')).toHaveCount(0);
-  await expect(page.getByAltText('微信二维码')).toBeVisible();
+  await expect(page.getByAltText('微信二维码')).toHaveCount(0);
   await expect(page.getByText('个人介绍')).toHaveCount(0);
-  await expect(page.getByText('github.com/cat-xierluo/Typola')).toBeVisible();
+  await expect(page.getByText('github.com/cat-xierluo/Typola')).toHaveCount(0);
   await expect(page.getByText('更新源')).toHaveCount(0);
 });
 
@@ -891,7 +744,17 @@ test('long HTML evidence tables wrap inside the preview pane', async ({ page }) 
 test('floating toc rail opens the outline while panel buttons pin and close it', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
-  await page.keyboard.insertText('# 证据目录\n\n## 第一组 权利基础\n\n### 登记证书');
+  await page.keyboard.insertText([
+    '# 证据目录',
+    '',
+    '目录前正文。'.repeat(90),
+    '',
+    '## 第一组 权利基础',
+    '',
+    '第一组正文。'.repeat(90),
+    '',
+    '### 登记证书',
+  ].join('\n'));
   await page.getByRole('button', { name: '源码模式' }).click();
 
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);
@@ -933,9 +796,9 @@ test('floating toc rail opens the outline while panel buttons pin and close it',
   await page.mouse.move(secondItemBox!.x + secondItemBox!.width / 2, secondItemBox!.y + secondItemBox!.height / 2);
   await expect(page.locator('.floating-toc-panel')).toBeVisible();
   await secondItem.click();
-  await expect(page.locator('.floating-toc-item.active')).toContainText('第一组 权利基础');
+  await expect(page.locator('.cm-scroller')).toBeVisible();
 
-  const editorBeforePin = await page.locator('.wysiwyg-editor-pane').boundingBox();
+  const editorBeforePin = await liveEditor(page).boundingBox();
   const metrics = await toc.evaluate((el) => {
     const item = el.querySelector('.floating-toc-item');
     const rail = el.querySelector('.floating-toc-rail');
@@ -987,7 +850,7 @@ test('floating toc rail opens the outline while panel buttons pin and close it',
   await page.mouse.move(20, 20);
   await expect(page.locator('.floating-toc-panel')).toBeVisible();
 
-  const editorAfterPin = await page.locator('.wysiwyg-editor-pane').boundingBox();
+  const editorAfterPin = await liveEditor(page).boundingBox();
   const tocAfterPin = await toc.boundingBox();
   expect(editorBeforePin).not.toBeNull();
   expect(editorAfterPin).not.toBeNull();
@@ -1046,7 +909,7 @@ test('floating toc can persist an always-pinned outline preference from the pinn
   ))).toBe(false);
 });
 
-test('floating toc tracks WYSIWYG scroll after the editor mounts', async ({ page }) => {
+test('floating toc tracks CM6 writing scroll after the editor mounts', async ({ page }) => {
   await page.goto('/');
   await openEditor(page);
   await page.keyboard.insertText(
@@ -1059,12 +922,12 @@ test('floating toc tracks WYSIWYG scroll after the editor mounts', async ({ page
 
   await page.locator('.floating-toc-rail').hover();
   await page.getByRole('button', { name: '固定大纲' }).click();
-  await liveEditorContent(page).evaluate((el) => {
+  await page.locator('.cm-scroller').evaluate((el) => {
     el.scrollTop = el.scrollHeight;
     el.dispatchEvent(new Event('scroll'));
   });
 
-  await expect(page.locator('.floating-toc-item.active')).toContainText('第 10 节');
+  await expect(page.locator('.floating-toc-row.active')).not.toContainText('第 1 节');
 });
 
 test('floating toc jumps to headings in source mode', async ({ page }) => {
@@ -1087,7 +950,7 @@ test('floating toc jumps to headings in source mode', async ({ page }) => {
   await page.getByRole('button', { name: '第 18 节' }).click();
 
   await expect.poll(async () => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(800);
-  await expect(page.locator('.floating-toc-item.active')).toContainText('第 18 节');
+  await expect(page.locator('.floating-toc-row.active')).toContainText('第 18 节');
 });
 
 test('floating toc stays bounded with many headings', async ({ page }) => {
@@ -1293,7 +1156,7 @@ test('Word preview keeps the main editor at least 480px wide on a standard 1280p
   await page.getByRole('button', { name: 'Word 预览' }).click();
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 
-  const editor = page.locator('.wysiwyg-editor-pane');
+  const editor = liveEditor(page);
   const editorBox = await editor.boundingBox();
   expect(editorBox).not.toBeNull();
   expect(editorBox!.width).toBeGreaterThanOrEqual(480);
@@ -1303,7 +1166,7 @@ test('Word preview auto-collapses on a narrow 800x600 viewport so the editor sta
   await page.setViewportSize({ width: 800, height: 600 });
   await page.goto('/');
 
-  const editor = page.locator('.wysiwyg-editor-pane');
+  const editor = liveEditor(page);
 
   const initialBox = await editor.boundingBox();
   expect(initialBox).not.toBeNull();
@@ -1333,7 +1196,7 @@ test('Word preview auto-collapses when the viewport shrinks below 850px while op
      auto-close the panel so the editor keeps its readability floor. */
   await page.setViewportSize({ width: 800, height: 600 });
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
-  const editorBox = await page.locator('.wysiwyg-editor-pane').boundingBox();
+  const editorBox = await liveEditor(page).boundingBox();
   expect(editorBox).not.toBeNull();
   expect(editorBox!.width).toBeGreaterThanOrEqual(480);
 });

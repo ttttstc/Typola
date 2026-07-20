@@ -58,8 +58,8 @@
 .preview-content > main,
 .preview-content > nav {
   font-family:
-    var(--preview-latin-font-family, -apple-system),
-    var(--preview-chinese-font-family, var(--font-reading)),
+    var(--preview-latin-font-family, var(--font-body)),
+    var(--preview-chinese-font-family, var(--font-body)),
     var(--preview-font-family, var(--font-body)) !important;
 }
 
@@ -71,8 +71,8 @@
 .preview-content dd,
 .preview-content dt {
   font-family:
-    var(--preview-latin-font-family, -apple-system),
-    var(--preview-chinese-font-family, var(--font-reading)),
+    var(--preview-latin-font-family, var(--font-body)),
+    var(--preview-chinese-font-family, var(--font-body)),
     var(--preview-font-family, var(--font-body)) !important;
 }
 

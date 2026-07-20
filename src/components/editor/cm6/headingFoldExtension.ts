@@ -13,14 +13,13 @@
 // - ViewPlugin 的 update 在折叠变化时回调 onChange,让 React 把状态镜像到
 //   editorRef,确保 wheel zoom 等触发扩展重建时折叠能从 React state 恢复。
 
-import { ensureSyntaxTree } from '@codemirror/language';
-import { StateEffect, StateField, Transaction, type Extension, type Range } from '@codemirror/state';
+import { StateEffect, StateField, Transaction, type EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { extractAtxHeadingText, foldKey, type FoldKey } from '../../../services/headingFoldService';
+import { analyzeMarkdown } from '../../../services/markdownAnalysisService';
 
 const FOLD_TOGGLE_CLASS = 'typola-heading-fold-toggle';
 const FOLDED_LINE_CLASS = 'typola-cm-line-folded';
-const SYNTAX_TREE_BUDGET_MS = 200;
 
 const toggleFoldEffect = StateEffect.define<FoldKey>();
 const setFoldedEffect = StateEffect.define<ReadonlySet<FoldKey>>();
@@ -49,27 +48,21 @@ type HeadingFoldOptions = {
 
 type HeadingInfo = { from: number; level: number; text: string; sectionIndex: number };
 
-function collectHeadings(view: EditorView): HeadingInfo[] | null {
-  const headings: HeadingInfo[] = [];
-  const tree = ensureSyntaxTree(view.state, view.state.doc.length, SYNTAX_TREE_BUDGET_MS);
-  if (!tree) return null;
-  const cursor = tree.cursor();
-  let sectionIndex = 0;
-  do {
-    const name = cursor.type.name;
-    if (name.startsWith('ATXHeading')) {
-      const level = Number(name.slice('ATXHeading'.length));
-      if (level >= 1 && level <= 6) {
-        const raw = view.state.doc.sliceString(cursor.from, cursor.to);
-        const text = extractAtxHeadingText(raw);
-        if (text) {
-          headings.push({ from: cursor.from, level, text, sectionIndex: sectionIndex++ });
-        }
-      }
-    }
-  } while (cursor.next());
-  return headings;
+function collectHeadings(state: EditorState): HeadingInfo[] {
+  return analyzeMarkdown(state.doc.toString()).headings.map((heading, sectionIndex) => ({
+    from: heading.from,
+    level: heading.level,
+    text: heading.text || extractAtxHeadingText(state.doc.sliceString(heading.from, heading.to)),
+    sectionIndex,
+  }));
 }
+
+const headingsField = StateField.define<HeadingInfo[]>({
+  create: collectHeadings,
+  update(headings, transaction) {
+    return transaction.docChanged ? collectHeadings(transaction.state) : headings;
+  },
+});
 
 class FoldToggleWidget extends WidgetType {
   readonly level: number;
@@ -104,15 +97,19 @@ class FoldToggleWidget extends WidgetType {
     return span;
   }
   ignoreEvent(event: Event) {
-    return event.type === 'mousedown' || event.type === 'click' || event.type === 'keydown';
+    // click/keydown 必须交给 foldClickHandler 产生 CM6 transaction；只屏蔽
+    // mousedown 的编辑器选区副作用。
+    return event.type === 'mousedown';
   }
 }
 
-function buildDecorations(view: EditorView, folded: ReadonlySet<FoldKey>): DecorationSet | null {
-  const headings = collectHeadings(view);
-  if (headings === null) return null;
+function buildFoldDecorations(
+  state: EditorState,
+  headings: HeadingInfo[],
+  folded: ReadonlySet<FoldKey>,
+): DecorationSet {
   if (headings.length === 0) return Decoration.none;
-  const docLen = view.state.doc.length;
+  const docLen = state.doc.length;
   const ranges: Range<Decoration>[] = [];
 
   for (let i = 0; i < headings.length; i++) {
@@ -132,10 +129,10 @@ function buildDecorations(view: EditorView, folded: ReadonlySet<FoldKey>): Decor
         break;
       }
     }
-    const headingLineEnd = view.state.doc.lineAt(h.from).to;
+    const headingLineEnd = state.doc.lineAt(h.from).to;
     let pos = headingLineEnd + 1;
     while (pos < sectionEnd) {
-      const line = view.state.doc.lineAt(pos);
+      const line = state.doc.lineAt(pos);
       if (line.from >= sectionEnd) break;
       ranges.push(Decoration.line({ attributes: { class: FOLDED_LINE_CLASS } }).range(line.from));
       pos = line.to + 1;
@@ -149,15 +146,22 @@ function makeFoldPlugin(onChange?: (folded: ReadonlySet<FoldKey>) => void) {
     class {
       decorations: DecorationSet;
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, view.state.field(foldedField)) ?? Decoration.none;
+        this.decorations = buildFoldDecorations(
+          view.state,
+          view.state.field(headingsField),
+          view.state.field(foldedField),
+        );
       }
       update(update: ViewUpdate) {
         const foldedChanged = update.transactions.some((tr) =>
           tr.effects.some((e) => e.is(toggleFoldEffect) || e.is(setFoldedEffect)),
         );
         if (update.docChanged || foldedChanged) {
-          const nextDecorations = buildDecorations(update.view, update.state.field(foldedField));
-          if (nextDecorations) this.decorations = nextDecorations;
+          this.decorations = buildFoldDecorations(
+            update.state,
+            update.state.field(headingsField),
+            update.state.field(foldedField),
+          );
           if (foldedChanged && onChange) {
             onChange(update.state.field(foldedField));
           }
@@ -203,6 +207,7 @@ export function headingFoldExtension(options: HeadingFoldOptions = {}): Extensio
   const { initial = new Set(), onChange } = options;
   return [
     foldedField.init(() => new Set(initial)),
+    headingsField,
     makeFoldPlugin(onChange),
     foldClickHandler,
   ];

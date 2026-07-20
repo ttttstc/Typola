@@ -1,5 +1,6 @@
-import { Fragment, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { FolderOpen, Sparkles, BookOpenText, Newspaper, X } from 'lucide-react';
 import { Toolbar } from './Toolbar';
 import { FloatingToc } from './FloatingToc';
@@ -66,12 +67,22 @@ function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolea
       return undefined;
     }
 
+    let frameId: number | null = null;
     const update = () => {
-      const containerRect = container.getBoundingClientRect();
-      const activeRect = active.getBoundingClientRect();
-      setStyle({
-        transform: `translateX(${activeRect.left - containerRect.left}px)`,
-        width: `${activeRect.width}px`,
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        const currentContainer = containerRef.current;
+        if (!currentContainer || !active.isConnected) return;
+        const containerRect = currentContainer.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        const nextTransform = `translateX(${activeRect.left - containerRect.left}px)`;
+        const nextWidth = `${activeRect.width}px`;
+        setStyle((current) => (
+          current?.transform === nextTransform && current.width === nextWidth
+            ? current
+            : { transform: nextTransform, width: nextWidth }
+        ));
       });
     };
 
@@ -84,6 +95,7 @@ function useActiveTabIndicator<T extends HTMLElement>(activeKey: string | boolea
     resizeObserver?.observe(active);
     window.addEventListener('resize', update);
     return () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', update);
     };
@@ -137,9 +149,21 @@ export function AppLayoutChrome({
   terminalNode,
   statusBarNode,
 }: AppLayoutChromeProps) {
+  const shouldReduceMotion = useReducedMotion();
+  const [tabsRef] = useAutoAnimate<HTMLDivElement>({
+    duration: shouldReduceMotion ? 0 : 180,
+    easing: 'ease-out',
+  });
+  const supportsWebAnimations = typeof Element !== 'undefined'
+    && typeof Element.prototype.animate === 'function';
   const leftRailIndicator = useActiveTabIndicator<HTMLDivElement>(leftRailMode);
   const editorTabIndicator = useActiveTabIndicator<HTMLDivElement>(activeTabId);
   const rightRailIndicator = useActiveTabIndicator<HTMLDivElement>(rightPanelMode);
+  const editorTabContainerRef = editorTabIndicator.containerRef;
+  const setEditorTabbarRef = useCallback((node: HTMLDivElement | null) => {
+    editorTabContainerRef.current = node;
+    if (supportsWebAnimations) tabsRef(node);
+  }, [editorTabContainerRef, supportsWebAnimations, tabsRef]);
 
   return (
     <MotionProvider>
@@ -156,11 +180,11 @@ export function AppLayoutChrome({
                 <motion.aside
                   key="left-rail"
                   className="left-rail-shell"
-                  style={{ width: workspacePanelWidth }}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={calmTransition}
+                  style={{ width: workspacePanelWidth, overflow: 'hidden' }}
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: workspacePanelWidth, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={leftResizing === 'workspace' ? { duration: 0 } : calmTransition}
                 >
               <div ref={leftRailIndicator.containerRef} className="left-rail-tabs" role="tablist" aria-label="左侧栏切换">
                 {leftRailIndicator.indicatorStyle && (
@@ -195,9 +219,13 @@ export function AppLayoutChrome({
                 <FileTreePanel {...fileTreeProps} />
               )}
                 </motion.aside>
-                <div
+                <motion.div
                   key="left-rail-resizer"
                   className={`left-panel-resizer ${leftResizing === 'workspace' ? 'dragging' : ''}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ ...calmTransition, duration: 0.12 }}
                   role="separator"
                   aria-label="调整目录栏宽度"
                   aria-orientation="vertical"
@@ -209,24 +237,35 @@ export function AppLayoutChrome({
           </AnimatePresence>
         {showToc && <FloatingToc {...tocProps} />}
         <section className="editor-workbench">
-          {externalChangeConflict && (
-            <div className="external-change-conflict" role="alert">
-              <span className="external-change-text">
-                Claude 改了这个文件,你有未保存修改
-              </span>
-              <button type="button" onClick={onViewDiff}>
-                查看差异
-              </button>
-              <button type="button" onClick={onAcceptExternal}>
-                用 Claude 的版本
-              </button>
-              <button type="button" onClick={onKeepMine}>
-                保留我的
-              </button>
-            </div>
-          )}
+          <AnimatePresence initial={false}>
+            {externalChangeConflict && (
+              <motion.div
+                key="external-change-conflict"
+                className="external-change-conflict"
+                role="alert"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={shouldReduceMotion ? { duration: 0 } : calmTransition}
+                style={{ overflow: 'hidden' }}
+              >
+                <span className="external-change-text">
+                  Claude 改了这个文件,你有未保存修改
+                </span>
+                <button type="button" onClick={onViewDiff}>
+                  查看差异
+                </button>
+                <button type="button" onClick={onAcceptExternal}>
+                  用 Claude 的版本
+                </button>
+                <button type="button" onClick={onKeepMine}>
+                  保留我的
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {shouldShowTabbar && (
-            <div ref={editorTabIndicator.containerRef} className="editor-tabbar" role="tablist" aria-label="打开的文件">
+            <div ref={setEditorTabbarRef} className="editor-tabbar" role="tablist" aria-label="打开的文件">
               {editorTabIndicator.indicatorStyle && (
                 <span className="tab-motion-indicator editor-tab-indicator" style={editorTabIndicator.indicatorStyle} aria-hidden="true" />
               )}
@@ -263,10 +302,14 @@ export function AppLayoutChrome({
           {isDocx ? docxPane : editorPane}
         </section>
         <AnimatePresence initial={false}>
-          {rightPanelMode !== 'none' && !isDocx && (
-            <div
+          {rightPanelMode !== 'none' && rightPanelMode !== 'review' && !isDocx && (
+            <motion.div
               key="right-rail-resizer"
               className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ ...calmTransition, duration: 0.12 }}
               role="separator"
               aria-label={rightPanelResizeLabel}
               aria-orientation="vertical"
@@ -282,13 +325,13 @@ export function AppLayoutChrome({
         <AnimatePresence initial={false}>
           {rightPanelMode !== 'none' && !isDocx ? (
             <motion.aside
-              key="right-rail"
+              key={rightPanelMode === 'review' ? 'right-rail-review' : 'right-rail'}
               className="right-rail-shell"
-              style={{ width: rightPanelWidth }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={calmTransition}
+              style={rightPanelMode === 'review' ? undefined : { width: rightPanelWidth, overflow: 'hidden' }}
+              initial={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
+              animate={rightPanelMode === 'review' ? { opacity: 1 } : { width: rightPanelWidth, opacity: 1 }}
+              exit={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
+              transition={resizing ? { duration: 0 } : calmTransition}
             >
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (
               <div ref={rightRailIndicator.containerRef} className="right-rail-tabs" role="tablist" aria-label="右侧预览切换">

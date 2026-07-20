@@ -47,7 +47,11 @@ export function useWorkspaceWatch({
 
     void import('../services/workspaceWatchService')
       .then(async ({ watchWorkspace, onWorkspaceChanged }) => {
-        const { mkdir } = await import('@tauri-apps/plugin-fs');
+        const [{ mkdir }, { invoke }] = await Promise.all([
+          import('@tauri-apps/plugin-fs'),
+          import('@tauri-apps/api/core'),
+        ]);
+        await invoke('allow_fs_directory', { dir: outputRoot });
         await mkdir(outputRoot, { recursive: true });
         await watchWorkspace(watchRoot);
         return onWorkspaceChanged((payload) => {

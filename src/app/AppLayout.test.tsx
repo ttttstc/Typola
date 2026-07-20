@@ -11,6 +11,8 @@ const updateServiceMock = vi.hoisted(() => ({
   checkForAppUpdate: vi.fn<() => Promise<UpdateCheckResult>>(),
   downloadAppUpdate: vi.fn<() => Promise<void>>(),
   installDownloadedAppUpdate: vi.fn<() => Promise<void>>(),
+  getDistributionKind: vi.fn().mockResolvedValue('installed'),
+  openReleaseForVersion: vi.fn<() => Promise<void>>(),
 }));
 
 const tauriWindowMock = vi.hoisted(() => ({
@@ -43,6 +45,8 @@ const dialogServiceMock = vi.hoisted(() => ({
 const editorPaneMock = vi.hoisted(() => ({
   source: '',
   renderCount: 0,
+  modes: [] as string[],
+  onChange: undefined as ((value: string) => void) | undefined,
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
@@ -61,6 +65,8 @@ vi.mock('../services/updateService', () => ({
   checkForAppUpdate: updateServiceMock.checkForAppUpdate,
   downloadAppUpdate: updateServiceMock.downloadAppUpdate,
   installDownloadedAppUpdate: updateServiceMock.installDownloadedAppUpdate,
+  getDistributionKind: updateServiceMock.getDistributionKind,
+  openReleaseForVersion: updateServiceMock.openReleaseForVersion,
 }));
 
 vi.mock('../components/EditorPane', () => ({
@@ -71,8 +77,14 @@ vi.mock('../components/EditorPane', () => ({
   },
 }));
 
-vi.mock('../components/WysiwygEditorPane', () => ({
-  WysiwygEditorPane: () => null,
+vi.mock('../components/editor/cm6/Cm6MarkdownEditorPane', () => ({
+  Cm6MarkdownEditorPane: ({ source, mode, onChange }: { source: string; mode?: string; onChange?: (value: string) => void }) => {
+    editorPaneMock.source = source;
+    editorPaneMock.renderCount += 1;
+    editorPaneMock.modes.push(mode ?? 'wysiwyg');
+    editorPaneMock.onChange = onChange;
+    return null;
+  },
 }));
 
 vi.mock('../components/SettingsPage', () => ({
@@ -130,6 +142,9 @@ describe('AppLayout update flow', () => {
     }));
     editorPaneMock.source = '';
     editorPaneMock.renderCount = 0;
+    editorPaneMock.modes = [];
+    editorPaneMock.onChange = undefined;
+    updateServiceMock.getDistributionKind.mockResolvedValue('installed');
   });
 
   afterEach(() => {
@@ -140,8 +155,16 @@ describe('AppLayout update flow', () => {
     vi.clearAllMocks();
   });
 
-  it('downloads detected updates silently before showing the restart button', async () => {
-    let resolveDownload: () => void = () => {};
+  it('publishes the configured global UI font size', async () => {
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+
+    expect(document.documentElement.style.getPropertyValue('--app-ui-font-size')).toBe('14px');
+  });
+
+  it('prompts first, then downloads and installs after one click', async () => {
     const availableUpdate = {
       status: 'available',
       version: '0.3.11',
@@ -149,9 +172,8 @@ describe('AppLayout update flow', () => {
       update: {},
     } as Extract<UpdateCheckResult, { status: 'available' }>;
     updateServiceMock.checkForAppUpdate.mockResolvedValue(availableUpdate);
-    updateServiceMock.downloadAppUpdate.mockImplementation(() => new Promise((resolve) => {
-      resolveDownload = resolve;
-    }));
+    updateServiceMock.downloadAppUpdate.mockResolvedValue(undefined);
+    updateServiceMock.installDownloadedAppUpdate.mockResolvedValue(undefined);
 
     await act(async () => {
       root.render(<AppLayout />);
@@ -164,16 +186,82 @@ describe('AppLayout update flow', () => {
     });
 
     expect(updateServiceMock.checkForAppUpdate).toHaveBeenCalledTimes(1);
-    expect(updateServiceMock.downloadAppUpdate).toHaveBeenCalledTimes(1);
-    expect(updateServiceMock.downloadAppUpdate.mock.calls[0]).toHaveLength(1);
-    expect(host.textContent).not.toContain('重启更新');
+    expect(updateServiceMock.downloadAppUpdate).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('发现新版本');
+    expect(host.textContent).toContain('v0.3.11');
 
     await act(async () => {
-      resolveDownload();
+      const action = host.querySelector<HTMLButtonElement>('.update-card button');
+      action?.click();
+      action?.click();
+      await flushPromises();
       await flushPromises();
     });
 
-    expect(host.textContent).toContain('重启更新');
+    expect(updateServiceMock.downloadAppUpdate).toHaveBeenCalledTimes(1);
+    expect(updateServiceMock.installDownloadedAppUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the release page instead of installing in portable mode', async () => {
+    updateServiceMock.getDistributionKind.mockResolvedValue('portable');
+    updateServiceMock.checkForAppUpdate.mockResolvedValue({
+      status: 'available',
+      version: '2.0.6',
+      update: {},
+    } as Extract<UpdateCheckResult, { status: 'available' }>);
+    updateServiceMock.openReleaseForVersion.mockResolvedValue(undefined);
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(2600);
+      await flushPromises();
+    });
+
+    expect(host.textContent).toContain('发现新版本');
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.update-card button')?.click();
+      await flushPromises();
+    });
+
+    expect(updateServiceMock.openReleaseForVersion).toHaveBeenCalledWith('2.0.6');
+    expect(updateServiceMock.downloadAppUpdate).not.toHaveBeenCalled();
+    expect(updateServiceMock.installDownloadedAppUpdate).not.toHaveBeenCalled();
+  });
+
+  it('stops before install when the document changes during download', async () => {
+    let finishDownload: () => void = () => {};
+    updateServiceMock.checkForAppUpdate.mockResolvedValue({
+      status: 'available',
+      version: '2.0.6',
+      update: {},
+    } as Extract<UpdateCheckResult, { status: 'available' }>);
+    updateServiceMock.downloadAppUpdate.mockImplementation(() => new Promise((resolve) => {
+      finishDownload = resolve;
+    }));
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(2600);
+      await flushPromises();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.update-card button')?.click();
+      await flushPromises();
+    });
+    await act(async () => {
+      editorPaneMock.onChange?.('# 下载期间的新修改');
+      finishDownload();
+      await flushPromises();
+    });
+
+    expect(updateServiceMock.installDownloadedAppUpdate).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('有未保存的修改');
   });
 
   it('opens a file path delivered by the desktop system open event', async () => {
@@ -222,6 +310,7 @@ describe('AppLayout update flow', () => {
 
     expect(editorPaneMock.renderCount).toBeGreaterThan(0);
     expect(editorPaneMock.source).toBe(source);
+    expect(editorPaneMock.modes).toContain('source');
   });
 
   it('explicitly destroys the window after an allowed native close request', async () => {

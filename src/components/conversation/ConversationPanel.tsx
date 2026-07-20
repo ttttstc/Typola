@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
+import { useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -103,6 +105,13 @@ export function ConversationPanel({
   onArchiveArtifact,
   updateConv,
 }: ConversationPanelProps) {
+  const shouldReduceMotion = useReducedMotion();
+  const [messagesRef] = useAutoAnimate<HTMLDivElement>({
+    duration: shouldReduceMotion ? 0 : 180,
+    easing: 'ease-out',
+  });
+  const supportsWebAnimations = typeof Element !== 'undefined'
+    && typeof Element.prototype.animate === 'function';
   const settings = useSettings();
   const cwd = activeWorkspaceRoot || settings.aiWorkspaceRoot || undefined;
   const running = runState === 'running';
@@ -301,7 +310,7 @@ export function ConversationPanel({
           <X size={15} />
         </button>
       </header>
-      <div className="conversation-messages">
+      <div ref={supportsWebAnimations ? messagesRef : undefined} className="conversation-messages">
         {messages.length === 0 && (
           <div className="conversation-empty">
             <strong>把文档任务交给 {providerConfig.label}</strong>

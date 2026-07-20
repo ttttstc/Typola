@@ -4,11 +4,13 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 // convertFileSrc. We need to mock both the global and the dynamic import.
 
 const mockConvertFileSrc = (filePath: string) => `https://asset.localhost${filePath}`;
+const mockInvoke = vi.fn();
 
 describe('resolveLocalImages', () => {
   let originalInternals: unknown;
 
   beforeEach(() => {
+    mockInvoke.mockClear();
     originalInternals = (window as Record<string, unknown>).__TAURI_INTERNALS__;
     (window as Record<string, unknown>).__TAURI_INTERNALS__ = {
       convertFileSrc: mockConvertFileSrc,
@@ -26,6 +28,7 @@ describe('resolveLocalImages', () => {
     vi.resetModules();
     vi.doMock('@tauri-apps/api/core', () => ({
       convertFileSrc: mockConvertFileSrc,
+      invoke: mockInvoke,
     }));
     return import('./localImageResolver');
   }
@@ -74,6 +77,15 @@ describe('resolveLocalImages', () => {
     await resolve(container, '/Users/demo/docs/sub/notes.md');
     const src = container.querySelector('img')?.getAttribute('src');
     expect(src).toContain('/Users/demo/docs/images/photo.jpg');
+  });
+
+  it('rejects absolute Windows image paths outside document directory', async () => {
+    const { resolveLocalImages: resolve } = await importFresh();
+    const container = createContainerWithImages([{ src: 'D:/images/photo.jpg' }]);
+    await resolve(container, 'D:/docs/note.md');
+    const src = container.querySelector('img')?.getAttribute('src');
+    expect(src).toBe('D:/images/photo.jpg');
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it('skips data: URIs', async () => {
