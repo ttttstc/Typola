@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { EditorView } from '@codemirror/view';
+import { EditorView, type ViewUpdate } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
 import { updateSettings } from '../services/settingsService';
@@ -43,7 +43,7 @@ export type ImageInsertRequest = {
 
 type EditorPaneProps = {
   source: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, origin?: 'table-format') => void;
   extraExtensions?: Extension[];
   headingScrollRequest?: SourceHeadingScrollRequest;
   onScrollRatio?: (ratio: number) => void;
@@ -75,6 +75,14 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const onAIActionRef = useRef(onAIAction);
   const filePathRef = useRef(filePath);
   const floatingBarHiddenDocsRef = useRef<Set<string>>(new Set());
+
+  const handleCodeMirrorChange = useCallback((value: string, update: ViewUpdate) => {
+    const tableFormat = update.transactions.some((transaction) => (
+      ((transaction as unknown as { annotations?: readonly { value: unknown }[] }).annotations ?? [])
+        .some((annotation) => annotation.value === 'table.format')
+    ));
+    onChange(value, tableFormat ? 'table-format' : undefined);
+  }, [onChange]);
   const editorFontFamily = settings.editorFontFamily === 'System Default'
     ? 'var(--font-mono)'
     : `'${settings.editorFontFamily}', ${settings.editorFontFamily === 'Source Han Serif SC VF' ? 'var(--font-body)' : 'var(--font-mono)'}`;
@@ -607,7 +615,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         value={source}
         height="100%"
         extensions={extensions}
-        onChange={onChange}
+        onChange={handleCodeMirrorChange}
         onCreateEditor={handleCreateEditor}
         spellCheck={settings.editorSpellCheck}
         theme="light"

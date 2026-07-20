@@ -24,8 +24,8 @@ type AppLayoutOverlaysProps = {
   onQuickOpen: (path: string) => void;
   artifactPreviewNode: ReactNode;
   settingsNode: ReactNode;
-  unsavedDialog: { message: string } | null;
-  onUnsavedChoice: (decision: 'save' | 'discard' | 'cancel') => void;
+  unsavedDialog: { message: string; allowDiscardAll?: boolean } | null;
+  onUnsavedChoice: (decision: 'save' | 'discard' | 'discard-all' | 'cancel') => void;
   renameDialog: { tabId: string; name: string; error?: string } | null;
   setRenameDialog: Dispatch<SetStateAction<{ tabId: string; name: string; error?: string } | null>>;
   onConfirmRename: () => void;
@@ -80,6 +80,7 @@ export function AppLayoutOverlays({
       <UnsavedChangesDialog
         open={unsavedDialog !== null}
         message={unsavedDialog?.message ?? ''}
+        allowDiscardAll={unsavedDialog?.allowDiscardAll}
         onChoice={onUnsavedChoice}
       />
       {renameDialog && (
