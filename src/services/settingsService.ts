@@ -187,6 +187,7 @@ export interface AppSettings {
   // 通用
   autoSave: boolean;
   autoUpdateCheck: boolean;
+  ignoredVersion: string;
   defaultEncoding: DefaultEncoding;
   reopenLastFile: boolean;
   locale: AppLocale;
@@ -267,6 +268,7 @@ export interface AppSettings {
 const defaults: AppSettings = {
   autoSave: false,
   autoUpdateCheck: true,
+  ignoredVersion: '',
   defaultEncoding: 'UTF-8',
   reopenLastFile: true,
   locale: 'zh-CN',
@@ -426,6 +428,10 @@ function normalizeExecutablePath(value: unknown): string {
 
 function normalizeModelString(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
+}
+
+function normalizeIgnoredVersion(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, 64) : '';
 }
 
 function normalizePathList(value: unknown): string[] {
@@ -868,6 +874,7 @@ export function getSettings(): AppSettings {
       ...defaults,
       ...stored,
       locale: normalizeLocale(stored.locale),
+      ignoredVersion: normalizeIgnoredVersion(stored.ignoredVersion),
       exportPresetId,
       customExportPresets,
       disabledExportPresetIds,
@@ -951,6 +958,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     ...current,
     ...patch,
     locale: normalizeLocale(patch.locale ?? current.locale),
+    ignoredVersion: normalizeIgnoredVersion(patch.ignoredVersion ?? current.ignoredVersion),
     editorFontFamily: normalizeEditorFontFamily(patch.editorFontFamily ?? current.editorFontFamily),
     fontDefaultsVersion: FONT_DEFAULTS_VERSION,
     previewFontFamily: normalizePreviewFontFamily(patch.previewFontFamily ?? current.previewFontFamily),

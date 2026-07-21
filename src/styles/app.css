@@ -211,7 +211,14 @@ html, body, #root {
   white-space: nowrap;
 }
 
-.update-card > button {
+.update-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.update-card-action {
   display: grid;
   flex: 0 0 36px;
   width: 36px;
@@ -225,12 +232,31 @@ html, body, #root {
   cursor: pointer;
 }
 
-.update-card > button:hover:not(:disabled) {
+.update-card-action:hover:not(:disabled) {
   background: var(--theme-control-hover-bg);
 }
 
-.update-card > button:disabled {
+.update-card-action:disabled {
   cursor: default;
+}
+
+.update-card-ignore {
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 7px;
+  color: var(--theme-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.update-card-ignore:hover {
+  color: var(--theme-text-primary);
+  background: var(--theme-control-hover-bg);
+  border-color: var(--theme-border-hover);
 }
 
 .update-card-progress {

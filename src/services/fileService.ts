@@ -1,6 +1,6 @@
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { readTextFile, readFile, writeTextFile } from '@tauri-apps/plugin-fs';
-import type { OpenedFile } from '../types/document';
+import { readFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import type { DocumentFingerprint, LineEnding, OpenedFile } from '../types/document';
 import type { DefaultEncoding } from './settingsService';
 
 function isTauriRuntime(): boolean {
@@ -30,6 +30,39 @@ function decodeText(data: Uint8Array, encoding: DefaultEncoding): string {
   return new TextDecoder(label).decode(data);
 }
 
+function hasUtf8Bom(data: Uint8Array): boolean {
+  return data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf;
+}
+
+function hashBytes(data: Uint8Array): string {
+  let hash = 2166136261;
+  for (const byte of data) {
+    hash ^= byte;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function fingerprintFromBytes(data: Uint8Array): DocumentFingerprint {
+  return { size: data.byteLength, modifiedAt: null, hash: hashBytes(data) };
+}
+
+function isDocumentFingerprint(value: unknown): value is DocumentFingerprint {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<DocumentFingerprint>;
+  return typeof candidate.size === 'number'
+    && (candidate.modifiedAt === null || typeof candidate.modifiedAt === 'number')
+    && typeof candidate.hash === 'string';
+}
+
+function lineEndingOf(content: string): LineEnding {
+  return content.includes('\r\n') ? 'CRLF' : 'LF';
+}
+
+function stripBom(data: Uint8Array, hasBom: boolean): Uint8Array {
+  return hasBom ? data.subarray(3) : data;
+}
+
 function toArrayBuffer(data: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(data.byteLength);
   copy.set(data);
@@ -37,16 +70,30 @@ function toArrayBuffer(data: Uint8Array): ArrayBuffer {
 }
 
 export async function readTextWithEncoding(path: string, encoding: DefaultEncoding): Promise<string> {
+  const data = isTauriRuntime() ? await readDocumentBytes(path) : await readFile(path);
+  return decodeText(stripBom(data, hasUtf8Bom(data)), encoding);
+}
+
+async function readDocument(path: string, encoding: DefaultEncoding): Promise<{
+  content: string;
+  encoding: DefaultEncoding;
+  hasBom: boolean;
+  lineEnding: LineEnding;
+  fingerprint: DocumentFingerprint;
+}> {
+  const data = isTauriRuntime() ? await readDocumentBytes(path) : await readFile(path);
+  const hasBom = hasUtf8Bom(data);
+  const content = decodeText(stripBom(data, hasBom), encoding);
+  let fingerprint = fingerprintFromBytes(data);
   if (isTauriRuntime()) {
-    return decodeText(await readDocumentBytes(path), encoding);
+    try {
+      const candidate = await getDocumentFingerprint(path);
+      if (isDocumentFingerprint(candidate)) fingerprint = candidate;
+    } catch {
+      // Reading succeeded; a missing stat only removes the optimization.
+    }
   }
-
-  if (encoding === 'UTF-8') {
-    return readTextFile(path);
-  }
-
-  const data = await readFile(path);
-  return decodeText(data, encoding);
+  return { content, encoding, hasBom, lineEnding: lineEndingOf(content), fingerprint };
 }
 
 export async function openFile(encoding: DefaultEncoding = 'UTF-8'): Promise<OpenedFile | null> {
@@ -77,10 +124,21 @@ export async function openPath(path: string, encoding: DefaultEncoding = 'UTF-8'
     return { path, name, content: '', dirty: false, lastSavedContent: '', fileType: 'docx', docxHtml };
   }
 
-  const content = await readTextWithEncoding(path, encoding);
+  const document = await readDocument(path, encoding);
   const fileType = ext === 'html' || ext === 'htm' ? 'html' as const : 'markdown' as const;
 
-  return { path, name, content, dirty: false, lastSavedContent: content, fileType };
+  return {
+    path,
+    name,
+    content: document.content,
+    dirty: false,
+    lastSavedContent: document.content,
+    fileType,
+    encoding: document.encoding,
+    hasBom: document.hasBom,
+    lineEnding: document.lineEnding,
+    fingerprint: document.fingerprint,
+  };
 }
 
 // 选一个或多个文件夹,仅取每目录下一层的 Markdown/HTML/Word 文档(flat first-level,不递归)。
@@ -113,19 +171,52 @@ export async function openFolder(encoding: DefaultEncoding = 'UTF-8'): Promise<O
 // @ts-expect-eslint: no-useless-assignment —— init 为下次 try 赋值占位,实际读取在 try 内,请保留占位类型声明
 export const _lintSentinel = null;
 
-export async function saveFile(file: OpenedFile): Promise<OpenedFile> {
-  if (!file.path) return saveFileAs(file);
-
-  if (isTauriRuntime()) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('write_opened_document', { path: file.path, content: file.content });
-  } else {
-    await writeTextFile(file.path, file.content);
-  }
-  return { ...file, dirty: false, lastSavedContent: file.content };
+function normalizedContent(file: OpenedFile): string {
+  const content = file.content.replace(/\r\n/g, '\n');
+  return file.lineEnding === 'CRLF' ? content.replace(/\n/g, '\r\n') : content;
 }
 
-export async function saveFileAs(file: OpenedFile): Promise<OpenedFile> {
+async function writeDocument(
+  path: string,
+  file: OpenedFile,
+  encoding: DefaultEncoding,
+): Promise<DocumentFingerprint | undefined> {
+  if (isTauriRuntime()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<DocumentFingerprint>('write_opened_document', {
+      request: {
+        path,
+        content: normalizedContent(file),
+        encoding,
+        hasBom: encoding === 'UTF-8' && file.hasBom === true,
+        lineEnding: file.lineEnding ?? 'LF',
+      },
+    });
+  }
+  if (encoding !== 'UTF-8') {
+    throw new Error(`${encoding} 编码写入仅支持桌面运行时。`);
+  }
+  const data = new TextEncoder().encode(normalizedContent(file));
+  await writeTextFile(path, normalizedContent(file));
+  return { size: data.byteLength, modifiedAt: null, hash: hashBytes(data) };
+}
+
+export async function getDocumentFingerprint(path: string): Promise<DocumentFingerprint> {
+  if (isTauriRuntime()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<DocumentFingerprint>('stat_opened_document', { path });
+  }
+  return fingerprintFromBytes(await readFile(path));
+}
+
+export async function saveFile(file: OpenedFile, saveAsEncoding: DefaultEncoding = file.encoding ?? 'UTF-8'): Promise<OpenedFile> {
+  if (!file.path) return saveFileAs(file, saveAsEncoding);
+
+  const fingerprint = await writeDocument(file.path, file, file.encoding ?? 'UTF-8');
+  return { ...file, dirty: false, lastSavedContent: file.content, fingerprint };
+}
+
+export async function saveFileAs(file: OpenedFile, encoding: DefaultEncoding = 'UTF-8'): Promise<OpenedFile> {
   const path = await save({
     defaultPath: file.name || 'untitled.md',
     filters: [
@@ -136,13 +227,17 @@ export async function saveFileAs(file: OpenedFile): Promise<OpenedFile> {
 
   if (!path) return file;
 
-  if (isTauriRuntime()) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('write_opened_document', { path, content: file.content });
-  } else {
-    await writeTextFile(path, file.content);
-  }
+  const fingerprint = await writeDocument(path, file, encoding);
   const name = fileNameFromPath(path);
 
-  return { ...file, path, name, dirty: false, lastSavedContent: file.content };
+  return {
+    ...file,
+    path,
+    name,
+    dirty: false,
+    lastSavedContent: file.content,
+    encoding,
+    hasBom: encoding === 'UTF-8' && file.hasBom === true,
+    fingerprint,
+  };
 }

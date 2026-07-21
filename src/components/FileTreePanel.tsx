@@ -267,8 +267,12 @@ export function FileTreePanel({
   }, [refreshKey, rootPath]);
 
   const handlePickRoot = async () => {
-    const selected = await pickWorkspaceDirectory();
-    if (selected) onRootChange(selected);
+    try {
+      const selected = await pickWorkspaceDirectory();
+      if (selected) onRootChange(selected);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
   };
 
   return (

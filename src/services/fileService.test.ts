@@ -39,7 +39,11 @@ describe('fileService', () => {
       configurable: true,
       value: {},
     });
-    tauriCoreMock.invoke.mockResolvedValue(bytesOf('# 双击打开\n正文'));
+    tauriCoreMock.invoke.mockImplementation(async (command: string) => (
+      command === 'read_opened_document'
+        ? bytesOf('# 双击打开\n正文')
+        : { size: 20, modifiedAt: 1, hash: 'hash' }
+    ));
     tauriFsMock.readTextFile.mockRejectedValue(new Error('frontend fs scope denied'));
 
     const opened = await openPath('/Users/demo/双击打开.md', 'UTF-8');
@@ -48,14 +52,18 @@ describe('fileService', () => {
       path: '/Users/demo/双击打开.md',
     });
     expect(tauriFsMock.readTextFile).not.toHaveBeenCalled();
-    expect(opened).toEqual({
+    expect(opened).toMatchObject({
       path: '/Users/demo/双击打开.md',
       name: '双击打开.md',
       content: '# 双击打开\n正文',
       dirty: false,
       lastSavedContent: '# 双击打开\n正文',
       fileType: 'markdown',
+      encoding: 'UTF-8',
+      hasBom: false,
+      lineEnding: 'LF',
     });
+    expect(opened.fingerprint).toEqual({ size: 20, modifiedAt: 1, hash: 'hash' });
   });
 
   it('openFolder: read_first_level_openable + filter + skip bad files', async () => {
@@ -87,13 +95,27 @@ describe('fileService', () => {
     expect(await openFolder('UTF-8')).toEqual([]);
   });
 
+  it('records UTF-8 BOM and CRLF metadata without leaking BOM into editor content', async () => {
+    tauriFsMock.readFile.mockResolvedValue(new Uint8Array([
+      0xef, 0xbb, 0xbf,
+      ...Array.from(new TextEncoder().encode('第一行\r\n第二行')),
+    ]));
+
+    const opened = await openPath('/tmp/format.md', 'UTF-8');
+
+    expect(opened.content).toBe('第一行\r\n第二行');
+    expect(opened.hasBom).toBe(true);
+    expect(opened.lineEnding).toBe('CRLF');
+    expect(opened.encoding).toBe('UTF-8');
+  });
+
   it('keeps browser/test fallback on the filesystem plugin outside Tauri runtime', async () => {
-    tauriFsMock.readTextFile.mockResolvedValue('# 手动打开');
+    tauriFsMock.readFile.mockResolvedValue(new TextEncoder().encode('# 手动打开'));
 
     const opened = await openPath('/tmp/manual.md', 'UTF-8');
 
     expect(tauriCoreMock.invoke).not.toHaveBeenCalled();
-    expect(tauriFsMock.readTextFile).toHaveBeenCalledWith('/tmp/manual.md');
+    expect(tauriFsMock.readFile).toHaveBeenCalledWith('/tmp/manual.md');
     expect(opened.content).toBe('# 手动打开');
   });
 
@@ -116,8 +138,13 @@ describe('fileService', () => {
     const saved = await saveFile(file);
 
     expect(tauriCoreMock.invoke).toHaveBeenCalledWith('write_opened_document', {
-      path: '/Users/demo/双击打开.md',
-      content: '# 修改后',
+      request: {
+        path: '/Users/demo/双击打开.md',
+        content: '# 修改后',
+        encoding: 'UTF-8',
+        hasBom: false,
+        lineEnding: 'LF',
+      },
     });
     expect(tauriFsMock.writeTextFile).not.toHaveBeenCalled();
     expect(saved.dirty).toBe(false);

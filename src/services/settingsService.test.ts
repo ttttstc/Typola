@@ -71,6 +71,7 @@ describe('settingsService', () => {
   it('returns defaults when persisted settings are missing or invalid', () => {
     expect(getSettings().exportPresetId).toBe('minimal');
     expect(getSettings().autoUpdateCheck).toBe(true);
+    expect(getSettings().ignoredVersion).toBe('');
     expect(getSettings().wechatCustomCss).toBe('');
     expect(getSettings()).toMatchObject({
       appearanceColorSystem: 'define-color',
@@ -90,6 +91,15 @@ describe('settingsService', () => {
     expect(getSettings().wechatCustomCss).toBe('');
     expect(getSettings().previewFontFamily).toBe('Default');
     expect(getSettings().tocAlwaysPinned).toBe(false);
+  });
+
+  it('persists and normalizes ignored update version', () => {
+    updateSettings({ ignoredVersion: ' 2.0.7 ' });
+    expect(getSettings().ignoredVersion).toBe('2.0.7');
+    expect(JSON.parse(localStorage.getItem('typola-settings') ?? '{}').ignoredVersion).toBe('2.0.7');
+
+    updateSettings({ ignoredVersion: 42 as unknown as string });
+    expect(getSettings().ignoredVersion).toBe('');
   });
 
   it('persists the selectable editor font and migrates the old default', () => {

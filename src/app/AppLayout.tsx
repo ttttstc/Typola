@@ -11,6 +11,7 @@ import {
   resolvePreviewFontFamily,
   resolvePreviewHeadingFontFamily,
   setLastWorkspaceRoot,
+  updateSettings,
 } from '../services/settingsService';
 import { firstOpenableDocumentPath, isOpenableDocumentPath } from '../services/fileDrop';
 import { useSettings } from '../hooks/useSettings';
@@ -410,6 +411,7 @@ export function AppLayout() {
     setHtmlPresentationVisible,
     setRightPanelMode,
     setEditorMode,
+    onWorkspaceRootChange: setWorkspaceRoot,
     extractToc,
     beforeDocumentChangeRef: candidateNavigationGuardRef,
   });
@@ -1695,14 +1697,23 @@ export function AppLayout() {
   }, [insertImageFromSource, resolveInsertPosition]);
 
   const showUpdateAvailable = useCallback((source: UpdateSource, update: AvailableUpdate) => {
+    if (settings.ignoredVersion === update.version) {
+      setUpdateState(source === 'manual'
+        ? { phase: 'ignored', source, update }
+        : { phase: 'idle' });
+      return;
+    }
     setUpdateState((current) => {
       if ('update' in current && current.update?.version === update.version && current.phase !== 'error') return current;
       return { phase: 'available', source, update };
     });
-  }, []);
+  }, [settings.ignoredVersion]);
 
   const checkForUpdateManually = useCallback(async () => {
-    if ('update' in updateState && updateState.update && updateState.phase !== 'error') {
+    if ('update' in updateState
+      && updateState.update
+      && updateState.phase !== 'error'
+      && updateState.phase !== 'ignored') {
       return updateState.update;
     }
     setUpdateState({ phase: 'checking', source: 'manual' });
@@ -1712,6 +1723,19 @@ export function AppLayout() {
     else setUpdateState({ phase: 'idle' });
     return result;
   }, [showUpdateAvailable, updateState]);
+
+  const ignoreAvailableUpdate = useCallback(() => {
+    if ('update' in updateState && updateState.update) {
+      updateSettings({ ignoredVersion: updateState.update.version });
+    }
+    setUpdateState({ phase: 'idle' });
+  }, [updateState]);
+
+  const showIgnoredUpdate = useCallback(() => {
+    if (!('update' in updateState) || !updateState.update) return;
+    updateSettings({ ignoredVersion: '' });
+    setUpdateState({ phase: 'available', source: updateState.source, update: updateState.update });
+  }, [updateState]);
 
   const installUpdate = useCallback(async (source: UpdateSource, update: AvailableUpdate) => {
     setUpdateState({ phase: 'installing', source, update });
@@ -2682,7 +2706,8 @@ export function AppLayout() {
               onCheckForUpdate={checkForUpdateManually}
               updateState={updateState}
               onUpdateAction={() => { void handleUpdateAction(); }}
-              onIgnoreUpdate={() => setUpdateState({ phase: 'idle' })}
+              onIgnoreUpdate={ignoreAvailableUpdate}
+              onShowIgnoredUpdate={showIgnoredUpdate}
               initialSection={settingsInitialSection}
             />
           </Suspense>
@@ -2699,6 +2724,7 @@ export function AppLayout() {
         state={updateState}
         distributionKind={distributionKind}
         onAction={() => { void handleUpdateAction(); }}
+        onIgnore={ignoreAvailableUpdate}
       />
       {exportToast && (
         <div className={`export-toast export-toast-${exportToast.type}`} role="status" aria-live="polite">
