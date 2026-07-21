@@ -111,6 +111,15 @@ export function UnsavedChangesDialog({
           >
             {t('unsavedDialogCancel')}
           </button>
+          <button
+            ref={allowSaveAll ? undefined : saveButtonRef}
+            type="button"
+            className="unsaved-dialog-button save"
+            data-action="save"
+            onClick={() => onChoice('save')}
+          >
+            {t('unsavedDialogSave')}
+          </button>
           {allowSaveAll && (
             <button
               ref={saveButtonRef}
@@ -120,17 +129,6 @@ export function UnsavedChangesDialog({
               onClick={() => onChoice('save-all')}
             >
               {t('unsavedDialogSaveAll')}
-            </button>
-          )}
-          {!allowSaveAll && (
-            <button
-              ref={saveButtonRef}
-              type="button"
-              className="unsaved-dialog-button save"
-              data-action="save"
-              onClick={() => onChoice('save')}
-            >
-              {t('unsavedDialogSave')}
             </button>
           )}
         </div>

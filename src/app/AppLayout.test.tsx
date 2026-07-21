@@ -48,6 +48,7 @@ const editorPaneMock = vi.hoisted(() => ({
   renderCount: 0,
   modes: [] as string[],
   onChange: undefined as ((value: string) => void) | undefined,
+  emitOnSourceChange: false,
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
@@ -84,6 +85,9 @@ vi.mock('../components/editor/cm6/Cm6MarkdownEditorPane', () => ({
     editorPaneMock.renderCount += 1;
     editorPaneMock.modes.push(mode ?? 'wysiwyg');
     editorPaneMock.onChange = onChange;
+    React.useEffect(() => {
+      if (editorPaneMock.emitOnSourceChange) onChange?.(source);
+    }, [onChange, source]);
     return null;
   },
 }));
@@ -145,6 +149,7 @@ describe('AppLayout update flow', () => {
     editorPaneMock.renderCount = 0;
     editorPaneMock.modes = [];
     editorPaneMock.onChange = undefined;
+    editorPaneMock.emitOnSourceChange = false;
     updateServiceMock.getDistributionKind.mockResolvedValue('installed');
   });
 
@@ -349,6 +354,75 @@ describe('AppLayout update flow', () => {
     expect(fileServiceMock.openPath).toHaveBeenCalledWith('/tmp/系统打开.md', 'UTF-8');
   });
 
+  it('shows the name and content of each newly opened Markdown file', async () => {
+    editorPaneMock.emitOnSourceChange = true;
+    fileServiceMock.openFile
+      .mockResolvedValueOnce({
+        path: 'D:\\docs\\第一篇.md',
+        name: '第一篇.md',
+        content: '# 第一篇正文',
+        dirty: false,
+        lastSavedContent: '# 第一篇正文',
+        fileType: 'markdown',
+      })
+      .mockResolvedValueOnce({
+        path: 'D:\\docs\\第二篇.md',
+        name: '第二篇.md',
+        content: '# 第二篇正文',
+        dirty: false,
+        lastSavedContent: '# 第二篇正文',
+        fileType: 'markdown',
+      });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(tauriWindowMock.setTitle).toHaveBeenLastCalledWith('第一篇.md');
+    expect(editorPaneMock.source).toBe('# 第一篇正文');
+    expect(host.querySelector('.status-save-state')).toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(tauriWindowMock.setTitle).toHaveBeenLastCalledWith('第二篇.md');
+    expect(editorPaneMock.source).toBe('# 第二篇正文');
+    expect(fileServiceMock.openFile).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('.status-save-state')).toBeNull();
+    expect(host.querySelector('[aria-label="关闭 第一篇.md"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="关闭 第二篇.md"]')).not.toBeNull();
+
+    await act(async () => {
+      Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+        .find((tab) => tab.textContent === '第一篇.md')
+        ?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(tauriWindowMock.setTitle).toHaveBeenLastCalledWith('第一篇.md');
+    expect(editorPaneMock.source).toBe('# 第一篇正文');
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="关闭 第一篇.md"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(tauriWindowMock.setTitle).toHaveBeenLastCalledWith('第二篇.md');
+    expect(editorPaneMock.source).toBe('# 第二篇正文');
+  });
+
   it('passes the current HTML source into the source editor from the WYSIWYG pane', async () => {
     const source = '<!doctype html><html><body><h1>材料</h1><table><tr><td>正文</td></tr></table></body></html>';
     fileServiceMock.openFile.mockResolvedValue({
@@ -521,6 +595,129 @@ describe('AppLayout update flow', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(fileServiceMock.saveFile).toHaveBeenCalledWith(expect.objectContaining({ path: '/tmp/save-before-close.md' }));
+    expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirms each dirty file separately before closing the window', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+    fileServiceMock.openFile
+      .mockResolvedValueOnce({
+        path: '/tmp/first-dirty.md',
+        name: 'first-dirty.md',
+        content: '# first',
+        dirty: false,
+        lastSavedContent: '# first',
+        fileType: 'markdown',
+      })
+      .mockResolvedValueOnce({
+        path: '/tmp/second-dirty.md',
+        name: 'second-dirty.md',
+        content: '# second',
+        dirty: false,
+        lastSavedContent: '# second',
+        fileType: 'markdown',
+      });
+    fileServiceMock.saveFile.mockImplementation(async (file) => ({
+      ...file,
+      dirty: false,
+      lastSavedContent: file.content,
+    }));
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      editorPaneMock.onChange?.('# first changed');
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      editorPaneMock.onChange?.('# second changed');
+      await flushPromises();
+    });
+    await act(async () => {
+      closeHandler?.({ preventDefault: vi.fn() });
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('first-dirty.md');
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('1 / 2');
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(fileServiceMock.saveFile).toHaveBeenCalledWith(expect.objectContaining({ path: '/tmp/first-dirty.md' }));
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('second-dirty.md');
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('2 / 2');
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="discard"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards all remaining dirty files in one action', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+    fileServiceMock.openFile
+      .mockResolvedValueOnce({
+        path: '/tmp/discard-first.md', name: 'discard-first.md', content: '# changed',
+        dirty: true, lastSavedContent: '# original', fileType: 'markdown',
+      })
+      .mockResolvedValueOnce({
+        path: '/tmp/discard-second.md', name: 'discard-second.md', content: '# changed',
+        dirty: true, lastSavedContent: '# original', fileType: 'markdown',
+      });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    for (let index = 0; index < 2; index += 1) {
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true }));
+        await flushPromises();
+        await flushPromises();
+      });
+    }
+    await act(async () => {
+      closeHandler?.({ preventDefault: vi.fn() });
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(host.querySelector<HTMLButtonElement>('[data-action="discard-all"]')).not.toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="discard-all"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(fileServiceMock.saveFile).not.toHaveBeenCalled();
     expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
   });
 

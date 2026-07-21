@@ -241,6 +241,18 @@ html, body, #root {
 }
 
 .update-card-ignore {
+  padding: 0 8px;
+  color: var(--theme-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.update-card-action:hover:not(:disabled),
+.update-card-ignore:hover:not(:disabled) {
+  background: var(--theme-control-hover-bg);
+}
+
+.update-card-ignore {
   height: 28px;
   padding: 0 7px;
   border: 1px solid var(--theme-border-soft);

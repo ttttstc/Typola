@@ -18,13 +18,17 @@ describe('UpdateCard', () => {
     hosts.splice(0).forEach((host) => host.remove());
   });
 
-  function render(state: AppUpdateState, distributionKind: 'installed' | 'portable' = 'installed') {
+  function render(
+    state: AppUpdateState,
+    distributionKind: 'installed' | 'portable' = 'installed',
+    onIgnore = vi.fn(),
+  ) {
     const host = document.createElement('div');
     hosts.push(host);
     document.body.append(host);
     const root = createRoot(host);
     act(() => root.render(
-      <UpdateCard state={state} distributionKind={distributionKind} onAction={vi.fn()} />,
+      <UpdateCard state={state} distributionKind={distributionKind} onAction={vi.fn()} onIgnore={onIgnore} />,
     ));
     return { host, root };
   }
@@ -34,6 +38,18 @@ describe('UpdateCard', () => {
     expect(host.textContent).toContain('发现新版本');
     expect(host.textContent).toContain('v2.0.6');
     expect(host.querySelector('button')?.getAttribute('aria-label')).toBe('更新并重启');
+    act(() => root.unmount());
+  });
+
+  it('lets the user ignore an available update', () => {
+    const onIgnore = vi.fn();
+    const { host, root } = render({ phase: 'available', source: 'auto', update: available }, 'installed', onIgnore);
+    const ignoreButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('忽略此版本'));
+
+    expect(ignoreButton).toBeDefined();
+    act(() => ignoreButton?.click());
+    expect(onIgnore).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
   });
 
