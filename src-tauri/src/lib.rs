@@ -759,6 +759,27 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut file = temp_file.ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::AlreadyExists, "temporary document path is busy")
     })?;
+
+    #[cfg(unix)]
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            use std::os::unix::fs::PermissionsExt;
+            if let Err(error) = file.set_permissions(std::fs::Permissions::from_mode(
+                metadata.permissions().mode(),
+            )) {
+                drop(file);
+                let _ = std::fs::remove_file(&temp_path);
+                return Err(error);
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            drop(file);
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(error);
+        }
+    }
+
     let write_result = (|| {
         file.write_all(bytes)?;
         file.sync_all()
@@ -3609,6 +3630,23 @@ mod tests {
             .read_dir()
             .unwrap()
             .any(|entry| entry.unwrap().file_name().to_string_lossy().contains("typola-")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_preserves_existing_unix_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("private.md");
+        std::fs::write(&target, b"before").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        atomic_write(&target, b"after").unwrap();
+
+        let mode = std::fs::metadata(&target).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(std::fs::read(&target).unwrap(), b"after");
     }
 
     #[test]
