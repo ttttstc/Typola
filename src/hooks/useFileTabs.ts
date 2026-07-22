@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { OpenedFile, TocItem } from '../types/document';
+import type { DocumentFingerprint, OpenedFile, TocItem } from '../types/document';
 import { createEmptyFile } from '../types/document';
 import type { DefaultEncoding } from '../services/settingsService';
 import { setLastOpenedPath } from '../services/settingsService';
@@ -22,6 +22,18 @@ export type DocumentChangeIntent = {
   targetPath?: string;
 };
 
+type SaveSnapshot = {
+  tabId: string;
+  file: OpenedFile;
+  revision: number;
+};
+
+type SelfWriteState = {
+  path: string;
+  fingerprint?: DocumentFingerprint;
+  at: number;
+};
+
 type DiffPreview = {
   path: string;
   hunks: import('../services/textDiffService').DiffHunk[];
@@ -39,6 +51,7 @@ type UseFileTabsOptions = {
   setHtmlPresentationVisible: Dispatch<SetStateAction<boolean>>;
   setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>>;
   setEditorMode: Dispatch<SetStateAction<EditorMode>>;
+  onWorkspaceRootChange?: (path: string) => void;
   extractToc: (content: string) => TocItem[];
   beforeDocumentChangeRef?: MutableRefObject<(intent: DocumentChangeIntent) => Promise<boolean>>;
 };
@@ -50,12 +63,12 @@ type UseFileTabsResult = {
   activeTabId: string;
   fileRef: MutableRefObject<OpenedFile>;
   documentRevisionRef: MutableRefObject<number>;
-  lastSelfWriteRef: MutableRefObject<{ path: string; at: number }>;
+  lastSelfWriteRef: MutableRefObject<SelfWriteState>;
   autoSaveFailureRef: MutableRefObject<{ key: string; count: number; suspended: boolean }>;
   dirtyPaths: Set<string>;
   saveVisualState: SaveVisualState;
   shouldShowTabbar: boolean;
-  unsavedDialog: { message: string; allowDiscardAll?: boolean } | null;
+  unsavedDialog: { message: string; allowSaveAll?: boolean; allowDiscardAll?: boolean } | null;
   renameDialog: { tabId: string; name: string; error?: string } | null;
   setRenameDialog: Dispatch<SetStateAction<{ tabId: string; name: string; error?: string } | null>>;
   externalChangeConflict: { path: string; ts: number } | null;
@@ -80,11 +93,22 @@ type UseFileTabsResult = {
 };
 
 function sameDocumentPath(a: string, b: string): boolean {
-  return a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
+  return documentPathKey(a) === documentPathKey(b);
+}
+
+function documentPathKey(path: string): string {
+  return path.replace(/\\/g, '/').toLowerCase();
 }
 
 function fileTabId(file: OpenedFile, fallback = ''): string {
   return file.path || fallback || `untitled-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function fileTypeForName(name: string): OpenedFile['fileType'] {
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (ext === 'docx') return 'docx';
+  if (ext === 'html' || ext === 'htm') return 'html';
+  return 'markdown';
 }
 
 function dirname(path: string): string {
@@ -121,16 +145,21 @@ export function useFileTabs({
   setHtmlPresentationVisible,
   setRightPanelMode,
   setEditorMode,
+  onWorkspaceRootChange,
   extractToc,
   beforeDocumentChangeRef,
 }: UseFileTabsOptions): UseFileTabsResult {
   const fileRef = useRef<OpenedFile>(createEmptyFile());
   const documentRevisionRef = useRef(0);
+  const tabRevisionsRef = useRef(new Map<string, number>());
   const openTabsRef = useRef<OpenFileTab[]>([]);
   const activeTabIdRef = useRef('');
   const defaultEncodingRef = useRef(defaultEncoding);
   const autoSaveFailureRef = useRef({ key: '', count: 0, suspended: false });
-  const lastSelfWriteRef = useRef({ path: '', at: 0 });
+  const lastSelfWriteRef = useRef<SelfWriteState>({ path: '', at: 0 });
+  const saveQueuesRef = useRef(new Map<string, Promise<void>>());
+  const pendingSelfWritesRef = useRef(new Map<string, number>());
+  const tabSwitchRequestRef = useRef(0);
   const [saveVisualState, setSaveVisualState] = useState<SaveVisualState>('idle');
   const saveVisualTimerRef = useRef<number | null>(null);
   const dirtyFilesRef = useRef(false);
@@ -141,7 +170,11 @@ export function useFileTabs({
   const [file, setFile] = useState<OpenedFile>(createEmptyFile());
   const [openTabs, setOpenTabs] = useState<OpenFileTab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
-  const [unsavedDialog, setUnsavedDialog] = useState<{ message: string; allowDiscardAll?: boolean } | null>(null);
+  const [unsavedDialog, setUnsavedDialog] = useState<{
+    message: string;
+    allowSaveAll?: boolean;
+    allowDiscardAll?: boolean;
+  } | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ tabId: string; name: string; error?: string } | null>(null);
   const [externalChangeConflict, setExternalChangeConflict] = useState<{ path: string; ts: number } | null>(null);
   const [diffPreview, setDiffPreview] = useState<DiffPreview>(null);
@@ -214,11 +247,12 @@ export function useFileTabs({
     const nextTabs = existingIndex >= 0
       ? openTabsRef.current.map((tab, index) => index === existingIndex ? { id: tab.id, file: opened } : tab)
       : [...openTabsRef.current, { id, file: opened }];
-
     // 先更新 ref，避免文档切换期间的编辑器回调把新正文写回旧标签身份。
-    fileRef.current = opened;
     openTabsRef.current = nextTabs;
     activeTabIdRef.current = activeId;
+    fileRef.current = opened;
+    tabRevisionsRef.current.set(activeId, 0);
+    documentRevisionRef.current = 0;
     setOpenTabs(nextTabs);
     setActiveTabId(activeId);
     setFile(opened);
@@ -261,15 +295,15 @@ export function useFileTabs({
   }, [applyOpenedFile, canChangeDocument]);
 
   const handleOpenFolder = useCallback(async () => {
-    const { openFolder } = await import('../services/fileService');
-    const openedList = await openFolder(defaultEncodingRef.current);
-    const finalOpened = openedList[openedList.length - 1];
-    if (finalOpened && !await canChangeDocument({ kind: 'open-folder', targetPath: finalOpened.path })) return;
-    for (const opened of openedList) {
-      if (opened.path) await allowAssetDirectoryForPath(opened.path);
-      applyOpenedFile(opened);
+    try {
+      const { pickWorkspaceDirectory } = await import('../services/workspaceService');
+      const selected = await pickWorkspaceDirectory();
+      if (!selected) return;
+      onWorkspaceRootChange?.(selected);
+    } catch (error) {
+      setTransientMessage(`工作区打开失败：${error instanceof Error ? error.message : String(error)}`);
     }
-  }, [applyOpenedFile, canChangeDocument]);
+  }, [onWorkspaceRootChange, setTransientMessage]);
 
   const handleNewFile = useCallback(() => {
     void canChangeDocument({ kind: 'new' }).then((allowed) => {
@@ -297,20 +331,52 @@ export function useFileTabs({
   const handleSwitchTab = useCallback((tabId: string) => {
     const tab = openTabsRef.current.find((candidate) => candidate.id === tabId);
     if (!tab || tab.id === activeTabIdRef.current) return;
-    void canChangeDocument({ kind: 'switch-tab', targetPath: tab.file.path }).then((allowed) => {
+    const requestId = tabSwitchRequestRef.current + 1;
+    tabSwitchRequestRef.current = requestId;
+    void canChangeDocument({ kind: 'switch-tab', targetPath: tab.file.path }).then(async (allowed) => {
       if (!allowed) return;
+      let nextFile = tab.file;
+      let changedWhileBackground = false;
+      if (isTauriRuntime && tab.file.path) {
+        try {
+          const { getDocumentFingerprint, openPath } = await import('../services/fileService');
+          const fingerprint = await getDocumentFingerprint(tab.file.path);
+          const known = tab.file.fingerprint;
+          const sameFingerprint = known
+            && known.size === fingerprint.size
+            && known.modifiedAt === fingerprint.modifiedAt
+            && known.hash === fingerprint.hash;
+          if (!sameFingerprint) {
+            if (tab.file.dirty) {
+              changedWhileBackground = true;
+            } else {
+              nextFile = await openPath(tab.file.path, tab.file.encoding ?? defaultEncodingRef.current);
+            }
+          }
+        } catch (error) {
+          setTransientMessage(`检查磁盘文件失败：${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (requestId !== tabSwitchRequestRef.current) return;
+      const nextTabs = openTabsRef.current.map((candidate) => (
+        candidate.id === tab.id ? { ...candidate, file: nextFile } : candidate
+      ));
+      openTabsRef.current = nextTabs;
       activeTabIdRef.current = tab.id;
-      fileRef.current = tab.file;
-      clearSaveVisualTimer();
+      fileRef.current = nextFile;
+      documentRevisionRef.current = tabRevisionsRef.current.get(tab.id) ?? 0;
+      setOpenTabs(nextTabs);
       setActiveTabId(tab.id);
-      setFile(tab.file);
-      setSaveVisualState(tab.file.dirty ? 'dirty' : 'idle');
-      setToc(tab.file.fileType === 'docx' ? [] : extractToc(tab.file.content));
+      setFile(nextFile);
+      setToc(nextFile.fileType === 'docx' ? [] : extractToc(nextFile.content));
+      clearSaveVisualTimer();
+      setSaveVisualState(nextFile.dirty ? 'dirty' : 'idle');
       setDiskChangeMessage('');
       setTransientMessage('');
       setFindVisible(false);
-      setHtmlPresentationVisible(tab.file.fileType === 'html');
-      if (tab.file.fileType === 'docx') {
+      setHtmlPresentationVisible(nextFile.fileType === 'html');
+      setExternalChangeConflict(changedWhileBackground ? { path: nextFile.path, ts: Date.now() } : null);
+      if (nextFile.fileType === 'docx') {
         setRightPanelMode('none');
       }
     });
@@ -318,6 +384,7 @@ export function useFileTabs({
     canChangeDocument,
     clearSaveVisualTimer,
     extractToc,
+    isTauriRuntime,
     setDiskChangeMessage,
     setFindVisible,
     setHtmlPresentationVisible,
@@ -339,11 +406,113 @@ export function useFileTabs({
     });
   }, []);
 
-  const requestUnsavedChoice = useCallback((message: string, allowDiscardAll = false) => {
+  const enqueueSave = useCallback((snapshot: SaveSnapshot, saveAs = false) => {
+    const key = snapshot.file.path
+      ? documentPathKey(snapshot.file.path)
+      : `tab:${snapshot.tabId}`;
+    const previous = saveQueuesRef.current.get(key) ?? Promise.resolve();
+    const operation = previous.catch(() => undefined).then(async () => {
+      const pendingPath = documentPathKey(snapshot.file.path);
+      if (pendingPath) {
+        pendingSelfWritesRef.current.set(pendingPath, (pendingSelfWritesRef.current.get(pendingPath) ?? 0) + 1);
+      }
+      try {
+        const { saveFile, saveFileAs } = await import('../services/fileService');
+        return saveAs
+          ? saveFileAs(snapshot.file, defaultEncodingRef.current)
+          : saveFile(snapshot.file);
+      } catch (error) {
+        if (pendingPath) {
+          const count = (pendingSelfWritesRef.current.get(pendingPath) ?? 1) - 1;
+          if (count > 0) pendingSelfWritesRef.current.set(pendingPath, count);
+          else pendingSelfWritesRef.current.delete(pendingPath);
+        }
+        throw error;
+      }
+    });
+    const settled = operation.then(() => undefined, () => undefined);
+    saveQueuesRef.current.set(key, settled);
+    void settled.finally(() => {
+      if (saveQueuesRef.current.get(key) === settled) saveQueuesRef.current.delete(key);
+    });
+    return operation;
+  }, []);
+
+  const applySaveResult = useCallback((snapshot: SaveSnapshot, updated: OpenedFile): boolean => {
+    for (const path of new Set([snapshot.file.path, updated.path].filter(Boolean))) {
+      const key = documentPathKey(path);
+      const count = (pendingSelfWritesRef.current.get(key) ?? 1) - 1;
+      if (count > 0) pendingSelfWritesRef.current.set(key, count);
+      else pendingSelfWritesRef.current.delete(key);
+    }
+    if (updated === snapshot.file) return false;
+    lastSelfWriteRef.current = { path: updated.path, fingerprint: updated.fingerprint, at: Date.now() };
+    const target = openTabsRef.current.find((candidate) => candidate.id === snapshot.tabId);
+    if (!target) return true;
+
+    const currentFile = target.file;
+    const currentRevision = tabRevisionsRef.current.get(snapshot.tabId) ?? 0;
+    const snapshotIsCurrent = currentRevision === snapshot.revision
+      && currentFile.content === snapshot.file.content;
+    const nextFile = snapshotIsCurrent
+      ? { ...updated, dirty: false }
+      : {
+        ...currentFile,
+        path: updated.path,
+        name: updated.name,
+        encoding: updated.encoding,
+        hasBom: updated.hasBom,
+        lineEnding: updated.lineEnding,
+        fingerprint: updated.fingerprint,
+        lastSavedContent: updated.lastSavedContent,
+        dirty: currentFile.content !== updated.lastSavedContent,
+      };
+    const nextTabs = openTabsRef.current.map((candidate) => (
+      candidate.id === snapshot.tabId ? { ...candidate, file: nextFile } : candidate
+    ));
+    openTabsRef.current = nextTabs;
+    setOpenTabs(nextTabs);
+    if (activeTabIdRef.current === snapshot.tabId) {
+      fileRef.current = nextFile;
+      setFile(nextFile);
+      if (nextFile.path) setLastOpenedPath(nextFile.path);
+      setSaveVisualState(nextFile.dirty ? 'dirty' : 'saved');
+    }
+    return true;
+  }, []);
+
+  const saveDirtyFilesBeforeClose = useCallback(async (targetTabs?: OpenFileTab[]) => {
+    const activeId = activeTabIdRef.current;
+    const tabs = openTabsRef.current.map((tab) => (
+      tab.id === activeId ? { ...tab, file: fileRef.current } : tab
+    ));
+    const dirtyTabs = targetTabs ?? tabs.filter((tab) => tab.file.dirty && tab.file.fileType !== 'docx');
+
+    for (const tab of dirtyTabs) {
+      const snapshot = {
+        tabId: tab.id,
+        file: { ...tab.file },
+        revision: tabRevisionsRef.current.get(tab.id) ?? 0,
+      };
+      const updated = await enqueueSave(snapshot);
+      if (!applySaveResult(snapshot, updated)) return false;
+    }
+
+    autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
+    setAutoSaveError('');
+    setDiskChangeMessage('');
+    dirtyFilesRef.current = false;
+    return true;
+  }, [applySaveResult, enqueueSave, setAutoSaveError, setDiskChangeMessage]);
+
+  const requestUnsavedChoice = useCallback((
+    message: string,
+    options: { allowSaveAll?: boolean; allowDiscardAll?: boolean } = {},
+  ) => {
     return new Promise<UnsavedDecision>((resolve) => {
       unsavedResolverRef.current?.('cancel');
       unsavedResolverRef.current = resolve;
-      setUnsavedDialog({ message, allowDiscardAll });
+      setUnsavedDialog({ message, ...options });
     });
   }, []);
 
@@ -366,29 +535,21 @@ export function useFileTabs({
       dirtyTabs.push({ id: '', file: liveActive });
     }
 
-    const { saveFile } = await import('../services/fileService');
     for (const [index, tab] of dirtyTabs.entries()) {
       const choice = await requestUnsavedChoice(
         `“${tab.file.name}” 有未保存的修改（${index + 1} / ${dirtyTabs.length}），是否保存后关闭？`,
-        index < dirtyTabs.length - 1,
+        {
+          allowSaveAll: index < dirtyTabs.length - 1,
+          allowDiscardAll: index < dirtyTabs.length - 1,
+        },
       );
       if (choice === 'cancel') return false;
       if (choice === 'discard-all') return true;
+      const tabsToSave = choice === 'save-all' ? dirtyTabs.slice(index) : [tab];
       if (choice === 'discard') continue;
       try {
-        const updated = await saveFile(tab.file);
-        if (updated.dirty) return false;
-        lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
-        const nextTabs = openTabsRef.current.map((candidate) => (
-          candidate.id === tab.id ? { ...candidate, file: updated } : candidate
-        ));
-        openTabsRef.current = nextTabs;
-        setOpenTabs(nextTabs);
-        if (tab.id === activeId || (!tab.id && !activeId)) {
-          fileRef.current = updated;
-          setFile(updated);
-          if (updated.path) setLastOpenedPath(updated.path);
-        }
+        if (!await saveDirtyFilesBeforeClose(tabsToSave)) return false;
+        if (choice === 'save-all') break;
       } catch (error) {
         console.warn('Failed to save before closing:', error);
         await messageDialog('保存失败，已取消关闭。请检查文件权限或磁盘状态后重试。', { title: '保存失败' });
@@ -401,18 +562,23 @@ export function useFileTabs({
     setDiskChangeMessage('');
     dirtyFilesRef.current = false;
     return true;
-  }, [requestUnsavedChoice, setAutoSaveError, setDiskChangeMessage]);
+  }, [requestUnsavedChoice, saveDirtyFilesBeforeClose, setAutoSaveError, setDiskChangeMessage]);
 
   const confirmCloseTabWithDirtyFile = useCallback(async (targetFile: OpenedFile) => {
     if (!targetFile.dirty || targetFile.fileType === 'docx') return true;
     const choice = await requestUnsavedChoice(`“${targetFile.name}” 有未保存的修改，是否保存后关闭？`);
     if (choice === 'cancel') return false;
-    if (choice === 'discard') return true;
+    if (choice === 'discard' || choice === 'discard-all') return true;
     try {
-      const { saveFile } = await import('../services/fileService');
-      const updated = await saveFile(targetFile);
-      if (updated.dirty) return false;
-      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+      const tab = openTabsRef.current.find((candidate) => candidate.file === targetFile)
+        ?? openTabsRef.current.find((candidate) => sameDocumentPath(candidate.file.path, targetFile.path));
+      const snapshot = {
+        tabId: tab?.id ?? activeTabIdRef.current,
+        file: { ...targetFile },
+        revision: tabRevisionsRef.current.get(tab?.id ?? activeTabIdRef.current) ?? 0,
+      };
+      const updated = await enqueueSave(snapshot);
+      if (!applySaveResult(snapshot, updated)) return false;
       autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
       setAutoSaveError('');
       setDiskChangeMessage('');
@@ -422,7 +588,7 @@ export function useFileTabs({
       await messageDialog('保存失败，已取消关闭标签页。请检查文件权限或磁盘状态后重试。', { title: '保存失败' });
       return false;
     }
-  }, [requestUnsavedChoice, setAutoSaveError, setDiskChangeMessage]);
+  }, [applySaveResult, enqueueSave, requestUnsavedChoice, setAutoSaveError, setDiskChangeMessage]);
 
   useEffect(() => {
     if (!isTauriRuntime) return undefined;
@@ -501,13 +667,22 @@ export function useFileTabs({
       const result = await invoke<{ path: string; name: string }>('rename_opened_document', {
         request: { path: targetFile.path, newName: renameDialog.name },
       });
-      const updatedFile = { ...targetFile, path: result.path, name: result.name };
+      const updatedFile = {
+        ...targetFile,
+        path: result.path,
+        name: result.name,
+        fileType: fileTypeForName(result.name),
+      };
       const nextId = fileTabId(updatedFile, result.path);
-      setOpenTabs((tabs) => tabs.map((tab) => (
+      const nextTabs = openTabsRef.current.map((tab) => (
         tab.id === renameDialog.tabId ? { id: nextId, file: updatedFile } : tab
-      )));
+      ));
+      openTabsRef.current = nextTabs;
+      fileRef.current = activeTabIdRef.current === renameDialog.tabId ? updatedFile : fileRef.current;
+      setOpenTabs(nextTabs);
       if (activeTabIdRef.current === renameDialog.tabId) {
         setActiveTabId(nextId);
+        activeTabIdRef.current = nextId;
         setFile(updatedFile);
         setLastOpenedPath(result.path);
       }
@@ -522,62 +697,58 @@ export function useFileTabs({
   }, [renameDialog, setTransientMessage]);
 
   const handleSave = useCallback(async () => {
-    if (file.fileType === 'docx') return;
+    const tabId = activeTabIdRef.current;
+    const snapshot: SaveSnapshot = {
+      tabId,
+      file: { ...fileRef.current },
+      revision: tabRevisionsRef.current.get(tabId) ?? documentRevisionRef.current,
+    };
+    if (snapshot.file.fileType === 'docx') return;
     clearSaveVisualTimer();
     setSaveVisualState('saving');
     try {
-      const { saveFile } = await import('../services/fileService');
-      const updated = await saveFile(file);
-      if (updated === file) {
-        setSaveVisualState(file.dirty ? 'dirty' : 'idle');
+      const updated = await enqueueSave(snapshot);
+      if (!applySaveResult(snapshot, updated)) {
+        if (activeTabIdRef.current === tabId) setSaveVisualState(snapshot.file.dirty ? 'dirty' : 'idle');
         return;
       }
       if (updated.path) await allowAssetDirectoryForPath(updated.path);
-      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
       autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
       setAutoSaveError('');
       setDiskChangeMessage('');
-      setFile(updated);
-      if (updated.path) setLastOpenedPath(updated.path);
-      if (updated.dirty) {
-        setSaveVisualState('dirty');
-      } else {
-        markSavedSoon();
-      }
+      if (activeTabIdRef.current === tabId) markSavedSoon();
     } catch (error) {
-      setSaveVisualState('error');
+      if (activeTabIdRef.current === tabId) setSaveVisualState('error');
       throw error;
     }
-  }, [clearSaveVisualTimer, file, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
+  }, [applySaveResult, clearSaveVisualTimer, enqueueSave, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
 
   const handleSaveAs = useCallback(async () => {
-    if (file.fileType === 'docx') return;
+    const tabId = activeTabIdRef.current;
+    const snapshot: SaveSnapshot = {
+      tabId,
+      file: { ...fileRef.current },
+      revision: tabRevisionsRef.current.get(tabId) ?? documentRevisionRef.current,
+    };
+    if (snapshot.file.fileType === 'docx') return;
     clearSaveVisualTimer();
     setSaveVisualState('saving');
     try {
-      const { saveFileAs } = await import('../services/fileService');
-      const updated = await saveFileAs(file);
-      if (updated === file) {
-        setSaveVisualState(file.dirty ? 'dirty' : 'idle');
+      const updated = await enqueueSave(snapshot, true);
+      if (!applySaveResult(snapshot, updated)) {
+        if (activeTabIdRef.current === tabId) setSaveVisualState(snapshot.file.dirty ? 'dirty' : 'idle');
         return;
       }
       if (updated.path) await allowAssetDirectoryForPath(updated.path);
-      lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
       autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
       setAutoSaveError('');
       setDiskChangeMessage('');
-      setFile(updated);
-      if (updated.path) setLastOpenedPath(updated.path);
-      if (updated.dirty) {
-        setSaveVisualState('dirty');
-      } else {
-        markSavedSoon();
-      }
+      if (activeTabIdRef.current === tabId) markSavedSoon();
     } catch (error) {
-      setSaveVisualState('error');
+      if (activeTabIdRef.current === tabId) setSaveVisualState('error');
       throw error;
     }
-  }, [clearSaveVisualTimer, file, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
+  }, [applySaveResult, clearSaveVisualTimer, enqueueSave, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
 
   const handleContentChange = useCallback((value: string, origin?: 'table-format') => {
     setAutoSaveError('');
@@ -591,7 +762,12 @@ export function useFileTabs({
       lastSavedContent: acceptAutomaticFormat ? value : fileRef.current.lastSavedContent,
       dirty: acceptAutomaticFormat ? false : value !== fileRef.current.lastSavedContent,
     };
-    if (value !== fileRef.current.content) documentRevisionRef.current += 1;
+    if (value !== fileRef.current.content) {
+      const activeTabId = activeTabIdRef.current;
+      const nextRevision = (tabRevisionsRef.current.get(activeTabId) ?? documentRevisionRef.current) + 1;
+      tabRevisionsRef.current.set(activeTabId, nextRevision);
+      documentRevisionRef.current = nextRevision;
+    }
     fileRef.current = nextFile;
     const activeTabId = activeTabIdRef.current;
     if (activeTabId) {
@@ -607,23 +783,27 @@ export function useFileTabs({
   }, [clearSaveVisualTimer, setAutoSaveError, setDiskChangeMessage, setTransientMessage]);
 
   useEffect(() => {
-    if (!autoSaveEnabled || !file.path || !file.dirty || file.fileType === 'docx') return;
-    const saveKey = `${file.path}\n${file.content}`;
+    const tabId = activeTabIdRef.current;
+    const snapshot: SaveSnapshot = {
+      tabId,
+      file: { ...fileRef.current },
+      revision: tabRevisionsRef.current.get(tabId) ?? documentRevisionRef.current,
+    };
+    if (!autoSaveEnabled || !snapshot.file.path || !snapshot.file.dirty || snapshot.file.fileType === 'docx') return;
+    const saveKey = `${snapshot.file.path}\n${snapshot.file.content}`;
     const failure = autoSaveFailureRef.current;
     if (failure.key === saveKey && failure.suspended) return;
 
     const timeout = window.setTimeout(() => {
       clearSaveVisualTimer();
       setSaveVisualState('saving');
-      void import('../services/fileService')
-        .then(({ saveFile }) => saveFile(file))
+      void enqueueSave(snapshot)
         .then((updated) => {
-          lastSelfWriteRef.current = { path: updated.path, at: Date.now() };
+          if (!applySaveResult(snapshot, updated)) throw new Error('自动保存已取消');
           autoSaveFailureRef.current = { key: '', count: 0, suspended: false };
           setAutoSaveError('');
           setDiskChangeMessage('');
-          setFile(updated);
-          markSavedSoon();
+          if (activeTabIdRef.current === tabId) markSavedSoon();
         })
         .catch((error) => {
           const current = autoSaveFailureRef.current;
@@ -638,7 +818,19 @@ export function useFileTabs({
         });
     }, 800);
     return () => window.clearTimeout(timeout);
-  }, [autoSaveEnabled, clearSaveVisualTimer, file, markSavedSoon, setAutoSaveError, setDiskChangeMessage]);
+  }, [
+    applySaveResult,
+    autoSaveEnabled,
+    clearSaveVisualTimer,
+    enqueueSave,
+    file.content,
+    file.dirty,
+    file.fileType,
+    file.path,
+    markSavedSoon,
+    setAutoSaveError,
+    setDiskChangeMessage,
+  ]);
 
   useEffect(() => {
     if (!isTauriRuntime || !file.path) return;
@@ -675,34 +867,50 @@ export function useFileTabs({
         const current = fileRef.current;
         if (!current.path || !sameDocumentPath(current.path, payload.path)) return;
 
-        const lastSelfWrite = lastSelfWriteRef.current;
-        if (sameDocumentPath(lastSelfWrite.path, payload.path) && Date.now() - lastSelfWrite.at < 1500) {
-          return;
-        }
-
-        if (current.dirty) {
-          setExternalChangeConflict({ path: payload.path, ts: Date.now() });
-          return;
-        }
+        if (pendingSelfWritesRef.current.has(documentPathKey(payload.path))) return;
 
         try {
-          const { readTextWithEncoding } = await import('../services/fileService');
-          const content = await readTextWithEncoding(payload.path, defaultEncoding);
+          const { getDocumentFingerprint, openPath } = await import('../services/fileService');
+          const fingerprint = await getDocumentFingerprint(payload.path);
+          const lastSelfWrite = lastSelfWriteRef.current;
+          if (sameDocumentPath(lastSelfWrite.path, payload.path)
+            && lastSelfWrite.fingerprint
+            && lastSelfWrite.fingerprint.size === fingerprint.size
+            && lastSelfWrite.fingerprint.modifiedAt === fingerprint.modifiedAt
+            && lastSelfWrite.fingerprint.hash === fingerprint.hash) {
+            return;
+          }
+
+          if (fileRef.current.dirty) {
+            setExternalChangeConflict({ path: payload.path, ts: Date.now() });
+            return;
+          }
+
+          const opened = await openPath(payload.path, current.encoding ?? defaultEncoding);
+          const content = opened.content;
           if (fileRef.current.path && sameDocumentPath(fileRef.current.path, payload.path)
               && !fileRef.current.dirty) {
-            setFile((prev) => ({
-              ...prev,
-              content,
-              lastSavedContent: content,
-              dirty: false,
-            }));
+            const nextFile = { ...opened, content, lastSavedContent: content, dirty: false };
+            fileRef.current = nextFile;
+            const nextTabs = openTabsRef.current.map((tab) => (
+              tab.id === activeTabIdRef.current ? { ...tab, file: nextFile } : tab
+            ));
+            openTabsRef.current = nextTabs;
+            setOpenTabs(nextTabs);
+            setFile(nextFile);
+            tabRevisionsRef.current.set(activeTabIdRef.current, 0);
+            documentRevisionRef.current = 0;
             setToc(extractToc(content));
             setDiskChangeMessage('');
             setTransientMessage('已自动从磁盘重新加载。');
           }
         } catch (error) {
           console.warn('Failed to auto-reload file:', error);
-          setDiskChangeMessage('磁盘文件已在外部变更，请保存前确认是否需要重新打开。');
+          if (fileRef.current.dirty) {
+            setExternalChangeConflict({ path: payload.path, ts: Date.now() });
+          } else {
+            setDiskChangeMessage('磁盘文件已在外部变更，请保存前确认是否需要重新打开。');
+          }
         }
       }))
       .then((fn) => {
@@ -715,7 +923,7 @@ export function useFileTabs({
       cancelled = true;
       unlisten?.();
     };
-  }, [defaultEncoding, extractToc, isTauriRuntime, setDiskChangeMessage, setToc, setTransientMessage]);
+  }, [defaultEncoding, extractToc, isTauriRuntime, setDiskChangeMessage, setOpenTabs, setToc, setTransientMessage]);
 
   const handleViewDiff = useCallback(async () => {
     if (!externalChangeConflict) return;
@@ -723,8 +931,8 @@ export function useFileTabs({
     const current = fileRef.current;
     if (!current.path) return;
     try {
-      const { readTextWithEncoding } = await import('../services/fileService');
-      const diskContent = await readTextWithEncoding(current.path, defaultEncoding);
+      const { openPath } = await import('../services/fileService');
+      const diskContent = (await openPath(current.path, current.encoding ?? defaultEncoding)).content;
       const result = diffTexts(current.content, diskContent);
       setDiffPreview({ path: current.path, ...result });
     } catch (error) {
@@ -740,17 +948,22 @@ export function useFileTabs({
       return;
     }
     try {
-      const { readTextWithEncoding } = await import('../services/fileService');
-      const content = await readTextWithEncoding(current.path, defaultEncoding);
-      setFile((prev) => ({
-        ...prev,
-        content,
-        lastSavedContent: content,
-        dirty: false,
-      }));
+      const { openPath } = await import('../services/fileService');
+      const opened = await openPath(current.path, current.encoding ?? defaultEncoding);
+      const content = opened.content;
+      const nextFile = { ...opened, content, lastSavedContent: content, dirty: false };
+      fileRef.current = nextFile;
+      const nextTabs = openTabsRef.current.map((tab) => (
+        tab.id === activeTabIdRef.current ? { ...tab, file: nextFile } : tab
+      ));
+      openTabsRef.current = nextTabs;
+      setOpenTabs(nextTabs);
+      setFile(nextFile);
+      tabRevisionsRef.current.set(activeTabIdRef.current, 0);
+      documentRevisionRef.current = 0;
       setToc(extractToc(content));
       setExternalChangeConflict(null);
-      setTransientMessage('已采用 Claude 的版本。');
+      setTransientMessage('已采用磁盘版本。');
     } catch (error) {
       console.warn('Failed to accept external:', error);
     }

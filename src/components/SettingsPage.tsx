@@ -48,6 +48,7 @@ interface SettingsPageProps {
   updateState: AppUpdateState;
   onUpdateAction: () => void;
   onIgnoreUpdate: () => void;
+  onShowIgnoredUpdate: () => void;
   // P1-E:从外部指定打开的初始段(例如场景卡「未找到 Claude」→ 'aiCli')
   initialSection?: SettingsSection;
 }
@@ -82,6 +83,7 @@ export function SettingsPage({
   updateState,
   onUpdateAction,
   onIgnoreUpdate,
+  onShowIgnoredUpdate,
   initialSection,
 }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection ?? 'general');
@@ -140,6 +142,7 @@ export function SettingsPage({
                 updateState={updateState}
                 onUpdateAction={onUpdateAction}
                 onIgnoreUpdate={onIgnoreUpdate}
+                onShowIgnoredUpdate={onShowIgnoredUpdate}
               />
             )}
           </Suspense>

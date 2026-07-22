@@ -29,6 +29,7 @@ export type AppUpdateState =
   | { phase: 'idle' }
   | { phase: 'checking'; source: UpdateSource }
   | { phase: 'available'; source: UpdateSource; update: AvailableUpdate }
+  | { phase: 'ignored'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'downloading'; source: UpdateSource; update: AvailableUpdate; progress: UpdateProgress }
   | { phase: 'ready'; source: UpdateSource; update: AvailableUpdate }
   | { phase: 'installing'; source: UpdateSource; update: AvailableUpdate }

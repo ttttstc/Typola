@@ -16,6 +16,7 @@ type AboutSectionProps = {
   updateState: AppUpdateState;
   onUpdateAction: () => void;
   onIgnoreUpdate: () => void;
+  onShowIgnoredUpdate?: () => void;
 };
 
 type CheckState = 'idle' | 'checking' | 'latest' | 'available' | 'ignored' | 'unsupported' | 'error';
@@ -23,7 +24,13 @@ type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
 
 const appIconUrl = new URL('../../assets/typola-icon.png', import.meta.url).href;
 
-export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, onIgnoreUpdate }: AboutSectionProps) {
+export function AboutSection({
+  onCheckForUpdate,
+  updateState,
+  onUpdateAction,
+  onIgnoreUpdate,
+  onShowIgnoredUpdate,
+}: AboutSectionProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const [version, setVersion] = useState(DEVELOPMENT_APP_VERSION);
@@ -39,9 +46,13 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
     availableUpdate
       && (updateState.phase === 'available'
         || updateState.phase === 'ready'
+        || updateState.phase === 'ignored'
         || hasLocalPendingUpdate),
   );
   const displayMessage = message
+    ?? (updateState.phase === 'ignored'
+      ? `${t('updateIgnored')} v${availableUpdate?.version ?? ''}`
+      : undefined)
     ?? (availableUpdate ? `${t('updateAvailable')} v${availableUpdate.version}` : '');
 
   useEffect(() => {
@@ -63,8 +74,11 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
 
     if (result.status === 'available') {
       setLocalAvailableUpdate(result);
-      setCheckState('available');
-      setMessage(`${t('updateAvailable')} ${result.version}`);
+      const ignored = settings.ignoredVersion === result.version;
+      setCheckState(ignored ? 'ignored' : 'available');
+      setMessage(ignored
+        ? `${t('updateIgnored')} v${result.version}`
+        : `${t('updateAvailable')} ${result.version}`);
       return;
     }
 
@@ -94,6 +108,12 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
     setLocalAvailableUpdate(null);
     setCheckState('ignored');
     setMessage(t('updateIgnored'));
+  };
+
+  const handleShowIgnoredUpdate = () => {
+    onShowIgnoredUpdate?.();
+    setCheckState('available');
+    setMessage(availableUpdate ? `${t('updateAvailable')} ${availableUpdate.version}` : null);
   };
 
   return (
@@ -132,12 +152,20 @@ export function AboutSection({ onCheckForUpdate, updateState, onUpdateAction, on
             )}
             {canChooseUpdate && availableUpdate && (
               <div className="about-update-choice">
-                <button type="button" className="primary-action-button" onClick={onUpdateAction}>
-                  {updateState.phase === 'ready' ? t('updateRelaunch') : t('updateApply')}
+                <button
+                  type="button"
+                  className="primary-action-button"
+                  onClick={updateState.phase === 'ignored' ? handleShowIgnoredUpdate : onUpdateAction}
+                >
+                  {updateState.phase === 'ignored'
+                    ? t('updateShowAgain')
+                    : updateState.phase === 'ready' ? t('updateRelaunch') : t('updateApply')}
                 </button>
-                <button type="button" className="secondary-action-button" onClick={handleIgnoreUpdate}>
-                  {t('updateIgnore')}
-                </button>
+                {updateState.phase !== 'ignored' && (
+                  <button type="button" className="secondary-action-button" onClick={handleIgnoreUpdate}>
+                    {t('updateIgnore')}
+                  </button>
+                )}
               </div>
             )}
           </div>

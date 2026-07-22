@@ -1,6 +1,7 @@
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
+use encoding_rs::{GB18030, GBK};
 use std::{
     collections::HashMap,
     env,
@@ -358,6 +359,24 @@ struct RenameDocumentRequest {
     new_name: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WriteOpenedDocumentRequest {
+    path: String,
+    content: String,
+    encoding: String,
+    has_bom: bool,
+    line_ending: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DocumentFingerprint {
+    size: u64,
+    modified_at: Option<u128>,
+    hash: String,
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RenameDocumentResult {
@@ -620,14 +639,184 @@ fn read_opened_document(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&path).map_err(|error| format!("failed to read document: {error}"))
 }
 
+fn document_hash(bytes: &[u8]) -> String {
+    let mut hash = 14_695_981_039_346_656_037u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(1_099_511_628_211);
+    }
+    format!("{hash:016x}")
+}
+
+fn document_fingerprint(path: &Path) -> Result<DocumentFingerprint, String> {
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| format!("failed to stat document: {error}"))?;
+    let bytes = std::fs::read(path)
+        .map_err(|error| format!("failed to read document for fingerprint: {error}"))?;
+    let modified_at = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis());
+    Ok(DocumentFingerprint {
+        size: metadata.len(),
+        modified_at,
+        hash: document_hash(&bytes),
+    })
+}
+
+fn normalize_line_endings(content: &str, line_ending: &str) -> String {
+    let normalized = content.replace("\r\n", "\n");
+    if line_ending == "CRLF" {
+        normalized.replace('\n', "\r\n")
+    } else {
+        normalized
+    }
+}
+
+fn encode_document(request: &WriteOpenedDocumentRequest) -> Result<Vec<u8>, String> {
+    let content = normalize_line_endings(&request.content, &request.line_ending);
+    let (encoded, had_errors) = match request.encoding.as_str() {
+        "UTF-8" => (content.as_bytes().to_vec(), false),
+        "GBK" => {
+            let (bytes, _, had_errors) = GBK.encode(&content);
+            (bytes.into_owned(), had_errors)
+        }
+        "GB18030" => {
+            let (bytes, _, had_errors) = GB18030.encode(&content);
+            (bytes.into_owned(), had_errors)
+        }
+        other => return Err(format!("unsupported document encoding: {other}")),
+    };
+    if had_errors {
+        return Err(format!("document contains characters not representable in {}", request.encoding));
+    }
+
+    if request.has_bom && request.encoding == "UTF-8" {
+        let mut with_bom = Vec::with_capacity(encoded.len() + 3);
+        with_bom.extend_from_slice(&[0xef, 0xbb, 0xbf]);
+        with_bom.extend_from_slice(&encoded);
+        return Ok(with_bom);
+    }
+    Ok(encoded)
+}
+
+fn atomic_replace_file(temp: &Path, target: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+        };
+        let source: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
+        let destination: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+        let result = unsafe {
+            MoveFileExW(
+                source.as_ptr(),
+                destination.as_ptr(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        };
+        if result == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::rename(temp, target)
+    }
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::fs::OpenOptions;
+
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .unwrap_or("document");
+    let mut temp_file = None;
+    let mut temp_path = PathBuf::new();
+    for attempt in 0..10 {
+        temp_path = parent.join(format!(
+            ".{file_name}.typola-{}-{attempt}.tmp",
+            std::process::id()
+        ));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+        {
+            Ok(file) => {
+                temp_file = Some(file);
+                break;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    let mut file = temp_file.ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::AlreadyExists, "temporary document path is busy")
+    })?;
+
+    #[cfg(unix)]
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            use std::os::unix::fs::PermissionsExt;
+            if let Err(error) = file.set_permissions(std::fs::Permissions::from_mode(
+                metadata.permissions().mode(),
+            )) {
+                drop(file);
+                let _ = std::fs::remove_file(&temp_path);
+                return Err(error);
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            drop(file);
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(error);
+        }
+    }
+
+    let write_result = (|| {
+        file.write_all(bytes)?;
+        file.sync_all()
+    })();
+    drop(file);
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(error);
+    }
+
+    let result = atomic_replace_file(&temp_path, path);
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp_path);
+    }
+    result
+}
+
 #[tauri::command]
-fn write_opened_document(path: String, content: String) -> Result<(), String> {
+fn stat_opened_document(path: String) -> Result<DocumentFingerprint, String> {
     let path = PathBuf::from(path);
+    if !is_openable_document_path(&path) {
+        return Err("unsupported document type".into());
+    }
+    document_fingerprint(&path)
+}
+
+#[tauri::command]
+fn write_opened_document(request: WriteOpenedDocumentRequest) -> Result<DocumentFingerprint, String> {
+    let path = PathBuf::from(&request.path);
     if !is_writable_document_path(&path) {
         return Err("unsupported document type".into());
     }
 
-    std::fs::write(&path, content).map_err(|error| format!("failed to write document: {error}"))
+    let bytes = encode_document(&request)?;
+    atomic_write(&path, &bytes)
+        .map_err(|error| format!("failed to atomically write document: {error}"))?;
+    document_fingerprint(&path)
 }
 
 // v1:仅列目录下一层的 Markdown / HTML / Word 文档(flat,不递归,跳过隐藏文件 / node_modules / dist / target / .git 与子目录)。
@@ -1689,6 +1878,7 @@ pub fn run() {
             open_path_external,
             read_first_level_openable,
             read_opened_document,
+            stat_opened_document,
             write_opened_document,
             rename_opened_document,
             archive_artifact_to_workspace,
@@ -3358,7 +3548,14 @@ mod tests {
         let path = temp_path("saved.html");
         std::fs::write(&path, b"before").unwrap();
 
-        write_opened_document(path.to_string_lossy().to_string(), "<h1>after</h1>".into()).unwrap();
+        write_opened_document(WriteOpenedDocumentRequest {
+            path: path.to_string_lossy().to_string(),
+            content: "<h1>after</h1>".into(),
+            encoding: "UTF-8".into(),
+            has_bom: false,
+            line_ending: "LF".into(),
+        })
+        .unwrap();
 
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "<h1>after</h1>");
         let _ = std::fs::remove_file(path);
@@ -3369,11 +3566,87 @@ mod tests {
         let path = temp_path("saved.docx");
         std::fs::write(&path, b"before").unwrap();
 
-        let error =
-            write_opened_document(path.to_string_lossy().to_string(), "after".into()).unwrap_err();
+        let error = write_opened_document(WriteOpenedDocumentRequest {
+            path: path.to_string_lossy().to_string(),
+            content: "after".into(),
+            encoding: "UTF-8".into(),
+            has_bom: false,
+            line_ending: "LF".into(),
+        })
+        .unwrap_err();
 
         assert!(error.contains("unsupported document type"));
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn write_opened_document_preserves_encoding_bom_and_line_endings() {
+        for encoding in ["GBK", "GB18030"] {
+            let path = temp_path(&format!("saved-{encoding}.md"));
+            write_opened_document(WriteOpenedDocumentRequest {
+                path: path.to_string_lossy().to_string(),
+                content: "中文\n第二行".into(),
+                encoding: encoding.into(),
+                has_bom: false,
+                line_ending: "CRLF".into(),
+            })
+            .unwrap();
+
+            let bytes = std::fs::read(&path).unwrap();
+            let decoded = if encoding == "GBK" {
+                GBK.decode(&bytes).0.into_owned()
+            } else {
+                GB18030.decode(&bytes).0.into_owned()
+            };
+            assert_eq!(decoded, "中文\r\n第二行");
+            let _ = std::fs::remove_file(path);
+        }
+
+        let path = temp_path("saved-bom.md");
+        write_opened_document(WriteOpenedDocumentRequest {
+            path: path.to_string_lossy().to_string(),
+            content: "第一行\n第二行".into(),
+            encoding: "UTF-8".into(),
+            has_bom: true,
+            line_ending: "CRLF".into(),
+        })
+        .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[..3], &[0xef, 0xbb, 0xbf]);
+        assert_eq!(String::from_utf8(bytes[3..].to_vec()).unwrap(), "第一行\r\n第二行");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn atomic_write_failure_keeps_existing_target_unchanged() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("document.md");
+        std::fs::create_dir(&target).unwrap();
+        let result = atomic_write(&target, b"new content");
+        assert!(result.is_err());
+        assert!(target.is_dir());
+        assert!(!root
+            .path()
+            .read_dir()
+            .unwrap()
+            .any(|entry| entry.unwrap().file_name().to_string_lossy().contains("typola-")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_preserves_existing_unix_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("private.md");
+        std::fs::write(&target, b"before").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        atomic_write(&target, b"after").unwrap();
+
+        let mode = std::fs::metadata(&target).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(std::fs::read(&target).unwrap(), b"after");
     }
 
     #[test]

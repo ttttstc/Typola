@@ -368,6 +368,7 @@ export function lineNumberForAnchor(source: string, offset: number): number | nu
 }
 
 function reviewEscape(text: string): string {
+  // 转义文末汇总 markdown 特殊字符,避免含 `#*[] 的意见把 ### 标题行渲染异常。
   return text.replace(/[`[\]#*]/g, '\\$&');
 }
 

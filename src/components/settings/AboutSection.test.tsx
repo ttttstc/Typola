@@ -115,4 +115,27 @@ describe('AboutSection', () => {
     expect(host.textContent).toContain('已忽略此版本');
     expect(host.textContent).not.toContain('发现新版本 2.0.6');
   });
+
+  it('手动检查命中已忽略版本时允许重新显示', async () => {
+    const update = {} as Extract<UpdateCheckResult, { status: 'available' }>['update'];
+    const onShowIgnoredUpdate = vi.fn();
+    await act(async () => {
+      root.render(
+        <AboutSection
+          onCheckForUpdate={vi.fn().mockResolvedValue({ status: 'available', version: '2.0.6', update })}
+          updateState={{ phase: 'ignored', source: 'manual', update: { status: 'available', version: '2.0.6', update } }}
+          onUpdateAction={vi.fn()}
+          onIgnoreUpdate={vi.fn()}
+          onShowIgnoredUpdate={onShowIgnoredUpdate}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain('已忽略此版本');
+    const showAgain = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('重新显示'));
+    expect(showAgain).toBeTruthy();
+    await act(async () => showAgain?.click());
+    expect(onShowIgnoredUpdate).toHaveBeenCalledTimes(1);
+  });
 });

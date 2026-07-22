@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppLayout } from './AppLayout';
 import type { UpdateCheckResult } from '../services/updateService';
+import { updateSettings } from '../services/settingsService';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -155,6 +156,7 @@ describe('AppLayout update flow', () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    updateSettings({ ignoredVersion: '' });
     delete (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     vi.useRealTimers();
     vi.clearAllMocks();
@@ -207,10 +209,12 @@ describe('AppLayout update flow', () => {
     expect(updateServiceMock.installDownloadedAppUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it('dismisses the update card when the user ignores an available version', async () => {
+  it('persists ignored version and suppresses the matching automatic update', async () => {
+    updateSettings({ ignoredVersion: '2.0.6' });
     updateServiceMock.checkForAppUpdate.mockResolvedValue({
       status: 'available',
       version: '2.0.6',
+      body: '',
       update: {},
     } as Extract<UpdateCheckResult, { status: 'available' }>);
 
@@ -223,16 +227,56 @@ describe('AppLayout update flow', () => {
       await flushPromises();
     });
 
-    const ignoreButton = Array.from(host.querySelectorAll<HTMLButtonElement>('.update-card button'))
-      .find((button) => button.textContent?.includes('忽略此版本'));
-    expect(ignoreButton).toBeDefined();
+    expect(updateServiceMock.checkForAppUpdate).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.update-card')).toBeNull();
+  });
+
+  it('clicking ignore on the update card persists the selected version', async () => {
+    updateServiceMock.checkForAppUpdate.mockResolvedValue({
+      status: 'available',
+      version: '2.0.6',
+      body: '',
+      update: {},
+    } as Extract<UpdateCheckResult, { status: 'available' }>);
 
     await act(async () => {
-      ignoreButton?.click();
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(2600);
       await flushPromises();
     });
 
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.update-card-ignore')?.click();
+      await flushPromises();
+    });
+
+    expect(JSON.parse(localStorage.getItem('typola-settings') ?? '{}').ignoredVersion).toBe('2.0.6');
     expect(host.querySelector('.update-card')).toBeNull();
+  });
+
+  it('shows a newer version even when an older version was ignored', async () => {
+    updateSettings({ ignoredVersion: '2.0.5' });
+    updateServiceMock.checkForAppUpdate.mockResolvedValue({
+      status: 'available',
+      version: '2.0.6',
+      body: '',
+      update: {},
+    } as Extract<UpdateCheckResult, { status: 'available' }>);
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(2600);
+      await flushPromises();
+    });
+
+    expect(host.textContent).toContain('发现新版本');
+    expect(host.textContent).toContain('v2.0.6');
   });
 
   it('opens the release page instead of installing in portable mode', async () => {
@@ -687,7 +731,7 @@ describe('AppLayout update flow', () => {
       fileType: 'markdown' as const,
     };
     fileServiceMock.openFile.mockResolvedValue(openedFile);
-    fileServiceMock.saveFileAs.mockResolvedValue(openedFile);
+    fileServiceMock.saveFileAs.mockImplementation(async (file) => file);
 
     await act(async () => {
       root.render(<AppLayout />);
@@ -704,7 +748,7 @@ describe('AppLayout update flow', () => {
       await flushPromises();
     });
 
-    expect(fileServiceMock.saveFileAs).toHaveBeenCalledWith(openedFile);
+    expect(fileServiceMock.saveFileAs).toHaveBeenCalledWith(openedFile, 'UTF-8');
     expect(host.textContent).not.toContain('已保存');
     expect(host.querySelector('.status-save-state')).toBeNull();
   });
@@ -814,6 +858,177 @@ describe('AppLayout update flow', () => {
 
     expect(fileServiceMock.saveFile).toHaveBeenCalledWith(expect.objectContaining({ path: '/tmp/dirty-tab-save.md' }));
     expect(host.querySelector('[aria-label="关闭 dirty-tab-save.md"]')).toBeNull();
+  });
+
+  it('offers one-click save all for multiple dirty documents', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    const preventDefault = vi.fn();
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+    fileServiceMock.openFile
+      .mockResolvedValueOnce({
+        path: '/tmp/dirty-a.md',
+        name: 'dirty-a.md',
+        content: '# A',
+        dirty: true,
+        lastSavedContent: '# old A',
+        fileType: 'markdown',
+      })
+      .mockResolvedValueOnce({
+        path: '/tmp/dirty-b.md',
+        name: 'dirty-b.md',
+        content: '# B',
+        dirty: true,
+        lastSavedContent: '# old B',
+        fileType: 'markdown',
+      });
+    fileServiceMock.saveFile.mockImplementation(async (file) => ({
+      ...file,
+      dirty: false,
+      lastSavedContent: file.content,
+    }));
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    expect(fileServiceMock.openFile).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      closeHandler?.({ preventDefault });
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(host.querySelector('[data-action="save-all"]')).not.toBeNull();
+    expect(host.querySelector('[data-action="discard-all"]')).not.toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save-all"]')?.click();
+      await flushPromises();
+    });
+
+    expect(fileServiceMock.saveFile).toHaveBeenCalledTimes(2);
+    expect(tauriWindowMock.destroy).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops closing when one document in save all fails', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    const preventDefault = vi.fn();
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+    fileServiceMock.openFile
+      .mockResolvedValueOnce({
+        path: '/tmp/failing-save-a.md',
+        name: 'failing-save-a.md',
+        content: '# A',
+        dirty: true,
+        lastSavedContent: '# old A',
+        fileType: 'markdown',
+      })
+      .mockResolvedValueOnce({
+        path: '/tmp/failing-save-b.md',
+        name: 'failing-save-b.md',
+        content: '# B',
+        dirty: true,
+        lastSavedContent: '# old B',
+        fileType: 'markdown',
+      });
+    fileServiceMock.saveFile.mockRejectedValueOnce(new Error('permission denied'));
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      closeHandler?.({ preventDefault });
+      await flushPromises();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save-all"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(fileServiceMock.saveFile).toHaveBeenCalledTimes(1);
+    expect(dialogServiceMock.messageDialog).toHaveBeenCalledWith(
+      '保存失败，已取消关闭。请检查文件权限或磁盘状态后重试。',
+      { title: '保存失败' },
+    );
+    expect(tauriWindowMock.destroy).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops closing when Save As is cancelled for an unsaved dirty document', async () => {
+    let closeHandler: ((event: { preventDefault: () => void }) => void) | undefined;
+    const preventDefault = vi.fn();
+    tauriWindowMock.onCloseRequested.mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return vi.fn();
+    });
+    fileServiceMock.openFile.mockResolvedValue({
+      path: '',
+      name: '未命名.md',
+      content: '# draft',
+      dirty: true,
+      lastSavedContent: '# old draft',
+      fileType: 'markdown',
+    });
+    fileServiceMock.saveFile.mockImplementation(async (file) => file);
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+      await flushPromises();
+      await flushPromises();
+    });
+    await act(async () => {
+      closeHandler?.({ preventDefault });
+      await flushPromises();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save"]')?.click();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(fileServiceMock.saveFile).toHaveBeenCalledWith(expect.objectContaining({ path: '' }));
+    expect(tauriWindowMock.destroy).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="关闭 未命名.md"]')).not.toBeNull();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 });
 

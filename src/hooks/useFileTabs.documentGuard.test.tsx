@@ -13,25 +13,10 @@ vi.mock('../services/fileService', () => ({
     lastSavedContent: `content:${path}`,
     fileType: 'markdown' as const,
   })),
-  openFolder: vi.fn(async () => ([
-    {
-      path: 'D:/docs/a.md',
-      name: 'a.md',
-      content: 'content:D:/docs/a.md',
-      dirty: false,
-      lastSavedContent: 'content:D:/docs/a.md',
-      fileType: 'markdown' as const,
-    },
-    {
-      path: 'D:/docs/c.md',
-      name: 'c.md',
-      content: 'content:D:/docs/c.md',
-      dirty: false,
-      lastSavedContent: 'content:D:/docs/c.md',
-      fileType: 'markdown' as const,
-    },
-  ])),
 }));
+
+const pickWorkspaceDirectory = vi.hoisted(() => vi.fn(async () => 'D:/docs'));
+vi.mock('../services/workspaceService', () => ({ pickWorkspaceDirectory }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,6 +36,7 @@ function Harness({ onValue }: { onValue: (value: HookValue) => void }) {
     setHtmlPresentationVisible: vi.fn(),
     setRightPanelMode: vi.fn(),
     setEditorMode: vi.fn(),
+    onWorkspaceRootChange: vi.fn(),
     extractToc: () => [],
     beforeDocumentChangeRef: guardRef,
   });
@@ -86,14 +72,11 @@ describe('useFileTabs 文档切换守卫', () => {
     expect(value.file.path).toBe('D:/docs/a.md');
   });
 
-  it('批量打开时按最终激活文档触发守卫', async () => {
+  it('打开文件夹时只选择工作区，不批量打开标签', async () => {
     await act(async () => value.handleOpenPath('D:/docs/a.md'));
-    const guard = vi.fn(async () => false);
-    guardRef.current = guard;
-
     await act(async () => value.handleOpenFolder());
 
-    expect(guard).toHaveBeenCalledWith({ kind: 'open-folder', targetPath: 'D:/docs/c.md' });
+    expect(pickWorkspaceDirectory).toHaveBeenCalledTimes(1);
     expect(value.file.path).toBe('D:/docs/a.md');
   });
 

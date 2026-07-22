@@ -7,7 +7,7 @@ type UpdateCardProps = {
   state: AppUpdateState;
   distributionKind: DistributionKind;
   onAction: () => void;
-  onIgnore: () => void;
+  onIgnore?: () => void;
 };
 
 function formatBytes(bytes: number): string {
@@ -19,7 +19,7 @@ function formatBytes(bytes: number): string {
 export function UpdateCard({ state, distributionKind, onAction, onIgnore }: UpdateCardProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
-  if (state.phase === 'idle' || state.phase === 'checking') return null;
+  if (state.phase === 'idle' || state.phase === 'checking' || state.phase === 'ignored') return null;
 
   const version = state.update?.version;
   const busy = state.phase === 'downloading' || state.phase === 'installing';
@@ -69,7 +69,7 @@ export function UpdateCard({ state, distributionKind, onAction, onIgnore }: Upda
         <button type="button" className="update-card-action" onClick={onAction} disabled={busy} aria-label={action}>
           {busy ? <span className="update-card-spinner" /> : <ArrowRight size={17} />}
         </button>
-        {state.phase === 'available' && (
+        {state.phase === 'available' && onIgnore && (
           <button type="button" className="update-card-ignore" onClick={onIgnore}>
             {t('updateIgnore')}
           </button>
