@@ -6,7 +6,7 @@
 - 清理旧 Atomic 表格样式，并补充右键点击指定列后的真实对齐回归测试。
 - 补齐 `codemirror-markdown-tables` 的运行时依赖 `@mobily/ts-belt`，确保 pnpm 严格安装后的测试与构建可解析。
 
-## Unreleased
+## [2.0.7] - 2026-07-24
 
 - 修复文档保存竞态：保存请求绑定标签、路径、内容快照和 revision，同路径写入串行化；保存完成不会覆盖切换后的标签或更新中的编辑内容。
 - 打开文档时保留 UTF-8 / GBK / GB18030、BOM、LF / CRLF 与磁盘 fingerprint；桌面端保存改为同目录临时文件 flush 后原子替换，并在切回后台标签时检查磁盘版本。

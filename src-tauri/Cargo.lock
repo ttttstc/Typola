@@ -4834,7 +4834,7 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "typola"
-version = "2.0.5"
+version = "2.0.7"
 dependencies = [
  "base64 0.22.1",
  "encoding_rs",
