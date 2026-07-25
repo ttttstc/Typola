@@ -10,19 +10,21 @@
 //   - 选区文本 hash 与上次一致 → 跳过(纯坐标微抖不计)。
 //   - 选区从非空 → 空:立即隐藏。
 //   - Esc / contextmenu:隐藏(只对当前选区)。
-//   - 两个独立按钮 「本文档不再展示」「全局隐藏」直接放在浮条右侧,与 polish/explain/review 同风格。
+//   - 文档级/全局隐藏属于低频设置动作，收进右侧“更多”菜单。
 //
 // 定位:渲染时用 rect 估算初始位置 → useLayoutEffect 在已渲染的 div 上读真实尺寸
 // 精确回弹(直接改 DOM style)。**不要**把渲染 gate 在一个"需要先渲染才能算出来"
 // 的 position state 上,否则鸡生蛋死锁(浮条永不显示)。
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { EyeOff, Globe2 } from 'lucide-react';
+import { EyeOff, Globe2, MoreHorizontal } from 'lucide-react';
 import { SELECTION_ACTIONS, type SelectionActionId } from '../../services/agent/selectionActions';
+import { ControlMenu, type ControlMenuItem } from '../ui/ControlMenu';
 
-// 浮条只暴露 5 个动作:润色 / 名词解释 / 加检视意见 / 本文档不再展示 / 全局隐藏。
-// 自定义 / 扩写 / 缩写 / 校对走右键菜单(场景更完整,不适合塞进浮动窄条)。
-const ACTION_IDS: SelectionActionId[] = ['polish', 'explain', 'review'];
+// 浮条一级只暴露 4 个高频动作:润色 / 名词解释 / 校对 / 加检视意见。
+// 自定义 / 扩写 / 缩写收进“更多”，避免低频能力丢失。
+const ACTION_IDS: SelectionActionId[] = ['polish', 'explain', 'proofread', 'review'];
+const MORE_ACTION_IDS: SelectionActionId[] = ['shorten', 'expand', 'custom'];
 const SHOW_DEBOUNCE_MS = 160;
 const ESTIMATED_WIDTH = 240;
 const ESTIMATED_HEIGHT = 34;
@@ -165,22 +167,33 @@ export function SelectionFloatingBar({
   );
 
   const handlePick = (id: SelectionActionId) => {
-    if (id === 'dismiss-session') {
-      onDismissSession?.();
-      return;
-    }
-    if (id === 'hide-globally') {
-      onHideGlobally?.();
-      return;
-    }
     // origin 用选区位置算(浮条点击后会消失,用 rect 比读 bar 位置稳),
     // 给结果卡/检视浮卡一个贴近选区下方的锚点。
     onPick(id, { x: rect.selRect.left, y: rect.selRect.bottom + 6 });
   };
-  const actionIds: Array<SelectionActionId | 'dismiss-session' | 'hide-globally'> = [
-    ...ACTION_IDS,
-    ...(onDismissSession ? ['dismiss-session' as const] : []),
-    ...(onHideGlobally ? ['hide-globally' as const] : []),
+  const moreItems: ControlMenuItem[] = [
+    ...MORE_ACTION_IDS.map((id) => {
+      const action = SELECTION_ACTIONS[id];
+      const Icon = action.icon;
+      return {
+        id,
+        label: action.label,
+        icon: <Icon size={14} strokeWidth={1.7} />,
+        onSelect: () => handlePick(id),
+      };
+    }),
+    ...(onDismissSession ? [{
+      id: 'dismiss-session',
+      label: '本文档隐藏',
+      icon: <EyeOff size={14} strokeWidth={1.7} />,
+      onSelect: onDismissSession,
+    }] : []),
+    ...(onHideGlobally ? [{
+      id: 'hide-globally',
+      label: '全局隐藏',
+      icon: <Globe2 size={14} strokeWidth={1.7} />,
+      onSelect: onHideGlobally,
+    }] : []),
   ];
 
   return (
@@ -198,12 +211,8 @@ export function SelectionFloatingBar({
       // 阻止 mousedown 默认行为,免得点浮条按钮时把编辑器选区清掉
       onMouseDown={(event) => event.preventDefault()}
     >
-      {actionIds.map((id) => {
-        const action = id === 'dismiss-session'
-          ? { label: '本文档隐藏', icon: EyeOff }
-          : id === 'hide-globally'
-            ? { label: '全局隐藏', icon: Globe2 }
-            : SELECTION_ACTIONS[id];
+      {ACTION_IDS.map((id) => {
+        const action = SELECTION_ACTIONS[id];
         const Icon = action.icon;
         return (
           <button
@@ -222,6 +231,15 @@ export function SelectionFloatingBar({
           </button>
         );
       })}
+      {moreItems.length > 0 && (
+        <ControlMenu
+          label="更多选区动作"
+          icon={<MoreHorizontal size={15} strokeWidth={1.7} />}
+          items={moreItems}
+          placement="bottom-end"
+          className="selection-floating-bar-more-wrap"
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AgentRuntimeCard } from '../agent/AgentRuntimeCard';
 import { useSettings } from '../../hooks/useSettings';
 import { detectAgentRuntime } from '../../services/agent/runtime/detection';
@@ -11,9 +11,12 @@ export function AiCliSection() {
   const settings = useSettings();
   const [detecting, setDetecting] = useState<AgentRuntimeId | null>(null);
   const [results, setResults] = useState<Partial<Record<AgentRuntimeId, AgentDetectResult>>>({});
+  const detectionsInFlight = useRef(new Set<AgentRuntimeId>());
   const runtimes = listAgentRuntimeDefs();
 
   const handleDetect = async (runtimeId: AgentRuntimeId, path: string) => {
+    if (detectionsInFlight.current.has(runtimeId)) return;
+    detectionsInFlight.current.add(runtimeId);
     setDetecting(runtimeId);
     try {
       const next = await detectAgentRuntime(runtimeId, path);
@@ -35,6 +38,7 @@ export function AiCliSection() {
         },
       }));
     } finally {
+      detectionsInFlight.current.delete(runtimeId);
       setDetecting(null);
     }
   };

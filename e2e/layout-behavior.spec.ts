@@ -1,5 +1,19 @@
 import { expect, type Page, test } from '@playwright/test';
 
+type PreviewName = 'Word 预览' | 'HTML 预览';
+
+async function togglePreview(page: Page, name: PreviewName): Promise<void> {
+  await page.getByRole('button', { name: '预览与产物' }).click();
+  await page.getByRole('menuitemcheckbox', { name: new RegExp(name) }).click();
+}
+
+async function expectPreviewChecked(page: Page, name: PreviewName, checked: boolean): Promise<void> {
+  await page.getByRole('button', { name: '预览与产物' }).click();
+  await expect(page.getByRole('menuitemcheckbox', { name: new RegExp(name) }))
+    .toHaveAttribute('aria-checked', String(checked));
+  await page.keyboard.press('Escape');
+}
+
 async function openEditor(page: Page): Promise<void> {
   await page.getByRole('button', { name: '源码模式' }).click();
   await expect(page.locator('.cm-editor')).toBeVisible();
@@ -21,7 +35,7 @@ function liveEditorContent(page: Page) {
 async function typeMarkdown(page: Page, markdown: string): Promise<void> {
   await openEditor(page);
   await page.keyboard.insertText(markdown);
-  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 }
 
@@ -54,9 +68,9 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
       titleDrag: document.querySelector('.toolbar-title')?.hasAttribute('data-tauri-drag-region') ?? false,
       overlayCount: document.querySelectorAll('.toolbar-drag-region').length,
       fallback: document.querySelector('.app-toolbar')?.getAttribute('data-window-drag-fallback') ?? '',
-      groups: Array.from(document.querySelectorAll('.toolbar-group')).map((group) => (
-        group.getAttribute('aria-label')
-      )),
+      groups: Array.from(document.querySelectorAll<HTMLElement>('.toolbar-group'))
+        .filter((group) => group.getBoundingClientRect().width > 0)
+        .map((group) => group.getAttribute('aria-label')),
       centerOffset: toolbar && title
         ? Math.abs((title.left + title.width / 2) - (toolbar.left + toolbar.width / 2))
         : Number.POSITIVE_INFINITY,
@@ -67,10 +81,29 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
     titleDrag: true,
     overlayCount: 0,
     fallback: 'manual',
-    groups: ['导航', '文件操作', 'Markdown 格式', '视图与导出', '导航设置', '文档模式'],
+    groups: ['工作区导航', '文件操作', 'Markdown 格式', '视图与导出', '导航设置', '文档模式', '右侧栏'],
   }));
   expect(toolbarState.centerOffset).toBeLessThanOrEqual(1);
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);
+});
+
+test('toolbar preserves direct file actions and compact formatting without narrow-window overflow', async ({ page }) => {
+  await page.goto('/');
+
+  for (const width of [1024, 700]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const label of ['新建文档', '打开文件', '打开文件夹', '保存当前文件', '另存为新文件', '插入表格', '插入图片', '导出']) {
+      await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole('button', { name: '格式', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '加粗', exact: true })).toBeHidden();
+
+    const overflow = await page.locator('.app-toolbar').evaluate((toolbar) => ({
+      toolbar: toolbar.scrollWidth - toolbar.clientWidth,
+      document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }));
+    expect(overflow).toEqual({ toolbar: 0, document: 0 });
+  }
 });
 
 test('CM6 writing editor keeps its paper surface transparent over the page background', async ({ page }) => {
@@ -165,29 +198,50 @@ test('Word preview button opens and closes the right paper preview panel', async
   await page.goto('/');
 
   await expect(page.getByRole('button', { name: '导出 Word' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
   await expect(page.locator('.word-preview-panel')).toBeVisible();
   await expect(page.getByLabel('Word 导出预设')).toBeVisible();
   await expect(page.getByRole('button', { name: '导出 Word' })).toBeVisible();
 
-  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
+});
+
+test('right sidebar collapse preserves the mounted preview and restores it unchanged', async ({ page }) => {
+  await page.goto('/');
+  await togglePreview(page, 'HTML 预览');
+
+  const panel = page.locator('.wechat-preview-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('button', { name: '关闭预览' })).toBeVisible();
+  const panelBefore = await panel.elementHandle();
+  expect(panelBefore).not.toBeNull();
+
+  await page.getByRole('button', { name: '收起右侧栏' }).click();
+  await expect(panel).toHaveCount(1);
+  await expect(panel).toBeHidden();
+  const panelCollapsed = await panel.elementHandle();
+  expect(panelCollapsed).not.toBeNull();
+  expect(await panelBefore!.evaluate((node, candidate) => node === candidate, panelCollapsed)).toBe(true);
+
+  await page.getByRole('button', { name: '展开右侧栏' }).click();
+  await expect(panel).toBeVisible();
+  const panelExpanded = await panel.elementHandle();
+  expect(panelExpanded).not.toBeNull();
+  expect(await panelBefore!.evaluate((node, candidate) => node === candidate, panelExpanded)).toBe(true);
 });
 
 test('HTML preview uses the shared right panel and is mutually exclusive with Word preview', async ({ page }) => {
   await page.goto('/');
 
   const editor = liveEditor(page);
-  const viewToolbar = page.getByLabel('视图与导出');
-  const wordButton = viewToolbar.getByRole('button', { name: 'Word 预览' });
-  const htmlButton = viewToolbar.getByRole('button', { name: 'HTML 预览' });
 
   await expect(editor).toBeVisible();
-  await htmlButton.click();
+  await togglePreview(page, 'HTML 预览');
   await expect(page.locator('.wechat-preview-panel')).toBeVisible();
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
-  await expect(htmlButton).toHaveClass(/active/);
-  await expect(wordButton).not.toHaveClass(/active/);
+  await expectPreviewChecked(page, 'HTML 预览', true);
+  await expectPreviewChecked(page, 'Word 预览', false);
   await expect(page.getByRole('separator', { name: '调整右侧预览宽度' })).toBeVisible();
 
   const editorBeforeResize = await editor.boundingBox();
@@ -205,17 +259,17 @@ test('HTML preview uses the shared right panel and is mutually exclusive with Wo
   expect(editorAfterResize!.width).toBeGreaterThan(240);
   await expect(page.locator('.wechat-preview-panel')).toBeVisible();
 
-  await wordButton.click();
+  await togglePreview(page, 'Word 预览');
   await expect(page.locator('.word-preview-panel')).toBeVisible();
   await expect(page.locator('.wechat-preview-panel')).toHaveCount(0);
-  await expect(wordButton).toHaveClass(/active/);
-  await expect(htmlButton).not.toHaveClass(/active/);
+  await expectPreviewChecked(page, 'Word 预览', true);
+  await expectPreviewChecked(page, 'HTML 预览', false);
 
-  await htmlButton.click();
+  await togglePreview(page, 'HTML 预览');
   await expect(page.locator('.wechat-preview-panel')).toBeVisible();
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
-  await expect(htmlButton).toHaveClass(/active/);
-  await expect(wordButton).not.toHaveClass(/active/);
+  await expectPreviewChecked(page, 'HTML 预览', true);
+  await expectPreviewChecked(page, 'Word 预览', false);
 
   await page.locator('.wechat-preview-panel').getByRole('button', { name: '关闭预览' }).click();
   await expect(page.locator('.wechat-preview-panel')).toHaveCount(0);
@@ -316,7 +370,7 @@ test('HTML export settings switch subpages and import custom CSS slots', async (
 
 test('Word preview keeps a true A4 page and scales it to the side panel', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
   await expect(page.locator('.word-rendered-paper')).toBeVisible();
   await expect(page.locator('.word-page-label').first()).toHaveText('第 1 页');
 
@@ -353,7 +407,7 @@ test('Word preview paginates long documents with page labels', async ({ page }) 
 
 test('Word preview resizer changes panel width', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
 
   const panel = page.locator('.word-preview-panel');
   const resizer = page.getByRole('separator', { name: '调整右侧预览宽度' });
@@ -406,7 +460,7 @@ test('legacy Markdown preview is not mounted by default', async ({ page }) => {
 
 test('Word preview uses the right panel instead of replacing the editor', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
 
   await expect(liveEditor(page)).toBeVisible();
   await expect(page.locator('.word-preview-panel')).toBeVisible();
@@ -414,7 +468,7 @@ test('Word preview uses the right panel instead of replacing the editor', async 
 
 test('Word preview panel keeps the editor visible while resizing', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
 
   const editor = liveEditor(page);
   const resizer = page.getByRole('separator', { name: '调整右侧预览宽度' });
@@ -640,7 +694,7 @@ test('settings nav exposes 8 sections and hides the legacy shortcuts tab (ISS-15
   await expect(page.getByRole('button', { name: '快捷键', exact: true })).toHaveCount(0);
 });
 
-test('toolbar buttons expose keyboard shortcuts in their hover titles (ISS-153)', async ({ page }) => {
+test('toolbar exposes platform shortcuts in tooltips and preview menu (ISS-153)', async ({ page }) => {
   await page.goto('/');
 
   const expectations: Array<{ name: RegExp | string; shortcut: RegExp }> = [
@@ -648,16 +702,20 @@ test('toolbar buttons expose keyboard shortcuts in their hover titles (ISS-153)'
     { name: '保存当前文件', shortcut: /Cmd\+S|Ctrl\+S/ },
     { name: '另存为新文件', shortcut: /Cmd\+Shift\+S|Ctrl\+Shift\+S/ },
     { name: '源码模式', shortcut: /Cmd\+Alt\+S|Ctrl\+Alt\+S/ },
-    { name: 'Word 预览', shortcut: /Cmd\+Alt\+P|Ctrl\+Alt\+P/ },
-    { name: 'HTML 预览', shortcut: /Cmd\+Alt\+M|Ctrl\+Alt\+M/ },
     { name: '设置', shortcut: /Cmd\+,|Ctrl\+,/ },
   ];
 
   for (const { name, shortcut } of expectations) {
-    const button = page.getByRole('button', { name }).first();
-    const title = await button.getAttribute('title');
-    expect(title ?? '', `Toolbar button "${name}" should declare a keyboard shortcut in its title`).toMatch(shortcut);
+    const button = page.getByRole('button', { name, exact: true });
+    await button.hover();
+    await expect(page.getByRole('tooltip')).toContainText(shortcut);
   }
+
+  await page.getByRole('button', { name: '预览与产物' }).click();
+  await expect(page.getByRole('menuitemcheckbox', { name: /Word 预览/ }))
+    .toContainText(/Cmd\+Alt\+P|Ctrl\+Alt\+P/);
+  await expect(page.getByRole('menuitemcheckbox', { name: /HTML 预览/ }))
+    .toContainText(/Cmd\+Alt\+M|Ctrl\+Alt\+M/);
 });
 
 test('settings modal switches tabs by lazy loading each section on demand (ISS-152)', async ({ page }) => {
@@ -1153,7 +1211,7 @@ test('Word preview keeps the main editor at least 480px wide on a standard 1280p
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 
   const editor = liveEditor(page);
@@ -1173,7 +1231,7 @@ test('Word preview auto-collapses on a narrow 800x600 viewport so the editor sta
   const initialWidth = initialBox!.width;
   expect(initialWidth).toBeLessThanOrEqual(800);
 
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
 
   /* At 800px the panel cannot host both the 480px main editor and the 360px
      right panel, so the toggle is a no-op and the editor keeps its full
@@ -1189,7 +1247,7 @@ test('Word preview auto-collapses when the viewport shrinks below 850px while op
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await togglePreview(page, 'Word 预览');
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 
   /* Shrink the viewport — WordPaperPreviewPane's resize listener should

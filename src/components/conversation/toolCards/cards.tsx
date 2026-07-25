@@ -72,7 +72,6 @@ function CardHead({
   title,
   meta,
   open,
-  isRunning,
   result,
   runStreaming,
   runSucceeded,
@@ -82,7 +81,6 @@ function CardHead({
   title: React.ReactNode;
   meta?: React.ReactNode;
   open: boolean;
-  isRunning: boolean;
   result?: ResultShape;
   runStreaming: boolean;
   runSucceeded: boolean;
@@ -98,7 +96,7 @@ function CardHead({
         onClick={onClick ?? onTitleClick}
         aria-expanded={open}
       >
-        <span className={`op-title${isRunning ? ' shimmer-text' : ''}`}>{title}</span>
+        <span className="op-title">{title}</span>
         {meta ? <span className="op-meta">{meta}</span> : null}
         <span className="op-expand-chev" aria-hidden>
           {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
@@ -218,7 +216,6 @@ export function FileWriteCard({ input, result, runStreaming, runSucceeded }: Car
   const file = obj.file_path ?? obj.filePath ?? obj.path ?? '(unnamed)';
   const baseName = basenameOf(file);
   const lines = typeof obj.content === 'string' ? obj.content.split('\n').length : null;
-  const isRunning = runStreaming && !result;
   return (
     <div className="op-card op-file">
       <CardHead
@@ -228,7 +225,6 @@ export function FileWriteCard({ input, result, runStreaming, runSucceeded }: Car
           (lines !== null ? ` · ${t('toolLines', { n: lines })}` : '')
         }
         open={open}
-        isRunning={isRunning}
         result={result}
         runStreaming={runStreaming}
         runSucceeded={runSucceeded}
@@ -259,7 +255,6 @@ export function FileEditCard({ input, result, runStreaming, runSucceeded }: Card
   const file = obj.file_path ?? obj.filePath ?? obj.path ?? '(unnamed)';
   const baseName = basenameOf(file);
   const editCount = Array.isArray(obj.edits) ? obj.edits.length : 1;
-  const isRunning = runStreaming && !result;
   const changeLabel = editCount === 1 ? t('toolChangeSingular') : t('toolChangePlural');
   return (
     <div className="op-card op-file">
@@ -267,7 +262,6 @@ export function FileEditCard({ input, result, runStreaming, runSucceeded }: Card
         title={t('toolEdit')}
         meta={`${baseName} · ${editCount} ${changeLabel}`}
         open={open}
-        isRunning={isRunning}
         result={result}
         runStreaming={runStreaming}
         runSucceeded={runSucceeded}
@@ -292,14 +286,12 @@ export function FileReadCard({ input, result, runStreaming, runSucceeded }: Card
   const obj = (input ?? {}) as { file_path?: string; filePath?: string; path?: string };
   const file = obj.file_path ?? obj.filePath ?? obj.path ?? '(unnamed)';
   const baseName = basenameOf(file);
-  const isRunning = runStreaming && !result;
   return (
     <div className="op-card op-file">
       <CardHead
         title={t('toolRead')}
         meta={baseName}
         open={open}
-        isRunning={isRunning}
         result={result}
         runStreaming={runStreaming}
         runSucceeded={runSucceeded}
@@ -324,14 +316,12 @@ export function BashCard({ input, result, runStreaming, runSucceeded }: CardProp
   const command = obj.command ?? '';
   const desc = obj.description;
   const [open, setOpen] = useState(false);
-  const isRunning = runStreaming && !result;
   return (
     <div className="op-card op-bash">
       <CardHead
         title={t('toolBash')}
         meta={desc ? <span className="op-desc">{desc}</span> : undefined}
         open={open}
-        isRunning={isRunning}
         result={result}
         runStreaming={runStreaming}
         runSucceeded={runSucceeded}

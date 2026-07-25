@@ -53,7 +53,7 @@ export function Tooltip({
       <div
         ref={refs.setFloating}
         className="typola-floating-tooltip"
-        style={{ ...floatingStyles, zIndex: 9999 }}
+        style={floatingStyles}
         {...getFloatingProps()}
       >
         <span className="typola-floating-tooltip-label">{label}</span>

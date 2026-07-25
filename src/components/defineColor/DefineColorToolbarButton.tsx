@@ -39,11 +39,11 @@ export function DefineColorToolbarButton({ settings }: { settings: AppSettings }
         aria-expanded={open}
         className={settings.appearanceColorSystem === 'define-color' ? 'active' : ''}
         {...getReferenceProps()}
-      ><Paintbrush size={18} strokeWidth={1.6} /></button>
+      ><Paintbrush size={16} strokeWidth={1.6} /></button>
       {open && (
         <FloatingPortal>
           <FloatingFocusManager context={floating.context} modal={false} returnFocus>
-            <div ref={floating.refs.setFloating} style={{ ...floating.floatingStyles, zIndex: 10000 }} {...getFloatingProps()}>
+            <div ref={floating.refs.setFloating} className="dc-floating-layer" style={floating.floatingStyles} {...getFloatingProps()}>
               <DefineColorPopover settings={draft} onPreview={preview} onCommit={commit} />
             </div>
           </FloatingFocusManager>

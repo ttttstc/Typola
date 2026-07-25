@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { filterRecentFiles, type RecentFile } from '../services/recentFilesService';
+import { quickOpenDisplay } from '../services/quickOpenDisplay';
 
 type QuickOpenPanelProps = {
   visible: boolean;
@@ -31,11 +32,13 @@ export function QuickOpenPanel({ visible, files, onClose, onOpen }: QuickOpenPan
   };
 
   return (
-    <div className="quick-open-overlay" role="dialog" aria-label="快速打开最近文件" onMouseDown={onClose}>
+    <div className="quick-open-overlay" role="dialog" aria-modal="true" aria-label="快速打开最近文件" onMouseDown={onClose}>
       <div className="quick-open-panel" onMouseDown={(event) => event.stopPropagation()}>
         <input
           autoFocus
           className="quick-open-input"
+          aria-label="搜索最近文件"
+          aria-controls="quick-open-results"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -58,24 +61,37 @@ export function QuickOpenPanel({ visible, files, onClose, onOpen }: QuickOpenPan
               event.preventDefault();
               moveActive(-1);
             }
+            if (event.key === 'Home') {
+              event.preventDefault();
+              setActiveIndex(0);
+            }
+            if (event.key === 'End') {
+              event.preventDefault();
+              setActiveIndex(Math.max(0, filtered.length - 1));
+            }
           }}
           placeholder="输入文件名或路径"
         />
-        <div className="quick-open-list">
+        <div id="quick-open-results" className="quick-open-list" role="listbox" aria-label="最近文件">
           {filtered.length === 0 ? (
             <div className="quick-open-empty">没有最近文件</div>
-          ) : filtered.map((file, index) => (
-            <button
-              key={file.path}
-              type="button"
-              className={`quick-open-item${index === activeIndex ? ' active' : ''}`}
-              onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => onOpen(file.path)}
-            >
-              <span className="quick-open-name">{file.name}</span>
-              <span className="quick-open-path">{file.path}</span>
-            </button>
-          ))}
+          ) : filtered.map((file, index) => {
+            const display = quickOpenDisplay(file);
+            return (
+              <button
+                key={file.path}
+                type="button"
+                role="option"
+                aria-selected={index === activeIndex}
+                className={`quick-open-item${index === activeIndex ? ' active' : ''}`}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => onOpen(file.path)}
+              >
+                <span className="quick-open-name">{display.name}</span>
+                <span className="quick-open-path">{display.path}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

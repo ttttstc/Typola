@@ -87,6 +87,7 @@ describe('AppLayoutChrome editor tab indicator', () => {
       editorPane: <div />,
       docxPane: <div />,
       rightPanelMode: 'none' as const,
+      rightPanelCollapsed: false,
       resizing: false,
       rightPanelResizeLabel: '',
       rightPanelResizeTitle: '',
@@ -104,5 +105,63 @@ describe('AppLayoutChrome editor tab indicator', () => {
     act(() => root.render(<AppLayoutChrome {...props} openTabs={[tab('second'), tab('third')]} />));
 
     expect(host.querySelector<HTMLElement>('.editor-tab-indicator')?.style.transform).toBe('translateX(136px)');
+  });
+
+  it('折叠右栏时保留面板挂载，只关闭布局与交互', () => {
+    const panel = <div data-testid="right-panel-content" />;
+    const props = {
+      appStyle: {},
+      toolbarProps: {} as never,
+      mainContentRef: createRef<HTMLDivElement>(),
+      mainContentClassName: 'main-content writing-layout',
+      rightPanelWidth: 420,
+      leftRailMode: 'none' as const,
+      workspacePanelWidth: 300,
+      leftResizing: 'none' as const,
+      onToggleWorkspacePanel: vi.fn(),
+      onToggleAiPanel: vi.fn(),
+      conversationPanelProps: {} as never,
+      fileTreeProps: {} as never,
+      onLeftPanelResize: vi.fn(),
+      showToc: false,
+      tocProps: {} as never,
+      externalChangeConflict: null,
+      onViewDiff: vi.fn(),
+      onAcceptExternal: vi.fn(),
+      onKeepMine: vi.fn(),
+      shouldShowTabbar: false,
+      openTabs: [],
+      activeTabId: '',
+      renameTitle: '重命名',
+      renameTitleUnsaved: '未保存文档',
+      onSwitchTab: vi.fn(),
+      onRequestRename: vi.fn(),
+      onCloseTab: vi.fn(),
+      isDocx: false,
+      editorPane: <div />,
+      docxPane: <div />,
+      rightPanelMode: 'word' as const,
+      rightPanelCollapsed: true,
+      resizing: false,
+      rightPanelResizeLabel: '',
+      rightPanelResizeTitle: '',
+      onRightPanelResize: vi.fn(),
+      onResetRightPanelWidth: vi.fn(),
+      rightPanel: panel,
+      onSetRightPanelMode: vi.fn(),
+      terminalNode: null,
+      statusBarNode: null,
+    };
+
+    act(() => root.render(<AppLayoutChrome {...props} />));
+    const contentBefore = host.querySelector('[data-testid="right-panel-content"]');
+    expect(contentBefore).not.toBeNull();
+    expect(host.querySelector('.right-rail-shell')?.classList.contains('is-collapsed')).toBe(true);
+    expect(host.querySelector('.word-preview-resizer')).toBeNull();
+
+    act(() => root.render(<AppLayoutChrome {...props} rightPanelCollapsed={false} />));
+
+    expect(host.querySelector('[data-testid="right-panel-content"]')).toBe(contentBefore);
+    expect(host.querySelector('.right-rail-shell')?.classList.contains('is-collapsed')).toBe(false);
   });
 });
