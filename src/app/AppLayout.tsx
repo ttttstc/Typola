@@ -350,6 +350,8 @@ export function AppLayout() {
   const {
     rightPanelMode,
     setRightPanelMode,
+    rightPanelCollapsed,
+    toggleRightPanelCollapsed,
     rightPanelWidth,
     setRightPanelWidth,
     resizing,
@@ -2294,11 +2296,11 @@ export function AppLayout() {
   const mainContentClassName = [
     'main-content',
     isDocx ? 'docx-layout' : 'writing-layout',
-    rightPanelMode !== 'none' && !isDocx ? 'right-panel-open' : '',
-    rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
-    rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
-    rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
-    rightPanelMode === 'review' && !isDocx ? 'review-panel-open' : '',
+    rightPanelMode !== 'none' && !rightPanelCollapsed && !isDocx ? 'right-panel-open' : '',
+    rightPanelMode === 'word' && !rightPanelCollapsed && !isDocx ? 'word-preview-open' : '',
+    rightPanelMode === 'wechat' && !rightPanelCollapsed && !isDocx ? 'wechat-preview-open' : '',
+    rightPanelMode === 'flow' && !rightPanelCollapsed && !isDocx ? 'flow-panel-open' : '',
+    rightPanelMode === 'review' && !rightPanelCollapsed && !isDocx ? 'review-panel-open' : '',
     leftRailMode !== 'none' ? 'left-panel-open' : '',
     leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
@@ -2489,6 +2491,8 @@ export function AppLayout() {
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
           artifactsVisible: rightPanelMode === 'artifacts',
+          rightPanelAvailable: rightPanelMode !== 'none' && !isDocx,
+          rightPanelCollapsed,
           terminalVisible,
           editingDisabled: isDocx,
           docMode,
@@ -2498,6 +2502,7 @@ export function AppLayout() {
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
+          onToggleRightPanel: toggleRightPanelCollapsed,
           onToggleTerminal: handleToggleTerminal,
           onOpenToc: () => setTocOpenRequest((tick) => tick + 1),
           onSetDocMode: (next) => void setDocMode(next),
@@ -2602,6 +2607,7 @@ export function AppLayout() {
         editorPane={editorPane}
         docxPane={docxPane}
         rightPanelMode={rightPanelMode}
+        rightPanelCollapsed={rightPanelCollapsed}
         resizing={resizing}
         rightPanelResizeLabel={t('rightPanelResizeLabel')}
         rightPanelResizeTitle={t('rightPanelResizeTitle')}

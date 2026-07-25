@@ -29,8 +29,6 @@ vi.mock('../ui/Tooltip', () => ({
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
 // jsdom 的 getBoundingClientRect 返回全 0;组件对 bar 尺寸有 ESTIMATED 兜底,
 // 渲染只 gate 在 visible && rect 上,所以这些测试能验证"是否出现"。
 function mkRect(): { selRect: DOMRect } {
@@ -84,8 +82,8 @@ describe('SelectionFloatingBar', () => {
     // debounce 后必须出现 —— 这条正是抓"position 死锁导致永不渲染"的回归测试
     const bar = host.querySelector('.selection-floating-bar');
     expect(bar).not.toBeNull();
-    // 默认只显示 3 个高频动作；未传隐藏回调时不显示无效按钮。
-    expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
+    // 默认只显示 4 个高频动作；未传隐藏回调时不显示无效按钮。
+    expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(4);
   });
 
   it('回归:浮条和按钮宽度按内容收缩,不被主题按钮规则撑满', () => {
@@ -123,7 +121,7 @@ describe('SelectionFloatingBar', () => {
     expect(onPick.mock.calls[0][1]).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
   });
 
-  it('传隐藏回调时显示两个独立按钮并触发对应回调', () => {
+  it('低频与隐藏动作收进更多菜单且仍可触发', () => {
     const onPick = vi.fn();
     const onDismissSession = vi.fn();
     const onHideGlobally = vi.fn();
@@ -141,21 +139,47 @@ describe('SelectionFloatingBar', () => {
     });
     act(() => { vi.advanceTimersByTime(200); });
     const items = host.querySelectorAll('.selection-floating-bar-item');
-    expect(items).toHaveLength(5);
-    act(() => { (items[2] as HTMLButtonElement).click(); });
-    expect(onPick.mock.calls[0][0]).toBe('review');
+    expect(items).toHaveLength(4);
     act(() => { (items[3] as HTMLButtonElement).click(); });
-    act(() => { (items[4] as HTMLButtonElement).click(); });
+    expect(onPick.mock.calls[0][0]).toBe('review');
+    const more = host.querySelector<HTMLButtonElement>('.control-menu-root > button');
+    act(() => { more?.click(); });
+    let menuItems = document.querySelectorAll<HTMLButtonElement>('.control-menu [role^="menuitem"]');
+    expect(Array.from(menuItems, (item) => item.textContent)).toEqual(
+      expect.arrayContaining(['缩写', '扩写', '自定义', '本文档隐藏', '全局隐藏']),
+    );
+    act(() => {
+      Array.from(menuItems).find((item) => item.textContent === '缩写')?.click();
+    });
+    expect(onPick.mock.calls.at(-1)?.[0]).toBe('shorten');
+
+    act(() => { more?.click(); });
+    menuItems = document.querySelectorAll<HTMLButtonElement>('.control-menu [role^="menuitem"]');
+    act(() => {
+      Array.from(menuItems).find((item) => item.textContent === '本文档隐藏')?.click();
+    });
+    act(() => { more?.click(); });
+    menuItems = document.querySelectorAll<HTMLButtonElement>('.control-menu [role^="menuitem"]');
+    act(() => {
+      Array.from(menuItems).find((item) => item.textContent === '全局隐藏')?.click();
+    });
     expect(onDismissSession).toHaveBeenCalledOnce();
     expect(onHideGlobally).toHaveBeenCalledOnce();
   });
 
-  it('未传隐藏回调时不渲染隐藏按钮', () => {
+  it('未传隐藏回调时仍保留低频动作但不渲染隐藏按钮', () => {
     act(() => {
       root.render(<SelectionFloatingBar rect={mkRect()} hasSelection stableTick={1} onPick={() => {}} />);
     });
     act(() => { vi.advanceTimersByTime(200); });
-    expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(3);
+    expect(host.querySelectorAll('.selection-floating-bar-item')).toHaveLength(4);
+    const more = host.querySelector<HTMLButtonElement>('.control-menu-root > button');
+    act(() => { more?.click(); });
+    const labels = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.control-menu [role^="menuitem"]'),
+      (item) => item.textContent,
+    );
+    expect(labels).toEqual(['缩写', '扩写', '自定义']);
   });
 
   it('选区消失(rect 变 null)→ 浮条立即隐藏', () => {

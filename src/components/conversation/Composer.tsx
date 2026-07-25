@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { Send, Square } from 'lucide-react';
 import type { AgentProvider } from '../../services/agent/provider';
 import { getAgentProviderConfig } from '../../services/agent/provider';
+import { formatShortcut } from '../../services/shortcuts';
 import { AgentProviderPicker } from './AgentProviderPicker';
 import { ComposerContextChips } from './ComposerContextChips';
 import { ComposerPlusMenu } from './ComposerPlusMenu';
@@ -69,6 +70,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [stopped, setStopped] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const providerLabel = getAgentProviderConfig(activeProvider).label;
+  const sendShortcut = formatShortcut('Mod+Enter');
   const {
     attachedFiles,
     currentFileDismissed,
@@ -221,19 +223,31 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 : `${providerLabel} · 默认模型`}
           </span>
         </div>
-        {running ? (
-          <button type="button" onClick={handleCancel} title="停止">
-            <Square size={14} /> 停止
-          </button>
-        ) : stopped ? (
-          <button type="button" onClick={handleSubmit} disabled={disabled || !value.trim()} title="发送 Ctrl+Enter" className="composer-stopped-btn">
-            <Send size={14} /> 已停止 · 发送
-          </button>
-        ) : (
-          <button type="button" onClick={handleSubmit} disabled={disabled || !value.trim()} title="发送 Ctrl+Enter">
-            <Send size={14} /> 发送
-          </button>
-        )}
+        <div className="conversation-composer-primary-actions">
+          {stopped && !running && <span className="conversation-composer-status" role="status">已停止</span>}
+          {running ? (
+            <button
+              type="button"
+              className="composer-submit-button is-running"
+              onClick={handleCancel}
+              title="停止生成"
+              aria-label="停止生成"
+            >
+              <Square size={14} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`composer-submit-button${stopped ? ' composer-stopped-btn' : ''}`}
+              onClick={handleSubmit}
+              disabled={disabled || !value.trim()}
+              title={`发送（${sendShortcut}）`}
+              aria-label={`发送（${sendShortcut}）`}
+            >
+              <Send size={14} />
+            </button>
+          )}
+        </div>
       </div>
       {panel === 'mcp' && (
         <ComposerMcpPanel cwd={cwd} onClose={() => setPanel(null)} />

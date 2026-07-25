@@ -62,8 +62,8 @@ describe('Composer', () => {
       plus?.click();
     });
 
-    const attach = Array.from(host.querySelectorAll<HTMLButtonElement>('.composer-plus-popup button'))
-      .find((button) => button.textContent?.includes('Attach files'));
+    const attach = Array.from(document.querySelectorAll<HTMLButtonElement>('.composer-plus-popup button'))
+      .find((button) => button.textContent?.includes('添加文件'));
     await act(async () => {
       attach?.click();
     });
@@ -280,8 +280,8 @@ describe('Composer', () => {
       plus?.click();
     });
 
-    const attach = Array.from(host.querySelectorAll<HTMLButtonElement>('.composer-plus-popup button'))
-      .find((button) => button.textContent?.includes('Attach files'));
+    const attach = Array.from(document.querySelectorAll<HTMLButtonElement>('.composer-plus-popup button'))
+      .find((button) => button.textContent?.includes('添加文件'));
     await act(async () => {
       attach?.click();
     });
@@ -330,7 +330,7 @@ describe('Composer', () => {
       trigger!.click();
     });
 
-    const picker = host.querySelector<HTMLElement>('.agent-provider-popover');
+    const picker = document.querySelector<HTMLElement>('.agent-provider-popover');
     const openCodeButton = Array.from(picker?.querySelectorAll('button') ?? [])
       .find((button) => button.textContent?.includes('OpenCode'));
     expect(openCodeButton).toBeTruthy();
@@ -361,7 +361,7 @@ describe('Composer', () => {
       host.querySelector<HTMLButtonElement>('.avatar-agent-trigger')?.click();
     });
 
-    const codex = Array.from(host.querySelectorAll<HTMLButtonElement>('.agent-provider-option'))
+    const codex = Array.from(document.querySelectorAll<HTMLButtonElement>('.agent-provider-option'))
       .find((button) => button.textContent?.includes('Codex'));
     expect(codex).toBeTruthy();
     expect(codex?.disabled).toBe(true);

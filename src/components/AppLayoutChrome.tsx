@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { FolderOpen, Sparkles, BookOpenText, Newspaper, X } from 'lucide-react';
+import { FolderOpen, Sparkles, BookOpenText, Newspaper } from 'lucide-react';
 import { Toolbar } from './Toolbar';
 import { FloatingToc } from './FloatingToc';
 import { FileTreePanel } from './FileTreePanel';
@@ -43,6 +43,7 @@ type AppLayoutChromeProps = {
   editorPane: ReactNode;
   docxPane: ReactNode;
   rightPanelMode: RightPanelMode;
+  rightPanelCollapsed: boolean;
   resizing: boolean;
   rightPanelResizeLabel: string;
   rightPanelResizeTitle: string;
@@ -139,6 +140,7 @@ export function AppLayoutChrome({
   editorPane,
   docxPane,
   rightPanelMode,
+  rightPanelCollapsed,
   resizing,
   rightPanelResizeLabel,
   rightPanelResizeTitle,
@@ -302,7 +304,7 @@ export function AppLayoutChrome({
           {isDocx ? docxPane : editorPane}
         </section>
         <AnimatePresence initial={false}>
-          {rightPanelMode !== 'none' && rightPanelMode !== 'review' && !isDocx && (
+          {rightPanelMode !== 'none' && rightPanelMode !== 'review' && !rightPanelCollapsed && !isDocx && (
             <motion.div
               key="right-rail-resizer"
               className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
@@ -326,12 +328,20 @@ export function AppLayoutChrome({
           {rightPanelMode !== 'none' && !isDocx ? (
             <motion.aside
               key={rightPanelMode === 'review' ? 'right-rail-review' : 'right-rail'}
-              className="right-rail-shell"
-              style={rightPanelMode === 'review' ? undefined : { width: rightPanelWidth, overflow: 'hidden' }}
+              className={`right-rail-shell ${rightPanelCollapsed ? 'is-collapsed' : ''}`}
+              style={{ overflow: 'hidden' }}
               initial={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
-              animate={rightPanelMode === 'review' ? { opacity: 1 } : { width: rightPanelWidth, opacity: 1 }}
+              animate={rightPanelMode === 'review'
+                ? rightPanelCollapsed
+                  ? { opacity: 0, width: 0, flexBasis: 0, flexGrow: 0 }
+                  : { opacity: 1, width: '50%', flexBasis: 0, flexGrow: 1 }
+                : rightPanelCollapsed
+                  ? { width: 0, opacity: 0 }
+                  : { width: rightPanelWidth, opacity: 1 }}
               exit={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
-              transition={resizing ? { duration: 0 } : calmTransition}
+              transition={shouldReduceMotion || resizing ? { duration: 0 } : { ...calmTransition, duration: 0.18 }}
+              aria-hidden={rightPanelCollapsed}
+              inert={rightPanelCollapsed ? true : undefined}
             >
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (
               <div ref={rightRailIndicator.containerRef} className="right-rail-tabs" role="tablist" aria-label="右侧预览切换">
@@ -359,15 +369,6 @@ export function AppLayoutChrome({
                 >
                   <Newspaper size={14} />
                   <span>微信</span>
-                </button>
-                <button
-                  type="button"
-                  className="right-rail-tab-close"
-                  onClick={() => onSetRightPanelMode('none')}
-                  aria-label="关闭右侧预览"
-                  title="关闭右侧预览"
-                >
-                  <X size={13} />
                 </button>
               </div>
             )}

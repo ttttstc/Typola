@@ -40,7 +40,8 @@ test('source mode reuses the loaded CM6 editor', async ({ page }) => {
 
 test('Word preview pane loads only after the Word preview button is used', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Word 预览' }).click();
+  await page.getByRole('button', { name: '预览与产物' }).click();
+  await page.getByRole('menuitemcheckbox', { name: /Word 预览/ }).click();
   await expect(page.locator('.word-preview-panel')).toBeVisible();
   await expect(page.locator('.word-rendered-paper')).toBeVisible();
 

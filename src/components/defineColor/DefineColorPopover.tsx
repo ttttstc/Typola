@@ -15,7 +15,7 @@ export function DefineColorPopover({ settings, onPreview, onCommit }: {
         <div className="dc-wheel-layer"><DefineColorWheel settings={settings} onPreview={onPreview} onCommit={onCommit} /></div>
         <DefineColorOptions settings={settings} onCommit={onCommit} />
       </div>
-      <DefineColorPresetStrip onSelect={onCommit} />
+      <DefineColorPresetStrip currentPresetIndex={settings.currentPresetIndex} onSelect={onCommit} />
       <DefineColorPatternSlider settings={settings} onPreview={onPreview} onCommit={onCommit} />
     </div>
   );

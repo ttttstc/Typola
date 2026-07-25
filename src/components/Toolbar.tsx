@@ -1,6 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  ChevronDown,
   Bold,
   Code2,
   FileDown,
@@ -8,44 +7,30 @@ import {
   FileText,
   FolderDown,
   FolderOpen,
-  PackageOpen,
-  Paintbrush,
   ImagePlus,
   Italic,
   Link,
-  List,
-  ListOrdered,
-  ListTodo,
   ListTree,
-  Newspaper,
   PanelLeft,
   Save,
   SaveAll,
   SlidersHorizontal,
   Table2,
   Terminal,
-  Quote,
+  Type,
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import {
-  FloatingPortal,
-  flip,
-  offset,
-  shift,
-  useClick,
-  useDismiss,
-  useFloating,
-  useInteractions,
-  useRole,
-} from '@floating-ui/react';
 import { useSettings } from '../hooks/useSettings';
-import { translate } from '../services/i18n';
-import { handleTitlebarMouseDown } from '../services/titlebarDrag';
-import { DocumentModeSwitcher } from './DocumentModeSwitcher';
-import { Tooltip } from './ui/Tooltip';
 import type { DocMode } from '../hooks/useDocumentMode';
+import { translate } from '../services/i18n';
+import { formatShortcut } from '../services/shortcuts';
+import { handleTitlebarMouseDown } from '../services/titlebarDrag';
 import type { FormatAction } from './EditorContextMenu';
 import { DefineColorToolbarButton } from './defineColor/DefineColorToolbarButton';
+import { DocumentModeSwitcher } from './DocumentModeSwitcher';
+import { ControlMenu, type ControlMenuItem } from './ui/ControlMenu';
+import { IconButton } from './ui/IconButton';
+import { Tooltip } from './ui/Tooltip';
 
 export type EditorMode = 'wysiwyg' | 'source';
 
@@ -55,6 +40,8 @@ type ToolbarProps = {
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
   artifactsVisible?: boolean;
+  rightPanelAvailable: boolean;
+  rightPanelCollapsed: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
   docMode: DocMode;
@@ -64,6 +51,7 @@ type ToolbarProps = {
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleArtifacts?: () => void;
+  onToggleRightPanel: () => void;
   onToggleTerminal: () => void;
   onOpenToc?: () => void;
   onSetDocMode: (next: DocMode) => void;
@@ -81,55 +69,139 @@ type ToolbarProps = {
   onPreloadSettings?: () => void;
 };
 
+type ToolbarTooltip = {
+  label: string;
+  shortcut?: string;
+  reference: HTMLElement;
+};
+
+const ICON_SIZE = 16;
+const ICON_STROKE = 1.6;
+
 export function Toolbar({
-  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
-  terminalVisible, editingDisabled, docMode,
-  onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
-  onToggleTerminal, onOpenToc, onSetDocMode,
-  onNew, onOpen, onOpenFolder, onSave, onSaveAs, onInsertImage, onExportPdf, onExportWord,
-  pdfExporting, wordExporting, onOpenSettings, onPreloadSettings,
+  editorMode,
+  workspacePanelVisible,
+  wordPreviewVisible,
+  wechatPreviewVisible,
+  artifactsVisible,
+  rightPanelAvailable,
+  rightPanelCollapsed,
+  terminalVisible,
+  editingDisabled,
+  docMode,
+  onToggleEditorMode,
+  onFormat,
+  onToggleWorkspacePanel,
+  onToggleWordPreview,
+  onToggleWechatPreview,
+  onToggleArtifacts,
+  onToggleRightPanel,
+  onToggleTerminal,
+  onOpenToc,
+  onSetDocMode,
+  onNew,
+  onOpen,
+  onOpenFolder,
+  onSave,
+  onSaveAs,
+  onInsertImage,
+  onExportPdf,
+  onExportWord,
+  pdfExporting,
+  wordExporting,
+  onOpenSettings,
+  onPreloadSettings,
 }: ToolbarProps) {
   const settings = useSettings();
-  const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
-  const iconSize = 18;
-  const strokeWidth = 1.6;
+  const t = useCallback(
+    (key: Parameters<typeof translate>[1]) => translate(settings.locale, key),
+    [settings.locale],
+  );
   const workspacePanelTooltip = workspacePanelVisible ? t('toolbarCollapseFileTree') : t('toolbarOpenFileTree');
-  const [toolbarTooltip, setToolbarTooltip] = useState<{ label: string; reference: HTMLElement } | null>(null);
+  const [toolbarTooltip, setToolbarTooltip] = useState<ToolbarTooltip | null>(null);
+
   const handleToolbarTooltipOver = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('button[data-tooltip]');
     if (!button || !event.currentTarget.contains(button)) return;
     const label = button.dataset.tooltip;
     if (!label) return;
-    setToolbarTooltip({ label, reference: button });
+    setToolbarTooltip({
+      label,
+      shortcut: button.dataset.tooltipShortcut,
+      reference: button,
+    });
   }, []);
   const handleToolbarTooltipFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
     const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('button[data-tooltip]');
     const label = button?.dataset.tooltip;
     if (!button || !label) return;
-    setToolbarTooltip({ label, reference: button });
+    setToolbarTooltip({
+      label,
+      shortcut: button.dataset.tooltipShortcut,
+      reference: button,
+    });
   }, []);
   const clearToolbarTooltip = useCallback(() => setToolbarTooltip(null), []);
 
-  // 导出下拉菜单(用 @floating-ui/react 挂到 body 规避 motion 引入后的 stacking trap)
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exporting = pdfExporting || wordExporting;
-  const exportFloating = useFloating({
-    open: exportMenuOpen,
-    onOpenChange: setExportMenuOpen,
-    placement: 'bottom-end',
-    middleware: [offset(4), flip({ padding: 8 }), shift({ padding: 8 })],
-  });
-  const exportClick = useClick(exportFloating.context);
-  const exportDismiss = useDismiss(exportFloating.context);
-  const exportRole = useRole(exportFloating.context, { role: 'menu' });
-  const { getReferenceProps: getExportReferenceProps, getFloatingProps: getExportFloatingProps } = useInteractions([
-    exportClick,
-    exportDismiss,
-    exportRole,
+  const formatItems = useMemo<ControlMenuItem[]>(() => {
+    if (!onFormat) return [];
+    return [
+      { id: 'bold', label: t('toolbarBoldLabel'), shortcut: formatShortcut('Mod+B'), onSelect: () => onFormat({ type: 'bold' }) },
+      { id: 'italic', label: t('toolbarItalicLabel'), shortcut: formatShortcut('Mod+I'), onSelect: () => onFormat({ type: 'italic' }) },
+      { id: 'link', label: t('toolbarLinkLabel'), shortcut: formatShortcut('Mod+K'), onSelect: () => onFormat({ type: 'link' }) },
+      { id: 'quote', label: t('toolbarQuoteLabel'), onSelect: () => onFormat({ type: 'quote' }) },
+      { id: 'ul', label: t('toolbarUnorderedListLabel'), onSelect: () => onFormat({ type: 'ul' }) },
+      { id: 'ol', label: t('toolbarOrderedListLabel'), onSelect: () => onFormat({ type: 'ol' }) },
+      { id: 'task', label: t('toolbarTaskListLabel'), onSelect: () => onFormat({ type: 'task' }) },
+      { id: 'painter', label: t('toolbarFormatPainterLabel'), onSelect: () => onFormat({ type: 'format-painter' }) },
+    ];
+  }, [onFormat, t]);
+  const secondaryFormatItems = formatItems.slice(3);
+  const previewItems = useMemo<ControlMenuItem[]>(() => [
+    {
+      id: 'word',
+      label: t('toolbarWordPreviewLabel'),
+      shortcut: formatShortcut('Mod+Alt+P'),
+      active: wordPreviewVisible,
+      onSelect: onToggleWordPreview,
+    },
+    {
+      id: 'html',
+      label: t('toolbarWechatPreviewLabel'),
+      shortcut: formatShortcut('Mod+Alt+M'),
+      active: wechatPreviewVisible,
+      onSelect: onToggleWechatPreview,
+    },
+    ...(onToggleArtifacts ? [{
+      id: 'artifacts',
+      label: t('toolbarArtifactsLabel'),
+      active: Boolean(artifactsVisible),
+      onSelect: onToggleArtifacts,
+    }] : []),
+  ], [
+    artifactsVisible,
+    onToggleArtifacts,
+    onToggleWechatPreview,
+    onToggleWordPreview,
+    t,
+    wechatPreviewVisible,
+    wordPreviewVisible,
   ]);
-  const setExportButtonRef = useCallback((node: HTMLButtonElement | null) => {
-    exportFloating.refs.setReference(node);
-  }, [exportFloating.refs.setReference]);
+  const exportItems = useMemo<ControlMenuItem[]>(() => [
+    ...(onExportPdf ? [{
+      id: 'pdf',
+      label: t('toolbarExportPdfLabel'),
+      disabled: editingDisabled || Boolean(exporting),
+      onSelect: onExportPdf,
+    }] : []),
+    ...(onExportWord ? [{
+      id: 'word',
+      label: t('toolbarExportWordLabel'),
+      disabled: editingDisabled || Boolean(exporting),
+      onSelect: onExportWord,
+    }] : []),
+  ], [editingDisabled, exporting, onExportPdf, onExportWord, t]);
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!('__TAURI_INTERNALS__' in window)) return;
@@ -140,219 +212,222 @@ export function Toolbar({
   return (
     <div
       className="app-toolbar"
+      role="toolbar"
+      aria-label={t('toolbarAriaLabel')}
       data-window-drag-fallback="manual"
       onMouseDownCapture={handleMouseDown}
       onPointerOverCapture={handleToolbarTooltipOver}
+      onPointerDownCapture={clearToolbarTooltip}
       onPointerLeave={clearToolbarTooltip}
       onFocusCapture={handleToolbarTooltipFocus}
       onBlurCapture={clearToolbarTooltip}
     >
       <div className="toolbar-left">
-        <div className="toolbar-group toolbar-nav-actions" aria-label="导航">
-          <button
-            data-no-window-drag="true"
+        <div className="toolbar-group toolbar-nav-actions" role="group" aria-label={t('toolbarWorkspaceGroup')}>
+          <IconButton
+            label={workspacePanelTooltip}
+            icon={<PanelLeft size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            pressed={workspacePanelVisible}
             className={workspacePanelVisible ? 'active' : ''}
             onClick={onToggleWorkspacePanel}
-            data-tooltip={workspacePanelTooltip}
-            aria-label={workspacePanelTooltip}
-          >
-            <PanelLeft size={iconSize} strokeWidth={strokeWidth} />
-          </button>
+            data-no-window-drag="true"
+          />
           <DefineColorToolbarButton settings={settings} />
           {onOpenToc && (
-            <button data-no-window-drag="true" onClick={onOpenToc} title={t('openTocHint')} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
-              <ListTree size={iconSize} strokeWidth={strokeWidth} />
-            </button>
+            <IconButton
+              label={t('openTocHint')}
+              icon={<ListTree size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+              onClick={onOpenToc}
+              data-no-window-drag="true"
+            />
           )}
         </div>
-        <div className="toolbar-group toolbar-file-actions" aria-label={t('toolbarFileGroup')}>
-          <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewLabel')} aria-label={t('toolbarNewLabel')}>
-            <FilePlus size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button data-no-window-drag="true" onClick={onOpen} title={t('toolbarOpenTitle')} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
-            <FolderDown size={iconSize} strokeWidth={strokeWidth} />
-          </button>
+
+        <div className="toolbar-group toolbar-file-actions" role="group" aria-label={t('toolbarFileGroup')}>
+          <IconButton
+            label={t('toolbarNewLabel')}
+            shortcut={formatShortcut('Mod+N')}
+            icon={<FilePlus size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            onClick={onNew}
+            data-no-window-drag="true"
+          />
+          <IconButton
+            label={t('toolbarOpenLabel')}
+            shortcut={formatShortcut('Mod+O')}
+            icon={<FolderDown size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            onClick={onOpen}
+            data-no-window-drag="true"
+          />
           {onOpenFolder && (
-            <button data-no-window-drag="true" onClick={onOpenFolder} data-tooltip={t('toolbarOpenFolderTitle')} aria-label={t('toolbarOpenFolderLabel')}>
-              <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
-            </button>
-          )}
-          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} title={t('toolbarSaveTitle')} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
-            <Save size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} title={t('toolbarSaveAsTitle')} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
-            <SaveAll size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          {onFormat && (
-            <button
+            <IconButton
+              label={t('toolbarOpenFolderLabel')}
+              shortcut={formatShortcut('Mod+Shift+O')}
+              icon={<FolderOpen size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+              onClick={onOpenFolder}
               data-no-window-drag="true"
+            />
+          )}
+          <IconButton
+            label={t('toolbarSaveLabel')}
+            shortcut={formatShortcut('Mod+S')}
+            icon={<Save size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            onClick={onSave}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+          />
+          <IconButton
+            label={t('toolbarSaveAsLabel')}
+            shortcut={formatShortcut('Mod+Shift+S')}
+            icon={<SaveAll size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            onClick={onSaveAs}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+          />
+          {onFormat && (
+            <IconButton
+              label={t('toolbarInsertTableLabel')}
+              icon={<Table2 size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
               onClick={() => onFormat({ type: 'table-insert', rows: 2, cols: 3 })}
               disabled={editingDisabled}
-              data-tooltip={t('toolbarInsertTableLabel')}
-              aria-label={t('toolbarInsertTableLabel')}
-            >
-              <Table2 size={iconSize} strokeWidth={strokeWidth} />
-            </button>
+              data-no-window-drag="true"
+            />
           )}
           {onInsertImage && (
-            <button
-              data-no-window-drag="true"
+            <IconButton
+              label={t('toolbarInsertImageLabel')}
+              icon={<ImagePlus size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
               onClick={onInsertImage}
               disabled={editingDisabled}
-              data-tooltip={t('toolbarInsertImageLabel')}
-              aria-label={t('toolbarInsertImageLabel')}
-            >
-              <ImagePlus size={iconSize} strokeWidth={strokeWidth} />
-            </button>
+              data-no-window-drag="true"
+            />
           )}
-          {onExportPdf && (
-            <div className="toolbar-export-dropdown">
-              <button
-                ref={setExportButtonRef}
-                data-no-window-drag="true"
-                disabled={editingDisabled || exporting}
-                aria-label={t('toolbarExportLabel')}
-                data-tooltip={t('toolbarExportLabel')}
-                aria-expanded={exportMenuOpen}
-                aria-haspopup="true"
-                {...getExportReferenceProps()}
-              >
-                <FileDown size={iconSize} strokeWidth={strokeWidth} />
-                <ChevronDown size={10} strokeWidth={strokeWidth} className="export-chevron" />
-              </button>
-              {exportMenuOpen && (
-                <FloatingPortal>
-                  <div
-                    ref={exportFloating.refs.setFloating}
-                    style={{ ...exportFloating.floatingStyles, zIndex: 9999 }}
-                    className="export-menu"
-                    role="menu"
-                    aria-label={t('toolbarExportMenuLabel')}
-                    {...getExportFloatingProps()}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-no-window-drag="true"
-                      onClick={() => { setExportMenuOpen(false); onExportPdf(); }}
-                      disabled={editingDisabled}
-                    >
-                      {t('toolbarExportPdfLabel')}
-                    </button>
-                    {onExportWord && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        data-no-window-drag="true"
-                        onClick={() => { setExportMenuOpen(false); onExportWord(); }}
-                        disabled={editingDisabled}
-                      >
-                        {t('toolbarExportWordLabel')}
-                      </button>
-                    )}
-                  </div>
-                </FloatingPortal>
-              )}
-            </div>
+          {exportItems.length > 0 && (
+            <ControlMenu
+              label={t('toolbarExportLabel')}
+              icon={<FileDown size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+              items={exportItems}
+              disabled={editingDisabled || Boolean(exporting)}
+            />
           )}
         </div>
+
         {onFormat && (
-          <div className="toolbar-group toolbar-format-actions" aria-label="Markdown 格式">
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip="加粗 (Ctrl+B)" aria-label="加粗"><Bold size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip="斜体 (Ctrl+I)" aria-label="斜体"><Italic size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip="链接" aria-label="链接"><Link size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip="引用块" aria-label="引用块"><Quote size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip="无序列表" aria-label="无序列表"><List size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip="有序列表" aria-label="有序列表"><ListOrdered size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip="任务列表" aria-label="任务列表"><ListTodo size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'format-painter' })} data-tooltip="格式刷" aria-label="格式刷"><Paintbrush size={iconSize} strokeWidth={strokeWidth} /></button>
-          </div>
+          <>
+            <div className="toolbar-group toolbar-format-actions toolbar-format-actions-wide" role="group" aria-label={t('toolbarFormatGroup')}>
+              <IconButton
+                label={t('toolbarBoldLabel')}
+                shortcut={formatShortcut('Mod+B')}
+                icon={<Bold size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+                onClick={() => onFormat({ type: 'bold' })}
+                disabled={editingDisabled}
+                data-no-window-drag="true"
+              />
+              <IconButton
+                label={t('toolbarItalicLabel')}
+                shortcut={formatShortcut('Mod+I')}
+                icon={<Italic size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+                onClick={() => onFormat({ type: 'italic' })}
+                disabled={editingDisabled}
+                data-no-window-drag="true"
+              />
+              <IconButton
+                label={t('toolbarLinkLabel')}
+                shortcut={formatShortcut('Mod+K')}
+                icon={<Link size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+                onClick={() => onFormat({ type: 'link' })}
+                disabled={editingDisabled}
+                data-no-window-drag="true"
+              />
+              <ControlMenu
+                label={t('toolbarFormatMoreLabel')}
+                icon={<Type size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+                items={secondaryFormatItems}
+                disabled={editingDisabled}
+              />
+            </div>
+            <div className="toolbar-group toolbar-format-actions toolbar-format-actions-compact" role="group" aria-label={t('toolbarFormatGroup')}>
+              <ControlMenu
+                label={t('toolbarFormatMenuLabel')}
+                icon={<Type size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+                items={formatItems}
+                disabled={editingDisabled}
+              />
+            </div>
+          </>
         )}
       </div>
+
       <div className="toolbar-title" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
+
       <div className="toolbar-right">
-        <div className="toolbar-group toolbar-view-actions" aria-label={t('toolbarViewGroup')}>
-          <button
+        <div className="toolbar-group toolbar-view-actions" role="group" aria-label={t('toolbarViewGroup')}>
+          <IconButton
+            label={t('toolbarSourceLabel')}
+            shortcut={formatShortcut('Mod+Alt+S')}
+            icon={<Code2 size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            pressed={editorMode === 'source'}
             className={editorMode === 'source' ? 'active' : ''}
-            title={t('toolbarSourceTitle')}
             onClick={onToggleEditorMode}
             disabled={editingDisabled}
             data-no-window-drag="true"
-            data-tooltip={t('toolbarSourceLabel')}
-            aria-label={t('toolbarSourceLabel')}
-          >
-            <Code2 size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button
-            className={wordPreviewVisible ? 'active' : ''}
-            title={t('toolbarWordPreviewTitle')}
-            onClick={onToggleWordPreview}
+          />
+          <ControlMenu
+            label={t('toolbarPreviewMenuLabel')}
+            icon={<FileText size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            items={previewItems}
+            active={Boolean(wordPreviewVisible || wechatPreviewVisible || artifactsVisible)}
             disabled={editingDisabled}
-            data-no-window-drag="true"
-            data-tooltip={t('toolbarWordPreviewLabel')}
-            aria-label={t('toolbarWordPreviewLabel')}
-          >
-            <FileText size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button
-            className={wechatPreviewVisible ? 'active' : ''}
-            title={t('toolbarWechatPreviewTitle')}
-            onClick={onToggleWechatPreview}
-            disabled={editingDisabled}
-            data-no-window-drag="true"
-            data-tooltip={t('toolbarWechatPreviewLabel')}
-            aria-label={t('toolbarWechatPreviewLabel')}
-          >
-            {/* lucide 无 wechat 品牌图标,沿用 Newspaper(评审已确认) */}
-            <Newspaper size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          {onToggleArtifacts && (
-            <button
-              className={artifactsVisible ? 'active' : ''}
-              onClick={onToggleArtifacts}
-              disabled={editingDisabled}
-              data-no-window-drag="true"
-              data-tooltip={t('toolbarArtifactsLabel')}
-              aria-label={t('toolbarArtifactsLabel')}
-            >
-              <PackageOpen size={iconSize} strokeWidth={strokeWidth} />
-            </button>
-          )}
-          <button
+            placement="bottom-end"
+          />
+          <IconButton
+            label={t('toolbarTerminalLabel')}
+            shortcut={formatShortcut('Mod+`')}
+            icon={<Terminal size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            pressed={terminalVisible}
             className={terminalVisible ? 'active' : ''}
             onClick={onToggleTerminal}
             data-no-window-drag="true"
-            data-tooltip={t('toolbarTerminalLabel')}
-            aria-label={t('toolbarTerminalLabel')}
-          >
-            <Terminal size={iconSize} strokeWidth={strokeWidth} />
-          </button>
+          />
         </div>
-        <div className="toolbar-group toolbar-navigation-actions" aria-label={t('toolbarNavGroup')}>
-          <button
-            data-no-window-drag="true"
+
+        <div className="toolbar-group toolbar-navigation-actions" role="group" aria-label={t('toolbarNavGroup')}>
+          <IconButton
+            label={t('toolbarSettingsLabel')}
+            shortcut={formatShortcut('Mod+,')}
+            icon={<SlidersHorizontal size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
             className="toolbar-settings-btn"
-            title={t('toolbarSettingsTitle')}
             onPointerEnter={onPreloadSettings}
             onFocus={onPreloadSettings}
             onClick={onOpenSettings}
-            data-tooltip={t('toolbarSettingsLabel')}
-            aria-label={t('toolbarSettingsLabel')}
-          >
-            <SlidersHorizontal size={iconSize} strokeWidth={strokeWidth} />
-          </button>
+            data-no-window-drag="true"
+          />
         </div>
-        <div className="toolbar-group toolbar-mode-group" aria-label="文档模式">
+
+        <div className="toolbar-group toolbar-mode-group" role="group" aria-label={t('toolbarModeGroup')}>
           <DocumentModeSwitcher
             mode={docMode}
             onChange={onSetDocMode}
             disabled={editingDisabled}
           />
         </div>
+
+        <div className="toolbar-group toolbar-right-panel-actions" role="group" aria-label={t('toolbarRightPanelGroup')}>
+          <IconButton
+            label={rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel')}
+            icon={<PanelLeft className="toolbar-panel-right-icon" size={ICON_SIZE} strokeWidth={ICON_STROKE} />}
+            pressed={rightPanelAvailable && !rightPanelCollapsed}
+            className={rightPanelAvailable && !rightPanelCollapsed ? 'active' : ''}
+            onClick={onToggleRightPanel}
+            disabled={!rightPanelAvailable}
+            data-no-window-drag="true"
+          />
+        </div>
       </div>
+
       <Tooltip
         label={toolbarTooltip?.label ?? ''}
+        shortcut={toolbarTooltip?.shortcut}
         reference={toolbarTooltip?.reference ?? null}
         placement="bottom"
         open={toolbarTooltip !== null}
@@ -360,4 +435,3 @@ export function Toolbar({
     </div>
   );
 }
-

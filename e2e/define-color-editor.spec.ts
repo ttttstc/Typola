@@ -66,6 +66,7 @@ test.describe('Define color editor', () => {
 
   test('selecting a static theme exits Define mode without deleting Define settings', async ({ page }) => {
     await page.getByRole('button', { name: '编辑主题颜色' }).click();
+    await page.getByRole('button', { name: '全部 50' }).click();
     await page.getByTestId('define-preset-8').click();
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('typola-settings') || '{}').defineColorSettings);
     await page.keyboard.press('Escape');

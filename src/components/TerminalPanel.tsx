@@ -17,6 +17,7 @@ import {
   type TerminalCreateResult,
 } from '../services/terminalService';
 import { waitForPtyReady } from '../services/ptyReady';
+import { friendlyTerminalError } from '../services/terminalError';
 import { resolveTerminalTheme } from '../services/themeRegistry';
 
 export type TerminalPanelHandle = {
@@ -461,12 +462,18 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           {tabs.map((tab) => (
             <div
               key={tab.localId}
-              role="tab"
               className={`terminal-tab ${tab.localId === activeLocalId ? 'active' : ''} ${tab.status} ${tab.isAgent ? 'agent' : ''}`}
               title={tab.cwd ?? tab.error ?? tab.title}
             >
-              <button type="button" className="terminal-tab-main" onClick={() => setActiveLocalId(tab.localId)}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab.localId === activeLocalId}
+                className="terminal-tab-main"
+                onClick={() => setActiveLocalId(tab.localId)}
+              >
                 <span>{tab.title}</span>
+                <span className="sr-only">，状态：{tab.status}</span>
               </button>
               <button
                 type="button"
@@ -483,22 +490,22 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           ))}
         </div>
         <div className="terminal-actions">
-          <button type="button" onClick={() => openNewTab()} title="新建终端">
+          <button type="button" onClick={() => openNewTab()} title="新建终端" aria-label="新建终端">
             <Plus size={15} />
           </button>
-          <button type="button" onClick={handleCopy} title="复制选中内容" disabled={!activeTab}>
+          <button type="button" onClick={handleCopy} title="复制选中内容" aria-label="复制选中内容" disabled={!activeTab}>
             <Copy size={15} />
           </button>
-          <button type="button" onClick={handlePaste} title="粘贴" disabled={!activeTab}>
+          <button type="button" onClick={handlePaste} title="粘贴" aria-label="粘贴到终端" disabled={!activeTab}>
             <Clipboard size={15} />
           </button>
-          <button type="button" onClick={handleSelectAll} title="全选" disabled={!activeTab}>
+          <button type="button" onClick={handleSelectAll} title="全选" aria-label="全选终端内容" disabled={!activeTab}>
             <Maximize2 size={15} />
           </button>
-          <button type="button" onClick={handleClear} title="清屏" disabled={!activeTab}>
+          <button type="button" onClick={handleClear} title="清屏" aria-label="清空终端显示" disabled={!activeTab}>
             <Eraser size={15} />
           </button>
-          <button type="button" onClick={onHide} title="隐藏终端">
+          <button type="button" onClick={onHide} title="隐藏终端" aria-label="隐藏终端">
             <Square size={14} />
           </button>
         </div>
@@ -507,6 +514,28 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
         {tabs.length === 0 && (
           <div className="terminal-empty">
             <button type="button" onClick={() => openNewTab()}>打开终端</button>
+          </div>
+        )}
+        {activeTab?.status === 'error' && (
+          <div className="terminal-error-state" role="alert">
+            <strong>无法启动终端</strong>
+            <p>{friendlyTerminalError(activeTab.error)}</p>
+            <div className="terminal-error-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  const failed = activeTab;
+                  closeTab(failed.localId);
+                  void openNewTab({ cwd: failed.cwd, title: failed.title, isAgent: failed.isAgent });
+                }}
+              >
+                重试
+              </button>
+              <details>
+                <summary>查看诊断</summary>
+                <code>{activeTab.error || '未提供原始错误信息'}</code>
+              </details>
+            </div>
           </div>
         )}
         {tabs.map((tab) => (

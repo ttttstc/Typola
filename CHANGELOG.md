@@ -65,6 +65,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- 统一桌面控件系统：工具栏、菜单、Tooltip、设置、AI 工作台、颜色编辑器、选区浮条、快速打开与终端采用同一套无衬线字体、尺寸、间距、圆角、层级、焦点和 Reduced Motion 规则。
+- 重组顶部工具栏层级：新建、打开、打开文件夹、保存、另存、表格、图片和导出继续常驻；低频格式与多种预览收进语义菜单，1024px 窗口自动切换为紧凑格式入口且不出现裁切或横向滚动。
+- 新增与左栏同源镜像的右栏收起按钮；收起仅改变宽度、可见性和交互可达性，保留当前预览模式、挂载内容和用户状态，再展开原样恢复。
+- 设置导航按“写作 / 呈现 / 工具”分组；AI Provider 改为扁平可展开列表；Define Color 首屏展示 8 个精选预设并保留“全部 50”；选区低频操作、预览与 Provider 选择统一为可键盘操作菜单。
 - 完成 #183 / #184：CM6 数学与 Mermaid 块预览改为带 source-hash / theme 缓存的原生 widget，光标进入块即回到 Markdown 源码；渲染仅在块被 CM6 物化到可视区域时发生，异步错误以卡片展示且不改写 source。HTML、PDF、Word 纸张预览与微信预览的 Markdown→HTML 基座改为 remark/rehype，支持 GFM、代码高亮、KaTeX、Mermaid、本地图片解析与 HTML sanitize，不再依赖 Vditor preview renderer；Word `.docx` 由内置 `docx` 生成器直接打包，不依赖外部转换器。
 - PDF 导出改为与 Word 一致的保存对话框：默认 Downloads 路径和 `.pdf` 文件名，用户可选择目标文件夹或取消导出。
 - 写作模块主入口固定为 CM6：移除 `typola.editorEngine` 的 Vditor 编辑器切换分支，写作 / 源码模式统一经 `Cm6MarkdownEditorPane` 和 `TypolaEditorKernel`；Vditor 仅保留既有兼容预览链路，统一导出走 remark/rehype。

@@ -13,6 +13,8 @@ type UseRightPanelOptions = {
 type UseRightPanelResult = {
   rightPanelMode: RightPanelMode;
   setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>>;
+  rightPanelCollapsed: boolean;
+  toggleRightPanelCollapsed: () => void;
   rightPanelWidth: number;
   setRightPanelWidth: Dispatch<SetStateAction<number>>;
   resizing: boolean;
@@ -28,7 +30,10 @@ export function useRightPanel({
   maxWidth,
   getDefaultRightPanelWidth,
 }: UseRightPanelOptions): UseRightPanelResult {
-  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
+  const [{ mode: rightPanelMode, collapsed: rightPanelCollapsed }, setPanelState] = useState({
+    mode: 'none' as RightPanelMode,
+    collapsed: false,
+  });
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [resizing, setResizing] = useState(false);
 
@@ -43,6 +48,21 @@ export function useRightPanel({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [getDefaultRightPanelWidth, rightPanelMode]);
+
+  const setRightPanelMode = useCallback<Dispatch<SetStateAction<RightPanelMode>>>((action) => {
+    setPanelState((current) => {
+      const mode = typeof action === 'function' ? action(current.mode) : action;
+      return {
+        mode,
+        collapsed: mode === 'none' ? false : current.collapsed,
+      };
+    });
+  }, []);
+
+  const toggleRightPanelCollapsed = useCallback(() => {
+    if (rightPanelMode === 'none') return;
+    setPanelState((current) => ({ ...current, collapsed: !current.collapsed }));
+  }, [rightPanelMode]);
 
   const handleRightPanelResizerPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const container = containerRef.current;
@@ -98,6 +118,8 @@ export function useRightPanel({
   return {
     rightPanelMode,
     setRightPanelMode,
+    rightPanelCollapsed,
+    toggleRightPanelCollapsed,
     rightPanelWidth,
     setRightPanelWidth,
     resizing,
