@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { filterRecentFiles, type RecentFile } from '../services/recentFilesService';
 
 type QuickOpenPanelProps = {
@@ -12,6 +12,16 @@ export function QuickOpenPanel({ visible, files, onClose, onOpen }: QuickOpenPan
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => filterRecentFiles(files, query), [files, query]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // 键盘移动 active 项时保持在可视区内
+  useEffect(() => {
+    const listNode = listRef.current;
+    if (!listNode) return;
+    const effectiveIndex = Math.min(activeIndex, Math.max(0, filtered.length - 1));
+    const activeNode = listNode.querySelector<HTMLButtonElement>(`[data-index="${effectiveIndex}"]`);
+    activeNode?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, filtered]);
 
   if (!visible) return null;
 
@@ -30,9 +40,32 @@ export function QuickOpenPanel({ visible, files, onClose, onOpen }: QuickOpenPan
     setActiveIndex((index) => Math.min(filtered.length - 1, Math.max(0, index + direction)));
   };
 
+  // keydown 统一挂在面板容器：焦点移到列表项后 Esc/方向键仍然可用
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      submit();
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveActive(1);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveActive(-1);
+    }
+  };
+
   return (
     <div className="quick-open-overlay" role="dialog" aria-label="快速打开最近文件" onMouseDown={onClose}>
-      <div className="quick-open-panel" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="quick-open-panel" onMouseDown={(event) => event.stopPropagation()} onKeyDown={handleKeyDown}>
         <input
           autoFocus
           className="quick-open-input"
@@ -41,33 +74,16 @@ export function QuickOpenPanel({ visible, files, onClose, onOpen }: QuickOpenPan
             setQuery(event.target.value);
             setActiveIndex(0);
           }}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              onClose();
-            }
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              submit();
-            }
-            if (event.key === 'ArrowDown') {
-              event.preventDefault();
-              moveActive(1);
-            }
-            if (event.key === 'ArrowUp') {
-              event.preventDefault();
-              moveActive(-1);
-            }
-          }}
           placeholder="输入文件名或路径"
         />
-        <div className="quick-open-list">
+        <div className="quick-open-list" ref={listRef}>
           {filtered.length === 0 ? (
-            <div className="quick-open-empty">没有最近文件</div>
+            <div className="quick-open-empty">{query.trim() ? '没有匹配的文件' : '没有最近文件'}</div>
           ) : filtered.map((file, index) => (
             <button
               key={file.path}
               type="button"
+              data-index={index}
               className={`quick-open-item${index === activeIndex ? ' active' : ''}`}
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => onOpen(file.path)}

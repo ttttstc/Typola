@@ -46,3 +46,11 @@ html[data-color-scheme='dark'] body .typola-floating-tooltip,
 html[data-color-scheme='dark'] body .typola-floating-tooltip :where(*) {
   color: var(--theme-canvas) !important;
 }
+
+/* 会话 toast 同样使用反色表面，不能继承正文的强制前景色。 */
+body .conversation-toast,
+body .conversation-toast :where(*),
+html[data-color-scheme='dark'] body .conversation-toast,
+html[data-color-scheme='dark'] body .conversation-toast :where(*) {
+  color: var(--theme-paper) !important;
+}

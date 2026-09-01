@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { writeText } from '../services/clipboardService';
 import type { DocumentStats } from '../services/documentStatsService';
 import { useSettings } from '../hooks/useSettings';
@@ -112,6 +112,12 @@ export function StatusBar({ filePath, dirty, saveState, message, stats }: Status
       });
   };
 
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handleDoubleClick();
+  };
+
   const copyState: 'idle' | CopyOutcome =
     copyMarker && copyMarker.path === filePath && hasPath
       ? copyMarker.outcome
@@ -122,10 +128,14 @@ export function StatusBar({ filePath, dirty, saveState, message, stats }: Status
       <span
         className="status-path"
         data-copy-state={copyState}
+        tabIndex={hasPath ? 0 : undefined}
+        role={hasPath ? 'button' : undefined}
+        aria-label={hasPath ? t('statusBarCopyPathTitle') : undefined}
         onDoubleClick={hasPath ? handleDoubleClick : undefined}
+        onKeyDown={hasPath ? handleKeyDown : undefined}
         title={hasPath ? t('statusBarCopyPathTitle') : undefined}
         style={
-          hasPath ? { cursor: 'text', userSelect: 'text' } : undefined
+          hasPath ? { cursor: 'copy', userSelect: 'text' } : undefined
         }
       >
         {hasPath ? filePath : t('statusBarNoFile')}

@@ -23,6 +23,17 @@
   padding: 10px 28px 12px;
 }
 
+/* wideTables 模式的 shell 修饰类:只保留原 html-preview-pane 提供的
+   flex 纵向铺满与可收缩能力,不再借用右栏面板容器类,避免带上
+   .right-panel-open/.html-preview-open 下的宽度 clamp 等跨组件副作用。 */
+.preview-shell-wide {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* Override Vditor defaults with legal-document-friendly styles */
 .preview-content h1,
 .preview-content h2,
@@ -149,8 +160,8 @@
 .preview-content blockquote {
   margin: 12px 0;
   padding: 8px 0 8px 16px;
-  border-left: 2px solid var(--accent);
-  color: var(--muted);
+  border-left: 2px solid var(--theme-accent);
+  color: var(--theme-text-secondary);
   font-style: italic;
 }
 
@@ -219,7 +230,7 @@
   text-align: center;
   font-weight: 500;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--theme-text-secondary);
   letter-spacing: 0;
 }
 
@@ -230,13 +241,13 @@
 }
 
 .preview-content a {
-  color: var(--accent);
+  color: var(--theme-accent);
   text-decoration: none;
-  border-bottom: 1px solid oklch(58% 0.16 35 / 0.3);
+  border-bottom: 1px solid color-mix(in oklch, var(--theme-accent) 30%, transparent);
 }
 
 .preview-content a:hover {
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--theme-accent);
 }
 
 .preview-content img {

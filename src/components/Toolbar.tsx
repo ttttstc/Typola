@@ -155,12 +155,13 @@ export function Toolbar({
             onClick={onToggleWorkspacePanel}
             data-tooltip={workspacePanelTooltip}
             aria-label={workspacePanelTooltip}
+            aria-pressed={workspacePanelVisible}
           >
             <PanelLeft size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <DefineColorToolbarButton settings={settings} />
           {onOpenToc && (
-            <button data-no-window-drag="true" onClick={onOpenToc} title={t('openTocHint')} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
+            <button data-no-window-drag="true" onClick={onOpenToc} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
               <ListTree size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}
@@ -169,7 +170,7 @@ export function Toolbar({
           <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewLabel')} aria-label={t('toolbarNewLabel')}>
             <FilePlus size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onOpen} title={t('toolbarOpenTitle')} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
+          <button data-no-window-drag="true" onClick={onOpen} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
             <FolderDown size={iconSize} strokeWidth={strokeWidth} />
           </button>
           {onOpenFolder && (
@@ -177,10 +178,10 @@ export function Toolbar({
               <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
             </button>
           )}
-          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} title={t('toolbarSaveTitle')} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
+          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
             <Save size={iconSize} strokeWidth={strokeWidth} />
           </button>
-          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} title={t('toolbarSaveAsTitle')} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
+          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
             <SaveAll size={iconSize} strokeWidth={strokeWidth} />
           </button>
           {onFormat && (
@@ -224,7 +225,7 @@ export function Toolbar({
                 <FloatingPortal>
                   <div
                     ref={exportFloating.refs.setFloating}
-                    style={{ ...exportFloating.floatingStyles, zIndex: 9999 }}
+                    style={exportFloating.floatingStyles}
                     className="export-menu"
                     role="menu"
                     aria-label={t('toolbarExportMenuLabel')}
@@ -275,34 +276,34 @@ export function Toolbar({
         <div className="toolbar-group toolbar-view-actions" aria-label={t('toolbarViewGroup')}>
           <button
             className={editorMode === 'source' ? 'active' : ''}
-            title={t('toolbarSourceTitle')}
             onClick={onToggleEditorMode}
             disabled={editingDisabled}
             data-no-window-drag="true"
             data-tooltip={t('toolbarSourceLabel')}
             aria-label={t('toolbarSourceLabel')}
+            aria-pressed={editorMode === 'source'}
           >
             <Code2 size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
             className={wordPreviewVisible ? 'active' : ''}
-            title={t('toolbarWordPreviewTitle')}
             onClick={onToggleWordPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
             data-tooltip={t('toolbarWordPreviewLabel')}
             aria-label={t('toolbarWordPreviewLabel')}
+            aria-pressed={wordPreviewVisible}
           >
             <FileText size={iconSize} strokeWidth={strokeWidth} />
           </button>
           <button
             className={wechatPreviewVisible ? 'active' : ''}
-            title={t('toolbarWechatPreviewTitle')}
             onClick={onToggleWechatPreview}
             disabled={editingDisabled}
             data-no-window-drag="true"
             data-tooltip={t('toolbarWechatPreviewLabel')}
             aria-label={t('toolbarWechatPreviewLabel')}
+            aria-pressed={wechatPreviewVisible}
           >
             {/* lucide 无 wechat 品牌图标,沿用 Newspaper(评审已确认) */}
             <Newspaper size={iconSize} strokeWidth={strokeWidth} />
@@ -315,6 +316,7 @@ export function Toolbar({
               data-no-window-drag="true"
               data-tooltip={t('toolbarArtifactsLabel')}
               aria-label={t('toolbarArtifactsLabel')}
+              aria-pressed={Boolean(artifactsVisible)}
             >
               <PackageOpen size={iconSize} strokeWidth={strokeWidth} />
             </button>
@@ -325,6 +327,7 @@ export function Toolbar({
             data-no-window-drag="true"
             data-tooltip={t('toolbarTerminalLabel')}
             aria-label={t('toolbarTerminalLabel')}
+            aria-pressed={terminalVisible}
           >
             <Terminal size={iconSize} strokeWidth={strokeWidth} />
           </button>
@@ -333,7 +336,6 @@ export function Toolbar({
           <button
             data-no-window-drag="true"
             className="toolbar-settings-btn"
-            title={t('toolbarSettingsTitle')}
             onPointerEnter={onPreloadSettings}
             onFocus={onPreloadSettings}
             onClick={onOpenSettings}

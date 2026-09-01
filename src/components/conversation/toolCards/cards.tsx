@@ -135,15 +135,13 @@ export function TodoCard({ input, runStreaming, runSucceeded }: CardProps) {
   const [overrideExpanded, setOverrideExpanded] = useState<boolean | null>(null);
   if (todos.length === 0) {
     return (
-      <div className="op-card op-todo op-generic">
-        <GenericCard
-          name="TodoWrite"
-          input={input}
-          result={undefined}
-          runStreaming={runStreaming}
-          runSucceeded={runSucceeded}
-        />
-      </div>
+      <GenericCard
+        name="TodoWrite"
+        input={input}
+        result={undefined}
+        runStreaming={runStreaming}
+        runSucceeded={runSucceeded}
+      />
     );
   }
   const hasInProgress = todos.some((todo) => todo.status === 'in_progress');

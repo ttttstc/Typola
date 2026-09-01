@@ -9,7 +9,7 @@ import {
   FolderOpen,
   NotebookText,
 } from 'lucide-react';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   listWorkspaceEntries,
   pickWorkspaceDirectory,
@@ -18,6 +18,8 @@ import {
 } from '../services/workspaceService';
 import { useSettings } from '../hooks/useSettings';
 import { translate } from '../services/i18n';
+
+const COPY_FEEDBACK_RESET_MS = 1200;
 
 type FileTreePanelProps = {
   rootPath: string;
@@ -76,6 +78,8 @@ function TreeNode({
   const [children, setChildren] = useState<WorkspaceEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<'copied' | 'failed' | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const active = !entry.isDir && activePath === entry.path;
   const isAgentChanged = !entry.isDir && Boolean(agentChangedPaths?.has(entry.path));
   const fileMeta = !entry.isDir ? getFileIconMeta(entry.name) : null;
@@ -93,21 +97,62 @@ function TreeNode({
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
     window.addEventListener('pointerdown', close);
     window.addEventListener('blur', close);
-    window.addEventListener('keydown', close);
+    window.addEventListener('keydown', onKey);
+    const menuNode = menuRef.current;
+    if (menuNode) {
+      // 视口钳位：菜单尺寸超出屏幕右/下缘时回拉（同 EditorContextMenu）
+      const rect = menuNode.getBoundingClientRect();
+      const padding = 6;
+      const left = Math.max(padding, Math.min(menu.x, window.innerWidth - rect.width - padding));
+      const top = Math.max(padding, Math.min(menu.y, window.innerHeight - rect.height - padding));
+      menuNode.style.left = `${left}px`;
+      menuNode.style.top = `${top}px`;
+      // 打开后聚焦第一个菜单项，保证键盘可达
+      menuNode.querySelector<HTMLButtonElement>('[role="menuitem"]:not([disabled])')?.focus();
+    }
     return () => {
       window.removeEventListener('pointerdown', close);
       window.removeEventListener('blur', close);
-      window.removeEventListener('keydown', close);
+      window.removeEventListener('keydown', onKey);
     };
   }, [menu]);
+
+  useEffect(() => {
+    if (!copyFeedback) return;
+    const timer = window.setTimeout(() => {
+      setCopyFeedback(null);
+      setMenu(null);
+    }, COPY_FEEDBACK_RESET_MS);
+    return () => window.clearTimeout(timer);
+  }, [copyFeedback]);
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const menuNode = menuRef.current;
+    if (!menuNode) return;
+    const items = Array.from(menuNode.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])'));
+    if (items.length === 0) return;
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = currentIndex === -1
+      ? (direction === 1 ? 0 : items.length - 1)
+      : (currentIndex + direction + items.length) % items.length;
+    items[nextIndex].focus();
+  };
 
   const copyPath = async () => {
     try {
       await navigator.clipboard?.writeText(entry.path);
+      setCopyFeedback('copied');
     } catch (error) {
       console.warn('Failed to copy workspace path:', error);
+      setCopyFeedback('failed');
     }
   };
 
@@ -141,6 +186,7 @@ function TreeNode({
         onContextMenu={(event) => {
           event.preventDefault();
           event.stopPropagation();
+          setCopyFeedback(null);
           setMenu({ x: event.clientX, y: event.clientY });
         }}
         title={entry.path}
@@ -165,10 +211,12 @@ function TreeNode({
       </button>
       {menu && (
         <div
+          ref={menuRef}
           className="file-tree-context-menu"
           style={{ left: menu.x, top: menu.y }}
           role="menu"
           onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={handleMenuKeyDown}
         >
           {entry.isDir ? (
             <button type="button" role="menuitem" onClick={() => { toggleExpanded(); setMenu(null); }}>
@@ -191,8 +239,8 @@ function TreeNode({
               打开所在文件夹
             </button>
           )}
-          <button type="button" role="menuitem" onClick={() => { void copyPath(); setMenu(null); }}>
-            复制路径
+          <button type="button" role="menuitem" onClick={() => { void copyPath(); }}>
+            {copyFeedback === 'copied' ? '已复制' : copyFeedback === 'failed' ? '复制失败' : '复制路径'}
           </button>
         </div>
       )}
@@ -260,8 +308,10 @@ export function FileTreePanel({
     void listWorkspaceEntries(rootPath)
       .then(setEntries)
       .catch((reason) => {
+        // 界面只显示友好兜底文案，原始错误保留在控制台便于排查
+        console.warn('Failed to list workspace entries:', reason);
         setEntries([]);
-        setError(reason instanceof Error ? reason.message : String(reason));
+        setError('读取文件夹失败');
       })
       .finally(() => setLoading(false));
   }, [refreshKey, rootPath]);

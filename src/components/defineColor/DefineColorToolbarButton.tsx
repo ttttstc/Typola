@@ -43,7 +43,7 @@ export function DefineColorToolbarButton({ settings }: { settings: AppSettings }
       {open && (
         <FloatingPortal>
           <FloatingFocusManager context={floating.context} modal={false} returnFocus>
-            <div ref={floating.refs.setFloating} style={{ ...floating.floatingStyles, zIndex: 10000 }} {...getFloatingProps()}>
+            <div ref={floating.refs.setFloating} style={{ ...floating.floatingStyles, zIndex: 800 }} {...getFloatingProps()}>
               <DefineColorPopover settings={draft} onPreview={preview} onCommit={commit} />
             </div>
           </FloatingFocusManager>
