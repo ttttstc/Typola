@@ -14,7 +14,7 @@ type UsePaneResizeResult = {
 };
 
 /**
- * 分栏拖拽的通用指针管线：rAF 节流 + pointerup/pointercancel 统一清理，
+ * 分栏拖拽的通用指针管线：rAF 节流 + pointerup/pointercancel/blur 统一清理，
  * 与 useLeftRail 的 resizer 行为保持一致。
  * 宽度 / 比例的换算与 clamp 由调用方在 onMove 里完成，
  * 避免大纲栏、检视分栏各自实现一套事件清理逻辑（issue #264 实现原则）。
@@ -47,18 +47,27 @@ export function usePaneResize({ onMove, onEnd }: UsePaneResizeOptions): UsePaneR
       if (frameId === null) frameId = window.requestAnimationFrame(flush);
     };
 
-    const handlePointerUp = () => {
-      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    const finish = () => {
+      // 松手时若还有未执行的 rAF 帧，先同步提交最后一次移动再结束，
+      // 否则快速拖动后立即松手会丢失最终位置（PR #265 检视意见）。
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+        flush();
+      }
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('blur', finish);
       setIsResizing(false);
       onEndRef.current?.();
     };
 
     window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    // 拖出窗口后松开时本窗口收不到 pointerup/pointercancel，
+    // 失焦时强制收尾（与 useLeftRail / useRightPanel 的 blur 处理一致）。
+    window.addEventListener('blur', finish);
   }, []);
 
   return { isResizing, handlePointerDown };

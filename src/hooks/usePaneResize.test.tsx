@@ -121,4 +121,57 @@ describe('usePaneResize — 通用分栏拖拽管线 (issue #264)', () => {
     act(() => fire(window, 'pointermove', 160));
     expect(onMove).not.toHaveBeenCalled();
   });
+
+  it('快速松手时冲刷 pending 帧,不丢最后一次拖拽位置（PR #265 检视）', () => {
+    // rAF 只入队不执行,模拟 pointermove 与 pointerup 同 tick、帧回调尚未跑的真实浏览器场景。
+    const pendingFrames: FrameRequestCallback[] = [];
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      pendingFrames.push(callback);
+      return pendingFrames.length;
+    }) as typeof window.requestAnimationFrame;
+
+    const onMove = vi.fn();
+    const onEnd = vi.fn();
+    act(() => root.render(
+      <Harness expose={(next) => { api = next; }} onMove={onMove} onEnd={onEnd} />,
+    ));
+
+    const handle = host.firstElementChild as HTMLElement;
+    act(() => fire(handle, 'pointerdown', 100));
+    act(() => {
+      fire(window, 'pointermove', 160);
+      fire(window, 'pointermove', 220);
+    });
+    // 帧还没跑,此时直接松手。
+    expect(onMove).not.toHaveBeenCalled();
+
+    act(() => fire(window, 'pointerup', 220));
+    // finish 必须先同步提交最新坐标再结束,最终持久化位置不回弹。
+    expect(onMove).toHaveBeenCalledOnce();
+    expect(onMove).toHaveBeenCalledWith(220);
+    expect(onEnd).toHaveBeenCalledOnce();
+    expect(api?.isResizing).toBe(false);
+    // 结束后不应再有帧被补执行。
+    expect(pendingFrames).toHaveLength(1);
+  });
+
+  it('窗口失焦时结束拖拽并清理监听（PR #265 检视）', () => {
+    const onMove = vi.fn();
+    const onEnd = vi.fn();
+    act(() => root.render(
+      <Harness expose={(next) => { api = next; }} onMove={onMove} onEnd={onEnd} />,
+    ));
+
+    const handle = host.firstElementChild as HTMLElement;
+    act(() => fire(handle, 'pointerdown', 100));
+    act(() => fire(window, 'pointermove', 160));
+    act(() => { window.dispatchEvent(new Event('blur')); });
+
+    expect(onEnd).toHaveBeenCalledOnce();
+    expect(api?.isResizing).toBe(false);
+
+    // 收尾后残留的 pointermove/pointerup 不再生效。
+    act(() => fire(window, 'pointermove', 300));
+    expect(onMove).toHaveBeenCalledTimes(1);
+  });
 });

@@ -284,6 +284,7 @@ export function AppLayoutChrome({
                     onClick={() => onSwitchTab(tab.id)}
                     onDoubleClick={() => onRequestRename(tab.id)}
                     title={tab.file.path ? renameTitle : renameTitleUnsaved}
+                    aria-label={tab.file.dirty ? `${tab.file.name}（未保存修改）` : tab.file.name}
                   >
                     <span>{tab.file.name}</span>
                   </button>

@@ -130,6 +130,9 @@ describe('AppLayoutChrome editor tab indicator', () => {
     expect(tabs[0].querySelector('.editor-tab-dirty-dot')).not.toBeNull();
     // 星号前缀退役,避免与激活态混淆。
     expect(tabs[0].textContent).not.toContain('*unsaved.md');
+    // dirty 状态必须进入 tab 按钮的可访问名称,不只依赖圆点颜色（PR #265 检视）。
+    expect(tabs[0].querySelector('.editor-tab-main')?.getAttribute('aria-label')).toBe('unsaved.md（未保存修改）');
+    expect(tabs[1].querySelector('.editor-tab-main')?.getAttribute('aria-label')).toBe('clean.md');
 
     // 未激活但干净:既无 dirty 类也无圆点,保持弱化可读。
     expect(tabs[1].classList.contains('active')).toBe(false);
