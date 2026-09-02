@@ -728,6 +728,19 @@ fn atomic_replace_file(temp: &Path, target: &Path) -> std::io::Result<()> {
     }
 }
 
+/// rename 后同步父目录元数据，确保掉电场景下目录项持久化。
+/// Windows 由 MoveFileExW 的 MOVEFILE_WRITE_THROUGH 保证，无需额外处理。
+#[cfg(unix)]
+fn sync_parent_directory(path: &Path) -> std::io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::File::open(parent)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::fs::OpenOptions;
 
@@ -790,7 +803,8 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         return Err(error);
     }
 
-    let result = atomic_replace_file(&temp_path, path);
+    let result = atomic_replace_file(&temp_path, path)
+        .and_then(|()| sync_parent_directory(path));
     if result.is_err() {
         let _ = std::fs::remove_file(&temp_path);
     }
