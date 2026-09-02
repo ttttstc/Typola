@@ -3,17 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
   assertReleaseTag,
   assertReleaseVersionChanged,
-  assertStableVersion,
+  assertVersion,
+  isPrerelease,
   synchronizeVersionText,
 } from '../../scripts/sync-version.mjs';
 
 describe('release version synchronization', () => {
-  it('accepts stable versions only', () => {
-    expect(assertStableVersion('2.0.6')).toBe('2.0.6');
-    expect(() => assertStableVersion('v2.0.6')).toThrow(/without a leading v/);
-    expect(() => assertStableVersion('2.0')).toThrow(/stable SemVer/);
-    expect(() => assertStableVersion('2.1.0-beta.1')).toThrow(/stable SemVer/);
-    expect(() => assertStableVersion('02.0.6')).toThrow(/stable SemVer/);
+  it('accepts SemVer with optional prerelease suffix', () => {
+    expect(assertVersion('2.0.6')).toBe('2.0.6');
+    expect(assertVersion('2.0.8-beta')).toBe('2.0.8-beta');
+    expect(() => assertVersion('v2.0.6')).toThrow(/without a leading v/);
+    expect(() => assertVersion('2.0')).toThrow(/SemVer/);
+    expect(() => assertVersion('02.0.6')).toThrow(/SemVer/);
+    expect(isPrerelease('2.0.8-beta')).toBe(true);
+    expect(isPrerelease('2.0.6')).toBe(false);
   });
 
   it('updates both package-lock version fields', () => {
