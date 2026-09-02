@@ -6,6 +6,15 @@
 - 清理旧 Atomic 表格样式，并补充右键点击指定列后的真实对齐回归测试。
 - 补齐 `codemirror-markdown-tables` 的运行时依赖 `@mobily/ts-belt`，确保 pnpm 严格安装后的测试与构建可解析。
 
+## Unreleased
+
+- Unix 下原子保存 rename 后对父目录执行 fsync，掉电场景下目录项可靠持久化（Windows 已由 MOVEFILE_WRITE_THROUGH 覆盖）。
+- 全局设计审查修复（P0/P1）：移除选区强制白字（浅色主题下不可读）；修复文件树右键菜单引用未定义阴影 token 导致无投影；会话 toast 改用主题反色表面并在高对比模式豁免，消除黑压黑；preview.css 全部死变量（--bg/--fg/--muted/--accent/--border/--surface）映射到现有 --theme-* token，深色主题下预览排版不再脱节；删除 app.css 中约 350 行重复的 tool cards 样式块；修复 GBK 乱码 aria-label 与「Attach files」中英混杂文案。
+- z-index 层级收束：清除 7 处被约定块覆盖的死声明，settings-overlay 回归 1000 模态层，文件树右键菜单回归 800 菜单层，重命名/SkillHub 模态遮罩从 80 提升至 1000，设置内全屏查看器定为 1100，工具栏 DefineColor 弹层从 10000 降至 800，约定注释同步更新为五级层级表。
+- 状态色与 token 纪律：会话 done-bar 改用 success、error-card 补齐 danger 表达；op-card/op-status/todo 等约 20 处硬编码状态色映射到 --theme-accent/success/danger/warning；diff 插入行底色改用 success 派生；状态栏文字改用 --theme-text-muted；遗留 token fallback（--theme-text/--theme-button-hover/--theme-mono 等）与 FloatingToc、SkillHub 区死变量全部清理；define-color 的 border-hover 强度方向修正。
+- 键盘可达性与交互反馈：文件树右键菜单改为 Escape 关闭并支持方向键导航（原先任意键即关闭，菜单完全不可达），增加视口钳位与「已复制」反馈；编辑器右键菜单打开即聚焦首项并支持方向键；工具栏按钮补 aria-pressed 与 focus-visible 焦点环，移除 native title 双 tooltip；状态栏路径支持 Enter 复制；快速打开面板键盘事件提升到容器并滚动跟随 active 项，区分空态文案；查找匹配数增加 aria-live；新增全局 prefers-reduced-motion 兜底。
+- DOCX 预览增加空态兜底；预览 wideTables 模式不再借用右栏容器类避免跨组件副作用；TodoCard 空态去掉双层卡片嵌套；导出 toast 与更新卡片圆角统一。
+
 ## [2.0.7] - 2026-07-24
 
 - 修复文档保存竞态：保存请求绑定标签、路径、内容快照和 revision，同路径写入串行化；保存完成不会覆盖切换后的标签或更新中的编辑内容。

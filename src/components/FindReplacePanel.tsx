@@ -185,7 +185,7 @@ export function FindReplacePanel({
             }}
             placeholder="查找"
           />
-          <span className="find-count">{current}/{matches.length}</span>
+          <span className="find-count" role="status" aria-live="polite">{current}/{matches.length}</span>
           <button type="button" className={options.caseSensitive ? 'find-opt active' : 'find-opt'} onClick={() => toggleOption('caseSensitive')} title="区分大小写">Aa</button>
           <button type="button" className={options.wholeWord ? 'find-opt active' : 'find-opt'} onClick={() => toggleOption('wholeWord')} title="全字匹配">词</button>
           <button type="button" className={options.regex ? 'find-opt active' : 'find-opt'} onClick={() => toggleOption('regex')} title="正则表达式">.*</button>

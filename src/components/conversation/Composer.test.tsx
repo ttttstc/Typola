@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,7 +63,7 @@ describe('Composer', () => {
     });
 
     const attach = Array.from(host.querySelectorAll<HTMLButtonElement>('.composer-plus-popup button'))
-      .find((button) => button.textContent?.includes('Attach files'));
+      .find((button) => button.textContent?.includes('添加附件'));
     await act(async () => {
       attach?.click();
     });
@@ -281,7 +281,7 @@ describe('Composer', () => {
     });
 
     const attach = Array.from(host.querySelectorAll<HTMLButtonElement>('.composer-plus-popup button'))
-      .find((button) => button.textContent?.includes('Attach files'));
+      .find((button) => button.textContent?.includes('添加附件'));
     await act(async () => {
       attach?.click();
     });

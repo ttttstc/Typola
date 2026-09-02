@@ -49,7 +49,7 @@ export function ComposerPlusMenu({ onAttachFiles, onOpenMcp, onOpenPlugins }: Co
         <div className="composer-plus-popup" role="menu">
           <button type="button" role="menuitem" onClick={() => pick(onAttachFiles)}>
             <FilePlus2 size={15} />
-            <span>Attach files</span>
+            <span>添加附件</span>
           </button>
           <button type="button" role="menuitem" onClick={() => pick(onOpenMcp)}>
             <Plug size={15} />

@@ -6,9 +6,9 @@ html[data-color-system='define-color'] {
   --theme-text-primary: var(--dc-text-shout);
   --theme-text-secondary: var(--dc-text-default);
   --theme-text-muted: var(--dc-text-muted);
-  --theme-border: var(--dc-border-loud);
+  --theme-border: var(--dc-border-strong);
   --theme-border-soft: var(--dc-border-default);
-  --theme-border-hover: var(--dc-border-strong);
+  --theme-border-hover: var(--dc-border-loud);
   --theme-accent: var(--dc-neutral-dark-100);
   --theme-accent-soft: var(--dc-background-dark-muted);
   --theme-accent-muted: var(--dc-neutral-dark-30);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import type { TableMenuAction } from './editor/cm6/table/tableInteractionExtension';
 
 export type HeadingLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -104,6 +104,8 @@ export function EditorContextMenu({
       adjustedRef.current = { left, top };
       menu.style.left = `${left}px`;
       menu.style.top = `${top}px`;
+      // 打开后聚焦第一个可用菜单项，保证键盘可达
+      menu.querySelector<HTMLButtonElement>('.editor-ctx-item:not([disabled])')?.focus();
     }
     const onDocMouseDown = (event: MouseEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) onClose();
@@ -124,6 +126,21 @@ export function EditorContextMenu({
 
   if (!open) return null;
 
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const menuNode = menuRef.current;
+    if (!menuNode) return;
+    const items = Array.from(menuNode.querySelectorAll<HTMLButtonElement>('.editor-ctx-item:not([disabled])'));
+    if (items.length === 0) return;
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = currentIndex === -1
+      ? (direction === 1 ? 0 : items.length - 1)
+      : (currentIndex + direction + items.length) % items.length;
+    items[nextIndex].focus();
+  };
+
   const pick = (action: FormatAction) => {
     onPick(action);
     onClose();
@@ -140,6 +157,7 @@ export function EditorContextMenu({
       className="editor-ctx-menu"
       role="menu"
       style={{ left: x, top: y }}
+      onKeyDown={handleMenuKeyDown}
     >
       <MenuItem label="剪切" hint="Ctrl+X" disabled={!hasSelection} onClick={() => pick({ type: 'cut' })} />
       <MenuItem label="复制" hint="Ctrl+C" disabled={!hasSelection} onClick={() => pick({ type: 'copy' })} />

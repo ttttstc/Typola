@@ -185,7 +185,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
 
   return (
     <div
-      className={`preview-shell ${wideTables ? 'html-preview-pane' : ''}`}
+      className={`preview-shell ${wideTables ? 'preview-shell-wide' : ''}`}
       aria-label={wideTables ? 'HTML 阅读预览' : 'Markdown 阅读预览'}
       style={{
         '--preview-font-size': `${settings.previewFontSize}px`,

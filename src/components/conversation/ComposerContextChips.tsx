@@ -40,7 +40,7 @@ export function ComposerContextChips({
           <button
             type="button"
             onClick={() => onRemoveAttachment(path)}
-            aria-label="绉婚櫎闄勪欢"
+            aria-label="移除附件"
           >
             <X size={12} />
           </button>
