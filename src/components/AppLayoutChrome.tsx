@@ -272,7 +272,7 @@ export function AppLayoutChrome({
               {openTabs.map((tab) => (
                 <div
                   key={tab.id}
-                  className={`editor-tab ${tab.id === activeTabId ? 'active' : ''}`}
+                  className={`editor-tab ${tab.id === activeTabId ? 'active' : ''}${tab.file.dirty ? ' is-dirty' : ''}`}
                   data-indicator-active={tab.id === activeTabId ? 'true' : undefined}
                   title={tab.file.path || tab.file.name}
                 >
@@ -284,9 +284,13 @@ export function AppLayoutChrome({
                     onClick={() => onSwitchTab(tab.id)}
                     onDoubleClick={() => onRequestRename(tab.id)}
                     title={tab.file.path ? renameTitle : renameTitleUnsaved}
+                    aria-label={tab.file.dirty ? `${tab.file.name}（未保存修改）` : tab.file.name}
                   >
-                    <span>{tab.file.dirty ? `*${tab.file.name}` : tab.file.name}</span>
+                    <span>{tab.file.name}</span>
                   </button>
+                  {tab.file.dirty && (
+                    <span className="editor-tab-dirty-dot" aria-hidden="true" title="未保存修改" />
+                  )}
                   <button
                     type="button"
                     className="editor-tab-close"

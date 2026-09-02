@@ -2,6 +2,12 @@ import { ChevronRight, Pin, PinOff, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import type { TocItem } from '../types/document';
 import { useSettings } from '../hooks/useSettings';
+import { usePaneResize } from '../hooks/usePaneResize';
+import {
+  TOC_PANEL_WIDTH_MAX,
+  TOC_PANEL_WIDTH_MIN,
+  updateSettings,
+} from '../services/settingsService';
 import { translate } from '../services/i18n';
 import {
   buildTocTree,
@@ -46,9 +52,30 @@ export function FloatingToc({
   // user switches documents (see review #2).
   const lastItemsRef = useRef(items);
   const panelVisible = pinned || expanded;
+  // 固定大纲栏宽度：拖拽期间走本地 state（rAF 高频更新），松手才持久化（issue #264）。
+  const asideRef = useRef<HTMLElement>(null);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const { isResizing, handlePointerDown } = usePaneResize({
+    onMove: (clientX) => {
+      const rect = asideRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setDragWidth(Math.min(
+        TOC_PANEL_WIDTH_MAX,
+        Math.max(TOC_PANEL_WIDTH_MIN, Math.round(clientX - rect.left)),
+      ));
+    },
+    onEnd: () => {
+      setDragWidth((width) => {
+        if (width !== null) updateSettings({ tocPanelWidth: width });
+        return null;
+      });
+    },
+  });
+  const pinnedWidth = dragWidth ?? settings.tocPanelWidth;
   const pinLabel = pinned ? t('unpinTocHint') : t('pinTocHint');
   const closeLabel = t('closeTocHint');
   const alwaysPinnedLabel = t('tocAlwaysPinnedLabel');
+  const resizeLabel = t('tocResizeHint');
   const collapseLabel = t('tocCollapse');
   const expandLabel = t('tocExpand');
 
@@ -142,8 +169,10 @@ export function FloatingToc({
 
   return (
     <aside
+      ref={asideRef}
       className={`floating-toc ${pinned ? 'pinned' : ''} ${expanded ? 'expanded' : ''}`}
       aria-label={t('floatingTocLabel')}
+      style={pinned ? ({ width: pinnedWidth } as CSSProperties) : undefined}
       onPointerLeave={() => {
         if (!pinned) setExpanded(false);
       }}
@@ -152,6 +181,16 @@ export function FloatingToc({
       }}
     >
       {!pinned && <div className="floating-toc-edge-trigger" aria-hidden="true" />}
+      {pinned && (
+        <div
+          className={`floating-toc-resizer ${isResizing ? 'dragging' : ''}`}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={resizeLabel}
+          title={resizeLabel}
+          onPointerDown={handlePointerDown}
+        />
+      )}
 
       <div id="floating-toc-panel" className="floating-toc-panel" aria-hidden={!panelVisible}>
         <div className="floating-toc-header">
@@ -231,6 +270,7 @@ export function FloatingToc({
                   id={itemId}
                   className="floating-toc-item"
                   aria-current={flatIndex === activeIndex ? 'location' : undefined}
+                  title={item.text}
                   onClick={() => onNavigate(item, flatIndex)}
                 >
                   <span>{item.text}</span>

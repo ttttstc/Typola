@@ -149,6 +149,36 @@ describe('settingsService', () => {
     expect(getSettings().tocAlwaysPinned).toBe(false);
   });
 
+  it('persists and clamps the pinned outline panel width (issue #264)', () => {
+    expect(getSettings().tocPanelWidth).toBe(260);
+
+    updateSettings({ tocPanelWidth: 340 });
+    expect(getSettings().tocPanelWidth).toBe(340);
+
+    // 超出 [200, 480] 的值收进边界,非法值回落默认。
+    updateSettings({ tocPanelWidth: 120 });
+    expect(getSettings().tocPanelWidth).toBe(200);
+    updateSettings({ tocPanelWidth: 900 });
+    expect(getSettings().tocPanelWidth).toBe(480);
+    updateSettings({ tocPanelWidth: 'wide' as unknown as number });
+    expect(getSettings().tocPanelWidth).toBe(260);
+  });
+
+  it('persists and clamps the diff review split ratio (issue #264)', () => {
+    expect(getSettings().diffReviewSplitRatio).toBe(0.5);
+
+    updateSettings({ diffReviewSplitRatio: 0.7 });
+    expect(getSettings().diffReviewSplitRatio).toBe(0.7);
+
+    // 比例收进 [0.15, 0.85],非法值回落默认。
+    updateSettings({ diffReviewSplitRatio: 0.02 });
+    expect(getSettings().diffReviewSplitRatio).toBe(0.15);
+    updateSettings({ diffReviewSplitRatio: 1.4 });
+    expect(getSettings().diffReviewSplitRatio).toBe(0.85);
+    updateSettings({ diffReviewSplitRatio: Number.NaN });
+    expect(getSettings().diffReviewSplitRatio).toBe(0.5);
+  });
+
   it('persists the selected Typola theme and falls back to Plain Paper for unknown theme ids', () => {
     expect(getSettings()).toMatchObject({
       themeId: 'plain-paper',

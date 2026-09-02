@@ -789,6 +789,33 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-color: transparent;
   color: var(--theme-text-primary);
   box-shadow: none;
+  font-weight: 600;
+}
+
+/* 当前文档的稳定激活标识：accent 下划线,与文字强调共存（issue #264）。 */
+.editor-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--theme-accent);
+}
+
+/* 未保存修改：圆点常驻,与激活态（下划线/字重）同时可见（issue #264）。 */
+.editor-tab-dirty-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin: 0 3px 0 0;
+  border-radius: 50%;
+  background: var(--theme-accent);
+}
+
+.editor-tab.is-dirty:not(.active) .editor-tab-dirty-dot {
+  background: var(--theme-text-secondary);
 }
 
 .editor-tab-main {
@@ -1222,7 +1249,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   pointer-events: auto;
   border-right: 1px solid var(--theme-border-soft);
   background: var(--theme-toc-panel-bg);
-  overflow-y: auto;
+  /* 滚动收进 .floating-toc-list 内部,aside 本身不滚,
+   * 这样右缘拖拽分隔条(position:absolute)不会随长大纲滚走（issue #264）。 */
+  overflow: hidden;
 }
 
 .right-panel-open .floating-toc {
@@ -1238,6 +1267,24 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   inset: 0 auto 0 0;
   width: 4px;
   pointer-events: auto;
+}
+
+/* 固定大纲栏右缘拖拽分隔条（issue #264）：拖拽宽度持久化到设置。 */
+.floating-toc-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+
+.floating-toc-resizer:hover,
+.floating-toc-resizer.dragging {
+  background: color-mix(in oklch, var(--theme-accent) 24%, transparent);
 }
 
 .floating-toc-panel {
@@ -1275,6 +1322,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   left: 0;
   width: 100%;
   max-height: 100%;
+  /* 受限高度的纵向 flex 容器:列表在剩余空间内滚动,
+   * 否则长大纲按自然高度展开后被 aside 的 overflow:hidden 裁掉(PR #265 检视意见)。 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -1419,6 +1471,13 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   max-height: calc(100vh - 164px);
   overflow-y: auto;
   padding: 6px 0;
+}
+
+/* 固定态：列表在面板内部滚动,撑满剩余高度（issue #264 拖拽调宽配套）。 */
+.floating-toc.pinned .floating-toc-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .floating-toc-item {
@@ -1798,6 +1857,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .cm6-markdown-editor-pane .cm-editor .cm-content {
   font-family: var(--editor-font-family, var(--font-reading));
+  /* 覆盖 atomic-editor 默认的 0.5rem,给正文与编辑器边界留出舒适距离（issue #264）。 */
+  padding-inline: var(--editor-inline-breathing, clamp(32px, 6vw, 96px));
 }
 
 .readonly-pane {
@@ -11459,12 +11520,17 @@ button[data-tooltip]:disabled::before {
 .diff-review-workspace.nav-collapsed { grid-template-columns: minmax(0, 1fr) 34px; }
 .diff-review-compare {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+  /* 三列：基线 | 拖拽分隔条 | 候选稿。实际比例由组件内联 style 按用户拖拽覆盖（issue #264）。 */
+  grid-template-columns: minmax(360px, 1fr) 7px minmax(360px, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   overflow: auto;
   background: var(--theme-surface);
 }
+.diff-review-compare > .diff-review-column-heading:first-of-type { grid-column: 1; }
+.diff-review-compare > .diff-review-column-heading:last-of-type { grid-column: 3; }
+.diff-review-compare > .diff-review-baseline { grid-column: 1; }
+.diff-review-compare > .diff-review-candidate { grid-column: 3; }
 .diff-review-column-heading {
   position: sticky;
   top: 0;
@@ -11476,14 +11542,44 @@ button[data-tooltip]:disabled::before {
   font-size: 11px;
   font-weight: 600;
 }
-.diff-review-column-heading:first-child { border-right: 1px solid var(--theme-border); }
 .diff-review-baseline,
 .diff-review-candidate {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.diff-review-baseline { border-right: 1px solid var(--theme-border); }
+/* 左右视图拖拽分隔条（issue #264）：常态细线,悬停/拖拽高亮 accent。 */
+.diff-review-split-resizer {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  position: relative;
+  z-index: 3;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+.diff-review-split-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--theme-border);
+}
+.diff-review-split-resizer:hover,
+.diff-review-split-resizer.dragging {
+  background: color-mix(in oklch, var(--theme-accent) 18%, transparent);
+}
+.diff-review-split-resizer:hover::before,
+.diff-review-split-resizer.dragging::before {
+  background: var(--theme-accent);
+}
+/* 拖拽期间禁掉两侧文本选择,避免高亮闪烁。 */
+.diff-review-workspace.split-resizing {
+  user-select: none;
+  cursor: col-resize;
+}
 .diff-review-cell {
   position: relative;
   flex: 0 0 auto;

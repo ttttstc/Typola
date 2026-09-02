@@ -12,6 +12,13 @@ import {
 } from '../../services/diff/markdownDiff';
 import { DiffReviewBar } from './DiffReviewBar';
 import { confirmDialog, messageDialog } from '../../services/dialogService';
+import { useSettings } from '../../hooks/useSettings';
+import { usePaneResize } from '../../hooks/usePaneResize';
+import {
+  DIFF_REVIEW_SPLIT_RATIO_MAX,
+  DIFF_REVIEW_SPLIT_RATIO_MIN,
+  updateSettings,
+} from '../../services/settingsService';
 
 export type DiffFeedbackScope = 'current-diff' | 'current-section' | 'all-candidate';
 
@@ -37,6 +44,11 @@ const SELF_CHECK_LABEL = {
   warning: '自检有警告',
   blocked: '自检阻断',
 } as const;
+
+/** 左右分栏分隔条宽度（px），拖拽比例换算时需要扣除。 */
+const SPLIT_RESIZER_WIDTH = 7;
+/** 任一侧最小可读宽度（px），与 CSS minmax(360px, …) 对应。 */
+const SPLIT_MIN_COLUMN_WIDTH = 360;
 
 function originalSide(hunk: DiffHunk): string {
   if (hunk.kind === 'modified') return hunk.before;
@@ -113,6 +125,28 @@ export function DiffReviewPane({
   const [editingHunkIndex, setEditingHunkIndex] = useState<number | null>(null);
   const [feedback, setFeedback] = useState('');
   const [feedbackScope, setFeedbackScope] = useState<DiffFeedbackScope>('current-diff');
+  // 左右分栏比例（基线侧占比）：拖拽期间走本地 state，松手才持久化（issue #264）。
+  const settings = useSettings();
+  const [dragRatio, setDragRatio] = useState<number | null>(null);
+  const splitRatio = dragRatio ?? settings.diffReviewSplitRatio;
+  const { isResizing: isSplitResizing, handlePointerDown: handleSplitPointerDown } = usePaneResize({
+    onMove: (clientX) => {
+      const rect = scrollerRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return;
+      const availableWidth = rect.width - SPLIT_RESIZER_WIDTH;
+      // 每侧保住最小可读宽度，再收进持久化范围，避免极端比例跨窗口不可用。
+      const lower = Math.max(DIFF_REVIEW_SPLIT_RATIO_MIN, SPLIT_MIN_COLUMN_WIDTH / availableWidth);
+      const upper = Math.min(DIFF_REVIEW_SPLIT_RATIO_MAX, 1 - SPLIT_MIN_COLUMN_WIDTH / availableWidth);
+      if (lower >= upper) return;
+      setDragRatio(Math.min(upper, Math.max(lower, (clientX - rect.left) / availableWidth)));
+    },
+    onEnd: () => {
+      setDragRatio((ratio) => {
+        if (ratio !== null) updateSettings({ diffReviewSplitRatio: ratio });
+        return null;
+      });
+    },
+  });
 
   const handleClose = useCallback(async () => {
     if (state.dirty) {
@@ -272,10 +306,22 @@ export function DiffReviewPane({
         </div>
       )}
 
-      <div className={`diff-review-workspace${navigationCollapsed ? ' nav-collapsed' : ''}`}>
-        <div className="diff-review-compare" ref={scrollerRef}>
+      <div className={`diff-review-workspace${navigationCollapsed ? ' nav-collapsed' : ''}${isSplitResizing ? ' split-resizing' : ''}`}>
+        <div
+          className="diff-review-compare"
+          ref={scrollerRef}
+          style={{ gridTemplateColumns: `minmax(${SPLIT_MIN_COLUMN_WIDTH}px, ${splitRatio}fr) ${SPLIT_RESIZER_WIDTH}px minmax(${SPLIT_MIN_COLUMN_WIDTH}px, ${1 - splitRatio}fr)` }}
+        >
           <div className="diff-review-column-heading">修改前（只读）</div>
           <div className="diff-review-column-heading">候选稿（可编辑）</div>
+          <div
+            className={`diff-review-split-resizer${isSplitResizing ? ' dragging' : ''}`}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="拖拽调整左右视图宽度"
+            title="拖拽调整左右视图宽度"
+            onPointerDown={handleSplitPointerDown}
+          />
           <div className="diff-review-baseline" aria-label="修改前原文">
             {visibleHunkIndexes.map((index, visibleIndex) => {
               const hunk = state.hunks[index];

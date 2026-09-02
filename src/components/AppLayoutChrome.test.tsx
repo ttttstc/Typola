@@ -23,6 +23,52 @@ function tab(id: string): OpenFileTab {
   };
 }
 
+function makeProps(overrides: Partial<Parameters<typeof AppLayoutChrome>[0]> = {}) {
+  return {
+    appStyle: {},
+    toolbarProps: {} as never,
+    mainContentRef: createRef<HTMLDivElement>(),
+    mainContentClassName: 'main-content',
+    rightPanelWidth: 420,
+    leftRailMode: 'none' as const,
+    workspacePanelWidth: 300,
+    leftResizing: 'none' as const,
+    onToggleWorkspacePanel: vi.fn(),
+    onToggleAiPanel: vi.fn(),
+    conversationPanelProps: {} as never,
+    fileTreeProps: {} as never,
+    onLeftPanelResize: vi.fn(),
+    showToc: false,
+    tocProps: {} as never,
+    externalChangeConflict: null,
+    onViewDiff: vi.fn(),
+    onAcceptExternal: vi.fn(),
+    onKeepMine: vi.fn(),
+    shouldShowTabbar: true,
+    openTabs: [tab('first'), tab('second'), tab('third')],
+    activeTabId: 'third',
+    renameTitle: '重命名',
+    renameTitleUnsaved: '未保存文档',
+    onSwitchTab: vi.fn(),
+    onRequestRename: vi.fn(),
+    onCloseTab: vi.fn(),
+    isDocx: false,
+    editorPane: <div />,
+    docxPane: <div />,
+    rightPanelMode: 'none' as const,
+    resizing: false,
+    rightPanelResizeLabel: '',
+    rightPanelResizeTitle: '',
+    onRightPanelResize: vi.fn(),
+    onResetRightPanelWidth: vi.fn(),
+    rightPanel: <div />,
+    onSetRightPanelMode: vi.fn(),
+    terminalNode: null,
+    statusBarNode: null,
+    ...overrides,
+  };
+}
+
 describe('AppLayoutChrome editor tab indicator', () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -55,54 +101,42 @@ describe('AppLayoutChrome editor tab indicator', () => {
   });
 
   it('moves the active indicator after closing a tab before it', () => {
-    const props = {
-      appStyle: {},
-      toolbarProps: {} as never,
-      mainContentRef: createRef<HTMLDivElement>(),
-      mainContentClassName: 'main-content',
-      rightPanelWidth: 420,
-      leftRailMode: 'none' as const,
-      workspacePanelWidth: 300,
-      leftResizing: 'none' as const,
-      onToggleWorkspacePanel: vi.fn(),
-      onToggleAiPanel: vi.fn(),
-      conversationPanelProps: {} as never,
-      fileTreeProps: {} as never,
-      onLeftPanelResize: vi.fn(),
-      showToc: false,
-      tocProps: {} as never,
-      externalChangeConflict: null,
-      onViewDiff: vi.fn(),
-      onAcceptExternal: vi.fn(),
-      onKeepMine: vi.fn(),
-      shouldShowTabbar: true,
-      openTabs: [tab('first'), tab('second'), tab('third')],
-      activeTabId: 'third',
-      renameTitle: '重命名',
-      renameTitleUnsaved: '未保存文档',
-      onSwitchTab: vi.fn(),
-      onRequestRename: vi.fn(),
-      onCloseTab: vi.fn(),
-      isDocx: false,
-      editorPane: <div />,
-      docxPane: <div />,
-      rightPanelMode: 'none' as const,
-      resizing: false,
-      rightPanelResizeLabel: '',
-      rightPanelResizeTitle: '',
-      onRightPanelResize: vi.fn(),
-      onResetRightPanelWidth: vi.fn(),
-      rightPanel: <div />,
-      onSetRightPanelMode: vi.fn(),
-      terminalNode: null,
-      statusBarNode: null,
-    };
-
+    const props = makeProps();
     act(() => root.render(<AppLayoutChrome {...props} />));
     expect(host.querySelector<HTMLElement>('.editor-tab-indicator')?.style.transform).toBe('translateX(260px)');
 
     act(() => root.render(<AppLayoutChrome {...props} openTabs={[tab('second'), tab('third')]} />));
 
     expect(host.querySelector<HTMLElement>('.editor-tab-indicator')?.style.transform).toBe('translateX(136px)');
+  });
+
+  it('激活标签与未保存圆点可同时标识（issue #264）', () => {
+    const dirtyActive = tab('unsaved');
+    dirtyActive.file.dirty = true;
+    const cleanInactive = tab('clean');
+
+    act(() => root.render(
+      <AppLayoutChrome
+        {...makeProps({ openTabs: [dirtyActive, cleanInactive], activeTabId: 'unsaved' })}
+      />,
+    ));
+
+    const tabs = host.querySelectorAll<HTMLElement>('.editor-tab');
+    expect(tabs).toHaveLength(2);
+
+    // 激活 + 未保存共存:active 类、下划线标识类与圆点同时存在。
+    expect(tabs[0].classList.contains('active')).toBe(true);
+    expect(tabs[0].classList.contains('is-dirty')).toBe(true);
+    expect(tabs[0].querySelector('.editor-tab-dirty-dot')).not.toBeNull();
+    // 星号前缀退役,避免与激活态混淆。
+    expect(tabs[0].textContent).not.toContain('*unsaved.md');
+    // dirty 状态必须进入 tab 按钮的可访问名称,不只依赖圆点颜色（PR #265 检视）。
+    expect(tabs[0].querySelector('.editor-tab-main')?.getAttribute('aria-label')).toBe('unsaved.md（未保存修改）');
+    expect(tabs[1].querySelector('.editor-tab-main')?.getAttribute('aria-label')).toBe('clean.md');
+
+    // 未激活但干净:既无 dirty 类也无圆点,保持弱化可读。
+    expect(tabs[1].classList.contains('active')).toBe(false);
+    expect(tabs[1].classList.contains('is-dirty')).toBe(false);
+    expect(tabs[1].querySelector('.editor-tab-dirty-dot')).toBeNull();
   });
 });

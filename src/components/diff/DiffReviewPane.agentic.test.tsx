@@ -7,6 +7,15 @@ import { DiffReviewPane, type DiffFeedbackRequest } from './DiffReviewPane';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const updateSettingsMock = vi.fn();
+vi.mock('../../services/settingsService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/settingsService')>();
+  return {
+    ...actual,
+    updateSettings: (...args: Parameters<typeof actual.updateSettings>) => updateSettingsMock(...args),
+  };
+});
+
 function Harness({
   onFeedback,
   onRecheck,
@@ -154,5 +163,87 @@ describe('DiffReviewPane 双栏候选稿', () => {
     const applyButton = Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
       .find((button) => button.textContent?.includes('应用'));
     expect(applyButton?.disabled).toBe(true);
+  });
+
+  function stubRafSynchronously(): void {
+    // jsdom 的 rAF 是异步定时器。用微任务模拟"下一帧",act(await) 会冲刷。
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      queueMicrotask(() => callback(0));
+      return 1;
+    }) as typeof window.requestAnimationFrame;
+  }
+
+  function baselineRatio(pane: HTMLElement | null): number {
+    const match = pane?.style.gridTemplateColumns.match(/minmax\(360px, ([\d.e+-]+)fr\)/);
+    expect(match).toBeTruthy();
+    return Number(match![1]);
+  }
+
+  it('左右视图分隔条可拖拽调比例,松手后持久化 (issue #264)', async () => {
+    stubRafSynchronously();
+    await act(async () => root.render(
+      <Harness onFeedback={async () => {}} onRecheck={async () => {}} />,
+    ));
+
+    const compare = host.querySelector<HTMLElement>('.diff-review-compare');
+    const resizer = host.querySelector<HTMLElement>('.diff-review-split-resizer');
+    expect(compare).not.toBeNull();
+    expect(resizer?.getAttribute('role')).toBe('separator');
+    // 默认 1:1。
+    expect(baselineRatio(compare)).toBeCloseTo(0.5, 10);
+
+    // jsdom 默认 rect 全 0,手动给出容器几何:可用宽度 1200px(扣除 7px 分隔条)。
+    compare!.getBoundingClientRect = () => new DOMRect(0, 0, 1207, 800);
+
+    await act(async () => {
+      resizer!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 600, button: 0 }));
+    });
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 840, button: 0 }));
+    });
+    // 840 / 1200 = 0.7。
+    expect(baselineRatio(compare)).toBeCloseTo(0.7, 10);
+    // 拖拽中不落盘。
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 840, button: 0 }));
+    });
+    expect(updateSettingsMock).toHaveBeenCalledWith({ diffReviewSplitRatio: expect.closeTo(0.7, 10) });
+  });
+
+  it('每侧保住 360px 最小宽度,比例不越过边界 (issue #264)', async () => {
+    if (typeof window.requestAnimationFrame !== 'function') {
+      window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      }) as typeof window.requestAnimationFrame;
+    }
+    await act(async () => root.render(
+      <Harness onFeedback={async () => {}} onRecheck={async () => {}} />,
+    ));
+
+    const compare = host.querySelector<HTMLElement>('.diff-review-compare');
+    const resizer = host.querySelector<HTMLElement>('.diff-review-split-resizer');
+    // 可用 1200px,360px 最小宽 → 比例范围 [0.3, 0.7],再叠加持久化上限 0.85/下限 0.15。
+    compare!.getBoundingClientRect = () => new DOMRect(0, 0, 1207, 800);
+
+    await act(async () => {
+      resizer!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 600, button: 0 }));
+    });
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 20, button: 0 }));
+    });
+    expect(baselineRatio(compare)).toBeCloseTo(0.3, 10);
+
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 1180, button: 0 }));
+    });
+    expect(baselineRatio(compare)).toBeCloseTo(0.7, 10);
+
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 1180, button: 0 }));
+    });
+    expect(updateSettingsMock).toHaveBeenCalledWith({ diffReviewSplitRatio: expect.closeTo(0.7, 10) });
   });
 });
