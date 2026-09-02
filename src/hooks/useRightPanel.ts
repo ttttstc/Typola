@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 
 export type RightPanelMode = 'none' | 'word' | 'wechat' | 'flow' | 'review' | 'artifacts' | 'toc';
@@ -8,11 +8,15 @@ type UseRightPanelOptions = {
   minWidth: number;
   maxWidth: number;
   getDefaultRightPanelWidth: () => number;
+  /** 拖拽结束回调（携带最终宽度），供调用方按模式持久化（issue #264 检视模式）。 */
+  onResizeEnd?: (width: number) => void;
 };
 
 type UseRightPanelResult = {
   rightPanelMode: RightPanelMode;
   setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>>;
+  rightPanelCollapsed: boolean;
+  toggleRightPanelCollapsed: () => void;
   rightPanelWidth: number;
   setRightPanelWidth: Dispatch<SetStateAction<number>>;
   resizing: boolean;
@@ -27,10 +31,17 @@ export function useRightPanel({
   minWidth,
   maxWidth,
   getDefaultRightPanelWidth,
+  onResizeEnd,
 }: UseRightPanelOptions): UseRightPanelResult {
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('none');
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [resizing, setResizing] = useState(false);
+  // latest-ref 转发回调，避免拖拽闭包拿到过期引用。
+  const onResizeEndRef = useRef(onResizeEnd);
+  useEffect(() => {
+    onResizeEndRef.current = onResizeEnd;
+  });
 
   useEffect(() => {
     if (rightPanelMode === 'none') return;
@@ -43,6 +54,16 @@ export function useRightPanel({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [getDefaultRightPanelWidth, rightPanelMode]);
+
+  // 切换面板模式时自动取消折叠，避免打开新面板仍是隐藏态。
+  useEffect(() => {
+    if (rightPanelMode !== 'none') setRightPanelCollapsed(false);
+  }, [rightPanelMode]);
+
+  const toggleRightPanelCollapsed = useCallback(() => {
+    if (rightPanelMode === 'none') return;
+    setRightPanelCollapsed((collapsed) => !collapsed);
+  }, [rightPanelMode]);
 
   const handleRightPanelResizerPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const container = containerRef.current;
@@ -59,7 +80,9 @@ export function useRightPanel({
 
     const updateWidth = (clientX: number) => {
       const nextWidth = rightEdge - clientX;
-      setRightPanelWidth(Math.min(maxAllowedWidth, Math.max(minWidth, nextWidth)));
+      const clamped = Math.min(maxAllowedWidth, Math.max(minWidth, nextWidth));
+      setRightPanelWidth(clamped);
+      return clamped;
     };
 
     updateWidth(event.clientX);
@@ -81,8 +104,9 @@ export function useRightPanel({
         window.cancelAnimationFrame(frameId);
         frameId = null;
       }
-      updateWidth(latestClientX);
+      const finalWidth = updateWidth(latestClientX);
       setResizing(false);
+      onResizeEndRef.current?.(finalWidth);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', finishResize);
       window.removeEventListener('pointercancel', finishResize);
@@ -98,6 +122,8 @@ export function useRightPanel({
   return {
     rightPanelMode,
     setRightPanelMode,
+    rightPanelCollapsed,
+    toggleRightPanelCollapsed,
     rightPanelWidth,
     setRightPanelWidth,
     resizing,

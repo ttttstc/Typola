@@ -43,6 +43,7 @@ type AppLayoutChromeProps = {
   editorPane: ReactNode;
   docxPane: ReactNode;
   rightPanelMode: RightPanelMode;
+  rightPanelCollapsed: boolean;
   resizing: boolean;
   rightPanelResizeLabel: string;
   rightPanelResizeTitle: string;
@@ -139,6 +140,7 @@ export function AppLayoutChrome({
   editorPane,
   docxPane,
   rightPanelMode,
+  rightPanelCollapsed,
   resizing,
   rightPanelResizeLabel,
   rightPanelResizeTitle,
@@ -306,7 +308,7 @@ export function AppLayoutChrome({
           {isDocx ? docxPane : editorPane}
         </section>
         <AnimatePresence initial={false}>
-          {rightPanelMode !== 'none' && rightPanelMode !== 'review' && !isDocx && (
+          {rightPanelMode !== 'none' && !rightPanelCollapsed && !isDocx && (
             <motion.div
               key="right-rail-resizer"
               className={`word-preview-resizer ${resizing ? 'dragging' : ''}`}
@@ -330,12 +332,14 @@ export function AppLayoutChrome({
           {rightPanelMode !== 'none' && !isDocx ? (
             <motion.aside
               key={rightPanelMode === 'review' ? 'right-rail-review' : 'right-rail'}
-              className="right-rail-shell"
-              style={rightPanelMode === 'review' ? undefined : { width: rightPanelWidth, overflow: 'hidden' }}
+              className={`right-rail-shell ${rightPanelCollapsed ? 'is-collapsed' : ''}`}
+              style={{ width: rightPanelWidth, overflow: 'hidden' }}
               initial={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
               animate={rightPanelMode === 'review' ? { opacity: 1 } : { width: rightPanelWidth, opacity: 1 }}
               exit={rightPanelMode === 'review' ? { opacity: 0 } : { width: 0, opacity: 0 }}
               transition={resizing ? { duration: 0 } : calmTransition}
+              aria-hidden={rightPanelCollapsed || undefined}
+              inert={rightPanelCollapsed ? true : undefined}
             >
             {(rightPanelMode === 'word' || rightPanelMode === 'wechat') && (
               <div ref={rightRailIndicator.containerRef} className="right-rail-tabs" role="tablist" aria-label="右侧预览切换">

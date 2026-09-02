@@ -179,6 +179,26 @@ describe('settingsService', () => {
     expect(getSettings().diffReviewSplitRatio).toBe(0.5);
   });
 
+  it('persists the review panel width and keeps null as the 50/50 default (issue #264)', () => {
+    // 默认 null = 未拖拽过,使用 50/50 分屏。
+    expect(getSettings().reviewPanelWidth).toBeNull();
+
+    updateSettings({ reviewPanelWidth: 560 });
+    expect(getSettings().reviewPanelWidth).toBe(560);
+
+    // 显式 null 表示重置回默认(区分"未提供")。
+    updateSettings({ reviewPanelWidth: null });
+    expect(getSettings().reviewPanelWidth).toBeNull();
+
+    // 宽度收进 [320, 760],非法值回落 null。
+    updateSettings({ reviewPanelWidth: 100 });
+    expect(getSettings().reviewPanelWidth).toBe(320);
+    updateSettings({ reviewPanelWidth: 9999 });
+    expect(getSettings().reviewPanelWidth).toBe(760);
+    updateSettings({ reviewPanelWidth: 'wide' as unknown as number });
+    expect(getSettings().reviewPanelWidth).toBeNull();
+  });
+
   it('persists the selected Typola theme and falls back to Plain Paper for unknown theme ids', () => {
     expect(getSettings()).toMatchObject({
       themeId: 'plain-paper',
