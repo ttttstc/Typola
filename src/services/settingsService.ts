@@ -76,6 +76,18 @@ export function normalizeDiffReviewSplitRatio(value: unknown): number {
   return Math.min(DIFF_REVIEW_SPLIT_RATIO_MAX, Math.max(DIFF_REVIEW_SPLIT_RATIO_MIN, ratio));
 }
 
+/** 检视模式右栏宽度范围（px）。与 appLayoutUtils 的 RIGHT_PANEL_MIN/MAX_WIDTH 保持一致。 */
+export const REVIEW_PANEL_WIDTH_MIN = 320;
+export const REVIEW_PANEL_WIDTH_MAX = 760;
+
+/** 检视模式右栏宽度：null 表示未拖拽过，使用默认 50/50 分屏。 */
+export function normalizeReviewPanelWidth(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const width = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(width)) return null;
+  return Math.min(REVIEW_PANEL_WIDTH_MAX, Math.max(REVIEW_PANEL_WIDTH_MIN, Math.round(width)));
+}
+
 export const STANDARD_CUSTOM_EXPORT_PRESET_LIMIT = STANDARD_PRESET_SLOT_LIMIT;
 export const CUSTOM_EXPORT_PRESET_LIMIT_MESSAGE =
   '当前 Word 自定义槽位已用完。';
@@ -265,6 +277,8 @@ export interface AppSettings {
   tocPanelWidth: number;
   /** 检视模式左右视图宽度比例（基线侧占比 0.15–0.85）。issue #264。 */
   diffReviewSplitRatio: number;
+  /** 检视意见模式右栏宽度（px）。null = 默认 50/50 分屏，拖拽后持久化。issue #264。 */
+  reviewPanelWidth: number | null;
   // 终端
   terminalShellPath: string;
   terminalFontFamily: string;
@@ -339,6 +353,7 @@ const defaults: AppSettings = {
   tocAlwaysPinned: false,
   tocPanelWidth: TOC_PANEL_WIDTH_DEFAULT,
   diffReviewSplitRatio: DIFF_REVIEW_SPLIT_RATIO_DEFAULT,
+  reviewPanelWidth: null,
   terminalShellPath: '',
   terminalFontFamily: 'Cascadia Mono, JetBrains Mono, SF Mono, Menlo, Consolas, monospace',
   terminalFontSize: 13,
@@ -920,6 +935,9 @@ export function getSettings(): AppSettings {
       previewLatinCustomFont: normalizeCustomFontName(stored.previewLatinCustomFont),
       previewHeadingCustomFont: normalizeCustomFontName(stored.previewHeadingCustomFont),
       tocAlwaysPinned: stored.tocAlwaysPinned === true,
+      tocPanelWidth: normalizeTocPanelWidth(stored.tocPanelWidth),
+      diffReviewSplitRatio: normalizeDiffReviewSplitRatio(stored.diffReviewSplitRatio),
+      reviewPanelWidth: normalizeReviewPanelWidth(stored.reviewPanelWidth),
       terminalShellPath: normalizeTerminalShellPath(stored.terminalShellPath),
       terminalFontFamily: normalizeTerminalFontFamily(stored.terminalFontFamily),
       terminalFontSize: normalizeTerminalFontSize(stored.terminalFontSize),
@@ -1024,6 +1042,9 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     tocPanelWidth: normalizeTocPanelWidth(patch.tocPanelWidth ?? current.tocPanelWidth),
     diffReviewSplitRatio: normalizeDiffReviewSplitRatio(
       patch.diffReviewSplitRatio ?? current.diffReviewSplitRatio,
+    ),
+    reviewPanelWidth: normalizeReviewPanelWidth(
+      'reviewPanelWidth' in patch ? patch.reviewPanelWidth : current.reviewPanelWidth,
     ),
     editorPaperBackground: (patch.editorPaperBackground ?? current.editorPaperBackground) === true,
     terminalShellPath: normalizeTerminalShellPath(patch.terminalShellPath ?? current.terminalShellPath),

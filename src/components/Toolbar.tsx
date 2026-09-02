@@ -19,6 +19,8 @@ import {
   ListTree,
   Newspaper,
   PanelLeft,
+  PanelRightClose,
+  PanelRightOpen,
   Save,
   SaveAll,
   SlidersHorizontal,
@@ -55,6 +57,8 @@ type ToolbarProps = {
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
   artifactsVisible?: boolean;
+  rightPanelAvailable: boolean;
+  rightPanelCollapsed: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
   docMode: DocMode;
@@ -64,6 +68,7 @@ type ToolbarProps = {
   onToggleWordPreview: () => void;
   onToggleWechatPreview: () => void;
   onToggleArtifacts?: () => void;
+  onToggleRightPanel: () => void;
   onToggleTerminal: () => void;
   onOpenToc?: () => void;
   onSetDocMode: (next: DocMode) => void;
@@ -83,9 +88,10 @@ type ToolbarProps = {
 
 export function Toolbar({
   editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
+  rightPanelAvailable, rightPanelCollapsed,
   terminalVisible, editingDisabled, docMode,
   onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
-  onToggleTerminal, onOpenToc, onSetDocMode,
+  onToggleRightPanel, onToggleTerminal, onOpenToc, onSetDocMode,
   onNew, onOpen, onOpenFolder, onSave, onSaveAs, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings,
 }: ToolbarProps) {
@@ -319,6 +325,18 @@ export function Toolbar({
               aria-pressed={Boolean(artifactsVisible)}
             >
               <PackageOpen size={iconSize} strokeWidth={strokeWidth} />
+            </button>
+          )}
+          {rightPanelAvailable && (
+            <button
+              className={rightPanelCollapsed ? 'active' : ''}
+              onClick={onToggleRightPanel}
+              data-no-window-drag="true"
+              data-tooltip={rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel')}
+              aria-label={rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel')}
+              aria-pressed={rightPanelCollapsed}
+            >
+              {rightPanelCollapsed ? <PanelRightOpen size={iconSize} strokeWidth={strokeWidth} /> : <PanelRightClose size={iconSize} strokeWidth={strokeWidth} />}
             </button>
           )}
           <button

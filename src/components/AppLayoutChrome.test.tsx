@@ -56,6 +56,7 @@ function makeProps(overrides: Partial<Parameters<typeof AppLayoutChrome>[0]> = {
     editorPane: <div />,
     docxPane: <div />,
     rightPanelMode: 'none' as const,
+    rightPanelCollapsed: false,
     resizing: false,
     rightPanelResizeLabel: '',
     rightPanelResizeTitle: '',
@@ -138,5 +139,51 @@ describe('AppLayoutChrome editor tab indicator', () => {
     expect(tabs[1].classList.contains('active')).toBe(false);
     expect(tabs[1].classList.contains('is-dirty')).toBe(false);
     expect(tabs[1].querySelector('.editor-tab-dirty-dot')).toBeNull();
+  });
+
+  it('检视模式渲染右栏拖拽分隔条且宽度生效（issue #264）', () => {
+    act(() => root.render(
+      <AppLayoutChrome
+        {...makeProps({ rightPanelMode: 'review', rightPanelWidth: 560 })}
+      />,
+    ));
+
+    // 检视模式下 resizer 不再被排除,右栏使用传入宽度而非固定 50%。
+    const resizer = host.querySelector<HTMLElement>('.word-preview-resizer');
+    expect(resizer).not.toBeNull();
+    expect(resizer?.getAttribute('role')).toBe('separator');
+    expect(resizer?.getAttribute('aria-valuenow')).toBe('560');
+
+    const rail = host.querySelector<HTMLElement>('.right-rail-shell');
+    expect(rail).not.toBeNull();
+    expect(rail?.style.width).toBe('560px');
+  });
+
+  it('折叠右栏时保留面板挂载，只关闭布局与交互', () => {
+    const panel = <div data-testid="right-panel-content" />;
+    const props = makeProps({
+      rightPanelMode: 'word' as const,
+      rightPanelCollapsed: true,
+      rightPanel: panel,
+    });
+
+    act(() => root.render(<AppLayoutChrome {...props} />));
+
+    // 面板内容仍挂载(不卸载),右栏容器加折叠态类。
+    const contentBefore = host.querySelector('[data-testid="right-panel-content"]');
+    expect(contentBefore).not.toBeNull();
+    const rail = host.querySelector<HTMLElement>('.right-rail-shell');
+    expect(rail?.classList.contains('is-collapsed')).toBe(true);
+    // 折叠时 resizer 隐藏、右栏设 aria-hidden + inert。
+    expect(host.querySelector('.word-preview-resizer')).toBeNull();
+    expect(rail?.getAttribute('aria-hidden')).toBe('true');
+
+    // 展开后同一节点复用,折叠态移除。
+    act(() => root.render(<AppLayoutChrome {...props} rightPanelCollapsed={false} />));
+
+    expect(host.querySelector('[data-testid="right-panel-content"]')).toBe(contentBefore);
+    const railAfter = host.querySelector<HTMLElement>('.right-rail-shell');
+    expect(railAfter?.classList.contains('is-collapsed')).toBe(false);
+    expect(railAfter?.getAttribute('aria-hidden')).toBe(null);
   });
 });

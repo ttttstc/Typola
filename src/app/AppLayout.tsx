@@ -8,6 +8,7 @@ import {
   clearLastOpenedPath,
   getLastOpenedPath,
   getLastWorkspaceRoot,
+  getSettings,
   resolvePreviewFontFamily,
   resolvePreviewHeadingFontFamily,
   setLastWorkspaceRoot,
@@ -340,6 +341,15 @@ export function AppLayout() {
     // 模式分支:word/wechat 跟编辑器 1:1(可用空间均分);其他模式跟左栏一致 360。
     const containerWidth = mainContentRef.current?.getBoundingClientRect().width ?? window.innerWidth;
     const mode = rightPanelModeRef.current;
+    if (mode === 'review') {
+      // 检视模式默认正文/工作台 1:1;拖拽过的宽度从设置恢复并随窗口保留(issue #264)。
+      const persisted = getSettings().reviewPanelWidth;
+      if (persisted !== null) {
+        return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, persisted));
+      }
+      const target = Math.round(containerWidth / 2);
+      return Math.min(RIGHT_PANEL_MAX_WIDTH, Math.max(RIGHT_PANEL_MIN_WIDTH, target));
+    }
     if (mode === 'word' || mode === 'wechat') {
       const available = containerWidth - WORKSPACE_PANEL_DEFAULT_WIDTH - RIGHT_PANEL_RESIZER_GAP;
       const target = Math.round(available / 2);
@@ -350,6 +360,8 @@ export function AppLayout() {
   const {
     rightPanelMode,
     setRightPanelMode,
+    rightPanelCollapsed,
+    toggleRightPanelCollapsed,
     rightPanelWidth,
     setRightPanelWidth,
     resizing,
@@ -359,6 +371,10 @@ export function AppLayout() {
     minWidth: RIGHT_PANEL_MIN_WIDTH,
     maxWidth: RIGHT_PANEL_MAX_WIDTH,
     getDefaultRightPanelWidth,
+    onResizeEnd: (width) => {
+      // 仅检视模式持久化拖拽宽度;word/wechat 维持既有"重开即重置"行为(issue #264)。
+      if (rightPanelModeRef.current === 'review') updateSettings({ reviewPanelWidth: width });
+    },
   });
   // 模式变化时同步 ref 并按新模式重算默认宽度
   useEffect(() => {
@@ -2294,11 +2310,11 @@ export function AppLayout() {
   const mainContentClassName = [
     'main-content',
     isDocx ? 'docx-layout' : 'writing-layout',
-    rightPanelMode !== 'none' && !isDocx ? 'right-panel-open' : '',
-    rightPanelMode === 'word' && !isDocx ? 'word-preview-open' : '',
-    rightPanelMode === 'wechat' && !isDocx ? 'wechat-preview-open' : '',
-    rightPanelMode === 'flow' && !isDocx ? 'flow-panel-open' : '',
-    rightPanelMode === 'review' && !isDocx ? 'review-panel-open' : '',
+    rightPanelMode !== 'none' && !rightPanelCollapsed && !isDocx ? 'right-panel-open' : '',
+    rightPanelMode === 'word' && !rightPanelCollapsed && !isDocx ? 'word-preview-open' : '',
+    rightPanelMode === 'wechat' && !rightPanelCollapsed && !isDocx ? 'wechat-preview-open' : '',
+    rightPanelMode === 'flow' && !rightPanelCollapsed && !isDocx ? 'flow-panel-open' : '',
+    rightPanelMode === 'review' && !rightPanelCollapsed && !isDocx ? 'review-panel-open' : '',
     leftRailMode !== 'none' ? 'left-panel-open' : '',
     leftRailMode === 'aiWorkbench' ? 'conversation-open' : '',
     shouldShowHtmlPresentation ? 'html-presentation-layout' : '',
@@ -2489,6 +2505,8 @@ export function AppLayout() {
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
           artifactsVisible: rightPanelMode === 'artifacts',
+          rightPanelAvailable: rightPanelMode !== 'none' && !isDocx,
+          rightPanelCollapsed,
           terminalVisible,
           editingDisabled: isDocx,
           docMode,
@@ -2498,6 +2516,7 @@ export function AppLayout() {
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
+          onToggleRightPanel: toggleRightPanelCollapsed,
           onToggleTerminal: handleToggleTerminal,
           onOpenToc: () => setTocOpenRequest((tick) => tick + 1),
           onSetDocMode: (next) => void setDocMode(next),
@@ -2602,11 +2621,16 @@ export function AppLayout() {
         editorPane={editorPane}
         docxPane={docxPane}
         rightPanelMode={rightPanelMode}
+        rightPanelCollapsed={rightPanelCollapsed}
         resizing={resizing}
-        rightPanelResizeLabel={t('rightPanelResizeLabel')}
-        rightPanelResizeTitle={t('rightPanelResizeTitle')}
+        rightPanelResizeLabel={rightPanelMode === 'review' ? t('reviewPanelResizeLabel') : t('rightPanelResizeLabel')}
+        rightPanelResizeTitle={rightPanelMode === 'review' ? t('reviewPanelResizeTitle') : t('rightPanelResizeTitle')}
         onRightPanelResize={handleRightPanelResizerPointerDown}
-        onResetRightPanelWidth={() => setRightPanelWidth(getDefaultRightPanelWidth())}
+        onResetRightPanelWidth={() => {
+          // 检视模式双击重置 = 清除持久化宽度,回到默认 50/50(issue #264)。
+          if (rightPanelMode === 'review') updateSettings({ reviewPanelWidth: null });
+          setRightPanelWidth(getDefaultRightPanelWidth());
+        }}
         rightPanel={rightPanel}
         onSetRightPanelMode={setRightPanelMode}
         terminalNode={(

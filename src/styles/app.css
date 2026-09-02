@@ -1121,11 +1121,16 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   overflow: hidden;
 }
 
-/* 检视模式固定为正文、检视工作台各占一半，不引入额外可调布局状态。 */
-.review-panel-open .editor-workbench,
-.review-panel-open .right-rail-shell {
+/* 折叠态:保留挂载只关布局,宽度归零并禁用交互(aria-hidden + inert)。 */
+.right-rail-shell.is-collapsed {
+  flex: 0 0 0;
+  width: 0 !important;
+  border-left: 0;
+}
+
+/* 检视模式:右栏宽度可拖拽(默认 50/50,拖后持久化),编辑器占剩余空间(issue #264)。 */
+.review-panel-open .editor-workbench {
   flex: 1 1 0;
-  width: 50%;
   min-width: 0;
 }
 
