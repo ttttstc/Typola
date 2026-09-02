@@ -4,13 +4,17 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-([a-zA-Z0-9]+)(\.\d+)?)?$/;
 
-export function assertStableVersion(value) {
-  if (!stableVersionPattern.test(value)) {
-    throw new Error(`VERSION must be stable SemVer X.Y.Z without a leading v: ${JSON.stringify(value)}`);
+export function assertVersion(value) {
+  if (!versionPattern.test(value)) {
+    throw new Error(`VERSION must be SemVer X.Y.Z or X.Y.Z-prerelease without a leading v: ${JSON.stringify(value)}`);
   }
   return value;
+}
+
+export function isPrerelease(version) {
+  return version.includes('-');
 }
 
 function replaceRequired(source, pattern, replacement, path) {
@@ -70,13 +74,13 @@ function readVersionAtRef(ref) {
     encoding: 'utf8',
   });
   if (result.status !== 0) return undefined;
-  return assertStableVersion(result.stdout.trim());
+  return assertVersion(result.stdout.trim());
 }
 
 async function main() {
   const args = new Set(process.argv.slice(2));
   const checkOnly = args.has('--check');
-  const version = assertStableVersion((await readFile(resolve(projectRoot, 'VERSION'), 'utf8')).trim());
+  const version = assertVersion((await readFile(resolve(projectRoot, 'VERSION'), 'utf8')).trim());
   const files = [
     'package.json',
     'package-lock.json',

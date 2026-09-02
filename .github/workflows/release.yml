@@ -47,6 +47,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Determine bundle args
+        id: bundles
+        shell: pwsh
+        run: |
+          if ('${{ contains(github.ref_name, '-') }}' -eq 'true') {
+            echo "args=--config src-tauri/tauri.updater.conf.json --bundles nsis" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "args=--config src-tauri/tauri.updater.conf.json" >> $env:GITHUB_OUTPUT
+          }
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,11 +66,12 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Typola ${{ github.ref_name }}'
           releaseDraft: true
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: false
-          args: '--config src-tauri/tauri.updater.conf.json'
+          args: ${{ steps.bundles.outputs.args }}
 
       - name: Create and upload updater manifest
+        if: ${{ !contains(github.ref_name, '-') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
@@ -79,15 +90,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
+          $isPrerelease = '${{ contains(github.ref_name, '-') }}' -eq 'true'
           $assets = gh release view "${{ github.ref_name }}" --json assets,isDraft | ConvertFrom-Json
           if (!$assets.isDraft) { throw 'Release must remain draft until validation completes' }
           $names = @($assets.assets.name)
-          foreach ($pattern in @('latest.json', '*-setup.exe', '*.msi', '*portable.zip', '*.sig')) {
+          $required = @('*-setup.exe', '*portable.zip', '*.sig')
+          if (!$isPrerelease) { $required = @('latest.json', '*.msi') + $required }
+          foreach ($pattern in $required) {
             if (!($names | Where-Object { $_ -like $pattern })) { throw "Missing release asset: $pattern" }
           }
           gh release edit "${{ github.ref_name }}" --draft=false
 
       - name: Smoke test public updater endpoint
+        if: ${{ !contains(github.ref_name, '-') }}
         shell: pwsh
         run: |
           $expected = (Get-Content VERSION -Raw).Trim()
