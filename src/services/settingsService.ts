@@ -54,6 +54,28 @@ const LAST_WORKSPACE_ROOT_KEY = 'typola-last-workspace-root';
 const FONT_DEFAULTS_VERSION = 4;
 
 export const SETTINGS_CHANGED_EVENT = 'typola-settings-changed';
+
+/** 固定大纲栏宽度范围（px）。与 .floating-toc.pinned 的 CSS min/max 保持一致。 */
+export const TOC_PANEL_WIDTH_DEFAULT = 260;
+export const TOC_PANEL_WIDTH_MIN = 200;
+export const TOC_PANEL_WIDTH_MAX = 480;
+/** 检视模式左右分栏比例的持久化范围（基线侧占比）。 */
+export const DIFF_REVIEW_SPLIT_RATIO_DEFAULT = 0.5;
+export const DIFF_REVIEW_SPLIT_RATIO_MIN = 0.15;
+export const DIFF_REVIEW_SPLIT_RATIO_MAX = 0.85;
+
+export function normalizeTocPanelWidth(value: unknown): number {
+  const width = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(width)) return TOC_PANEL_WIDTH_DEFAULT;
+  return Math.min(TOC_PANEL_WIDTH_MAX, Math.max(TOC_PANEL_WIDTH_MIN, Math.round(width)));
+}
+
+export function normalizeDiffReviewSplitRatio(value: unknown): number {
+  const ratio = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(ratio)) return DIFF_REVIEW_SPLIT_RATIO_DEFAULT;
+  return Math.min(DIFF_REVIEW_SPLIT_RATIO_MAX, Math.max(DIFF_REVIEW_SPLIT_RATIO_MIN, ratio));
+}
+
 export const STANDARD_CUSTOM_EXPORT_PRESET_LIMIT = STANDARD_PRESET_SLOT_LIMIT;
 export const CUSTOM_EXPORT_PRESET_LIMIT_MESSAGE =
   '当前 Word 自定义槽位已用完。';
@@ -239,6 +261,10 @@ export interface AppSettings {
   fontDefaultsVersion: number;
   // 大纲
   tocAlwaysPinned: boolean;
+  /** 固定大纲栏宽度（px）。用户拖拽调整后的布局状态，本地持久化（issue #264）。 */
+  tocPanelWidth: number;
+  /** 检视模式左右视图宽度比例（基线侧占比 0.15–0.85）。issue #264。 */
+  diffReviewSplitRatio: number;
   // 终端
   terminalShellPath: string;
   terminalFontFamily: string;
@@ -311,6 +337,8 @@ const defaults: AppSettings = {
   previewWidth: 680,
   fontDefaultsVersion: FONT_DEFAULTS_VERSION,
   tocAlwaysPinned: false,
+  tocPanelWidth: TOC_PANEL_WIDTH_DEFAULT,
+  diffReviewSplitRatio: DIFF_REVIEW_SPLIT_RATIO_DEFAULT,
   terminalShellPath: '',
   terminalFontFamily: 'Cascadia Mono, JetBrains Mono, SF Mono, Menlo, Consolas, monospace',
   terminalFontSize: 13,
@@ -993,6 +1021,10 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     ),
     license,
     tocAlwaysPinned: (patch.tocAlwaysPinned ?? current.tocAlwaysPinned) === true,
+    tocPanelWidth: normalizeTocPanelWidth(patch.tocPanelWidth ?? current.tocPanelWidth),
+    diffReviewSplitRatio: normalizeDiffReviewSplitRatio(
+      patch.diffReviewSplitRatio ?? current.diffReviewSplitRatio,
+    ),
     editorPaperBackground: (patch.editorPaperBackground ?? current.editorPaperBackground) === true,
     terminalShellPath: normalizeTerminalShellPath(patch.terminalShellPath ?? current.terminalShellPath),
     terminalFontFamily: normalizeTerminalFontFamily(patch.terminalFontFamily ?? current.terminalFontFamily),

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TocItem } from '../types/document';
 import { FloatingToc } from './FloatingToc';
 
@@ -10,8 +10,19 @@ import { FloatingToc } from './FloatingToc';
 vi.mock('../services/i18n', () => ({
   translate: () => '',
 }));
+
+const updateSettingsMock = vi.fn();
+vi.mock('../services/settingsService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/settingsService')>();
+  return {
+    ...actual,
+    updateSettings: (...args: Parameters<typeof actual.updateSettings>) => updateSettingsMock(...args),
+  };
+});
+
+let mockSettings: { locale: string; tocPanelWidth: number } = { locale: 'en-US', tocPanelWidth: 260 };
 vi.mock('../hooks/useSettings', () => ({
-  useSettings: () => ({ locale: 'en-US' }),
+  useSettings: () => mockSettings,
 }));
 
 function makeItems(): TocItem[] {
@@ -174,6 +185,82 @@ describe('FloatingToc — edge drawer trigger', () => {
     expect(h.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(false);
     await h.requestOpen();
     expect(h.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(true);
+    h.cleanup();
+  });
+});
+
+describe('FloatingToc — 拖拽调宽与悬停提示 (issue #264)', () => {
+  const originalRaf = window.requestAnimationFrame;
+  const originalCancelRaf = window.cancelAnimationFrame;
+
+  beforeEach(() => {
+    mockSettings = { locale: 'en-US', tocPanelWidth: 260 };
+    updateSettingsMock.mockClear();
+    // jsdom 的 rAF 是异步定时器。用微任务模拟"下一帧",act(await) 会冲刷。
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      queueMicrotask(() => callback(0));
+      return 1;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame = (() => undefined) as typeof window.cancelAnimationFrame;
+  });
+
+  afterEach(() => {
+    window.requestAnimationFrame = originalRaf;
+    window.cancelAnimationFrame = originalCancelRaf;
+  });
+
+  function fire(target: EventTarget, type: string, clientX: number): void {
+    target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX, button: 0 }));
+  }
+
+  it('仅固定态渲染右缘分隔条,悬停提示显示完整标题', async () => {
+    const pinned = await mountFloatingToc(makeItems(), 0, true);
+    const resizer = pinned.host.querySelector<HTMLElement>('.floating-toc-resizer');
+    expect(resizer).toBeTruthy();
+    expect(resizer?.getAttribute('role')).toBe('separator');
+    // 长标题被截断时,标题按钮通过 title 提供完整文本。
+    const firstItem = pinned.host.querySelector<HTMLButtonElement>('.floating-toc-item');
+    expect(firstItem?.getAttribute('title')).toBe('A');
+    pinned.cleanup();
+
+    const floating = await mountFloatingToc(makeItems(), 0, false);
+    expect(floating.host.querySelector('.floating-toc-resizer')).toBeNull();
+    floating.cleanup();
+  });
+
+  it('拖动分隔条更新宽度并在松手时持久化到设置', async () => {
+    const h = await mountFloatingToc(makeItems(), 0, true);
+    const aside = h.host.querySelector<HTMLElement>('.floating-toc');
+    expect(aside?.style.width).toBe('260px');
+
+    const resizer = h.host.querySelector<HTMLElement>('.floating-toc-resizer');
+    await act(async () => {
+      resizer!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 260, button: 0 }));
+    });
+    await act(async () => { fire(window, 'pointermove', 320); });
+    expect(aside?.style.width).toBe('320px');
+    // 拖拽中不落盘。
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+
+    await act(async () => { fire(window, 'pointerup', 320); });
+    expect(updateSettingsMock).toHaveBeenCalledWith({ tocPanelWidth: 320 });
+    expect(aside?.style.width).toBe('260px'); // 回落到 settings 值(mock 未变)
+    h.cleanup();
+  });
+
+  it('拖出边界时宽度收进 [200, 480]', async () => {
+    const h = await mountFloatingToc(makeItems(), 0, true);
+    const aside = h.host.querySelector<HTMLElement>('.floating-toc');
+    const resizer = h.host.querySelector<HTMLElement>('.floating-toc-resizer');
+    await act(async () => {
+      resizer!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 260, button: 0 }));
+    });
+    await act(async () => { fire(window, 'pointermove', 50); });
+    expect(aside?.style.width).toBe('200px');
+    await act(async () => { fire(window, 'pointermove', 2000); });
+    expect(aside?.style.width).toBe('480px');
+    await act(async () => { fire(window, 'pointerup', 2000); });
+    expect(updateSettingsMock).toHaveBeenCalledWith({ tocPanelWidth: 480 });
     h.cleanup();
   });
 });
