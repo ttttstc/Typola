@@ -1,6 +1,6 @@
 [package]
 name = "typola"
-version = "2.0.5"
+version = "2.0.7"
 description = "A lightweight Markdown editor with HTML, Word export, and terminal support"
 authors = ["Typola contributors"]
 license = "Apache-2.0"
