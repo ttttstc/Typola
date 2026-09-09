@@ -8,6 +8,8 @@ import {
   FileText,
   FolderDown,
   FolderOpen,
+  Highlighter,
+  Minus,
   PackageOpen,
   Paintbrush,
   ImagePlus,
@@ -24,6 +26,9 @@ import {
   Save,
   SaveAll,
   SlidersHorizontal,
+  SquareCode,
+  SquareRadical,
+  Strikethrough,
   Table2,
   Terminal,
   Quote,
@@ -265,14 +270,19 @@ export function Toolbar({
         </div>
         {onFormat && (
           <div className="toolbar-group toolbar-format-actions" aria-label="Markdown 格式">
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip="加粗 (Ctrl+B)" aria-label="加粗"><Bold size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip="斜体 (Ctrl+I)" aria-label="斜体"><Italic size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip="链接" aria-label="链接"><Link size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip="引用块" aria-label="引用块"><Quote size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip="无序列表" aria-label="无序列表"><List size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip="有序列表" aria-label="有序列表"><ListOrdered size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip="任务列表" aria-label="任务列表"><ListTodo size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'format-painter' })} data-tooltip="格式刷" aria-label="格式刷"><Paintbrush size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip={t('toolbarBoldLabel')} aria-label={t('toolbarBoldLabel')}><Bold size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip={t('toolbarItalicLabel')} aria-label={t('toolbarItalicLabel')}><Italic size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'strike' })} data-tooltip={t('toolbarStrikethroughLabel')} aria-label={t('toolbarStrikethroughLabel')}><Strikethrough size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'highlight' })} data-tooltip={t('toolbarHighlightLabel')} aria-label={t('toolbarHighlightLabel')}><Highlighter size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip={t('toolbarLinkLabel')} aria-label={t('toolbarLinkLabel')}><Link size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'codeblock' })} data-tooltip={t('toolbarCodeBlockLabel')} aria-label={t('toolbarCodeBlockLabel')}><SquareCode size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'math-block' })} data-tooltip={t('toolbarMathBlockLabel')} aria-label={t('toolbarMathBlockLabel')}><SquareRadical size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip={t('toolbarQuoteLabel')} aria-label={t('toolbarQuoteLabel')}><Quote size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip={t('toolbarUnorderedListLabel')} aria-label={t('toolbarUnorderedListLabel')}><List size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip={t('toolbarOrderedListLabel')} aria-label={t('toolbarOrderedListLabel')}><ListOrdered size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip={t('toolbarTaskListLabel')} aria-label={t('toolbarTaskListLabel')}><ListTodo size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'hr' })} data-tooltip={t('toolbarHorizontalRuleLabel')} aria-label={t('toolbarHorizontalRuleLabel')}><Minus size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'format-painter' })} data-tooltip={t('toolbarFormatPainterLabel')} aria-label={t('toolbarFormatPainterLabel')}><Paintbrush size={iconSize} strokeWidth={strokeWidth} /></button>
           </div>
         )}
       </div>

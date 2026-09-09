@@ -86,6 +86,18 @@ export function EditorSection() {
 
       <div className="settings-row">
         <div>
+          <div className="settings-label">打字机模式</div>
+          <div className="settings-help">开启后，输入或移动光标时自动滚动，使当前行保持在编辑区约 40% 高度处，适合长文写作。</div>
+        </div>
+        <SettingsToggle
+          checked={settings.editorTypewriterMode}
+          label="打字机模式"
+          onChange={() => handleChange({ editorTypewriterMode: !settings.editorTypewriterMode })}
+        />
+      </div>
+
+      <div className="settings-row">
+        <div>
           <div className="settings-label">拼写检查</div>
         </div>
         <SettingsToggle

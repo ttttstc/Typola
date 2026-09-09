@@ -244,6 +244,8 @@ export interface AppSettings {
   editorWordWrap: boolean;
   editorLineNumbers: boolean;
   editorSpellCheck: boolean;
+  /** 打字机模式:打字/移动光标时把当前行滚到视口约 40% 处(Typora typewriter scrolling)。 */
+  editorTypewriterMode: boolean;
   /** 选区浮条(选中即现)开关。关掉后右键菜单 / Ctrl+K 仍在,只是不自动浮现。 */
   selectionFloatingBarEnabled: boolean;
   editorFrontmatterFoldEnabled: boolean;
@@ -326,6 +328,7 @@ const defaults: AppSettings = {
   editorWordWrap: true,
   editorLineNumbers: true,
   editorSpellCheck: false,
+  editorTypewriterMode: false,
   selectionFloatingBarEnabled: true,
   editorFrontmatterFoldEnabled: true,
   editorFormatPainterEnabled: true,
@@ -956,6 +959,7 @@ export function getSettings(): AppSettings {
       imageAllowYamlUpload: stored.imageAllowYamlUpload === true,
       imageUploadCommand: normalizeImageUploadCommand(stored.imageUploadCommand),
       editorFrontmatterFoldEnabled: stored.editorFrontmatterFoldEnabled !== false,
+      editorTypewriterMode: stored.editorTypewriterMode === true,
       editorFormatPainterEnabled: stored.editorFormatPainterEnabled !== false,
       editorPaperBackground: stored.editorPaperBackground === true,
       aiClaudePath: normalizeExecutablePath(stored.aiClaudePath),
@@ -1047,6 +1051,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
       'reviewPanelWidth' in patch ? patch.reviewPanelWidth : current.reviewPanelWidth,
     ),
     editorPaperBackground: (patch.editorPaperBackground ?? current.editorPaperBackground) === true,
+    editorTypewriterMode: (patch.editorTypewriterMode ?? current.editorTypewriterMode) === true,
     terminalShellPath: normalizeTerminalShellPath(patch.terminalShellPath ?? current.terminalShellPath),
     terminalFontFamily: normalizeTerminalFontFamily(patch.terminalFontFamily ?? current.terminalFontFamily),
     terminalFontSize: normalizeTerminalFontSize(patch.terminalFontSize ?? current.terminalFontSize),

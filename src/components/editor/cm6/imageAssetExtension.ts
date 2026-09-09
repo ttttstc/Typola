@@ -15,7 +15,7 @@ function containsAtomicImage(node: Node): boolean {
 }
 
 /** 将 atomic-editor 动态插入的图片交给统一的 Tauri 本地资源解析器。 */
-export function imageAssetExtension(options: ImageAssetOptions) {
+export function imageAssetExtension(options: ImageAssetOptions = { filePath: () => undefined }) {
   return ViewPlugin.fromClass(class {
     private observer: MutationObserver;
     private timerId: number | null = null;

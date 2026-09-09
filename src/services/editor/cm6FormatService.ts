@@ -62,6 +62,9 @@ export function applyCm6Format(view: EditorView, action: FormatAction, requestEd
     case 'hr':
       insertHorizontalRule(view);
       return;
+    case 'math-block':
+      insertMathBlock(view);
+      return;
     case 'quote-up':
       changeQuoteLevel(view, true);
       return;
@@ -320,6 +323,17 @@ function insertHorizontalRule(view: EditorView): void {
   view.dispatch({
     changes: { from: sel.from, insert },
     selection: { anchor: sel.from + insert.length },
+  });
+  view.focus();
+}
+
+function insertMathBlock(view: EditorView): void {
+  const sel = view.state.selection.main;
+  const insert = '\n$$\n\n$$\n';
+  view.dispatch({
+    changes: { from: sel.from, insert },
+    // 光标落在两个 $$ 围栏之间的空行,直接输入公式体
+    selection: { anchor: sel.from + 4 },
   });
   view.focus();
 }

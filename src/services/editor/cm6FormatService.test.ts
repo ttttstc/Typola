@@ -95,6 +95,14 @@ describe('applyCm6Format', () => {
     view.destroy();
   });
 
+  it('inserts a math block with the cursor on the empty line between fences', () => {
+    const { view } = createView('正文', 2, 2);
+    applyCm6Format(view, { type: 'math-block' });
+    expect(view.state.doc.toString()).toBe('正文\n$$\n\n$$\n');
+    expect(view.state.selection.main.anchor).toBe(6);
+    view.destroy();
+  });
+
   it('captures and applies inline format in one transaction', () => {
     const { view } = createView('**bold**\nplain', 0, 8);
     applyCm6Format(view, { type: 'capture-format' });

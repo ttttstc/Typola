@@ -40,6 +40,8 @@ export type TypolaEditorKernel = {
       searchOptions?: import('../services/documentSearchService').SearchOptions;
     },
   ) => void;
+  /** 跳转到 1-based 行号(可选 1-based 列号,支持 "行:列" 输入);行号越界自动 clamp。返回是否执行了跳转。 */
+  gotoLine: (line: number, col?: number) => boolean;
   revealText: (text: string, backwards?: boolean) => void;
   /** 重置编辑器字号(用于缩放指示器点击回 100%)。 */
   setZoom: (size: number) => void;
