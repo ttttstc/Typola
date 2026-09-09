@@ -1263,6 +1263,13 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   pointer-events: none;
 }
 
+/* 非固定态 aside 需要显式高度:子元素全为 absolute,不撑开父盒,
+ * 否则 edge-trigger(inset: 0 auto 0 0)的悬停热区高度为 0,
+ * "悬停左缘展开大纲"入口在真实浏览器中不可命中。 */
+.floating-toc:not(.pinned) {
+  height: calc(100% - 72px);
+}
+
 
 .floating-toc.pinned {
   position: relative;

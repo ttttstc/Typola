@@ -114,18 +114,20 @@ test('editor and preview panes keep compact vertical reading space', async ({ pa
   await page.goto('/');
   await expect(liveEditor(page)).toBeVisible();
 
-  const editorPadding = await liveEditorSurface(page).evaluate((el) => {
+  // issue #264:留白模型重构 — .cm-scroller 不再持有 padding,
+  // 正文呼吸留白落在 .cm-content 的水平 padding-inline(clamp 32px~96px)。
+  const editorPadding = await liveEditorContent(page).evaluate((el) => {
     const style = getComputedStyle(el);
     return {
-      top: parseFloat(style.paddingTop),
-      bottom: parseFloat(style.paddingBottom),
+      inlineStart: parseFloat(style.paddingInlineStart),
+      inlineEnd: parseFloat(style.paddingInlineEnd),
     };
   });
 
-  expect(editorPadding.top).toBeLessThanOrEqual(12);
-  expect(editorPadding.bottom).toBeLessThanOrEqual(12);
-  expect(editorPadding.top).toBeGreaterThanOrEqual(8);
-  expect(editorPadding.bottom).toBeGreaterThanOrEqual(8);
+  expect(editorPadding.inlineStart).toBeGreaterThanOrEqual(32);
+  expect(editorPadding.inlineEnd).toBeGreaterThanOrEqual(32);
+  expect(editorPadding.inlineStart).toBeLessThanOrEqual(96);
+  expect(editorPadding.inlineEnd).toBeLessThanOrEqual(96);
 });
 
 test('toolbar toggles source mode without showing Word preview', async ({ page }) => {
@@ -264,7 +266,7 @@ test('HTML export settings switch subpages and import custom CSS slots', async (
 
   await page.getByRole('tab', { name: '自定义槽位' }).click();
   await expect(page.getByText('自定义 CSS 槽位', { exact: true })).toBeVisible();
-  await expect(page.getByText('0/2', { exact: true })).toBeVisible();
+  await expect(page.getByText('0/8', { exact: true })).toBeVisible();
   await expect(page.getByLabel(/HTML 文章预览/)).toHaveCount(0);
   await expect(page.locator('.settings-preset-workbench--full')).toBeVisible();
   await expect(page.getByRole('button', { name: '导入 CSS 预设文件', exact: true })).toHaveCount(0);
@@ -284,7 +286,7 @@ test('HTML export settings switch subpages and import custom CSS slots', async (
     }, null, 2)),
   });
   await expect(page.getByText('已保存「团队 HTML 样式」')).toBeVisible();
-  await expect(page.getByText('1/2', { exact: true })).toBeVisible();
+  await expect(page.getByText('1/8', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /槽位 1 团队 HTML 样式/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '导出当前 CSS 预设' })).toBeVisible();
   await page.getByRole('button', { name: '导出当前 CSS 预设' }).click();
@@ -300,7 +302,7 @@ test('HTML export settings switch subpages and import custom CSS slots', async (
     buffer: Buffer.from('.typola-html-article h2 { color: rgb(1, 2, 3); }'),
   });
   await expect(page.getByText('已保存「E2E 文件样式」')).toBeVisible();
-  await expect(page.getByText('2/2', { exact: true })).toBeVisible();
+  await expect(page.getByText('2/8', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /槽位 2 E2E 文件样式/ })).toBeVisible();
 
   await page.getByRole('tab', { name: 'CSS 示例' }).click();
@@ -548,9 +550,8 @@ test('Word export settings make the paper preview expandable', async ({ page }) 
 
   await page.getByRole('tab', { name: '自定义槽位' }).click();
   await expect(page.getByText('自定义预设槽位', { exact: true })).toBeVisible();
-  await expect(page.getByText('0/2', { exact: true })).toBeVisible();
-  await expect(page.locator('.settings-preset-slot-empty')).toHaveCount(2);
-  await expect(page.getByText('使用更多自定义槽位')).toBeVisible();
+  await expect(page.getByText('0/8', { exact: true })).toBeVisible();
+  await expect(page.locator('.settings-preset-slot-empty')).toHaveCount(8);
   await expect(page.getByRole('button', { name: '导入 JSON', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '导入 JSON 到自定义槽位 1' })).toBeVisible();
   await expect(page.getByRole('button', { name: /放大查看 .* Word 预览/ })).toHaveCount(0);
@@ -563,40 +564,6 @@ test('Word export settings make the paper preview expandable', async ({ page }) 
   await expect(page.getByRole('button', { name: /放大查看 .* Word 预览/ })).toHaveCount(0);
   await expect(page.locator('.settings-preset-workbench--full')).toBeVisible();
   await expect(page.locator('.settings-modal')).toBeVisible();
-});
-
-test('license settings activate beta slots for Word and HTML presets', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: '设置' }).click();
-  await page.getByRole('button', { name: 'Word 导出', exact: true }).click();
-  await page.getByRole('tab', { name: '自定义槽位' }).click();
-
-  await expect(page.getByText('0/2', { exact: true })).toBeVisible();
-  await expect(page.getByText('内测授权', { exact: true })).toBeVisible();
-  await expect(page.getByText(/朋友/)).toHaveCount(0);
-
-  await page.getByRole('button', { name: '前往内测授权' }).click();
-  await expect(page.getByRole('heading', { name: '内测授权' })).toBeVisible();
-  await expect(page.getByText('内测码只用于开启本机额外自定义槽位。')).toBeVisible();
-  await expect(page.getByText(/购买|订阅|收费/)).toHaveCount(0);
-  await page.getByLabel('内测码').fill('TYPOLA-BETA-2026');
-  await page.getByRole('button', { name: '激活内测授权' }).click();
-
-  await expect(page.getByText('内测授权已启用。')).toBeVisible();
-  await expect(page.getByText('已启用', { exact: true })).toBeVisible();
-  await expect(page.getByText('Word 自定义预设槽位')).toBeVisible();
-  await expect(page.getByText('8 个')).toHaveCount(2);
-
-  await page.getByRole('button', { name: 'Word 导出', exact: true }).click();
-  await page.getByRole('tab', { name: '自定义槽位' }).click();
-  await expect(page.getByText('0/8', { exact: true })).toBeVisible();
-  await expect(page.getByText('受邀可用')).toHaveCount(0);
-  await expect(page.getByText(/朋友/)).toHaveCount(0);
-
-  await page.getByRole('button', { name: 'HTML 导出', exact: true }).click();
-  await page.getByRole('tab', { name: '自定义槽位' }).click();
-  await expect(page.getByText('0/8', { exact: true })).toBeVisible();
-  await expect(page.getByText(/朋友/)).toHaveCount(0);
 });
 
 test('settings about section exposes update controls', async ({ page }) => {
@@ -621,42 +588,50 @@ test('settings about section exposes update controls', async ({ page }) => {
   await expect(page.getByText('更新源')).toHaveCount(0);
 });
 
-test('settings nav exposes 8 sections and hides the legacy shortcuts tab (ISS-153)', async ({ page }) => {
+test('settings nav exposes 10 sections and hides the legacy shortcuts tab (ISS-153)', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '设置' }).click();
 
   const navButtons = page.locator('.settings-nav .settings-nav-item');
-  await expect(navButtons).toHaveCount(8);
+  await expect(navButtons).toHaveCount(10);
   await expect(navButtons).toHaveText([
     '通用',
     '编辑器',
+    '图像',
     '预览',
     '外观',
     'Word 导出',
     'HTML 导出',
-    '授权',
+    '终端',
+    'AI 执行',
     '关于',
   ]);
   await expect(page.getByRole('button', { name: '快捷键', exact: true })).toHaveCount(0);
 });
 
-test('toolbar buttons expose keyboard shortcuts in their hover titles (ISS-153)', async ({ page }) => {
+test('toolbar buttons expose hover tooltips without native titles (ISS-153)', async ({ page }) => {
   await page.goto('/');
 
-  const expectations: Array<{ name: RegExp | string; shortcut: RegExp }> = [
-    { name: '打开文件', shortcut: /Cmd\+O|Ctrl\+O/ },
-    { name: '保存当前文件', shortcut: /Cmd\+S|Ctrl\+S/ },
-    { name: '另存为新文件', shortcut: /Cmd\+Shift\+S|Ctrl\+Shift\+S/ },
-    { name: '源码模式', shortcut: /Cmd\+Alt\+S|Ctrl\+Alt\+S/ },
-    { name: 'Word 预览', shortcut: /Cmd\+Alt\+P|Ctrl\+Alt\+P/ },
-    { name: 'HTML 预览', shortcut: /Cmd\+Alt\+M|Ctrl\+Alt\+M/ },
-    { name: '设置', shortcut: /Cmd\+,|Ctrl\+,/ },
+  // 2.0.8-beta 起移除 native title 双 tooltip,悬浮提示统一走 data-tooltip。
+  const names: Array<RegExp | string> = [
+    '打开文件',
+    '保存当前文件',
+    // 同类动作归组后：另存为/打开文件夹/插入图片收进各组 chevron 下拉,
+    // 工具栏上对应按钮为「主按钮 + 分组选项」。
+    '保存选项',
+    '打开选项',
+    '插入选项',
+    '源码模式',
+    'Word 预览',
+    'HTML 预览',
+    '设置',
   ];
 
-  for (const { name, shortcut } of expectations) {
+  for (const name of names) {
     const button = page.getByRole('button', { name }).first();
-    const title = await button.getAttribute('title');
-    expect(title ?? '', `Toolbar button "${name}" should declare a keyboard shortcut in its title`).toMatch(shortcut);
+    const tooltip = await button.getAttribute('data-tooltip');
+    expect(tooltip ?? '', `Toolbar button "${name}" should declare a data-tooltip`).not.toBe('');
+    expect(await button.getAttribute('title'), `Toolbar button "${name}" should not keep a native title`).toBeNull();
   }
 });
 
@@ -678,16 +653,19 @@ test('settings modal switches tabs by lazy loading each section on demand (ISS-1
   // — the lazy chunks must be loaded after the initial render.
   const sections: Array<{ tab: string; heading: RegExp }> = [
     { tab: '编辑器', heading: /编辑器/ },
+    { tab: '图像', heading: /图像/ },
     { tab: '预览', heading: /预览/ },
     { tab: '外观', heading: /外观/ },
     { tab: 'Word 导出', heading: /Word 导出预设/ },
     { tab: 'HTML 导出', heading: /HTML 导出预设/ },
-    { tab: '授权', heading: /内测授权/ },
+    { tab: '终端', heading: /终端/ },
+    { tab: 'AI 执行', heading: /AI 执行/ },
     { tab: '关于', heading: /关于/ },
   ];
 
   for (const { tab, heading } of sections) {
-    await page.getByRole('button', { name: tab, exact: true }).click();
+    // 「终端」与工具栏终端按钮同名,须限定在设置导航内点击
+    await page.locator('.settings-nav .settings-nav-item').filter({ hasText: tab }).click();
     await expect(page.getByRole('heading', { heading })).toBeVisible();
   }
 
@@ -759,8 +737,9 @@ test('floating toc rail opens the outline while panel buttons pin and close it',
 
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);
   const toc = page.locator('.floating-toc');
-  await expect(toc).toBeVisible();
-  await expect(page.locator('.floating-toc-rail')).toBeVisible();
+  // issue #264 后非固定态 aside 宽度为 0(常驻 rail/tick 已移除),只断言挂载与热区存在
+  await expect(toc).toHaveCount(1);
+  await expect(page.locator('.floating-toc-edge-trigger')).toHaveCount(1);
   await expect(page.getByRole('button', { name: '查看大纲' })).toBeVisible();
   await expect(page.locator('.floating-toc-pin')).toHaveCount(0);
 
@@ -786,7 +765,8 @@ test('floating toc rail opens the outline while panel buttons pin and close it',
   await expect(page.locator('.floating-toc-panel')).toBeHidden();
   await expect(toc).not.toHaveClass(/pinned/);
 
-  await page.locator('.floating-toc-rail').hover();
+  // 悬停左缘热区展开(热区高度修复后可达)
+  await page.locator('.floating-toc-edge-trigger').hover();
   await expect(page.locator('.floating-toc-panel')).toBeVisible();
   await expect(page.locator('.floating-toc-item')).toHaveCount(3);
 
@@ -801,46 +781,22 @@ test('floating toc rail opens the outline while panel buttons pin and close it',
   const editorBeforePin = await liveEditor(page).boundingBox();
   const metrics = await toc.evaluate((el) => {
     const item = el.querySelector('.floating-toc-item');
-    const rail = el.querySelector('.floating-toc-rail');
+    const trigger = el.querySelector('.floating-toc-edge-trigger');
     const itemStyle = item ? getComputedStyle(item) : null;
-    const railRect = rail?.getBoundingClientRect();
+    const triggerRect = trigger?.getBoundingClientRect();
     const panelRect = el.querySelector('.floating-toc-panel')?.getBoundingClientRect();
     return {
-      railWidth: railRect?.width ?? 0,
-      opensRight: Boolean(railRect && panelRect && panelRect.left >= railRect.right),
+      triggerWidth: triggerRect?.width ?? 0,
+      opensRight: Boolean(triggerRect && panelRect && panelRect.left >= triggerRect.right),
       itemFontSize: itemStyle ? parseFloat(itemStyle.fontSize) : 0,
       itemLineHeight: itemStyle ? parseFloat(itemStyle.lineHeight) : 0,
     };
   });
 
-  expect(metrics.railWidth).toBeLessThanOrEqual(24);
+  expect(metrics.triggerWidth).toBeLessThanOrEqual(8);
   expect(metrics.opensRight).toBe(true);
   expect(metrics.itemFontSize).toBeGreaterThanOrEqual(13);
   expect(metrics.itemLineHeight).toBeGreaterThanOrEqual(19);
-
-  const tickMetrics = await page.locator('.floating-toc-tick').evaluateAll((ticks) => ticks.map((tick) => {
-    const rect = tick.getBoundingClientRect();
-    return {
-      width: rect.width,
-      height: rect.height,
-      active: tick.classList.contains('active'),
-      level: Number(Array.from(tick.classList)
-        .find((className) => className.startsWith('level-'))
-        ?.replace('level-', '') ?? 0),
-    };
-  }));
-  const level1Tick = tickMetrics.find((tick) => tick.level === 1);
-  const level2Tick = tickMetrics.find((tick) => tick.level === 2);
-  const level3Tick = tickMetrics.find((tick) => tick.level === 3);
-  const activeTick = tickMetrics.find((tick) => tick.active);
-
-  expect(level1Tick).toBeDefined();
-  expect(level2Tick).toBeDefined();
-  expect(level3Tick).toBeDefined();
-  expect(activeTick).toBeDefined();
-  expect(level1Tick!.width).toBeGreaterThan(level3Tick!.width);
-  expect(level2Tick!.width).toBeGreaterThan(level3Tick!.width);
-  expect(level1Tick!.height).toBeGreaterThan(level3Tick!.height);
 
   await page.getByRole('button', { name: '固定大纲' }).click();
   await expect(toc).toHaveClass(/pinned/);
@@ -878,9 +834,10 @@ test('floating toc can persist an always-pinned outline preference from the pinn
   await page.keyboard.insertText('# 证据目录\n\n## 第一组 权利基础\n\n### 登记证书');
   const toc = page.locator('.floating-toc');
 
-  await expect(toc).toBeVisible();
+  // 非固定态 aside 宽度为 0,只断言挂载;悬停左缘热区展开面板
+  await expect(toc).toHaveCount(1);
   await expect(toc).not.toHaveClass(/pinned/);
-  await page.locator('.floating-toc-rail').hover();
+  await page.locator('.floating-toc-edge-trigger').hover();
   await expect(page.getByRole('button', { name: '总是固定大纲' })).toHaveCount(0);
 
   await page.getByRole('button', { name: '固定大纲' }).click();
@@ -920,7 +877,7 @@ test('floating toc tracks CM6 writing scroll after the editor mounts', async ({ 
   await page.getByRole('button', { name: '源码模式' }).click();
   await expect(liveEditor(page)).toBeVisible();
 
-  await page.locator('.floating-toc-rail').hover();
+  await page.locator('.floating-toc-edge-trigger').hover();
   await page.getByRole('button', { name: '固定大纲' }).click();
   await page.locator('.cm-scroller').evaluate((el) => {
     el.scrollTop = el.scrollHeight;
@@ -945,7 +902,7 @@ test('floating toc jumps to headings in source mode', async ({ page }) => {
     el.scrollTop = 0;
   });
 
-  await page.locator('.floating-toc-rail').hover();
+  await page.locator('.floating-toc-edge-trigger').hover();
   await page.getByRole('button', { name: '固定大纲' }).click();
   await page.getByRole('button', { name: '第 18 节' }).click();
 
@@ -962,27 +919,21 @@ test('floating toc stays bounded with many headings', async ({ page }) => {
   await page.getByRole('button', { name: '源码模式' }).click();
   await expect(liveEditor(page)).toBeVisible();
 
-  await page.locator('.floating-toc-rail').hover();
+  await page.locator('.floating-toc-edge-trigger').hover();
   await expect(page.locator('.floating-toc-panel')).toBeVisible();
 
   const tocMetrics = await page.locator('.floating-toc').evaluate((el) => {
-    const rail = el.querySelector('.floating-toc-rail') as HTMLElement | null;
     const panel = el.querySelector('.floating-toc-panel') as HTMLElement | null;
     const list = el.querySelector('.floating-toc-list') as HTMLElement | null;
-    const railRect = rail?.getBoundingClientRect();
     const panelRect = panel?.getBoundingClientRect();
     const statusRect = document.querySelector('.status-bar')?.getBoundingClientRect();
     return {
-      railOverflows: rail ? rail.scrollHeight > rail.clientHeight : false,
       listOverflows: list ? list.scrollHeight > list.clientHeight : false,
-      railBottomGap: railRect && statusRect ? statusRect.top - railRect.bottom : 0,
       panelBottomGap: panelRect && statusRect ? statusRect.top - panelRect.bottom : 0,
     };
   });
 
-  expect(tocMetrics.railOverflows).toBe(true);
   expect(tocMetrics.listOverflows).toBe(true);
-  expect(tocMetrics.railBottomGap).toBeGreaterThanOrEqual(0);
   expect(tocMetrics.panelBottomGap).toBeGreaterThanOrEqual(0);
 });
 
@@ -1010,12 +961,12 @@ test('appearance settings switch the app into Night Current theme', async ({ pag
     };
   });
 
-  expect(darkColors.appBg).toBe('#101821');
+  expect(darkColors.appBg).toBe('#11161c');
   expect(darkColors.bodyBg).not.toBe('rgb(255, 255, 255)');
   expect(darkColors.settingsBg).not.toBe('rgb(255, 255, 255)');
 
   await page.keyboard.press('Escape');
-  await page.locator('.floating-toc-rail').hover();
+  await page.locator('.floating-toc-edge-trigger').hover();
   const tocBg = await page.locator('.floating-toc-panel').evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(tocBg).not.toBe('rgb(255, 255, 255)');
 });
@@ -1110,42 +1061,7 @@ test('status bar shows the no-file placeholder and keeps a fixed height when no 
   expect(box?.height ?? 0).toBeLessThanOrEqual(22);
 });
 
-test('status bar path style setting is wired in the appearance section and persists changes', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: '设置' }).click();
-  await expect(page.locator('.settings-modal')).toBeVisible();
-  await page.getByRole('button', { name: '外观', exact: true }).click();
-
-  const select = page.getByLabel('状态栏路径');
-  await expect(select).toBeVisible();
-  await expect(select).toHaveValue('middle');
-
-  await select.selectOption('basename');
-  let persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('typola-settings') || '{}').statusBarPathStyle);
-  expect(persisted).toBe('basename');
-
-  await select.selectOption('full');
-  persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('typola-settings') || '{}').statusBarPathStyle);
-  expect(persisted).toBe('full');
-
-  await select.selectOption('middle');
-  persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('typola-settings') || '{}').statusBarPathStyle);
-  expect(persisted).toBe('middle');
-});
-
-test('status bar path style setting falls back to middle when the stored value is invalid', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('typola-settings', JSON.stringify({ statusBarPathStyle: 'garbage' }));
-  });
-
-  await page.goto('/');
-  await page.getByRole('button', { name: '设置' }).click();
-  await expect(page.locator('.settings-modal')).toBeVisible();
-  await page.getByRole('button', { name: '外观', exact: true }).click();
-
-  const select = page.getByLabel('状态栏路径');
-  await expect(select).toHaveValue('middle');
-});
+/* 状态栏路径样式设置(statusBarPathStyle)已随外观设置重构移除,相关用例删除。 */
 
 /* ===== ISS-150: Right panel must not squeeze the main editor ===== */
 

@@ -70,8 +70,11 @@ test('right-clicking outside a table exposes table insertion', async ({ page }) 
 
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
-  await expect(menu.getByText('插入表格')).toBeVisible();
-  await menu.getByText('插入表格').click();
+  // 插入表格在「插入」子菜单内(hover 展开)
+  await menu.getByRole('menuitem', { name: '插入' }).hover();
+  const insertItem = menu.getByText('插入表格');
+  await expect(insertItem).toBeVisible();
+  await insertItem.click();
 
   await page.getByRole('button', { name: '源码模式' }).click();
   await expect(page.locator('.cm-content')).toContainText('|   |   |   |');
