@@ -38,7 +38,8 @@
   --font-body: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
     'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun',
     -apple-system, BlinkMacSystemFont, 'Segoe UI', serif;
-  --font-ui: var(--font-body);
+  --font-ui: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC',
+    'Noto Sans SC', system-ui, -apple-system, sans-serif;
   --font-reading: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
     'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC', 'SimSun', serif;
   --font-serif-reading: 'Source Han Serif SC VF', 'Songti SC', 'STSong',
@@ -412,6 +413,7 @@ html, body, #root {
 */
 .document-mode-switcher {
   --switcher-padding: 3px;
+  font-family: var(--font-ui);
   position: relative;
   display: inline-flex;
   align-items: stretch;
@@ -574,7 +576,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  font-family: var(--font-body);
+  font-family: var(--font-ui);
   color: var(--theme-text-secondary);
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
@@ -585,15 +587,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   color: var(--theme-text-primary);
 }
 
-.app-toolbar button.active {
-  color: var(--theme-text-primary);
-  background: var(--theme-paper);
-  border-color: var(--theme-border-hover);
-}
-
-/* 文件树与调色器本身已通过展开面板/色彩系统表达状态，不再使用激活边框。 */
-.app-toolbar .toolbar-nav-actions > button.active {
-  background: transparent;
+/* 动作级激活统一语法：柔和 tint 底色表达状态，不再画硬边框盒子。
+   前景不强制变色——全局高对比纪律（high-contrast.css）规定文本统一最高对比。 */
+.app-toolbar button.active,
+.app-toolbar button.active:hover {
+  background: var(--theme-accent-soft);
   border-color: transparent;
 }
 
@@ -627,7 +625,42 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex-shrink: 0;
 }
 
+/* 工具栏分组 split 按钮：主操作 + 下拉 chevron 连体（打开/保存/插入三类） */
+.app-toolbar .toolbar-split {
+  display: inline-flex;
+  align-items: center;
+}
+
+.app-toolbar .toolbar-split > .split-main {
+  border-radius: 6px 2px 2px 6px;
+}
+
+.app-toolbar .toolbar-split > .split-chevron {
+  width: 16px;
+  min-width: 16px;
+  padding: 0;
+  margin-left: 1px;
+  border-radius: 2px 6px 6px 2px;
+}
+
+.app-toolbar .toolbar-split .split-chevron-icon {
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+/* 分组下拉菜单项图标（复用 export-menu 容器样式） */
+.export-menu .export-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  width: 15px;
+  height: 15px;
+  margin-right: 8px;
+  color: var(--theme-text-secondary);
+  flex-shrink: 0;
+}
+
 .export-menu {
+  font-family: var(--font-ui);
   position: absolute;
   top: 100%;
   left: 50%;
@@ -737,11 +770,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .editor-tabbar {
   position: relative;
-  height: 44px;
+  height: 38px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 4px 10px;
   border-bottom: 1px solid var(--theme-border-soft);
   background: var(--theme-paper);
   flex-shrink: 0;
@@ -750,7 +783,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .tab-motion-indicator {
   position: absolute;
   pointer-events: none;
-  border-radius: 9px;
+  border-radius: 8px;
   border: 1px solid var(--theme-border-hover);
   background: var(--theme-paper);
   box-shadow: 0 4px 14px color-mix(in oklch, var(--theme-paper-shadow) 24%, transparent);
@@ -762,8 +795,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .editor-tab-indicator {
-  top: 6px;
-  height: 32px;
+  top: 4px;
+  height: 30px;
   z-index: 0;
 }
 
@@ -774,12 +807,12 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   align-items: center;
   min-width: 118px;
   max-width: min(320px, 34vw);
-  height: 32px;
+  height: 30px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--theme-text-secondary);
-  font-family: var(--font-body);
+  font-family: var(--font-ui);
   font-size: 13px;
   overflow: hidden;
 }
@@ -789,33 +822,20 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-color: transparent;
   color: var(--theme-text-primary);
   box-shadow: none;
-  font-weight: 600;
 }
 
-/* 当前文档的稳定激活标识：accent 下划线,与文字强调共存（issue #264）。 */
-.editor-tab.active::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 0;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--theme-accent);
-}
-
-/* 未保存修改：圆点常驻,与激活态（下划线/字重）同时可见（issue #264）。 */
+/* 未保存修改：圆点常驻并独立为 warning 语义，与激活态（药丸指示器）可同时识别。 */
 .editor-tab-dirty-dot {
   flex: 0 0 auto;
   width: 7px;
   height: 7px;
   margin: 0 3px 0 0;
   border-radius: 50%;
-  background: var(--theme-accent);
+  background: var(--theme-warning);
 }
 
 .editor-tab.is-dirty:not(.active) .editor-tab-dirty-dot {
-  background: var(--theme-text-secondary);
+  background: color-mix(in oklch, var(--theme-warning) 72%, var(--theme-text-secondary));
 }
 
 .editor-tab-main {
@@ -1073,8 +1093,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding: 8px;
+  gap: 4px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--theme-border-soft);
 }
 
@@ -1087,11 +1107,12 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   gap: 6px;
   min-height: 30px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: var(--theme-text-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
 }
 
 .left-rail-tabs button:hover {
@@ -1106,7 +1127,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .left-rail-tab-indicator {
-  top: 8px;
+  top: 4px;
   height: 30px;
   z-index: 0;
 }
@@ -1143,8 +1164,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: 1fr 1fr auto;
-  gap: 6px;
-  padding: 8px;
+  gap: 4px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--theme-border-soft);
 }
 
@@ -1157,11 +1178,12 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   gap: 6px;
   min-height: 30px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: var(--theme-text-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
 }
 
 .right-rail-tabs button:hover {
@@ -1176,7 +1198,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .right-rail-tab-indicator {
-  top: 8px;
+  top: 4px;
   height: 30px;
   z-index: 0;
 }

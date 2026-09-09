@@ -291,10 +291,17 @@ html[data-color-system='define-color'] .app-toolbar :is(button, .toolbar-export-
   box-shadow: none;
 }
 
-html[data-color-system='define-color'] .app-toolbar :is(button, .toolbar-export-dropdown > button):hover,
-html[data-color-system='define-color'] .app-toolbar :is(button, .toolbar-export-dropdown > button).active {
+html[data-color-system='define-color'] .app-toolbar :is(button, .toolbar-export-dropdown > button):hover {
   color: var(--dc-text-shout);
   background: transparent !important;
+  border-color: transparent !important;
+}
+
+/* 激活 toggle 与全局语法一致：柔和 tint 底色（前景维持高对比，不强制 accent）。
+   需 #root 提级 + !important 才能覆盖上文 dc 透明底。 */
+html[data-color-system='define-color'] #root .app-toolbar button.active,
+html[data-color-system='define-color'] #root .app-toolbar button.active:hover {
+  background: var(--theme-accent-soft) !important;
   border-color: transparent !important;
 }
 
