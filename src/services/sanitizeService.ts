@@ -13,6 +13,9 @@ const ALLOWED_TAGS = [
   'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
   'text', 'tspan', 'defs', 'marker', 'pattern', 'clipPath', 'linearGradient', 'stop',
   'foreignObject',
+  // mermaid 11 的 SVG 依赖：<style> 承载全部节点配色，<filter>/<feDropShadow>
+  // 提供阴影，<use>/<symbol> 支持图标引用。剥掉会导致导出/Word 预览图劣化。
+  'style', 'filter', 'fedropshadow', 'use', 'symbol',
 ];
 
 const ALLOWED_ATTR = [
@@ -24,6 +27,11 @@ const ALLOWED_ATTR = [
   'points', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
   'marker-end', 'marker-start', 'text-anchor', 'dominant-baseline', 'font-size', 'font-family',
   'style', 'offset', 'stop-color', 'clip-path',
+  // SVG 文本行距（tspan dy/dx）、箭头 marker 方向/尺寸、透明度与虚线样式，
+  // 缺失会导致 mermaid 图文本重叠、箭头残缺。filter 相关属性供阴影节点使用。
+  'dx', 'dy', 'refX', 'refY', 'markerWidth', 'markerHeight', 'markerUnits', 'orient',
+  'fill-opacity', 'stroke-opacity', 'stroke-dasharray', 'stroke-dashoffset',
+  'stdDeviation', 'flood-color', 'flood-opacity',
 ];
 
 export function sanitizeHtml(html: string): string {

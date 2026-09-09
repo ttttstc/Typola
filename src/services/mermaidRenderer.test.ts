@@ -67,4 +67,37 @@ describe('mermaidRenderer', () => {
     expect(pre.classList.contains('typola-mermaid-source-hidden')).toBe(false);
     expect(container.querySelector('.typola-mermaid')).toBeNull();
   });
+
+  it('rejects hanging renders after the timeout and shows an error bar', async () => {
+    vi.useFakeTimers();
+    try {
+      renderMock.mockImplementationOnce(() => new Promise(() => { /* 模拟 mermaid.render 挂起 */ }));
+      const { renderMermaidIn } = await import('./mermaidRenderer');
+      const container = document.createElement('div');
+      container.innerHTML = '<pre><code class="language-mermaid">flowchart TD\\nA-->B</code></pre>';
+      document.body.appendChild(container);
+      const pending = renderMermaidIn(container);
+      await vi.advanceTimersByTimeAsync(5000);
+      await pending;
+      expect(container.querySelector('pre')).toBeTruthy();
+      expect(container.querySelector('.typola-mermaid-error')?.textContent).toContain('render timeout after 5000ms');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('initializes mermaid once per theme and re-initializes on theme switch', async () => {
+    const { ensureMermaidInitialized } = await import('./mermaidRenderer');
+    // 本文件前面的用例已以 default 主题初始化过：相同主题不再重复 initialize。
+    await ensureMermaidInitialized('default');
+    expect(initializeMock).toHaveBeenCalledTimes(0);
+    await ensureMermaidInitialized('default');
+    expect(initializeMock).toHaveBeenCalledTimes(0);
+    // 切换主题时重新 initialize，避免共享单例被旧主题覆盖。
+    await ensureMermaidInitialized('dark');
+    expect(initializeMock).toHaveBeenCalledTimes(1);
+    expect(initializeMock).toHaveBeenCalledWith(expect.objectContaining({ theme: 'dark', securityLevel: 'strict' }));
+    await ensureMermaidInitialized('dark');
+    expect(initializeMock).toHaveBeenCalledTimes(1);
+  });
 });

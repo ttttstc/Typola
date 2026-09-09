@@ -242,8 +242,10 @@ export function AppLayout() {
   const previewScrollRef = useRef<PreviewScrollHandle | null>(null);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   // 双向同步震荡抑制:任一方向触发后,锁定反向一段时间(防止 editor↔preview 循环)。
+  // 400ms 需覆盖编辑器侧 previewSyncExtension 的 200ms throttle + rAF 回程事件 ——
+  // 之前 220ms 恰好卡在回程事件到达之后,偶发"编辑器打字/滚动被反向拽回"。
   const syncLockUntilRef = useRef(0);
-  const SYNC_LOCK_MS = 220;
+  const SYNC_LOCK_MS = 400;
   const handleEditorScrollRatio = useCallback((ratio: number) => {
     if (Date.now() < syncLockUntilRef.current) return;
     syncLockUntilRef.current = Date.now() + SYNC_LOCK_MS;
@@ -272,6 +274,8 @@ export function AppLayout() {
   const [findVisible, setFindVisible] = useState(false);
   const [findFocusTarget, setFindFocusTarget] = useState<'find' | 'replace'>('find');
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
+  // 跳转到行弹窗:CM6 侧 Mod-g dispatch 'typola:goto-line' CustomEvent 打开。
+  const [gotoLineVisible, setGoToLineVisible] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(() => getRecentFiles());
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const [sourceHeadingScrollRequest, setSourceHeadingScrollRequest] = useState<SourceHeadingScrollRequest>();
@@ -1618,6 +1622,17 @@ export function AppLayout() {
     setFindVisible(true);
   }, []);
 
+  // Ctrl/Cmd+G(CM6 keymap)→ 'typola:goto-line' → 打开跳转到行弹窗。
+  useEffect(() => {
+    const onGotoLine = () => setGoToLineVisible(true);
+    window.addEventListener('typola:goto-line', onGotoLine);
+    return () => window.removeEventListener('typola:goto-line', onGotoLine);
+  }, []);
+
+  const handleGoToLine = useCallback((line: number, col?: number) => {
+    editorCommandRef.current?.gotoLine(line, col);
+  }, []);
+
   const handleToggleEditorMode = useCallback(() => {
     if (file.fileType === 'docx') return;
     setEditorMode((mode) => {
@@ -2704,6 +2719,9 @@ export function AppLayout() {
         recentFiles={recentFiles}
         onCloseQuickOpen={() => setQuickOpenVisible(false)}
         onQuickOpen={handleQuickOpenPath}
+        gotoLineVisible={gotoLineVisible}
+        onCloseGotoLine={() => setGoToLineVisible(false)}
+        onGotoLine={handleGoToLine}
         artifactPreviewNode={artifactItems.length > 0 ? (
           <Suspense fallback={null}>
             <ArtifactPreview

@@ -324,8 +324,7 @@ html[data-color-system='define-color'] .app-toolbar .toolbar-nav-actions > butto
 
 html[data-color-system='define-color'] .vditor,
 html[data-color-system='define-color'] .cm-editor,
-html[data-color-system='define-color'] .editor-paper,
-html[data-color-system='define-color'] .wysiwyg-editor-pane {
+html[data-color-system='define-color'] .editor-paper {
   background: var(--dc-neutral-light-1000);
   color: var(--dc-neutral-dark-100);
 }

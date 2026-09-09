@@ -28,6 +28,7 @@ import { writeText as writeClipboardText } from '../services/clipboardService';
 import { resolveLocalResourcePath } from '../services/htmlPresentationService';
 import { formatImageSrc, serializeHtmlImage } from '../services/imageInsert';
 import { findSearchMatches } from '../services/documentSearchService';
+import { convertHtmlPasteToMarkdown } from '../services/htmlPasteService';
 import { sourceLineNumberGutter } from './editor/cm6/sourceLineNumberGutter';
 
 export type SourceHeadingScrollRequest = {
@@ -40,6 +41,37 @@ export type SourceHeadingScrollRequest = {
 export type ImageInsertRequest = {
   replace?: { from: number; to: number; alt: string; title?: string };
 };
+
+/**
+ * 整篇文档替换后的光标映射：按公共前缀/后缀对齐。
+ *
+ * ChangeSet.mapPos 对"落在被替换范围内"的位置只能返回插入文本的边界（开头/结尾），
+ * AI 回写、agent 写盘重载这类"局部修改 + 全文替换"场景会把光标甩到文档头部。
+ * 这里用最长公共前缀/后缀把未变区域内的位置精确映射到新文档 ——
+ *  - 光标在前缀区：位置不变；
+ *  - 光标在后缀区：按后缀偏移平移；
+ *  - 光标落在被修改的中间区域：回到修改区起点（内容已变，无处可精确对应）。
+ */
+function remapSelectionAcrossDocReplacement(
+  oldDoc: string,
+  oldAnchor: number,
+  oldHead: number,
+  newDoc: string,
+): { anchor: number; head: number } {
+  const oldLen = oldDoc.length;
+  const newLen = newDoc.length;
+  const maxCommon = Math.min(oldLen, newLen);
+  let prefix = 0;
+  while (prefix < maxCommon && oldDoc.charCodeAt(prefix) === newDoc.charCodeAt(prefix)) prefix++;
+  let suffix = 0;
+  while (suffix < maxCommon - prefix && oldDoc.charCodeAt(oldLen - 1 - suffix) === newDoc.charCodeAt(newLen - 1 - suffix)) suffix++;
+  const mapPos = (pos: number): number => {
+    if (pos <= prefix) return pos;
+    if (pos >= oldLen - suffix) return newLen - (oldLen - pos);
+    return prefix;
+  };
+  return { anchor: mapPos(oldAnchor), head: mapPos(oldHead) };
+}
 
 type EditorPaneProps = {
   source: string;
@@ -73,10 +105,20 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
   const handledHeadingScrollRequestRef = useRef<number | null>(null);
   const onAIActionRef = useRef(onAIAction);
+  const onRequestImageInsertRef = useRef(onRequestImageInsert);
   const filePathRef = useRef(filePath);
   const floatingBarHiddenDocsRef = useRef<Set<string>>(new Set());
+  // 光标稳定性：per-document 视图状态（选区 + 滚动），切文档时保存/恢复。
+  const perDocViewStateRef = useRef<Map<string, { anchor: number; head: number; scrollTop: number }>>(new Map());
+  // 受控同步锚点：<CodeMirror value> 的取值来源。用户编辑时在 onChange 里即时更新，
+  // 外部 source 变化时由下方同步 effect 更新 —— 保证 @uiw 永远看到 value === doc。
+  const lastSyncedSourceRef = useRef(source);
+  const lastFilePathRef = useRef<string | undefined>(filePath);
 
   const handleCodeMirrorChange = useCallback((value: string, update: ViewUpdate) => {
+    // 受控同步锚点：用户编辑后立即记录最新 doc，让 <CodeMirror value> 恒等于 doc，
+    // @uiw 的受控替换 effect（全文档替换且不带 selection）永远不会触发。
+    lastSyncedSourceRef.current = value;
     const tableFormat = update.transactions.some((transaction) => (
       ((transaction as unknown as { annotations?: readonly { value: unknown }[] }).annotations ?? [])
         .some((annotation) => annotation.value === 'table.format')
@@ -105,6 +147,59 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   }, []);
 
   useEffect(() => { onAIActionRef.current = onAIAction; }, [onAIAction]);
+  useEffect(() => { onRequestImageInsertRef.current = onRequestImageInsert; }, [onRequestImageInsert]);
+  // 外部 source 同步（接管 @uiw 受控替换）：AI 候选稿 / agent 写盘重载 / 切标签等
+  // 让整篇文档变化的链路统一在这里单次 dispatch，并保留/恢复光标 ——
+  //  - 同文档替换：selection 按 ChangeSet 映射，光标停在对应内容处（不飞开头）；
+  //  - 切换文档：保存旧文档选区/滚动，恢复新文档上次状态（首次打开则回到开头）。
+  useEffect(() => {
+    const view = editorViewRef.current;
+    if (!view) return;
+    const currentDoc = view.state.doc.toString();
+    if (source === currentDoc) {
+      lastSyncedSourceRef.current = source;
+      lastFilePathRef.current = filePath;
+      return;
+    }
+    const prevPath = lastFilePathRef.current;
+    const isDocSwitch = filePath !== prevPath;
+    const changes = { from: 0, to: currentDoc.length, insert: source };
+    let anchor = 0;
+    let head: number | undefined;
+    let savedScroll: number | null = null;
+    if (isDocSwitch) {
+      if (prevPath) {
+        perDocViewStateRef.current.set(prevPath, {
+          anchor: view.state.selection.main.anchor,
+          head: view.state.selection.main.head,
+          scrollTop: view.scrollDOM.scrollTop,
+        });
+      }
+      const saved = filePath ? perDocViewStateRef.current.get(filePath) : undefined;
+      if (saved) {
+        anchor = Math.min(saved.anchor, source.length);
+        head = Math.min(saved.head, source.length);
+        savedScroll = saved.scrollTop;
+      }
+    } else {
+      // 同文档外部替换：按公共前缀/后缀把光标映射到新文档的对应内容处。
+      const remapped = remapSelectionAcrossDocReplacement(
+        currentDoc,
+        view.state.selection.main.anchor,
+        view.state.selection.main.head,
+        source,
+      );
+      anchor = remapped.anchor;
+      head = remapped.head;
+    }
+    view.dispatch({ changes, selection: { anchor, head } });
+    if (savedScroll !== null) {
+      const scrollTop = savedScroll;
+      window.requestAnimationFrame(() => { view.scrollDOM.scrollTop = scrollTop; });
+    }
+    lastSyncedSourceRef.current = source;
+    lastFilePathRef.current = filePath;
+  }, [source, filePath]);
   useEffect(() => {
     filePathRef.current = filePath;
     floatingBarHiddenDocsRef.current.clear();
@@ -287,8 +382,24 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     if (event.target instanceof Element && event.target.closest('.tbl-table-widget')) return;
     const html = event.clipboardData.getData('text/html');
     const plain = event.clipboardData.getData('text/plain');
-    if (!pasteTableData(editor, plain, html || undefined)) return;
-    event.preventDefault();
+    // 粘贴优先级:表格(TSV/CSV/HTML 表格,现有链路) → 富文本 HTML 转
+    // Markdown(门控命中) → 默认行为(不 preventDefault,CM6 自己插纯文本)。
+    if (pasteTableData(editor, plain, html || undefined)) {
+      event.preventDefault();
+      return;
+    }
+    if (html) {
+      const markdown = convertHtmlPasteToMarkdown(html);
+      if (markdown !== null) {
+        event.preventDefault();
+        const selection = editor.state.selection.main;
+        editor.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: markdown },
+          selection: { anchor: selection.from + markdown.length },
+        });
+        return;
+      }
+    }
   }, []);
 
   const handleTablePick = useCallback((action: TableContextAction) => {
@@ -343,6 +454,16 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     updateSettings({ editorLineNumbers: !settings.editorLineNumbers });
   }, [settings.editorLineNumbers]);
 
+  // basicSetup 必须引用稳定：@uiw 的 reconfigure effect 以它为依赖，
+  // 内联对象字面量会让每次渲染（每个字符输入的受控回流）都触发
+  // StateEffect.reconfigure —— 全量重建 ViewPlugin/widget DOM，
+  // 真实浏览器中表现为 IME 组合输入被打断、代码块/公式 widget 闪跳、光标视觉乱飞。
+  const stableBasicSetup = useMemo(() => ({
+    lineNumbers: settings.editorLineNumbers && lineNumberMode === 'source',
+    searchKeymap: true,
+    history: true,
+  }), [settings.editorLineNumbers, lineNumberMode]);
+
   const extensions = useMemo(() => {
     return createMarkdownExtensions({
       fontFamily: editorFontFamily,
@@ -353,17 +474,11 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         ...(extraExtensions ?? []),
         ...(settings.editorLineNumbers && lineNumberMode === 'blocks' ? [sourceLineNumberGutter()] : []),
       ],
-      // Cmd/Ctrl+K → 弹起 5+1 AI 菜单(对齐右键的动线),菜单触发后再走 onAIAction 注入
-      onModK: () => {
-        const cb = onAIActionRef.current;
-        if (!cb || !filePathRef.current) return false;
-        const view = editorViewRef.current;
-        if (!view) return false;
-        const sel = view.state.selection.main;
-        if (sel.empty) return false;
-        // 用选区首字符的视口位置作为菜单位置;coords 不可用时退化到视口左上
-        const coords = view.coordsAtPos(sel.from) ?? { left: 80, top: 80 };
-        setCtxMenu({ x: coords.left, y: coords.top, hasSelection: true, hasImage: false });
+      // Ctrl/Cmd+Shift+I → 插入图片(复用右键/工具栏的本地图片链路);无回调时不拦截
+      onInsertImage: () => {
+        const cb = onRequestImageInsertRef.current;
+        if (!cb) return false;
+        cb();
         return true;
       },
       onFormat: (action) => {
@@ -385,7 +500,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     handledHeadingScrollRequestRef.current = request.requestId;
 
     if (request.withinRatio !== undefined) {
-      // 段内插值滚动:用 view.lineBlockAt 像素位置 + withinRatio 精确定位
+      // 段内插值滚动:用 view.lineBlockAt 像素位置 + withinRatio 精确定位。
+      // 只走 scrollTop 单通道 —— 再叠加 scrollIntoView 会二次滚动造成跳动。
       const nextFrom = headingIndexAt(editor.state, request.index + 1);
       const headingBlock = editor.lineBlockAt(from);
       const nextBlock = nextFrom !== null ? editor.lineBlockAt(nextFrom) : null;
@@ -394,10 +510,7 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       const ratio = Math.max(0, Math.min(1, request.withinRatio));
       const target = sectionStart + (sectionEnd - sectionStart) * ratio;
       suppressFloatingBarRef.current = true;
-      editor.dispatch({
-        effects: EditorView.scrollIntoView(from, { y: 'start' }),
-        selection: { anchor: from },
-      });
+      editor.dispatch({ selection: { anchor: from } });
       editor.scrollDOM.scrollTop = Math.max(0, target);
       window.setTimeout(() => { suppressFloatingBarRef.current = false; }, FLOATING_BAR_SETTLE_MS);
     } else {
@@ -585,6 +698,25 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       if (!editorView) return;
       applyBaseSize(editorView, size);
     },
+    gotoLine(line: number, col?: number) {
+      const editorView = editorViewRef.current;
+      if (!editorView) return false;
+      const doc = editorView.state.doc;
+      // 行号 1-based,越界 clamp 到 [1, 行数]。
+      const clampedLine = Math.min(Math.max(1, Math.trunc(line)), doc.lines);
+      const targetLine = doc.line(clampedLine);
+      let pos = targetLine.from;
+      if (col !== undefined && Number.isFinite(col) && col > 1) {
+        // 列号 1-based,超出行长时停到行尾。
+        pos = Math.min(targetLine.from + Math.trunc(col) - 1, targetLine.to);
+      }
+      editorView.dispatch({
+        selection: { anchor: pos },
+        effects: EditorView.scrollIntoView(pos, { y: 'center' }),
+      });
+      editorView.focus();
+      return true;
+    },
     setFoldedHeadings(keys: ReadonlySet<string>) {
       const editorView = editorViewRef.current;
       if (!editorView) return;
@@ -599,11 +731,20 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     },
     commitAIReplacement(content: string) {
       // 一次性整篇替换:走单次 dispatch,CodeMirror history 自动栈,一次 Ctrl+Z 回退。
+      // 光标按公共前缀/后缀映射 —— AI 改写后停在对应内容处,不飞到开头。
       const editorView = editorViewRef.current;
       if (!editorView) return;
       const docLen = editorView.state.doc.length;
+      const selection = editorView.state.selection.main;
+      const remapped = remapSelectionAcrossDocReplacement(
+        editorView.state.doc.toString(),
+        selection.anchor,
+        selection.head,
+        content,
+      );
       editorView.dispatch({
         changes: { from: 0, to: docLen, insert: content },
+        selection: { anchor: remapped.anchor, head: remapped.head },
       });
       editorView.focus();
     },
@@ -612,18 +753,14 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   return (
     <div className="editor-pane" style={editorFontStyle} onContextMenu={handleContextMenu} onPaste={handlePaste}>
       <CodeMirror
-        value={source}
+        value={lastSyncedSourceRef.current}
         height="100%"
         extensions={extensions}
         onChange={handleCodeMirrorChange}
         onCreateEditor={handleCreateEditor}
         spellCheck={settings.editorSpellCheck}
         theme="light"
-        basicSetup={{
-          lineNumbers: settings.editorLineNumbers && lineNumberMode === 'source',
-          searchKeymap: true,
-          history: true,
-        }}
+        basicSetup={stableBasicSetup}
       />
       {onAIAction && settings.selectionFloatingBarEnabled && (
         <SelectionFloatingBar

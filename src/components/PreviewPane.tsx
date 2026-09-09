@@ -21,6 +21,20 @@ type PreviewPaneProps = {
   onPreviewHeadingScroll?: (change: { index: number; withinRatio?: number }) => void;
 };
 
+// Vditor 的 preview 流程会加载自带的 mermaid 11.6（securityLevel: loose、
+// SVG 未经 DOMPurify 清洗直接 innerHTML 注入）处理 .language-mermaid 块，
+// 与 Typola 的 strict 渲染管线形成双管线竞争：后到的一方会把前者注入的
+// SVG 文本当源码再渲染，报 parse error 并残留错误条。其 addScript 以
+// id 去重——这里预插一个空占位 script，让 Vditor 侧脚本加载直接短路
+// （全局 mermaid 不存在，其渲染回调安全失败），由 Typola 管线独占渲染。
+// 导出供回归测试直接引用。
+export function disableVditorMermaidPipeline(): void {
+  if (document.getElementById('vditorMermaidScript')) return;
+  const placeholder = document.createElement('script');
+  placeholder.id = 'vditorMermaidScript';
+  document.head.appendChild(placeholder);
+}
+
 export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(function PreviewPane(
   { source, tocIds, wideTables = false, renderMode = 'markdown', filePath, onScrollRatio, onPreviewHeadingScroll },
   ref,
@@ -64,6 +78,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
       import('vditor'),
     ]).then(([, { default: Vditor }]) => {
       if (cancelled) return;
+      disableVditorMermaidPipeline();
       Vditor.preview(el, deferredSource, {
         mode: vditorTheme,
         anchor: 0,

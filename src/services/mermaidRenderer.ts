@@ -9,8 +9,31 @@ const RENDERED_ATTR = 'data-typola-mermaid-rendered';
 const SOURCE_ATTR = 'data-typola-mermaid-source';
 const GRAPH_SELECTOR = '.typola-mermaid';
 
+/** mermaid 单次渲染的超时上限，CM6 编辑器与预览链路共用。 */
+export const MERMAID_RENDER_TIMEOUT_MS = 5000;
+
 let mermaidModulePromise: Promise<MermaidModule> | null = null;
 let renderCounter = 0;
+// 记录上一次 initialize 的主题：CM6 编辑器与预览/导出链路共享同一个
+// mermaid 单例，若每次都 initialize 会互相覆盖主题与安全级别配置。
+let lastInitializedTheme: 'default' | 'dark' | null = null;
+
+/** 共享的 mermaid 初始化入口：相同主题只 initialize 一次，供 CM6 侧复用。 */
+export async function ensureMermaidInitialized(
+  theme: 'default' | 'dark' = 'default',
+): Promise<MermaidModule> {
+  const mermaid = await loadMermaid();
+  if (lastInitializedTheme !== theme) {
+    mermaid.default.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme,
+      flowchart: { useMaxWidth: true },
+    });
+    lastInitializedTheme = theme;
+  }
+  return mermaid;
+}
 
 export async function renderMermaidIn(
   container: HTMLElement,
@@ -19,13 +42,7 @@ export async function renderMermaidIn(
   const blocks = findMermaidBlocks(container);
   if (blocks.length === 0) return;
 
-  const mermaid = await loadMermaid();
-  mermaid.default.initialize({
-    startOnLoad: false,
-    securityLevel: 'strict',
-    theme: options.theme ?? 'default',
-    flowchart: { useMaxWidth: true },
-  });
+  const mermaid = await ensureMermaidInitialized(options.theme ?? 'default');
 
   const activePre = getActivePre(container);
   for (const block of blocks) {
@@ -40,7 +57,7 @@ export async function renderMermaidIn(
 
     try {
       const id = `typola-mermaid-${Date.now()}-${renderCounter++}`;
-      const { svg } = await withTimeout(mermaid.default.render(id, source), 5000);
+      const { svg } = await withTimeout(mermaid.default.render(id, source), MERMAID_RENDER_TIMEOUT_MS);
       insertMermaidSvg(block.pre, svg, source, options);
     } catch (error) {
       showMermaidError(block.pre, error);
@@ -159,7 +176,8 @@ function hasUnclosedFence(source: string): boolean {
   return fenceCount % 2 === 1;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+/** mermaid.render 无自身超时，挂起时由该兜底转成可展示的错误。 */
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error(`render timeout after ${timeoutMs}ms`)), timeoutMs);
     promise.then((value) => {
