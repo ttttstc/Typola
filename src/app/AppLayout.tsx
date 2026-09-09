@@ -1465,7 +1465,9 @@ export function AppLayout() {
       query,
       searchOptions,
     });
-  }, [editorMode, file.content, foldedHeadings]);
+    // markdownAnalysis 由 180ms 防抖源计算;若不进依赖,防抖未追上内容时的
+    // 渲染会把过期(空)foldSections 永久锁进闭包,导致"搜索命中折叠区自动展开"失效。
+  }, [editorMode, markdownAnalysis, foldedHeadings]);
 
   // 在指定 doc 位置插入;pos=null 时回退到当前 selection 末尾。
   const insertMarkdownAt = useCallback((markdown: string, pos: number | null) => {

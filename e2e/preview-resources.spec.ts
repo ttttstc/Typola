@@ -1,5 +1,14 @@
 import { expect, type Page, test } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  // Vite dev 按模块粒度加载,资源数容易超过 Chromium 默认 250 条的
+  // resource timing buffer 上限,导致后加载的模块(如 Word 预览懒加载
+  // chunk)不进 buffer。放大 buffer 保证断言可见。
+  await page.addInitScript(() => {
+    performance.setResourceTimingBufferSize(20000);
+  });
+});
+
 async function loadedResourcePaths(page: Page): Promise<string[]> {
   return page.evaluate(() =>
     performance.getEntriesByType('resource')
