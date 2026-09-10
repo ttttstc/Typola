@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import {
   ChevronDown,
   Bold,
@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
+  FloatingFocusManager,
   FloatingPortal,
   flip,
   offset,
@@ -38,6 +39,7 @@ import {
   useDismiss,
   useFloating,
   useInteractions,
+  useListNavigation,
   useRole,
 } from '@floating-ui/react';
 import { useSettings } from '../hooks/useSettings';
@@ -79,6 +81,8 @@ type ToolbarSplitMenuProps = {
  */
 function ToolbarSplitMenu({ mainLabel, mainIcon, onMainClick, mainDisabled, chevronLabel, items }: ToolbarSplitMenuProps) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const listRef = useRef<Array<HTMLButtonElement | null>>([]);
   const floating = useFloating({
     open,
     onOpenChange: setOpen,
@@ -88,7 +92,15 @@ function ToolbarSplitMenu({ mainLabel, mainIcon, onMainClick, mainDisabled, chev
   const click = useClick(floating.context);
   const dismiss = useDismiss(floating.context);
   const role = useRole(floating.context, { role: 'menu' });
-  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role]);
+  // 键盘可达性:菜单打开后首项聚焦、ArrowUp/ArrowDown 在菜单项间移动,
+  // Esc/outside 关闭后由 FloatingFocusManager 把焦点还给 chevron trigger。
+  const listNavigation = useListNavigation(floating.context, {
+    listRef,
+    activeIndex,
+    onNavigate: setActiveIndex,
+    loop: true,
+  });
+  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role, listNavigation]);
   const setReferenceRef = useCallback((node: HTMLButtonElement | null) => {
     floating.refs.setReference(node);
   }, [floating.refs.setReference]);
@@ -134,28 +146,31 @@ function ToolbarSplitMenu({ mainLabel, mainIcon, onMainClick, mainDisabled, chev
       </button>
       {open && (
         <FloatingPortal>
-          <div
-            ref={floating.refs.setFloating}
-            style={floating.floatingStyles}
-            className="export-menu"
-            role="menu"
-            aria-label={chevronLabel}
-            {...getFloatingProps()}
-          >
-            {items.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                role="menuitem"
-                data-no-window-drag="true"
-                disabled={item.disabled}
-                onClick={() => { setOpen(false); item.onSelect(); }}
-              >
-                <span className="export-menu-icon" aria-hidden="true">{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <FloatingFocusManager context={floating.context} initialFocus={0}>
+            <div
+              ref={floating.refs.setFloating}
+              style={floating.floatingStyles}
+              className="export-menu"
+              role="menu"
+              aria-label={chevronLabel}
+              {...getFloatingProps()}
+            >
+              {items.map((item, index) => (
+                <button
+                  key={item.key}
+                  ref={(node) => { listRef.current[index] = node; }}
+                  type="button"
+                  role="menuitem"
+                  data-no-window-drag="true"
+                  disabled={item.disabled}
+                  onClick={() => { setOpen(false); item.onSelect(); }}
+                >
+                  <span className="export-menu-icon" aria-hidden="true">{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </FloatingFocusManager>
         </FloatingPortal>
       )}
     </div>
@@ -227,7 +242,9 @@ export function Toolbar({
 
   // 导出下拉菜单(用 @floating-ui/react 挂到 body 规避 motion 引入后的 stacking trap)
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportActiveIndex, setExportActiveIndex] = useState<number | null>(null);
   const exporting = pdfExporting || wordExporting;
+  const exportListRef = useRef<Array<HTMLButtonElement | null>>([]);
   const exportFloating = useFloating({
     open: exportMenuOpen,
     onOpenChange: setExportMenuOpen,
@@ -237,10 +254,18 @@ export function Toolbar({
   const exportClick = useClick(exportFloating.context);
   const exportDismiss = useDismiss(exportFloating.context);
   const exportRole = useRole(exportFloating.context, { role: 'menu' });
+  // 与 ToolbarSplitMenu 同一焦点管线:首项聚焦 + 方向键导航 + Esc 返回 trigger。
+  const exportListNavigation = useListNavigation(exportFloating.context, {
+    listRef: exportListRef,
+    activeIndex: exportActiveIndex,
+    onNavigate: setExportActiveIndex,
+    loop: true,
+  });
   const { getReferenceProps: getExportReferenceProps, getFloatingProps: getExportFloatingProps } = useInteractions([
     exportClick,
     exportDismiss,
     exportRole,
+    exportListNavigation,
   ]);
   const setExportButtonRef = useCallback((node: HTMLButtonElement | null) => {
     exportFloating.refs.setReference(node);
@@ -327,42 +352,46 @@ export function Toolbar({
               </button>
               {exportMenuOpen && (
                 <FloatingPortal>
-                  <div
-                    ref={exportFloating.refs.setFloating}
-                    style={exportFloating.floatingStyles}
-                    className="export-menu"
-                    role="menu"
-                    aria-label={t('toolbarExportMenuLabel')}
-                    {...getExportFloatingProps()}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-no-window-drag="true"
-                      onClick={() => { setExportMenuOpen(false); onExportPdf(); }}
-                      disabled={editingDisabled}
+                  <FloatingFocusManager context={exportFloating.context} initialFocus={0}>
+                    <div
+                      ref={exportFloating.refs.setFloating}
+                      style={exportFloating.floatingStyles}
+                      className="export-menu"
+                      role="menu"
+                      aria-label={t('toolbarExportMenuLabel')}
+                      {...getExportFloatingProps()}
                     >
-                      {t('toolbarExportPdfLabel')}
-                    </button>
-                    {onExportWord && (
                       <button
+                        ref={(node) => { exportListRef.current[0] = node; }}
                         type="button"
                         role="menuitem"
                         data-no-window-drag="true"
-                        onClick={() => { setExportMenuOpen(false); onExportWord(); }}
+                        onClick={() => { setExportMenuOpen(false); onExportPdf(); }}
                         disabled={editingDisabled}
                       >
-                        {t('toolbarExportWordLabel')}
+                        {t('toolbarExportPdfLabel')}
                       </button>
-                    )}
-                  </div>
+                      {onExportWord && (
+                        <button
+                          ref={(node) => { exportListRef.current[1] = node; }}
+                          type="button"
+                          role="menuitem"
+                          data-no-window-drag="true"
+                          onClick={() => { setExportMenuOpen(false); onExportWord(); }}
+                          disabled={editingDisabled}
+                        >
+                          {t('toolbarExportWordLabel')}
+                        </button>
+                      )}
+                    </div>
+                  </FloatingFocusManager>
                 </FloatingPortal>
               )}
             </div>
           )}
         </div>
         {(onFormat || onInsertImage) && (
-          <div className="toolbar-group toolbar-insert-actions" aria-label="插入">
+          <div className="toolbar-group toolbar-insert-actions" aria-label={t('toolbarInsertGroup')}>
             {onFormat && (
               <ToolbarSplitMenu
                 mainLabel={t('toolbarInsertTableLabel')}
@@ -408,7 +437,7 @@ export function Toolbar({
       <div className="toolbar-title" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-right">
-        <div className="toolbar-group toolbar-view-actions" aria-label="视图与外观">
+        <div className="toolbar-group toolbar-view-actions" aria-label={t('toolbarViewGroup')}>
           <button
             className={editorMode === 'source' ? 'active' : ''}
             onClick={onToggleEditorMode}

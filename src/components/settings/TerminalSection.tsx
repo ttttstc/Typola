@@ -26,10 +26,11 @@ export function TerminalSection() {
 
       <div className="settings-row settings-row-stacked">
         <div>
-          <div className="settings-label">Shell 路径</div>
+          <label className="settings-label" htmlFor="terminal-shell-path">Shell 路径</label>
           <div className="settings-desc">留空时 Windows 优先使用 pwsh，macOS 使用系统默认 SHELL。</div>
         </div>
         <input
+          id="terminal-shell-path"
           className="settings-input"
           value={settings.terminalShellPath}
           placeholder="例如 C:\\Program Files\\PowerShell\\7\\pwsh.exe 或 /bin/zsh"
@@ -41,9 +42,10 @@ export function TerminalSection() {
 
       <div className="settings-row settings-row-stacked">
         <div>
-          <div className="settings-label">字体</div>
+          <label className="settings-label" htmlFor="terminal-font-family">字体</label>
         </div>
         <input
+          id="terminal-font-family"
           className="settings-input"
           value={settings.terminalFontFamily}
           onChange={(event) => updateSettings({ terminalFontFamily: event.target.value })}
@@ -52,10 +54,11 @@ export function TerminalSection() {
 
       <div className="settings-row">
         <div>
-          <div className="settings-label">字号</div>
+          <label className="settings-label" htmlFor="terminal-font-size">字号</label>
         </div>
         <div className="settings-font-control">
           <input
+            id="terminal-font-size"
             className="settings-input settings-font-input"
             type="number"
             min={10}
@@ -68,9 +71,10 @@ export function TerminalSection() {
 
       <div className="settings-row">
         <div>
-          <div className="settings-label">光标样式</div>
+          <label className="settings-label" htmlFor="terminal-cursor-style">光标样式</label>
         </div>
         <select
+          id="terminal-cursor-style"
           className="settings-select"
           value={settings.terminalCursorStyle}
           onChange={(event) => updateSettings({ terminalCursorStyle: event.target.value as TerminalCursorStyle })}
@@ -97,9 +101,10 @@ export function TerminalSection() {
 
       <div className="settings-row">
         <div>
-          <div className="settings-label">快捷键预设</div>
+          <label className="settings-label" htmlFor="terminal-shortcut-preset">快捷键预设</label>
         </div>
         <select
+          id="terminal-shortcut-preset"
           className="settings-select"
           value={settings.terminalShortcutPreset}
           onChange={(event) => updateSettings({

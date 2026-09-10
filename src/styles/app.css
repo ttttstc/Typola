@@ -636,8 +636,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .app-toolbar .toolbar-split > .split-chevron {
-  width: 16px;
-  min-width: 16px;
+  /* 命中区保持 ≥24px（WCAG 2.2 最小目标），视觉图标仍为 10px chevron */
+  width: 24px;
+  min-width: 24px;
   padding: 0;
   margin-left: 1px;
   border-radius: 2px 6px 6px 2px;
@@ -1091,6 +1092,10 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .left-rail-tabs {
   position: relative;
   flex: 0 0 auto;
+  /* 与 .editor-tabbar 显式同高 38px（按钮 30px + padding 8px + border 1px 的
+     自动高度是 39px，会与编辑器标签栏差 1px）；行内容在剩余空间内垂直居中。 */
+  height: 38px;
+  align-content: center;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
@@ -1162,6 +1167,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .right-rail-tabs {
   position: relative;
   flex: 0 0 auto;
+  /* 同 .left-rail-tabs：显式 38px，与 .editor-tabbar 三栏齐高。 */
+  height: 38px;
+  align-content: center;
   display: grid;
   grid-template-columns: 1fr 1fr auto;
   gap: 4px;
