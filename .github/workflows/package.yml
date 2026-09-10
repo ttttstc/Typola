@@ -37,7 +37,16 @@ jobs:
           }
           node scripts/sync-version.mjs --tag "v${{ inputs.version }}"
           if ('${{ inputs.publish }}' -eq 'true') {
-            node scripts/sync-version.mjs --check --tag "v${{ inputs.version }}" --require-version-change "HEAD^"
+            # Code commits may land after the VERSION bump and before the formal release.
+            # Compare against the newest earlier tag, not only the merge commit parent.
+            $previousTag = git tag --merged HEAD --sort=-version:refname |
+              Where-Object { $_ -ne "v${{ inputs.version }}" } |
+              Select-Object -First 1
+            if ($previousTag) {
+              node scripts/sync-version.mjs --check --tag "v${{ inputs.version }}" --require-version-change $previousTag
+            } else {
+              node scripts/sync-version.mjs --check --tag "v${{ inputs.version }}"
+            }
           } else {
             node scripts/sync-version.mjs --check --tag "v${{ inputs.version }}"
           }
