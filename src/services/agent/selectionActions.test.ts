@@ -138,6 +138,19 @@ describe('findUniqueAnchor', () => {
     expect(findUniqueAnchor(source, 'SELECTED', null)).toEqual({ start: 4, length: 8 });
   });
 
+  it('CM6 选区锚点的 prefixHint(选区前 24 字符快照)能对重复文本消歧定位', () => {
+    // 模拟 EditorPane.triggerAIAction 组装的锚点:同一段文字在文档中出现两次,
+    // 选中第二次出现;prefixHint = 选区起点往前 24 字符的原文(不含选区内容)。
+    const para = '完全相同的一段文字内容。';
+    const source = `前置说明\n\n${para}\n\n中间过渡的段落文本甲乙丙丁。\n\n${para}\n\n结尾。`;
+    const secondStart = source.indexOf(para, source.indexOf(para) + 1);
+    const prefixHint = source.slice(Math.max(0, secondStart - 24), secondStart);
+    // 无 prefixHint:同文本出现 2 次 → 歧义
+    expect(findUniqueAnchor(source, para)).toBeNull();
+    // 有 prefixHint(层 2 消歧):prefixHint + originalText 唯一 → 命中第二次出现
+    expect(findUniqueAnchor(source, para, prefixHint)).toEqual({ start: secondStart, length: para.length });
+  });
+
   // ----- 兜底层:source 含行内 markdown,选区是 range.toString()(纯文本) -----
   describe('fallback: strip inline markdown then map back', () => {
     it('粗体内段定位:source 是 `**xx**` 选纯文本 xx', () => {

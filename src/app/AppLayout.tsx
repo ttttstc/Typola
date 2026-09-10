@@ -55,6 +55,7 @@ import { useRevisionList } from '../hooks/useRevisionList';
 import {
   buildReviewMarkdown,
   getActiveReviewComments,
+  getExportableReviewComments,
   parseReviewMarkdown,
   type ReviewBasis,
   type ReviewComment,
@@ -645,6 +646,16 @@ export function AppLayout() {
     agentChangedPaths,
   });
   const [pendingInitialCandidate, setPendingInitialCandidate] = useState<PendingInitialCandidate | null>(null);
+  // AI 改稿应用闭环(P1-1):发送 AI 改稿时收集的意见集合 + 目标候选稿文件名,
+  // apply 成功且对上同一候选稿/文档时,把这些意见标记为已应用(appliedAt)。
+  const appliedPendingCommentsRef = useRef<{
+    documentPath: string;
+    candidateFileName: string;
+    commentIds: string[];
+  } | null>(null);
+  // 当前打开 diff 的候选稿文件名镜像:onApplyMerged 闭包里读取,
+  // 保证只在「本次发送的候选稿」上生效,应用历史版本不会误标意见。
+  const diffReviewCandidateNameRef = useRef<string | undefined>(undefined);
   const pendingCandidateRunRef = useRef<PendingCandidateRun | null>(null);
   const [candidateRunVersion, setCandidateRunVersion] = useState(0);
   const pendingAIReviewRunRef = useRef<PendingAIReviewRun | null>(null);
@@ -713,9 +724,10 @@ export function AppLayout() {
       return;
     }
     const { state, markClean } = reviewStateApi;
-    const activeComments = getActiveReviewComments(state.comments);
-    if (activeComments.length === 0) return;
-    const reviewMd = buildReviewMarkdown(file.content, activeComments);
+    // 导出集合:只排除忽略;已应用(appliedAt)的意见保留并标注「已应用」,不丢处理历史。
+    const exportableComments = getExportableReviewComments(state.comments);
+    if (exportableComments.length === 0) return;
+    const reviewMd = buildReviewMarkdown(file.content, exportableComments);
     const baseName = file.path.replace(/\\/g, '/').split('/').pop() ?? 'document.md';
     const stem = baseName.replace(/\.[^.]+$/u, '');
     const sep = file.path.includes('\\') ? '\\' : '/';
@@ -973,7 +985,10 @@ export function AppLayout() {
       const hint = c.anchor.prefixHint
         ? `前缀「${truncate(c.anchor.prefixHint, 40)}」+ `
         : '';
-      return `${idx + 1}. 锚点 = ${hint}原文「${truncate(original, 160)}」\n   意见:${c.text}`;
+      // 截断阈值 500:原先 160 会把长段落锚点截成无法定位的碎片;
+      // 仍超长时显式提示 AI 结合前缀在文稿中定位整段,不静默丢信息。
+      const truncatedNote = original.length > 500 ? '（锚点原文过长已截断，请结合前缀在文稿中定位整段）' : '';
+      return `${idx + 1}. 锚点 = ${hint}原文「${truncate(original, 500)}」${truncatedNote}\n   意见:${c.text}`;
     }).join('\n\n');
     const prompt = [
       `请按以下检视意见,修改指定文稿并产出一份完整的、可替换原文的新版本。`,
@@ -983,6 +998,7 @@ export function AppLayout() {
       '- 改稿范围仅限上述指定文稿;不要读取、搜索、引用或修改任何其他文件',
       '- 不要扫描工作区,不要根据相邻文件、目录、README 或历史版本补充上下文',
       '- 每条意见都附了精确锚点 = 「前缀 prefixHint」+「原文 originalText」共同唯一定位',
+      '- 锚点原文过长时会被截断（末尾以「…」标示并附提示）；请结合前缀 prefixHint 在文稿中搜索定位整段后再修改',
       `- 每条意见**只修改该锚点对应的那一小段原文**,其他位置一律不动`,
       `- 如果 prefixHint + originalText 在文档中找不到唯一位置(已被改动 / 重复多次),**跳过该条意见,不修改任何内容**`,
       '- 不要因为「上下文衔接」「行文更顺」等原因扩大修改范围',
@@ -1002,6 +1018,12 @@ export function AppLayout() {
     ].join('\n');
     try {
       await startInitialCandidate(targetFileName, prompt, [file.path]);
+      // 记录本次发送的意见集合:apply 成功且对上同一候选稿时,把这些意见标记为已应用。
+      appliedPendingCommentsRef.current = {
+        documentPath: file.path,
+        candidateFileName: targetFileName,
+        commentIds: activeComments.map((comment) => comment.id),
+      };
       markClean();
     } catch (error) {
       await messageDialog(String(error), { title: '发起 AI 修改失败' });
@@ -1124,10 +1146,29 @@ export function AppLayout() {
       replaceCurrentContent(merged);
     }
     refreshDocumentHistories();
-    setTransientMessage('AI 改动已应用，并已保存应用前历史版本。');
-  }, [convManager.activeConvId, file.path, outputBaseDir, refreshDocumentHistories, replaceCurrentContent]), candidatePersistenceKey);
+    // 意见闭环:本次 AI 改稿源自检视意见时,应用成功后把发送时收集的意见标记为已应用,
+    // 锚点已 stale 的意见不再进入下一轮「AI 改稿」prompt 空转。
+    // 仅当当前文档与打开的候选稿都对得上时才标记(应用历史版本不误标)。
+    const pendingApplied = appliedPendingCommentsRef.current;
+    let appliedNote = '';
+    if (
+      pendingApplied
+      && file.path === pendingApplied.documentPath
+      && diffReviewCandidateNameRef.current === pendingApplied.candidateFileName
+    ) {
+      reviewStateApi.markApplied(pendingApplied.commentIds);
+      appliedPendingCommentsRef.current = null;
+      appliedNote = ` ${pendingApplied.commentIds.length} 条检视意见已标记为已应用。`;
+    }
+    setTransientMessage(`AI 改动已应用，并已保存应用前历史版本。${appliedNote}`);
+  }, [convManager.activeConvId, file.path, outputBaseDir, refreshDocumentHistories, replaceCurrentContent, reviewStateApi]), candidatePersistenceKey);
   const diffReviewState = diffReviewController.state;
   const markCandidateBaselineStale = diffReviewController.markBaselineStale;
+  // 镜像当前打开 diff 的候选稿文件名,供 onApplyMerged 闭包在 apply 时比对。
+  useEffect(() => {
+    diffReviewCandidateNameRef.current = diffReviewState.candidatePath
+      ?.replace(/\\/gu, '/').split('/').pop();
+  }, [diffReviewState.candidatePath]);
 
   useEffect(() => {
     const state = diffReviewState;
@@ -1422,7 +1463,14 @@ export function AppLayout() {
       void messageDialog(conversation.lastError || 'AI 改稿失败。', { title: 'AI 改稿失败' });
       return;
     }
-    if (file.path !== pending.documentPath) return;
+    if (file.path !== pending.documentPath) {
+      // 改稿运行中切到了其他文档:不在这台文档上开 diff,但必须重置挂起态,
+      // 否则 pendingInitialCandidate 永久挂起、全局「AI 改稿」按钮永久禁用。
+      // 候选稿已写盘,切回原文档后可从「改稿历史」打开审阅。
+      setPendingInitialCandidate(null);
+      setTransientMessage(`AI 改稿已完成：${pending.name}，请切回「${pathBasename(pending.documentPath)}」查看。`);
+      return;
+    }
     openingInitialCandidateRef.current = true;
     refreshRevisions();
     void handleReviewRevision(pending.candidatePath)

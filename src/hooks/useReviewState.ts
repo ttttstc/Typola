@@ -7,6 +7,7 @@ import {
   addReviewComment,
   clearReviewState,
   markReviewClean,
+  markReviewCommentsApplied,
   removeReviewComment,
   setReviewCommentIgnored,
   updateReviewComment,
@@ -27,6 +28,8 @@ type UseReviewStateResult = {
   removeComment: (commentId: string) => void;
   clearAll: () => void;
   markClean: () => void;
+  /** AI 改稿应用成功后,把本次发送的意见标记为已应用(保留历史,不再计入待处理)。 */
+  markApplied: (commentIds: string[]) => void;
   /** 从检视版恢复意见。已有内存状态时不覆盖用户本轮操作。 */
   hydrateComments: (comments: ReviewComment[]) => void;
 };
@@ -81,6 +84,11 @@ export function useReviewState(currentFilePath: string | undefined): UseReviewSt
     mutate((prev) => markReviewClean(prev));
   }, [mutate]);
 
+  const markApplied = useCallback((commentIds: string[]) => {
+    if (commentIds.length === 0) return;
+    mutate((prev) => markReviewCommentsApplied(prev, commentIds));
+  }, [mutate]);
+
   const hydrateComments = useCallback((comments: ReviewComment[]) => {
     if (!currentFilePath || comments.length === 0) return;
     setDocStates((prev) => {
@@ -100,6 +108,7 @@ export function useReviewState(currentFilePath: string | undefined): UseReviewSt
     removeComment,
     clearAll,
     markClean,
+    markApplied,
     hydrateComments,
   };
 }

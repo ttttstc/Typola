@@ -19,6 +19,8 @@ export type ReviewComment = {
   source: ReviewSource;
   status: ReviewStatus;
   basis?: ReviewBasis;
+  /** AI 改稿应用成功的时间戳;设置后意见保留历史但不再计入待处理(active)集合。 */
+  appliedAt?: number;
 };
 
 export type ReviewStateSnapshot = {
@@ -114,7 +116,30 @@ export function setReviewCommentIgnored(
 }
 
 export function getActiveReviewComments(comments: ReviewComment[]): ReviewComment[] {
+  return comments.filter((comment) => comment.status !== 'ignored' && comment.appliedAt === undefined);
+}
+
+// 导出检视版用的集合:只排除忽略,已应用(appliedAt)的意见保留并标注「已应用」。
+export function getExportableReviewComments(comments: ReviewComment[]): ReviewComment[] {
   return comments.filter((comment) => comment.status !== 'ignored');
+}
+
+// AI 改稿应用成功后,把本次发送的意见标记为已应用:保留历史供追溯,但不再计入待处理集合,
+// 避免用户再次「AI 改稿」时把已处理(锚点已 stale)的意见重复塞进 prompt 空转。
+export function markReviewCommentsApplied(
+  state: ReviewStateSnapshot,
+  commentIds: readonly string[],
+  appliedAt = Date.now(),
+): ReviewStateSnapshot {
+  if (commentIds.length === 0) return state;
+  const ids = new Set(commentIds);
+  let changed = false;
+  const comments = state.comments.map((comment) => {
+    if (!ids.has(comment.id) || comment.appliedAt !== undefined) return comment;
+    changed = true;
+    return { ...comment, appliedAt };
+  });
+  return changed ? { comments, dirty: true } : state;
 }
 
 export function removeReviewComment(
@@ -136,15 +161,16 @@ export function markReviewClean(state: ReviewStateSnapshot): ReviewStateSnapshot
 }
 
 // 给其他 Markdown 阅读器保留可读批注，同时写入 Typola 可重新识别的不可见元数据。
+// 已应用(appliedAt)的意见保留在导出中并标注「已应用」,不丢处理历史。
 export function buildReviewMarkdown(source: string, comments: ReviewComment[]): string {
-  const activeComments = getActiveReviewComments(comments);
-  if (activeComments.length === 0) return source;
+  const exportableComments = getExportableReviewComments(comments);
+  if (exportableComments.length === 0) return source;
 
-  type Hit = { insertAt: number; text: string };
+  type Hit = { insertAt: number; text: string; order: number; applied: boolean };
   const hits: Hit[] = [];
   const exportedComments: ReviewComment[] = [];
 
-  activeComments.forEach((comment) => {
+  exportableComments.forEach((comment) => {
     const hit = recoverAnchorInBlock(source, comment.anchor, comment.anchor.block);
     const exportedComment = {
       ...comment,
@@ -155,22 +181,27 @@ export function buildReviewMarkdown(source: string, comments: ReviewComment[]): 
     exportedComments.push(exportedComment);
     if (!hit) return;
     const segmentEnd = findSegmentEnd(source, hit.start + hit.length);
-    hits.push({ insertAt: segmentEnd, text: comment.text });
+    hits.push({ insertAt: segmentEnd, text: comment.text, order: hits.length, applied: comment.appliedAt !== undefined });
   });
 
-  hits.sort((a, b) => b.insertAt - a.insertAt);
+  // 从文末往前插入,避免前面的插入使后面的 insertAt 偏移。
+  // 同 insertAt(同段多意见)时按 order 降序:后插入的落在更靠前位置,
+  // 最终文中顺序与意见列表顺序一致(修复同段多意见导出后顺序反转)。
+  hits.sort((a, b) => b.insertAt - a.insertAt || b.order - a.order);
 
   let result = source;
   for (const hit of hits) {
-    const marker = `\n\n> **检视意见，请处理**：${hit.text}`;
+    const label = hit.applied ? '检视意见（已应用）' : '检视意见，请处理';
+    const marker = `\n\n> **${label}**：${hit.text}`;
     result = `${result.slice(0, hit.insertAt)}${marker}${result.slice(hit.insertAt)}`;
   }
 
   const summary = exportedComments.map((comment, index) => {
     const quote = reviewEscape(truncate(comment.anchor.originalText.replace(/\n+/g, ' '), 80));
     const line = lineNumberForAnchor(source, comment.anchor.from);
+    const appliedSuffix = comment.appliedAt ? '（已应用）' : '';
     const prefix = line === null ? '定位失效 · ' : `第 ${line} 行 · `;
-    return `### ${index + 1}. ${prefix}针对片段「${quote}」\n\n${reviewEscape(comment.text)}`;
+    return `### ${index + 1}. ${prefix}针对片段「${quote}」${appliedSuffix}\n\n${reviewEscape(comment.text)}`;
   }).join('\n\n');
   const metadata = exportedComments.map(reviewMetadataMarker).join('\n');
 
@@ -198,6 +229,7 @@ export function parseReviewMarkdown(source: string, filePath: string): ReviewCom
         source: value.source,
         status: value.status,
         ...(value.basis ? { basis: value.basis } : {}),
+        ...(value.appliedAt ? { appliedAt: value.appliedAt } : {}),
       });
     } catch {
       // 单条损坏不影响其余检视意见恢复。
@@ -221,6 +253,7 @@ function reviewMetadataMarker(comment: ReviewComment): string {
     c: comment.createdAt,
     s: comment.source,
     ...(comment.basis ? { r: [comment.basis.kind, comment.basis.label] } : {}),
+    ...(comment.appliedAt !== undefined ? { d: comment.appliedAt } : {}),
   };
   return `<!-- typola-review:v2:${encodeBase64Url(JSON.stringify(compact))} -->`;
 }
@@ -240,6 +273,8 @@ type CompactReviewComment = {
   c: number;
   s: ReviewSource;
   r?: [ReviewBasis['kind'], string];
+  /** appliedAt 时间戳(已应用);缺省表示待处理。 */
+  d?: number;
 };
 
 function encodeBase64Url(value: string): string {
@@ -273,6 +308,7 @@ function decodeCompactReviewComment(value: string): unknown {
     source: compact.s,
     status: 'active',
     ...(basis ? { basis } : {}),
+    ...(compact.d !== undefined ? { appliedAt: compact.d } : {}),
   } satisfies SerializedReviewComment;
 }
 
@@ -299,6 +335,7 @@ function isCompactReviewComment(value: unknown): value is CompactReviewComment {
     || typeof anchor.b[1] !== 'number'
     || typeof anchor.b[2] !== 'number'
   )) return false;
+  if (candidate.d !== undefined && typeof candidate.d !== 'number') return false;
   return candidate.r === undefined || (
     Array.isArray(candidate.r)
     && candidate.r.length === 2
@@ -336,6 +373,7 @@ function isSerializedReviewComment(value: unknown): value is SerializedReviewCom
       || typeof basis.label !== 'string'
     ) return false;
   }
+  if (candidate.appliedAt !== undefined && typeof candidate.appliedAt !== 'number') return false;
   return true;
 }
 

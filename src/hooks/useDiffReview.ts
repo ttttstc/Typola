@@ -341,12 +341,21 @@ export function useDiffReview(
     });
   }, []);
 
+  // apply 进行中标记:历史快照落盘是异步的,双击「应用」会在 state 尚未清空前
+  // 再次进入本函数,导致 onApplyMerged(含文档替换)被执行两次。
+  const applyingRef = useRef(false);
   const apply = useCallback(async () => {
+    if (applyingRef.current) return false;
     if (!state.isOpen || state.selfCheckStatus === 'blocked' || state.baselineStatus === 'stale') return false;
-    await onApplyMerged?.(mergeDecisions(state.hunks, state.decisions), state.originalContent);
-    clearPersistedCandidate();
-    setState(EMPTY_STATE);
-    return true;
+    applyingRef.current = true;
+    try {
+      await onApplyMerged?.(mergeDecisions(state.hunks, state.decisions), state.originalContent);
+      clearPersistedCandidate();
+      setState(EMPTY_STATE);
+      return true;
+    } finally {
+      applyingRef.current = false;
+    }
   }, [clearPersistedCandidate, onApplyMerged, state]);
 
   const decidableCount = useMemo(() => countDecidableHunks(state.hunks), [state.hunks]);

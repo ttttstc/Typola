@@ -255,9 +255,11 @@ function ReviewListView({
   const [rulePaths, setRulePaths] = useState<string[]>([]);
   const [skillNames, setSkillNames] = useState<string[]>([]);
   const [requirement, setRequirement] = useState('');
+  // 已应用(appliedAt)的意见保留在列表中供追溯(带「已应用」徽标),
+  // 但不计入 activeComments(不参与 AI 改稿收集与待处理计数)。
   const filteredComments = filter === 'ignored'
     ? comments.filter((comment) => comment.status === 'ignored')
-    : activeComments.filter((comment) => filter === 'all' || comment.source === filter);
+    : comments.filter((comment) => comment.status !== 'ignored' && (filter === 'all' || comment.source === filter));
   const visibleComments = [...filteredComments].sort((left, right) => {
     const leftPosition = findUniqueAnchor(currentSource, left.anchor.originalText, left.anchor.prefixHint)?.start;
     const rightPosition = findUniqueAnchor(currentSource, right.anchor.originalText, right.anchor.prefixHint)?.start;
@@ -447,6 +449,9 @@ function ReviewListView({
                     <span className={`review-sidebar-item-source is-${comment.source}`}>
                       {comment.source === 'ai' ? 'AI' : '人工'}
                     </span>
+                    {comment.appliedAt !== undefined && (
+                      <span className="review-sidebar-item-applied">已应用</span>
+                    )}
                     {comment.source === 'ai' && comment.basis && (
                       <span className="review-sidebar-item-basis">依据：{comment.basis.label}</span>
                     )}
