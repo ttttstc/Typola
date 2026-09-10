@@ -20,6 +20,21 @@ type CreateMarkdownExtensionsOptions = {
 export function createMarkdownExtensions(options: CreateMarkdownExtensionsOptions): Extension[] {
   const extensions: Extension[] = [markdown({ base: markdownLanguage })];
 
+  // Typora 行为:在已有选区内按下并拖动 = 重新选择,而不是拖放移动/复制文字。
+  // CM6 默认链路:mousedown 不阻止默认 → 选区内拖动启动原生 dragstart →
+  // 内建 handler 把 MouseSelection.dragging 置 true(拖选让位)+ 记录拖拽数据,
+  // drop 时把选中文字移动/复制到松手位置 —— 用户想调整选区时表现为
+  // "选不中本行,文字一直跑进下一行"、段落结构被破坏。
+  // 这里拦截编辑器内发起的 dragstart:拖放不启动,CM6 的 MouseSelection
+  // 继续接管 mousemove → 拖动变为普通重新选择。
+  // 从外部拖文字/文件进编辑器不受影响(其 dragstart 不在编辑器内发起)。
+  extensions.push(EditorView.domEventHandlers({
+    dragstart(event) {
+      event.preventDefault();
+      return true;
+    },
+  }));
+
   if (options.tabSize !== 4) {
     extensions.push(EditorState.tabSize.of(options.tabSize));
   }
