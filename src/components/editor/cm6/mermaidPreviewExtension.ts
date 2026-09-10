@@ -35,11 +35,56 @@ function cursorTouches(state: EditorState, from: number, to: number): boolean {
   return state.selection.ranges.some((range) => range.from <= to && range.to >= from);
 }
 
+/**
+ * 从 FencedCode 节点提取 mermaid 源码（逐行重建）。
+ *
+ * 不能依赖 `getChild('CodeText')` 的文档区间：块被引用/列表缩进时，
+ * CodeText 跨行区间会夹进行首的 `> ` 标记与列表缩进，且部分场景只
+ * 覆盖到首行——mermaid 容错跳过所有"节点行"后渲染出 16x16 空图。
+ * 这里按行取 FencedCode 覆盖范围的文本，剥掉引用标记与 fence 行，
+ * 再去掉公共缩进，得到与顶层块等价的干净源码。
+ */
+export function extractMermaidSource(state: EditorState, nodeFrom: number, nodeTo: number): string {
+  const { doc } = state;
+  const firstLine = doc.lineAt(nodeFrom);
+  const lastLine = doc.lineAt(nodeTo);
+  const lines: string[] = [];
+  for (let number = firstLine.number; number <= lastLine.number; number += 1) {
+    const line = doc.line(number);
+    // 剥离行首引用标记（支持嵌套 `> >`）；列表缩进交给公共缩进剥离。
+    const text = line.text.replace(/^\s*(?:>\s?)+/, '');
+    const isFence = /^\s*(```|~~~)\s*$/.test(text);
+    const isFirstFence = number === firstLine.number;
+    const isLastFence = number === lastLine.number && isFence;
+    if (isFirstFence || isLastFence) continue;
+    if (number === lastLine.number && isFence) continue;
+    lines.push(text);
+  }
+  // 去掉非空行的公共前导空格（列表/嵌套缩进），保持图内相对缩进。
+  const indents = lines
+    .filter((line) => line.trim().length > 0)
+    .map((line) => line.match(/^ */)![0].length);
+  const minIndent = indents.length > 0 ? Math.min(...indents) : 0;
+  return lines
+    .map((line) => line.slice(minIndent).trimEnd())
+    .join('\n')
+    .trim();
+}
+
+// 缩放范围与步长（对标 Typora 的 Ctrl+滚轮缩放）。
+const MERMAID_ZOOM_MIN = 0.5;
+const MERMAID_ZOOM_MAX = 4;
+const MERMAID_ZOOM_STEP = 1.15;
+
 class MermaidWidget extends WidgetType {
   private readonly source: string;
   private readonly themeId: string;
   private readonly refresh: () => void;
   private readonly nextId: () => string;
+  // 当前缩放倍率（会话内记忆，不持久化）；1 = 原始尺寸。
+  private scale = 1;
+  // SVG 原始宽度（px），首次缩放/绘制时计算缓存。
+  private naturalWidth = 0;
 
   constructor(
     source: string, themeId: string, refresh: () => void, nextId: () => string,
@@ -56,8 +101,55 @@ class MermaidWidget extends WidgetType {
   toDOM(): HTMLElement {
     const element = document.createElement('div');
     element.className = 'typola-cm6-mermaid';
+    element.title = 'Ctrl+滚轮缩放图表';
     this.paint(element);
+    this.attachZoom(element);
     return element;
+  }
+
+  /**
+   * Ctrl+滚轮缩放图（capture + stopImmediatePropagation 拦截编辑器的
+   * Ctrl+滚轮字号缩放）。不做双击复位——双击手势已被 CM6 用作"进入
+   * 源码编辑"，绑定复位会导致图表展开为源码。
+   */
+  private attachZoom(element: HTMLElement): void {
+    element.addEventListener('wheel', (event) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const factor = event.deltaY < 0 ? MERMAID_ZOOM_STEP : 1 / MERMAID_ZOOM_STEP;
+      this.scale = Math.min(MERMAID_ZOOM_MAX, Math.max(MERMAID_ZOOM_MIN, this.scale * factor));
+      this.applyScale(element);
+    }, { passive: false, capture: true });
+  }
+
+  /** 按倍率调整 SVG 的 max-width（height:auto 保持纵横比，布局自然撑开）。 */
+  private applyScale(element: HTMLElement): void {
+    const svg = element.querySelector('svg');
+    if (!svg) return;
+    // mermaid 的 width 属性是 "100%"，不可直接用；原始宽度取 style 里的
+    // max-width 数值（useMaxWidth 输出），并在首次计算后缓存（后续会被
+    // 我们改写）。viewBox 宽度作最后兜底。
+    if (!this.naturalWidth) {
+      const fromStyle = Number(svg.style.maxWidth.match(/^([\d.]+)px$/)?.[1]);
+      const fromViewBox = Number(svg.getAttribute('viewBox')?.match(/^[\d.-]+\s+[\d.-]+\s+([\d.]+)/)?.[1]);
+      const natural = Number.isFinite(fromStyle) && fromStyle > 0 ? fromStyle : fromViewBox;
+      if (!Number.isFinite(natural) || natural <= 0) return;
+      this.naturalWidth = natural;
+    }
+    svg.style.maxWidth = `${Math.round(this.naturalWidth * this.scale)}px`;
+    element.classList.toggle('typola-cm6-mermaid-scaled', Math.abs(this.scale - 1) > 0.01);
+    // 缩放改变块高度，必须通知 CM6 重新测量（否则滚动出现幻影空白）。
+    this.requestMeasure(element);
+  }
+
+  /** widget 异步变高后必须 requestMeasure，否则 heightmap 失同步。 */
+  private requestMeasure(element: HTMLElement): void {
+    try {
+      EditorView.findFromDOM(element)?.requestMeasure();
+    } catch {
+      // jsdom 等环境下找不到 view 时忽略。
+    }
   }
 
   private paint(element: HTMLElement): void {
@@ -74,10 +166,16 @@ class MermaidWidget extends WidgetType {
       this.refresh();
       if (element.isConnected) this.paint(element);
     });
-    if (result.state === 'ready') element.innerHTML = result.html;
-    else if (result.state === 'error') {
+    if (result.state === 'ready') {
+      element.innerHTML = result.html;
+      // SVG 异步到达会撑高 widget：立即重放当前缩放并通知测量，
+      // 避免 heightmap 停留在"渲染中…"的单行高度。
+      this.applyScale(element);
+      this.requestMeasure(element);
+    } else if (result.state === 'error') {
       element.classList.add('typola-cm6-mermaid-error');
       element.textContent = `Mermaid 渲染失败：${result.message}`;
+      this.requestMeasure(element);
     } else element.textContent = 'Mermaid 渲染中…';
   }
 }
@@ -87,11 +185,21 @@ function collectMermaidRanges(state: EditorState): Array<{ from: number; to: num
   const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
   tree.iterate({ enter(node: any) {
     if (node.name !== 'FencedCode') return;
-    const info = node.node.getChild('CodeInfo');
-    const code = node.node.getChild('CodeText');
-    if (!info || state.doc.sliceString(info.from, info.to).trim().toLowerCase() !== 'mermaid') return;
-    const source = code ? state.doc.sliceString(code.from, code.to).trim() : '';
-    if (source && !cursorTouches(state, node.from, node.to)) ranges.push({ from: node.from, to: node.to, source });
+    // 语言标记从 fence 行文本解析（剥引用标记后取 ``` 后的内容），
+    // 不依赖 CodeInfo 子节点——缩进场景下其范围同样不可靠。
+    const firstLine = state.doc.lineAt(node.from);
+    const fenceInfo = firstLine.text
+      .replace(/^\s*(?:>\s?)+/, '')
+      .match(/^\s*(```|~~~)\s*([^\s`]*)/);
+    const language = fenceInfo?.[2]?.trim().toLowerCase() ?? '';
+    if (language !== 'mermaid') return;
+    const source = extractMermaidSource(state, node.from, node.to);
+    if (source && !cursorTouches(state, node.from, node.to)) {
+      // 注意 from 不扩展到行首：引用内 fence 行行首的 `> ` 已由 inlinePreview
+      // 的 QuoteMark 装饰隐藏，block replace 覆盖它会造成装饰重叠冲突
+      // （widget 整体消失）。`> `/列表缩进残留的空行框（~一行高）可接受。
+      ranges.push({ from: node.from, to: node.to, source });
+    }
   } });
   return ranges;
 }
