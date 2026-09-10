@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Bold,
   Code2,
+  Eye,
   FileDown,
   FilePlus,
   FileText,
@@ -68,6 +69,9 @@ type ToolbarProps = {
   editingDisabled: boolean;
   docMode: DocMode;
   onToggleEditorMode: () => void;
+  /** 显式设定编辑模式（渲染/源码）。提供时两个模式按钮各自可直接切换；
+   *  未提供时回退为 onToggleEditorMode 的 toggle 行为。 */
+  onSelectEditorMode?: (mode: EditorMode) => void;
   onFormat?: (action: FormatAction) => void;
   onToggleWorkspacePanel: () => void;
   onToggleWordPreview: () => void;
@@ -95,7 +99,7 @@ export function Toolbar({
   editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
   rightPanelAvailable, rightPanelCollapsed,
   terminalVisible, editingDisabled, docMode,
-  onToggleEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
+  onToggleEditorMode, onSelectEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
   onToggleRightPanel, onToggleTerminal, onOpenToc, onSetDocMode,
   onNew, onOpen, onOpenFolder, onSave, onSaveAs, onInsertImage, onExportPdf, onExportWord,
   pdfExporting, wordExporting, onOpenSettings, onPreloadSettings,
@@ -290,6 +294,24 @@ export function Toolbar({
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-right">
         <div className="toolbar-group toolbar-view-actions" aria-label={t('toolbarViewGroup')}>
+          {/* 渲染/源码成对按钮:渲染按钮是从源码模式切回的显式入口(此前只有
+              源码按钮一个 toggle,切回不可发现)。源码按钮保留 toggle 语义
+              (源码态再点一次也切回渲染),兼容既有习惯与测试。 */}
+          <button
+            className={editorMode === 'wysiwyg' ? 'active' : ''}
+            onClick={() => {
+              if (editorMode === 'wysiwyg') return;
+              if (onSelectEditorMode) onSelectEditorMode('wysiwyg');
+              else onToggleEditorMode();
+            }}
+            disabled={editingDisabled}
+            data-no-window-drag="true"
+            data-tooltip={t('toolbarRenderLabel')}
+            aria-label={t('toolbarRenderLabel')}
+            aria-pressed={editorMode === 'wysiwyg'}
+          >
+            <Eye size={iconSize} strokeWidth={strokeWidth} />
+          </button>
           <button
             className={editorMode === 'source' ? 'active' : ''}
             onClick={onToggleEditorMode}

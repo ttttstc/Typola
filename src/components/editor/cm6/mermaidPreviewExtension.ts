@@ -104,7 +104,29 @@ class MermaidWidget extends WidgetType {
     element.title = 'Ctrl+滚轮缩放图表';
     this.paint(element);
     this.attachZoom(element);
+    this.attachClickToEdit(element);
     return element;
+  }
+
+  /**
+   * 单击图表进入源码编辑（对齐 Typora）：把光标放到 fence 后第一行行首，
+   * cursorTouches 命中 → 块还原为源码，用户直接改 mermaid 代码，
+   * 光标离开后自动重新渲染。block replace widget 本身没有可定位的内部
+   * 位置，不拦截 mousedown 的话 CM6 会把光标弹到块外，点图无法编辑。
+   */
+  private attachClickToEdit(element: HTMLElement): void {
+    element.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+      const view = EditorView.findFromDOM(element);
+      if (!view) return;
+      event.preventDefault();
+      // posAtDOM 对 block widget 返回块起点（fence 行行首）。
+      const pos = view.posAtDOM(element);
+      const fenceLine = view.state.doc.lineAt(pos);
+      const target = Math.min(fenceLine.to + 1, view.state.doc.length);
+      view.dispatch({ selection: { anchor: target } });
+      view.focus();
+    });
   }
 
   /**

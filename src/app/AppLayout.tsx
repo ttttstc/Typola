@@ -2576,6 +2576,7 @@ export function AppLayout() {
           editingDisabled: isDocx,
           docMode,
           onToggleEditorMode: handleToggleEditorMode,
+          onSelectEditorMode: setEditorMode,
           onFormat: handleEditorFormat,
           onToggleWorkspacePanel: handleTogglePrimaryPanel,
           onToggleWordPreview: handleToggleWordPreview,

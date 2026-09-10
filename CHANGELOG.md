@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 修复右键菜单系列功能 bug 并与 Typora 行为对齐：① 右键命令作用于旧选区而非右键落点——右键时若落点不在当前选区内先把光标移到落点（段落/格式/编辑语言/编辑链接等命令作用于右键所在块），落点在选区内则保留选区（剪切/复制仍可用）；② "编辑语言"不再要求选区精确覆盖整个代码块，改为按语法树 `FencedCode` 节点（覆盖光标位置）定位代码块，语法树不可用时回退 fence 行扫描，右键块内任意行都能弹语言编辑弹窗，且保存时只重写开 fence 行、块体不动；③ mermaid 图右键"复制为 SVG"接线修复——右键命中 `.typola-cm6-mermaid` widget 且内部已渲染 svg 时显示该菜单项，点击将 SVG 源码文本写入剪贴板（错误态/渲染中不显示）；④ 右键+选区时 AI 浮条与菜单叠加——拖选追踪只响应左键 mousedown，右键不再触发浮条浮现；⑤ 菜单"粘贴"与键盘 Ctrl+V 行为对齐——新增 `applyClipboardData` 智能链路（表格 TSV/CSV/HTML → 结构化 HTML 转 Markdown → 纯文本回退），键盘 onPaste 与菜单"粘贴"共用，菜单粘贴优先 `clipboard.read()` 取 HTML+纯文本，不可用时回退 `readText`。新增右键菜单回归测试（EditorPane 落点/mermaid/粘贴链路、cm6FormatService 标题升降级与代码块定位、EditorContextMenu 新菜单项）与 e2e（右键段落→H2 作用于落点行、右键代码块→编辑语言）。
+
+- "段落"子菜单对齐 Typora 高频项：新增"提升标题等级 (Ctrl+=)"（H2-H6 升一级、正文变 H2、H1 保持）、"降低标题等级 (Ctrl+-)"（H1 回正文、H2-H5 降一级、H6/正文保持）、"引用"、"无序列表"、"有序列表"入口；`createMarkdownExtensions` 的 onFormat keymap 追加 `Mod-=` / `Mod--` 两条绑定。
+
+- 修复检视模式「应用全部检视意见 / AI 改稿」链路系列问题：① 应用后意见不闭环——AI 改稿应用成功后，本次发送的检视意见自动标记「已应用」（检视列表显示徽标、不再计入待处理数），不再把锚点已失效的意见原样塞进下一轮改稿 prompt 空转；已应用意见保留历史、导出检视版时标注「已应用」且元数据往返不丢。② 长锚点不再截断丢信息——AI 改稿 prompt 中锚点原文截断阈值从 160 提升至 500 字符，仍超长时显式提示 AI 结合前缀在文稿中定位整段。③ 跨文档不再挂起——AI 改稿运行中切换文档后，改稿完成时不再永久挂起（全局「AI 改稿」按钮不再永久禁用），改为一次性提示切回原文档查看，候选稿可从改稿历史打开。④ 应用按钮双击并发——useDiffReview 增加进行中守卫，历史快照落盘期间重复点击只执行一次应用，失败后守卫自动复位可重试。⑤ 人工检视意见锚点补 prefixHint（选区前 24 字符），重复文本多处出现时定位不再撞错位置。⑥ 导出检视版同段多意见顺序修复——同一落点插入多条意见时按意见列表顺序输出，不再反转。新增意见闭环、并发守卫、同段顺序、prefixHint 消歧回归测试。
+
 - 修复编辑器光标乱飞系列问题（普通打字/代码块内编辑/AI 改写/切标签四个场景）：① 打字受控回流不再触发 `StateEffect.reconfigure`——原先 basicSetup 内联对象每次渲染都是新引用，每敲一个字都会全量重建 ViewPlugin/widget DOM（真实浏览器中表现为 IME 组合输入被打断、代码块/公式 widget 闪跳、光标视觉乱跳），现稳定化引用；② EditorPane 接管外部 value 同步（@uiw 受控替换从此不触发），AI 候选稿/agent 写盘重载等整篇替换时光标按公共前缀/后缀对齐映射到对应内容处，不再飞到文档开头；③ 切换文档时保存并按文档恢复上次的选区与滚动位置；④ 查找面板开着时打字不再被 matches 重算自动导航拽走光标（仅响应查找词变化与用户主动跳转）；⑤ TOC/大纲跳转的 scrollIntoView 与 scrollTop 双通道叠加改为单通道，预览反向同步锁窗口从 220ms 延长到 400ms 覆盖编辑器侧 200ms 节流回程，消除滚动回拽。新增光标稳定性回归测试（打字回流 reconfigure 计数、代码块内选区稳定、外部替换映射、per-doc 恢复四场景）。
 
 - 清理 Vditor WYSIWYG 编辑遗留死代码（约 1500 行）：删除已无引用的 `WysiwygEditorPane` 及其专属表格子菜单/序列化/变更模块与 `vditorFormatService`，清理 app.css / define-color-system.css 中约 230 行死样式。Vditor 仅保留既有兼容预览链路（AI 消息渲染），编辑场景已全量运行于 CM6。
@@ -30,7 +36,7 @@
 
 - 插入类功能入口补齐（对齐 Typora 惯例）：新增快捷键 Ctrl+Shift+K 插入代码块、Ctrl+T 插入表格、Ctrl+Shift+M 插入公式块（新格式命令，插入 `$$` 围栏并落光标于公式体空行）、Ctrl+Shift+I 插入本地图片（无图片回调时不拦截按键）、Ctrl+0 回到正文；Ctrl+K 从“AI 选区菜单”改为插入/编辑链接（AI 选区菜单保留选区浮条与右键入口），右键菜单“链接 (Ctrl+K)”“正文 (Ctrl+0)”提示从此与实际一致。工具栏格式组新增代码块/分隔线/删除线/高亮/公式块五个按钮，全部 tooltip 与 aria-label 改走 i18n（中/英/日三语）；右键“插入”子菜单新增“公式块”，插入类菜单项补齐快捷键提示。
 
-- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel` 新增 `gotoLine` 方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按 `indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `<p>`/`<span>` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
+- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                  <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
 
 ## \[2.0.5] - 2026-07-13
 

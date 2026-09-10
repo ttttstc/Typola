@@ -76,5 +76,22 @@ test('indented mermaid renders real diagrams and supports ctrl-wheel zoom', asyn
   const widthReset = await topWidget.locator('svg').evaluate((el) => el.getBoundingClientRect().width);
   expect(Math.abs(widthReset - widthBefore) / widthBefore).toBeLessThan(0.25);
 
-  await page.screenshot({ path: 'e2e/__mermaid-fixed.png', fullPage: true });
+  // 单击图表进入源码编辑（对齐 Typora）：被点击的顶层图 widget 消失、
+  // 其 mermaid 源码行可见（另外两张缩进图不受影响）
+  await topWidget.click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('.typola-cm6-mermaid')).toHaveCount(2);
+  await expect(page.locator('.cm-content')).toContainText('X[顶层开始]');
+  // 源码态直接编辑后光标移出，图重新渲染
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('正文');
+  await page.waitForTimeout(800);
+  await expect(page.locator('.typola-cm6-mermaid svg').first()).toBeVisible();
+
+  // 渲染模式按钮：从源码模式一键切回渲染（此前只有源码按钮 toggle，不可发现）
+  await page.getByRole('button', { name: '源码模式' }).click();
+  await expect(page.locator('.typola-cm6-mermaid')).toHaveCount(0);
+  await page.getByRole('button', { name: '渲染模式' }).click();
+  await page.waitForTimeout(600);
+  await expect(page.locator('.typola-cm6-mermaid svg').first()).toBeVisible();
 });
