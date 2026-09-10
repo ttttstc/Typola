@@ -3,6 +3,8 @@ type MermaidModule = typeof import('mermaid');
 export type MermaidRenderOptions = {
   theme?: 'default' | 'dark';
   editable?: boolean;
+  /** 按自然尺寸展示（编辑器/预览面板用）；导出管线缺省自适应容器宽。 */
+  naturalSize?: boolean;
 };
 
 const RENDERED_ATTR = 'data-typola-mermaid-rendered';
@@ -71,6 +73,39 @@ export function serializeMermaidSvg(target: Element | null): string | null {
   return new XMLSerializer().serializeToString(svg);
 }
 
+/**
+ * 把 mermaid 输出的 SVG 归一为自然尺寸（显式 width + height:auto 基线）。
+ *
+ * mermaid 默认 useMaxWidth 输出 `width="100%"` + `style="max-width:Npx"`，
+ * 图会被压进容器宽 —— 窄窗口下宽流程图直接变成缩略图。这里从 viewBox
+ * 取自然宽度，改写为显式像素 width 并移除 max-width，让编辑器/预览容器
+ * 以自然尺寸展示（超宽由容器 overflow-x 滚动承接，缩放控件按倍率改写
+ * width）。仅用于编辑器与预览管线；导出链路保持自适应宽度不调用本函数。
+ */
+export function normalizeMermaidSvgSize(svg: string): string {
+  try {
+    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+    const el = doc.documentElement;
+    if (el?.nodeName.toLowerCase() !== 'svg') return svg;
+    const viewBox = el.getAttribute('viewBox')?.match(/^[\d.-]+\s+[\d.-]+\s+([\d.]+)/);
+    const natural = Number(viewBox?.[1]);
+    if (!Number.isFinite(natural) || natural <= 0) return svg;
+    el.setAttribute('width', `${Math.round(natural)}`);
+    // SVG 的 height 属性不认 "auto"：移除属性后由 inline style 的
+    // height:auto（replaced element 按纵横比）接管，避免部分浏览器
+    // 回退到 150px 默认高度。XML 文档的 Element 没有 .style 接口
+    // （jsdom 下访问即抛错），必须直接操作 style 属性字符串。
+    el.removeAttribute('height');
+    const style = el.getAttribute('style') ?? '';
+    const restStyle = style.replace(/max-width\s*:[^;]*;?/giu, '').trim();
+    el.setAttribute('style', `height: auto${restStyle ? `; ${restStyle}` : ''}`);
+    return new XMLSerializer().serializeToString(el);
+  } catch {
+    // 解析失败时原样返回，宁可小图也不能丢图。
+    return svg;
+  }
+}
+
 async function loadMermaid(): Promise<MermaidModule> {
   mermaidModulePromise ??= import('mermaid');
   return mermaidModulePromise;
@@ -122,7 +157,9 @@ function insertMermaidSvg(pre: HTMLElement, svg: string, source: string, options
   graph.className = 'typola-mermaid';
   graph.setAttribute(RENDERED_ATTR, 'true');
   graph.setAttribute(SOURCE_ATTR, source);
-  graph.innerHTML = svg;
+  // 预览面板（naturalSize）与编辑器一致按自然尺寸展示，超宽由容器
+  // overflow-x 滚动承接；导出链路不传该选项，保持自适应容器宽。
+  graph.innerHTML = options.naturalSize ? normalizeMermaidSvgSize(svg) : svg;
 
   if (options.editable) {
     // editable 模式:把 pre 隐藏(可点击图回到源码),也把 fence 头 pre 一起隐藏 + 恢复时还原。

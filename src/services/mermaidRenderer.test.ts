@@ -100,4 +100,40 @@ describe('mermaidRenderer', () => {
     await ensureMermaidInitialized('dark');
     expect(initializeMock).toHaveBeenCalledTimes(1);
   });
+
+  it('normalizeMermaidSvgSize 把 useMaxWidth 输出归一为显式自然宽度', async () => {
+    const { normalizeMermaidSvgSize } = await import('./mermaidRenderer');
+    const svg = '<svg width="100%" style="max-width: 700px;" viewBox="0 0 700 420" height="420"><g></g></svg>';
+    const normalized = normalizeMermaidSvgSize(svg);
+    const el = document.createElement('div');
+    el.innerHTML = normalized;
+    const out = el.querySelector('svg')!;
+    expect(out.getAttribute('width')).toBe('700');
+    expect(out.hasAttribute('height')).toBe(false);
+    expect(out.style.height).toBe('auto');
+    expect(out.style.maxWidth).toBe('');
+  });
+
+  it('normalizeMermaidSvgSize 对无 viewBox 的 SVG 原样返回', async () => {
+    const { normalizeMermaidSvgSize } = await import('./mermaidRenderer');
+    const svg = '<svg width="100%"><text>no viewBox</text></svg>';
+    expect(normalizeMermaidSvgSize(svg)).toBe(svg);
+  });
+
+  it('naturalSize 选项控制预览/导出尺寸策略', async () => {
+    const { renderMermaidIn } = await import('./mermaidRenderer');
+    renderMock.mockImplementation(async (id: string) => ({
+      svg: `<svg id="${id}" width="100%" style="max-width: 700px;" viewBox="0 0 700 420" height="420"></svg>`,
+    }));
+    const natural = document.createElement('div');
+    natural.innerHTML = '<pre><code class="language-mermaid">A</code></pre>';
+    await renderMermaidIn(natural, { naturalSize: true });
+    expect(natural.querySelector('svg')!.getAttribute('width')).toBe('700');
+
+    const adaptive = document.createElement('div');
+    adaptive.innerHTML = '<pre><code class="language-mermaid">A</code></pre>';
+    await renderMermaidIn(adaptive);
+    // 导出链路缺省不归一：保持 mermaid 的自适应宽度输出。
+    expect(adaptive.querySelector('svg')!.getAttribute('width')).toBe('100%');
+  });
 });

@@ -100,7 +100,7 @@ export const PreviewPane = forwardRef<PreviewScrollHandle, PreviewPaneProps>(fun
         after() {
           if (cancelled) return;
           void (async () => {
-            await renderMermaidIn(el, { theme: mermaidTheme });
+            await renderMermaidIn(el, { theme: mermaidTheme, naturalSize: true });
             await resolveLocalImages(el, filePath);
             if (deferredTocIds.length > 0) applyTocIds(el, deferredTocIds);
           })();

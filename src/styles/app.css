@@ -1788,14 +1788,68 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .cm6-markdown-editor-pane .typola-cm6-mermaid svg {
   display: block;
-  max-width: 100%;
+  /* 归一为自然尺寸（显式 width）：不再压缩到容器宽，
+   * 超宽由容器 overflow-x 滚动承接；缩放控件按倍率改写 width。 */
+  max-width: none;
   height: auto;
   margin: 0 auto;
 }
 
-/* Ctrl+滚轮缩放后的视觉提示：边框换成 accent 色，双击复位后消失。 */
+/* 放大溢出时容器内横向滚动（不撑破文档布局）。 */
+.cm6-markdown-editor-pane .typola-cm6-mermaid {
+  overflow-x: auto;
+}
+
+/* Ctrl+滚轮缩放后的视觉提示：边框换成 accent 色，1:1 复位后消失。 */
 .cm6-markdown-editor-pane .typola-cm6-mermaid.typola-cm6-mermaid-scaled {
   border-color: color-mix(in oklch, var(--theme-accent) 64%, transparent);
+}
+
+/* mermaid 缩放控件组：hover 图表时右上角浮现（−/＋/适宽/1:1），
+ * 模式与代码块复制按钮一致。 */
+.cm6-markdown-editor-pane .typola-cm6-mermaid {
+  position: relative;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border-soft);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transition: opacity 120ms;
+  z-index: 2;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid:hover .typola-cm6-mermaid-zoom,
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom:focus-within {
+  opacity: 1;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom-button {
+  border: none;
+  background: transparent;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 6px;
+  min-height: 20px;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom-button:hover {
+  background: var(--theme-control-hover-bg);
+  color: var(--theme-text-primary);
 }
 
 /* 代码块复制按钮:widget 挂在 fence 行行首,绝对定位到块首行右上角,

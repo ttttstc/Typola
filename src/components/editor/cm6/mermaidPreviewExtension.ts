@@ -6,6 +6,7 @@ import { getBlockRender } from './blockRenderCache';
 import {
   MERMAID_RENDER_TIMEOUT_MS,
   ensureMermaidInitialized,
+  normalizeMermaidSvgSize,
   withTimeout,
 } from '../../../services/mermaidRenderer';
 
@@ -101,9 +102,9 @@ class MermaidWidget extends WidgetType {
   toDOM(): HTMLElement {
     const element = document.createElement('div');
     element.className = 'typola-cm6-mermaid';
-    element.title = 'Ctrl+滚轮缩放图表';
     this.paint(element);
     this.attachZoom(element);
+    this.attachZoomControls(element);
     this.attachClickToEdit(element);
     return element;
   }
@@ -139,27 +140,84 @@ class MermaidWidget extends WidgetType {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      const factor = event.deltaY < 0 ? MERMAID_ZOOM_STEP : 1 / MERMAID_ZOOM_STEP;
-      this.scale = Math.min(MERMAID_ZOOM_MAX, Math.max(MERMAID_ZOOM_MIN, this.scale * factor));
-      this.applyScale(element);
+      this.setScale(element, this.scale * (event.deltaY < 0 ? MERMAID_ZOOM_STEP : 1 / MERMAID_ZOOM_STEP));
     }, { passive: false, capture: true });
   }
 
-  /** 按倍率调整 SVG 的 max-width（height:auto 保持纵横比，布局自然撑开）。 */
+  /**
+   * hover 显示的缩放控件组（右上角）：−/＋/适宽/1:1。缩放语义与
+   * Ctrl+滚轮一致（改 SVG 显式宽度，容器横向滚动承接放大溢出）。
+   * 按钮的 mousedown 阻断冒泡，避免触发"单击进源码编辑"。
+   */
+  private attachZoomControls(element: HTMLElement): void {
+    const controls = document.createElement('div');
+    controls.className = 'typola-cm6-mermaid-zoom';
+    const mkButton = (label: string, title: string, onClick: () => void) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'typola-cm6-mermaid-zoom-button';
+      button.textContent = label;
+      button.title = title;
+      button.setAttribute('aria-label', title);
+      button.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      });
+      return button;
+    };
+    controls.append(
+      mkButton('−', '缩小', () => this.setScale(element, this.scale / MERMAID_ZOOM_STEP)),
+      mkButton('＋', '放大', () => this.setScale(element, this.scale * MERMAID_ZOOM_STEP)),
+      mkButton('适宽', '缩放到容器宽度', () => this.fitToWidth(element)),
+      mkButton('1:1', '恢复原始尺寸', () => this.setScale(element, 1)),
+    );
+    element.append(controls);
+  }
+
+  /** 统一缩放入口：clamp 后按倍率改写 SVG 显式宽度。 */
+  private setScale(element: HTMLElement, next: number): void {
+    this.scale = Math.min(MERMAID_ZOOM_MAX, Math.max(MERMAID_ZOOM_MIN, next));
+    this.applyScale(element);
+  }
+
+  /** 适宽：把图缩放到容器内容宽度（不放大超过原始尺寸时也可小于 1）。 */
+  private fitToWidth(element: HTMLElement): void {
+    if (!this.resolveNaturalWidth(element)) return;
+    // clientWidth 含左右 padding（14px×2）与边框，扣掉后是内容可用宽。
+    const available = element.clientWidth - 28 - 2;
+    if (available <= 0) return;
+    this.setScale(element, available / this.naturalWidth);
+  }
+
+  /** 归一后的 SVG 带显式 width 属性；viewBox 宽度兜底。缓存到 naturalWidth。 */
+  private resolveNaturalWidth(element: HTMLElement): boolean {
+    if (this.naturalWidth) return true;
+    const svg = element.querySelector('svg');
+    if (!svg) return false;
+    const fromAttr = Number(svg.getAttribute('width')?.match(/^([\d.]+)(?:px)?$/)?.[1]);
+    const fromViewBox = Number(svg.getAttribute('viewBox')?.match(/^[\d.-]+\s+[\d.-]+\s+([\d.]+)/)?.[1]);
+    const natural = Number.isFinite(fromAttr) && fromAttr > 0 ? fromAttr : fromViewBox;
+    if (!Number.isFinite(natural) || natural <= 0) return false;
+    this.naturalWidth = natural;
+    return true;
+  }
+
+  /** 按倍率调整 SVG 显式宽度（height:auto 保持纵横比，布局自然撑开）。 */
   private applyScale(element: HTMLElement): void {
     const svg = element.querySelector('svg');
     if (!svg) return;
-    // mermaid 的 width 属性是 "100%"，不可直接用；原始宽度取 style 里的
-    // max-width 数值（useMaxWidth 输出），并在首次计算后缓存（后续会被
-    // 我们改写）。viewBox 宽度作最后兜底。
-    if (!this.naturalWidth) {
-      const fromStyle = Number(svg.style.maxWidth.match(/^([\d.]+)px$/)?.[1]);
-      const fromViewBox = Number(svg.getAttribute('viewBox')?.match(/^[\d.-]+\s+[\d.-]+\s+([\d.]+)/)?.[1]);
-      const natural = Number.isFinite(fromStyle) && fromStyle > 0 ? fromStyle : fromViewBox;
-      if (!Number.isFinite(natural) || natural <= 0) return;
-      this.naturalWidth = natural;
+    if (!this.resolveNaturalWidth(element)) return;
+    if (Math.abs(this.scale - 1) <= 0.01) {
+      // 1:1 = 归一后的自然尺寸（width 属性），清除覆盖样式即可。
+      svg.style.removeProperty('width');
+    } else {
+      svg.style.width = `${Math.round(this.naturalWidth * this.scale)}px`;
     }
-    svg.style.maxWidth = `${Math.round(this.naturalWidth * this.scale)}px`;
     element.classList.toggle('typola-cm6-mermaid-scaled', Math.abs(this.scale - 1) > 0.01);
     // 缩放改变块高度，必须通知 CM6 重新测量（否则滚动出现幻影空白）。
     this.requestMeasure(element);
@@ -183,7 +241,9 @@ class MermaidWidget extends WidgetType {
         mermaidModule.default.render(this.nextId(), this.source),
         MERMAID_RENDER_TIMEOUT_MS,
       );
-      return DOMPurify.sanitize(svg, MERMAID_SANITIZE_OPTIONS);
+      // 归一为自然尺寸（显式 width）：图不再被 useMaxWidth 压进容器宽，
+      // 超宽由容器横向滚动承接；缩放控件/Ctrl+滚轮按倍率改写 width。
+      return normalizeMermaidSvgSize(DOMPurify.sanitize(svg, MERMAID_SANITIZE_OPTIONS));
     }, () => {
       this.refresh();
       if (element.isConnected) this.paint(element);
