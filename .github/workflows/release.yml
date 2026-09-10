@@ -33,7 +33,16 @@ jobs:
           $global:LASTEXITCODE = 0
           if ($releaseExists) { throw 'Release already exists; published versions are immutable' }
           node scripts/sync-version.mjs --tag "${{ github.ref_name }}"
-          node scripts/sync-version.mjs --check --tag "${{ github.ref_name }}" --require-version-change "HEAD^"
+          # Code commits may land after the VERSION bump and before the formal release.
+          # Compare against the newest earlier tag, not only the merge commit parent.
+          $previousTag = git tag --merged HEAD --sort=-version:refname |
+            Where-Object { $_ -ne '${{ github.ref_name }}' } |
+            Select-Object -First 1
+          if ($previousTag) {
+            node scripts/sync-version.mjs --check --tag "${{ github.ref_name }}" --require-version-change $previousTag
+          } else {
+            node scripts/sync-version.mjs --check --tag "${{ github.ref_name }}"
+          }
 
       - uses: pnpm/action-setup@v4
         with:

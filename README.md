@@ -106,7 +106,7 @@ npm run tauri:build:update     # tauri:build 的兼容别名
 npm run version:check          # 可选本地诊断；发布 CI 会自动同步并校验
 ```
 
-正式发版只需修改并提交根目录 `VERSION`，随后在该提交创建并推送同版本 Tag（例如 `v2.0.6`）。发布提交必须相对第一父提交修改 `VERSION`；代码提交变化但版本未变时 CI 会拒绝发布。GitHub Actions 会自动同步 package、Tauri、Cargo 与锁文件版本，构建 Draft Release，校验后公开；无需手动运行 `version:sync` 或 `version:check`。本地执行 `npm run tauri:build` 时仍会自动同步版本，并要求设置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
+正式发版只需修改并提交根目录 `VERSION`，随后在该提交创建并推送同版本 Tag（例如 `v2.0.6`）。发布版本必须相对上一个已存在的 release tag 修改 `VERSION`；代码提交可以在版本提交与正式发布之间合入，CI 会按上一 release tag 校验版本跃迁。GitHub Actions 会自动同步 package、Tauri、Cargo 与锁文件版本，构建 Draft Release，校验后公开；无需手动运行 `version:sync` 或 `version:check`。本地执行 `npm run tauri:build` 时仍会自动同步版本，并要求设置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 
 ## 技术与文档
 
