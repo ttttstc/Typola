@@ -263,8 +263,11 @@
 }
 
 .typola-mermaid svg {
-  max-width: 100%;
+  /* 归一为自然尺寸（显式 width，见 mermaidRenderer.normalizeMermaidSvgSize）：
+   * 不再压缩到容器宽，超宽由上方容器的 overflow-x 滚动承接。 */
+  max-width: none;
   height: auto;
+  flex: none;
 }
 
 .typola-mermaid-error {

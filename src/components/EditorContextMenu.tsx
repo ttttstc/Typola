@@ -7,8 +7,9 @@ export type TableAlign = 'left' | 'center' | 'right';
 
 export type FormatAction =
   | { type: 'heading'; level: HeadingLevel }
+  | { type: 'heading-up' | 'heading-down' }
   | { type: 'bold' | 'italic' | 'strike' | 'underline' | 'sup' | 'sub' | 'highlight' | 'inline-code' }
-  | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' }
+  | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' | 'math-block' }
   | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
   | { type: 'link-edit' }
   | { type: 'format-painter' | 'capture-format' | 'apply-format' }
@@ -169,7 +170,7 @@ export function EditorContextMenu({
       <div className="editor-ctx-quick-format" role="group" aria-label="常用格式">
         <QuickFormatButton label="B" title="加粗 (Ctrl+B)" onClick={() => pick({ type: 'bold' })} />
         <QuickFormatButton label="I" title="斜体 (Ctrl+I)" onClick={() => pick({ type: 'italic' })} />
-        <QuickFormatButton label="</>" title="行内代码 (Ctrl+G)" onClick={() => pick({ type: 'inline-code' })} />
+        <QuickFormatButton label="</>" title="行内代码 (Ctrl+Shift+`)" onClick={() => pick({ type: 'inline-code' })} />
         <QuickFormatButton label="↗" title="链接 (Ctrl+K)" onClick={() => pick({ type: 'link' })} />
         <QuickFormatButton label="❝" title="引用块" onClick={() => pick({ type: 'quote' })} />
         <QuickFormatButton label="1." title="有序列表" onClick={() => pick({ type: 'ol' })} />
@@ -200,16 +201,23 @@ export function EditorContextMenu({
           <button type="button" onClick={() => pick({ type: 'heading', level: 6 })} title="六级标题 (Ctrl+6)">H6</button>
         </div>
         <div className="editor-ctx-separator" />
+        <MenuItem label="提升标题等级" hint="Ctrl+=" onClick={() => pick({ type: 'heading-up' })} />
+        <MenuItem label="降低标题等级" hint="Ctrl+-" onClick={() => pick({ type: 'heading-down' })} />
+        <MenuItem label="引用" onClick={() => pick({ type: 'quote' })} />
+        <MenuItem label="无序列表" onClick={() => pick({ type: 'ul' })} />
+        <MenuItem label="有序列表" onClick={() => pick({ type: 'ol' })} />
+        <div className="editor-ctx-separator" />
         <MenuItem label="升级引用" hint="Ctrl+." onClick={() => pick({ type: 'quote-up' })} />
         <MenuItem label="降级引用" hint="Ctrl+," onClick={() => pick({ type: 'quote-down' })} />
         <MenuItem label="清除格式" hint="Ctrl+\\" onClick={() => pick({ type: 'clear-format' })} />
-        <MenuItem label="代码块" onClick={() => pick({ type: 'codeblock' })} />
+        <MenuItem label="代码块" hint="Ctrl+Shift+K" onClick={() => pick({ type: 'codeblock' })} />
         <MenuItem label="编辑语言" onClick={() => pick({ type: 'codeblock-lang' })} />
         <MenuItem label="分隔线" onClick={() => pick({ type: 'hr' })} />
       </SubmenuItem>
       <SubmenuItem label="插入">
-        <MenuItem label="插入表格" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
-        <MenuItem label="插入图片" onClick={() => pick({ type: 'image-insert' })} />
+        <MenuItem label="插入表格" hint="Ctrl+T" onClick={() => pick({ type: 'table-insert', rows: 2, cols: 3 })} />
+        <MenuItem label="插入图片" hint="Ctrl+Shift+I" onClick={() => pick({ type: 'image-insert' })} />
+        <MenuItem label="公式块" hint="Ctrl+Shift+M" onClick={() => pick({ type: 'math-block' })} />
         {hasImage && (
           <>
             <MenuItem label="替换图片" onClick={() => pick({ type: 'image-replace' })} />

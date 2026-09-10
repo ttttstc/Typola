@@ -692,8 +692,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 .writing-layout .editor-pane,
-.writing-layout .cm6-markdown-editor-pane,
-.writing-layout .wysiwyg-editor-pane {
+.writing-layout .cm6-markdown-editor-pane {
   flex: 1;
   display: flex;
   overflow: hidden;
@@ -712,7 +711,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .editor-workbench > .editor-pane,
 .editor-workbench > .cm6-markdown-editor-pane,
-.editor-workbench > .wysiwyg-editor-pane,
 .editor-workbench > .html-presentation-pane {
   flex: 1;
   min-height: 0;
@@ -924,21 +922,10 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
    must refuse to shrink below the readable threshold. The right panel
    instead takes the flex-shrink burden 鈥?see the clamp below. */
 .right-panel-open .writing-layout > .editor-pane,
-.right-panel-open .writing-layout > .wysiwyg-editor-pane,
 .right-panel-open .writing-layout > .markdown-editing-pane,
 .right-panel-open .writing-layout > .html-presentation-pane,
 .right-panel-open .writing-layout > .html-reading-pane {
   min-width: var(--main-min-width);
-}
-
-.wysiwyg-editor-pane .vditor-ir :not(pre):not([data-type='code-block']) > code,
-.wysiwyg-editor-pane .vditor-wysiwyg :not(pre) > code {
-  border-radius: 5px;
-  background: color-mix(in oklch, var(--theme-accent) 10%, var(--theme-surface));
-  color: color-mix(in oklch, var(--theme-accent) 74%, var(--theme-text-primary));
-  padding: 0.12em 0.36em;
-  font-family: var(--font-mono);
-  font-size: 0.92em;
 }
 
 .writing-layout .preview-shell {
@@ -1801,9 +1788,112 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 .cm6-markdown-editor-pane .typola-cm6-mermaid svg {
   display: block;
-  max-width: 100%;
+  /* 归一为自然尺寸（显式 width）：不再压缩到容器宽，
+   * 超宽由容器 overflow-x 滚动承接；缩放控件按倍率改写 width。 */
+  max-width: none;
   height: auto;
   margin: 0 auto;
+}
+
+/* 放大溢出时容器内横向滚动（不撑破文档布局）。 */
+.cm6-markdown-editor-pane .typola-cm6-mermaid {
+  overflow-x: auto;
+}
+
+/* Ctrl+滚轮缩放后的视觉提示：边框换成 accent 色，1:1 复位后消失。 */
+.cm6-markdown-editor-pane .typola-cm6-mermaid.typola-cm6-mermaid-scaled {
+  border-color: color-mix(in oklch, var(--theme-accent) 64%, transparent);
+}
+
+/* mermaid 缩放控件组：hover 图表时右上角浮现（−/＋/适宽/1:1），
+ * 模式与代码块复制按钮一致。 */
+.cm6-markdown-editor-pane .typola-cm6-mermaid {
+  position: relative;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--theme-surface);
+  border: 1px solid var(--theme-border-soft);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transition: opacity 120ms;
+  z-index: 2;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid:hover .typola-cm6-mermaid-zoom,
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom:focus-within {
+  opacity: 1;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom-button {
+  border: none;
+  background: transparent;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 6px;
+  min-height: 20px;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-mermaid-zoom-button:hover {
+  background: var(--theme-control-hover-bg);
+  color: var(--theme-text-primary);
+}
+
+/* 代码块复制按钮:widget 挂在 fence 行行首,绝对定位到块首行右上角,
+ * hover 代码块首行时显示;点击写入块内代码(样式见 codeBlockCopyExtension)。 */
+.cm6-markdown-editor-pane .cm-line:has(> .typola-cm6-code-copy),
+.cm6-markdown-editor-pane .cm-line:has(.typola-cm6-code-copy) {
+  position: relative;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-code-copy {
+  position: absolute;
+  top: 3px;
+  right: 10px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--theme-surface) 88%, transparent);
+  color: var(--theme-text-secondary);
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.cm6-markdown-editor-pane .cm-line:hover .typola-cm6-code-copy,
+.cm6-markdown-editor-pane .typola-cm6-code-copy:focus-visible {
+  opacity: 1;
+}
+
+.cm6-markdown-editor-pane .typola-cm6-code-copy:hover {
+  color: var(--theme-text-primary);
+  border-color: var(--theme-border-hover);
+}
+
+.cm6-markdown-editor-pane .typola-cm6-code-copy.is-copied {
+  color: var(--theme-success);
+  opacity: 1;
 }
 
 .editor-pane > div {
@@ -1890,159 +1980,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 }
 
 /* ===== Markdown Preview Mode ===== */
-
-/* ===== WYSIWYG Editor Pane ===== */
-
-.wysiwyg-editor-pane {
-  height: 100%;
-  min-width: 0;
-}
-
-.wysiwyg-editor-host {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-}
-
-.wysiwyg-editor-pane .vditor {
-  width: 100%;
-  height: 100%;
-  border: none;
-  border-radius: 0;
-  background: var(--theme-canvas);
-  --textarea-background-color: var(--theme-canvas);
-}
-
-.wysiwyg-editor-pane .vditor-reset,
-.wysiwyg-editor-pane .vditor-reset p,
-.wysiwyg-editor-pane .vditor-reset li,
-.wysiwyg-editor-pane .vditor-reset td {
-  color: var(--theme-text-primary);
-}
-
-.wysiwyg-editor-pane .vditor-reset code,
-.wysiwyg-editor-pane .vditor-reset pre {
-  background: var(--theme-surface);
-  color: var(--theme-text-primary);
-}
-
-.wysiwyg-editor-pane .vditor-toolbar,
-.wysiwyg-editor-pane .vditor-counter,
-.wysiwyg-editor-pane .vditor-resize {
-  display: none;
-}
-
-.wysiwyg-editor-pane .vditor-content {
-  height: 100%;
-  background: var(--theme-canvas);
-}
-
-.wysiwyg-editor-pane .vditor-ir,
-.wysiwyg-editor-pane .vditor-wysiwyg {
-  height: 100%;
-  padding: 10px 30px 10px 120px;
-  background: var(--theme-paper);
-  color: var(--theme-text-primary);
-  font-family: var(--reading-font-family, var(--font-reading));
-  font-size: 15px;
-  line-height: 1.72;
-}
-
-.right-panel-open .wysiwyg-editor-pane .vditor-ir,
-.right-panel-open .wysiwyg-editor-pane .vditor-wysiwyg {
-  padding-left: clamp(48px, 5vw, 84px);
-  padding-right: 30px;
-}
-
-.wysiwyg-editor-pane .vditor-reset {
-  font-family: var(--reading-font-family, var(--font-reading));
-}
-
-.wysiwyg-editor-pane .vditor-ir > .vditor-reset,
-.wysiwyg-editor-pane .vditor-wysiwyg > .vditor-reset,
-.wysiwyg-editor-pane .vditor-ir > pre.vditor-reset,
-.wysiwyg-editor-pane .vditor-wysiwyg > pre.vditor-reset {
-  width: 100% !important;
-  max-width: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  box-sizing: border-box;
-  overflow: auto;
-}
-
-.wysiwyg-editor-pane .vditor-reset p,
-.wysiwyg-editor-pane .vditor-reset li,
-.wysiwyg-editor-pane .vditor-reset td {
-  font-family: inherit;
-}
-
-.wysiwyg-editor-pane .vditor-ir > .vditor-reset,
-.wysiwyg-editor-pane .vditor-wysiwyg > .vditor-reset {
-  background: var(--theme-paper) !important;
-}
-
-.wysiwyg-editor-pane .vditor-ir h1,
-.wysiwyg-editor-pane .vditor-ir h2,
-.wysiwyg-editor-pane .vditor-ir h3,
-.wysiwyg-editor-pane .vditor-ir h4,
-.wysiwyg-editor-pane .vditor-ir h5,
-.wysiwyg-editor-pane .vditor-ir h6,
-.wysiwyg-editor-pane .vditor-wysiwyg h1,
-.wysiwyg-editor-pane .vditor-wysiwyg h2,
-.wysiwyg-editor-pane .vditor-wysiwyg h3,
-.wysiwyg-editor-pane .vditor-wysiwyg h4,
-.wysiwyg-editor-pane .vditor-wysiwyg h5,
-.wysiwyg-editor-pane .vditor-wysiwyg h6 {
-  font-family: var(--reading-heading-font-family, var(--reading-font-family, var(--font-reading)));
-  letter-spacing: 0;
-}
-
-.wysiwyg-editor-pane .vditor-ir h1,
-.wysiwyg-editor-pane .vditor-wysiwyg h1 {
-  font-size: 28px;
-  font-weight: 600;
-}
-
-.wysiwyg-editor-pane .vditor-ir h2,
-.wysiwyg-editor-pane .vditor-wysiwyg h2 {
-  font-size: 22px;
-  font-weight: 580;
-}
-
-.wysiwyg-editor-pane .vditor-ir h3,
-.wysiwyg-editor-pane .vditor-wysiwyg h3 {
-  font-size: 18px;
-  font-weight: 560;
-}
-
-.wysiwyg-editor-pane .vditor-ir h4,
-.wysiwyg-editor-pane .vditor-ir h5,
-.wysiwyg-editor-pane .vditor-ir h6,
-.wysiwyg-editor-pane .vditor-wysiwyg h4,
-.wysiwyg-editor-pane .vditor-wysiwyg h5,
-.wysiwyg-editor-pane .vditor-wysiwyg h6 {
-  font-weight: 540;
-}
-
-.wysiwyg-editor-pane .vditor-ir table,
-.wysiwyg-editor-pane .vditor-wysiwyg table,
-.wysiwyg-editor-pane .vditor-wysiwyg .vditor-wysiwyg__preview table {
-  width: 100%;
-  max-width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-}
-
-.wysiwyg-editor-pane .vditor-ir th,
-.wysiwyg-editor-pane .vditor-ir td,
-.wysiwyg-editor-pane .vditor-wysiwyg th,
-.wysiwyg-editor-pane .vditor-wysiwyg td,
-.wysiwyg-editor-pane .vditor-wysiwyg .vditor-wysiwyg__preview th,
-.wysiwyg-editor-pane .vditor-wysiwyg .vditor-wysiwyg__preview td {
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
 
 /* ===== Preview Shell ===== */
 
@@ -2447,17 +2384,6 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   font-weight: 600;
 }
 
-/* ===== WYSIWYG locked complex table ===== */
-
-.wysiwyg-editor-pane .typola-locked-table {
-  position: relative;
-  background: var(--theme-surface);
-  border: 1px solid var(--theme-border);
-  outline: none;
-  cursor: default;
-  user-select: none;
-}
-
 /* ===== 妫€瑙嗘剰瑙佹钀介珮浜?===== */
 
 [data-review-mark='true'] {
@@ -2486,22 +2412,6 @@ html[data-doc-mode='review'][data-review-enhance-marks='true'] [data-review-mark
 .cm-line.typola-cm-review-mark:hover,
 html[data-doc-mode='review'][data-review-enhance-marks='true'] .cm-line.typola-cm-review-mark {
   background: var(--theme-review-mark-bg-strong);
-}
-
-.wysiwyg-editor-pane .typola-locked-table * {
-  user-select: none;
-}
-
-.wysiwyg-editor-pane .typola-locked-table--hover-bound {
-  border-color: color-mix(in oklch, var(--theme-accent) 50%, var(--theme-border));
-  box-shadow: 0 0 0 2px color-mix(in oklch, var(--theme-accent) 18%, transparent);
-}
-
-.wysiwyg-editor-pane .typola-locked-table::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
 }
 
 .typola-html-table-viewer-trigger {
@@ -5021,6 +4931,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .find-input,
 .quick-open-input,
+.goto-line-input,
 .edit-assist-section input {
   height: 26px;
   min-width: 0;
@@ -5077,6 +4988,52 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 .find-panel .find-action {
   padding: 0 10px;
+}
+
+/* ===== GoToLine 跳转到行弹窗(Ctrl+G,Typora 惯例) ===== */
+
+.goto-line-popover {
+  position: fixed;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--theme-border-soft);
+  border-radius: 6px;
+  background: var(--theme-panel-bg);
+  box-shadow: 0 10px 28px var(--theme-paper-shadow);
+  backdrop-filter: blur(14px);
+  z-index: 700;
+}
+
+.goto-line-input {
+  width: 180px;
+}
+
+.goto-line-error {
+  flex: 0 0 auto;
+  color: var(--theme-danger);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.goto-line-popover button {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--theme-text-primary);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.goto-line-popover button:hover {
+  background: color-mix(in oklch, var(--theme-text-primary) 8%, transparent);
 }
 
 /* ===== Workspace File Tree ===== */
@@ -5398,8 +5355,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  min-width: 260px;
-  max-width: 360px;
+  /* 固定宽度:列表控件长度保持一致(原先 260-360 随最长标题伸缩,每次打开宽窄不一) */
+  width: 300px;
+  box-sizing: border-box;
   background: var(--theme-surface);
   border: 1px solid var(--theme-border-soft);
   border-radius: 8px;
@@ -5479,7 +5437,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   justify-content: center;
   min-height: 20px;
   min-width: 20px;
-  opacity: 0;
+  /* 常驻显示(原先 hover 才现,各行控件视觉长度不一致);行 hover 时增强可见性 */
+  opacity: 0.55;
+  flex: none;
   transition: opacity 100ms, background 100ms;
 }
 
@@ -9362,84 +9322,6 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   display: none !important;
 }
 
-.wysiwyg-editor-pane .typola-mermaid {
-  display: flex;
-  justify-content: center;
-  max-width: 100%;
-  margin: 1em 0;
-  overflow-x: auto;
-  cursor: pointer;
-}
-
-.wysiwyg-editor-pane .typola-mermaid svg {
-  max-width: 100%;
-  height: auto;
-}
-
-.wysiwyg-editor-pane .typola-mermaid-source-hidden {
-  display: none !important;
-}
-
-.wysiwyg-editor-pane .typola-mermaid-error {
-  margin: 0.5em 0;
-  padding: 8px 12px;
-  border-left: 3px solid var(--theme-danger);
-  border-radius: 4px;
-  background: color-mix(in oklch, var(--theme-danger) 8%, var(--theme-paper));
-  color: color-mix(in oklch, var(--theme-danger) 72%, var(--theme-text-primary));
-  font-family: var(--font-mono);
-  font-size: 0.85em;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
-/* KaTeX 瀹炴椂娓叉煋:鏇挎崲 .language-math 鐨?innerHTML 鍚庣暀 cursor 鎻愮ず鐢ㄦ埛鍙偣鍑绘敼婧愮爜銆?*/
-.wysiwyg-editor-pane .typola-katex-rendered {
-  cursor: text;
-  display: inline-block;
-}
-
-.wysiwyg-editor-pane .typola-katex-error {
-  display: inline-block;
-  padding: 2px 6px;
-  border-left: 3px solid var(--theme-danger);
-  background: color-mix(in oklch, var(--theme-danger) 8%, var(--theme-paper));
-  color: color-mix(in oklch, var(--theme-danger) 72%, var(--theme-text-primary));
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-}
-
-/* Heading 鎶樺彔鎸夐挳:prepend 鍒?<h1>-<h6> 鍐呯殑绗竴涓瓙鍏冪礌,璺熸枃鏈熀绾垮榻愩€?*/
-.wysiwyg-editor-pane .typola-heading-fold-toggle {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  margin-right: 4px;
-  color: #888;
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
-  user-select: none;
-  vertical-align: middle;
-  text-align: center;
-}
-
-.wysiwyg-editor-pane .typola-heading-fold-toggle:hover {
-  color: #333;
-}
-
-.wysiwyg-editor-pane.dark-theme .typola-heading-fold-toggle {
-  color: #aaa;
-}
-
-.wysiwyg-editor-pane.dark-theme .typola-heading-fold-toggle:hover {
-  color: #eee;
-}
-
-.wysiwyg-editor-pane .typola-heading-folded {
-  display: none !important;
-}
-
 .selection-ai-section-title {
   padding: 4px 10px 2px;
   font-size: 10.5px;
@@ -10649,11 +10531,6 @@ html[data-color-scheme='dark'] .word-paper-content hr::before {
   display: none;
 }
 
-.wysiwyg-editor-pane .vditor-hint,
-.wysiwyg-editor-pane .vditor-panel--arrow {
-  display: none !important;
-}
-
 /* ===== Custom tooltip(P0-5:鍏ㄥ眬鍙敤,涓嶉檺浜?toolbar) ===== */
 /* 浠讳綍甯?data-tooltip 鐨?button 閮借嚜鍔ㄨ幏寰?hover 鎻愮ず,DiffReviewBar /
    DiffGutterMap 杩欑闈?toolbar 瀛愭爲鐨?UI 涔熻兘鐢ㄣ€?*/
@@ -11308,6 +11185,14 @@ button[data-tooltip]:disabled::before {
   background: color-mix(in oklch, var(--theme-accent) 12%, transparent);
   color: var(--theme-accent);
 }
+.review-sidebar-item-applied {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--theme-success) 14%, transparent);
+  color: var(--theme-success);
+  font-size: 9.5px;
+  line-height: 1.4;
+}
 .review-sidebar-item-basis {
   min-width: 0;
   overflow: hidden;
@@ -11414,6 +11299,7 @@ button[data-tooltip]:disabled::before {
 
 .review-sidebar-panel .review-sidebar-item-line,
 .review-sidebar-panel .review-sidebar-item-source,
+.review-sidebar-panel .review-sidebar-item-applied,
 .review-sidebar-panel .review-sidebar-item-basis {
   font-size: calc(var(--review-font-size, 14px) - 3.5px);
 }

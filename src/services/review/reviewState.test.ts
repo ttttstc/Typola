@@ -4,9 +4,14 @@ import {
   addReviewComment,
   buildReviewMarkdown,
   clearReviewState,
+  getActiveReviewComments,
+  getExportableReviewComments,
   lineNumberForAnchor,
   markReviewClean,
+  markReviewCommentsApplied,
+  parseReviewMarkdown,
   removeReviewComment,
+  resolveAppliedCommentIds,
   updateReviewComment,
 } from './reviewState';
 import type { SelectionAnchor } from '../agent/types';
@@ -65,6 +70,122 @@ describe('reviewState - mutations', () => {
 
   it('clearReviewState 总是返回干净空状态', () => {
     expect(clearReviewState()).toEqual(EMPTY_REVIEW_STATE);
+  });
+});
+
+describe('reviewState - 意见应用闭环 (appliedAt)', () => {
+  it('markReviewCommentsApplied 给指定意见设置 appliedAt → dirty=true,其余意见不动', () => {
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
+    state = addReviewComment(state, 'a.md', mkAnchor('y'), '意见 B');
+    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
+    expect(marked.comments[0].appliedAt).toBe(12345);
+    expect(marked.comments[1].appliedAt).toBeUndefined();
+    expect(marked.dirty).toBe(true);
+  });
+
+  it('已应用意见不再计入 getActiveReviewComments(AI 改稿收集时被过滤)', () => {
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
+    state = addReviewComment(state, 'a.md', mkAnchor('y'), '意见 B');
+    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
+    expect(getActiveReviewComments(marked.comments).map((comment) => comment.text)).toEqual(['意见 B']);
+    // 忽略 + 已应用都不计入
+    const ignored = marked.comments.map((comment) => ({ ...comment, status: 'ignored' as const }));
+    expect(getActiveReviewComments(ignored)).toHaveLength(0);
+  });
+
+  it('getExportableReviewComments 保留已应用意见,只排除忽略(导出不丢处理历史)', () => {
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
+    state = addReviewComment(state, 'a.md', mkAnchor('y'), '意见 B');
+    state = addReviewComment(state, 'a.md', mkAnchor('z'), '意见 C');
+    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
+    const ignored = marked.comments.map((comment) => (
+      comment.text === '意见 B' ? { ...comment, status: 'ignored' as const } : comment
+    ));
+    expect(getExportableReviewComments(ignored).map((comment) => comment.text)).toEqual(['意见 A', '意见 C']);
+  });
+
+  it('markReviewCommentsApplied 幂等:已应用的意见重复标记不变更状态', () => {
+    const state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
+    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
+    expect(markReviewCommentsApplied(marked, [marked.comments[0].id], 99999)).toBe(marked);
+    expect(marked.comments[0].appliedAt).toBe(12345);
+  });
+
+  it('buildReviewMarkdown 导出时已应用意见标注「已应用」,待处理意见照常输出', () => {
+    const src = '待处理段落。\n\n已完成段落。';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('待处理段落。'), '待处理意见');
+    state = addReviewComment(state, 'a.md', mkAnchor('已完成段落。'), '已完成意见');
+    const marked = markReviewCommentsApplied(state, [state.comments[1].id], 12345);
+    const out = buildReviewMarkdown(src, marked.comments);
+    // 行内标注
+    expect(out).toContain('> **检视意见，请处理**：待处理意见');
+    expect(out).toContain('> **检视意见（已应用）**：已完成意见');
+    // 文末汇总标注
+    expect(out).toMatch(/针对片段「待处理段落。」\n\n/);
+    expect(out).toMatch(/针对片段「已完成段落。」（已应用）\n\n/);
+  });
+
+  it('检视版元数据往返保留 appliedAt,恢复后仍不计入待处理', () => {
+    const src = '段落内容。\n\n下一段。';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('段落内容。'), '意见 A');
+    state = addReviewComment(state, 'a.md', mkAnchor('下一段。'), '意见 B');
+    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
+    const out = buildReviewMarkdown(src, marked.comments);
+    const restored = parseReviewMarkdown(out, 'a.md');
+    expect(restored).toHaveLength(2);
+    expect(restored.find((comment) => comment.text === '意见 A')?.appliedAt).toBe(12345);
+    expect(restored.find((comment) => comment.text === '意见 B')?.appliedAt).toBeUndefined();
+    expect(getActiveReviewComments(restored).map((comment) => comment.text)).toEqual(['意见 B']);
+  });
+});
+
+describe('reviewState - AI 改稿逐意见确认 (resolveAppliedCommentIds)', () => {
+  it('两条意见 AI 只修改一条、跳过一条:只有锚点被改动的意见算已落实', () => {
+    // 原文两条意见:「啰嗦段落」AI 已改写;「完好段落」AI 跳过、原文保留。
+    const merged = '标题\n\n精简后的新段落。\n\n完好段落。\n';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('啰嗦段落。'), '意见 A');
+    state = addReviewComment(state, 'a.md', mkAnchor('完好段落。'), '意见 B');
+    const candidateIds = state.comments.map((comment) => comment.id);
+
+    const appliedIds = resolveAppliedCommentIds(merged, state.comments, candidateIds);
+
+    expect(appliedIds).toEqual([state.comments[0].id]);
+    // 端到端:只有意见 A 被关闭,意见 B 仍留在待处理集合。
+    const marked = markReviewCommentsApplied(state, appliedIds, 12345);
+    expect(getActiveReviewComments(marked.comments).map((comment) => comment.text)).toEqual(['意见 B']);
+  });
+
+  it('锚点原文在候选稿中原样保留(哪怕出现多次)→ 不标记,避免不唯一歧义误判', () => {
+    const merged = '重复文本。\n\n改写后的段落。\n\n重复文本。\n';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('重复文本。'), '意见 A');
+    state = addReviewComment(state, 'a.md', mkAnchor('中间段落。'), '意见 B');
+    const appliedIds = resolveAppliedCommentIds(merged, state.comments, state.comments.map((c) => c.id));
+    // 意见 B 的锚点已被改写 → 已落实;意见 A 的锚点仍出现(两处,不唯一)→ 无法确认,保持待处理。
+    expect(appliedIds).toEqual([state.comments[1].id]);
+  });
+
+  it('空锚点意见无法验证 → 不标记,保持待处理', () => {
+    const merged = '改写后的内容。';
+    const state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor(''), '空锚点意见');
+    const appliedIds = resolveAppliedCommentIds(merged, state.comments, [state.comments[0].id]);
+    expect(appliedIds).toEqual([]);
+  });
+
+  it('AI 全部落实 → 全部标记;AI 全部跳过 → 全部保持待处理', () => {
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('段落一。'), '意见 A');
+    state = addReviewComment(state, 'a.md', mkAnchor('段落二。'), '意见 B');
+    const ids = state.comments.map((comment) => comment.id);
+
+    const allApplied = resolveAppliedCommentIds('全新内容甲。\n\n全新内容乙。', state.comments, ids);
+    expect(allApplied).toEqual(ids);
+
+    const noneApplied = resolveAppliedCommentIds('段落一。\n\n段落二。', state.comments, ids);
+    expect(noneApplied).toEqual([]);
+  });
+
+  it('candidateIds 含未知 id 时安全忽略', () => {
+    const state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('段落。'), '意见 A');
+    expect(resolveAppliedCommentIds('新段落。', state.comments, ['不存在的 id'])).toEqual([]);
   });
 });
 
@@ -147,6 +268,22 @@ describe('buildReviewMarkdown', () => {
     const secondHitIdx = out.indexOf('关键观点。', src.indexOf('再来一段'));
     const reviewIdx = out.indexOf('> **检视意见');
     expect(reviewIdx).toBeGreaterThan(secondHitIdx);
+  });
+
+  it('同一段落多条意见 → 检视块按意见列表顺序出现,不反转', () => {
+    const src = '第一句与第二句与第三句都在同一段。\n\n下一段。';
+    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('第一句'), '意见甲');
+    state = addReviewComment(state, 'a.md', mkAnchor('第二句'), '意见乙');
+    state = addReviewComment(state, 'a.md', mkAnchor('第三句'), '意见丙');
+    const out = buildReviewMarkdown(src, state.comments);
+    const idxA = out.indexOf('> **检视意见，请处理**：意见甲');
+    const idxB = out.indexOf('> **检视意见，请处理**：意见乙');
+    const idxC = out.indexOf('> **检视意见，请处理**：意见丙');
+    expect(idxA).toBeGreaterThanOrEqual(0);
+    expect(idxB).toBeGreaterThanOrEqual(0);
+    expect(idxC).toBeGreaterThanOrEqual(0);
+    expect(idxA).toBeLessThan(idxB);
+    expect(idxB).toBeLessThan(idxC);
   });
 });
 

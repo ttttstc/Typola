@@ -8,6 +8,7 @@ import {
   TableStyle,
   TableTheme,
 } from 'codemirror-markdown-tables';
+import { codeBlockCopyExtension } from './codeBlockCopyExtension';
 import { imageFallbackExtension } from './imageFallbackExtension';
 import { imageAssetExtension } from './imageAssetExtension';
 import { mathPreviewExtension } from './mathPreviewExtension';
@@ -18,6 +19,7 @@ import { headingFoldExtension } from './headingFoldExtension';
 import { frontmatterFoldExtension } from './frontmatterFoldExtension';
 import { footnoteExtension } from './footnoteExtension';
 import { htmlPreviewExtension } from './htmlPreviewExtension';
+import { typewriterExtension } from './typewriterExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
 import type { ReviewComment } from '../../../services/review/reviewState';
 import { reviewMarkExtension } from './reviewMarkExtension';
@@ -74,6 +76,7 @@ export type LivePreviewCompartments = {
   taskToggle: Compartment;
   linkOpen: Compartment;
   imageAsset: Compartment;
+  typewriter: Compartment;
 };
 
 export function createLivePreviewCompartments(): LivePreviewCompartments {
@@ -86,6 +89,7 @@ export function createLivePreviewCompartments(): LivePreviewCompartments {
     taskToggle: new Compartment(),
     linkOpen: new Compartment(),
     imageAsset: new Compartment(),
+    typewriter: new Compartment(),
   };
 }
 
@@ -105,6 +109,8 @@ export type CreateLivePreviewExtensionsOptions = {
   themeId?: string;
   locale?: AppLocale;
   frontmatterFold?: boolean;
+  /** 打字机模式(设置项 editorTypewriterMode),源码/写作模式都生效。 */
+  typewriterMode?: boolean;
   compartments?: LivePreviewCompartments;
 };
 
@@ -119,8 +125,10 @@ function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'li
     ...tableInteractionExtension(options.locale),
     imageBlocks(),
     imageFallbackExtension(),
+    imageAssetExtension(),
     mathPreviewExtension(options.themeId),
     mermaidPreviewExtension(options.themeId),
+    codeBlockCopyExtension(),
   ];
 }
 
@@ -141,6 +149,7 @@ export function createLivePreviewExtensions(
     themeId,
     locale = 'zh-CN',
     frontmatterFold = true,
+    typewriterMode = false,
     compartments = createLivePreviewCompartments(),
   } = options;
   return [
@@ -152,6 +161,7 @@ export function createLivePreviewExtensions(
     compartments.taskToggle.of(taskToggleExtension({ onToggle: onTaskToggle })),
     compartments.linkOpen.of(linkOpenExtension({ onOpenLink })),
     compartments.imageAsset.of(imageAssetExtension({ filePath: () => filePath })),
+    compartments.typewriter.of(typewriterMode ? typewriterExtension() : []),
   ];
 }
 
@@ -174,6 +184,7 @@ export function reconfigureLivePreviewExtensions(
     themeId,
     locale = 'zh-CN',
     frontmatterFold = true,
+    typewriterMode = false,
   } = options;
   view.dispatch({
     effects: [
@@ -184,6 +195,7 @@ export function reconfigureLivePreviewExtensions(
       compartments.taskToggle.reconfigure(taskToggleExtension({ onToggle: onTaskToggle })),
       compartments.linkOpen.reconfigure(linkOpenExtension({ onOpenLink })),
       compartments.imageAsset.reconfigure(imageAssetExtension({ filePath: () => filePath })),
+      compartments.typewriter.reconfigure(typewriterMode ? typewriterExtension() : []),
       ...(foldedHeadings !== undefined
         ? [compartments.headingFold.reconfigure(headingFoldExtension({ initial: foldedHeadings, onChange: onFoldChange }))]
         : []),

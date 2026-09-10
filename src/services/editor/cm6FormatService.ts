@@ -1,6 +1,10 @@
 import { EditorView } from '@codemirror/view';
+import { syntaxTree } from '@codemirror/language';
+import type { EditorState } from '@codemirror/state';
 import type { FormatAction, HeadingLevel } from '../../components/EditorContextMenu';
 import { applyTableFormat } from './tableFormatService';
+import { pasteTableData } from '../../components/editor/cm6/table/tableCommands';
+import { convertHtmlPasteToMarkdown } from '../htmlPasteService';
 import { findMarkdownLinkAt } from '../markdownAnalysisService';
 import type { Cm6EditRequest } from '../../components/editor/cm6/Cm6EditPopover';
 
@@ -44,6 +48,12 @@ export function applyCm6Format(view: EditorView, action: FormatAction, requestEd
     case 'heading':
       setHeadingPrefix(view, action.level);
       return;
+    case 'heading-up':
+      changeHeadingLevel(view, true);
+      return;
+    case 'heading-down':
+      changeHeadingLevel(view, false);
+      return;
     case 'quote':
       toggleLinePrefix(view, 'quote');
       return;
@@ -61,6 +71,9 @@ export function applyCm6Format(view: EditorView, action: FormatAction, requestEd
       return;
     case 'hr':
       insertHorizontalRule(view);
+      return;
+    case 'math-block':
+      insertMathBlock(view);
       return;
     case 'quote-up':
       changeQuoteLevel(view, true);
@@ -297,6 +310,40 @@ function setHeadingPrefix(view: EditorView, level: HeadingLevel): void {
   view.focus();
 }
 
+// 提升标题等级(Typora Ctrl+=):H2-H6 → 升一级;正文行 → H2;H1 保持。
+// 降低标题等级(Typora Ctrl+-):H1 → 回正文;H2-H5 → 降一级;H6/正文保持。
+function changeHeadingLevel(view: EditorView, upgrade: boolean): void {
+  const sel = view.state.selection.main;
+  const fromLine = view.state.doc.lineAt(sel.from);
+  const toLine = sel.to <= fromLine.to && sel.from === fromLine.from
+    ? fromLine
+    : view.state.doc.lineAt(sel.to);
+  const headingRe = /^(#{1,6})\s/;
+  const changes = [];
+  for (let n = fromLine.number; n <= toLine.number; n += 1) {
+    const line = view.state.doc.line(n);
+    const text = view.state.sliceDoc(line.from, line.to);
+    const m = text.match(headingRe);
+    if (upgrade) {
+      if (!m) {
+        changes.push({ from: line.from, insert: '## ' });
+      } else if (m[1].length > 1) {
+        changes.push({ from: line.from, to: line.from + m[0].length, insert: '#'.repeat(m[1].length - 1) + ' ' });
+      }
+    } else if (m) {
+      const level = m[1].length;
+      if (level === 1) {
+        changes.push({ from: line.from, to: line.from + m[0].length, insert: '' });
+      } else if (level < 6) {
+        changes.push({ from: line.from, to: line.from + m[0].length, insert: '#'.repeat(level + 1) + ' ' });
+      }
+    }
+  }
+  if (changes.length === 0) return;
+  view.dispatch({ changes });
+  view.focus();
+}
+
 function wrapCodeBlock(view: EditorView): void {
   const sel = view.state.selection.main;
   if (sel.empty) {
@@ -320,6 +367,17 @@ function insertHorizontalRule(view: EditorView): void {
   view.dispatch({
     changes: { from: sel.from, insert },
     selection: { anchor: sel.from + insert.length },
+  });
+  view.focus();
+}
+
+function insertMathBlock(view: EditorView): void {
+  const sel = view.state.selection.main;
+  const insert = '\n$$\n\n$$\n';
+  view.dispatch({
+    changes: { from: sel.from, insert },
+    // 光标落在两个 $$ 围栏之间的空行,直接输入公式体
+    selection: { anchor: sel.from + 4 },
   });
   view.focus();
 }
@@ -375,7 +433,10 @@ function applyCapturedFormat(view: EditorView, captured?: CapturedFormat): void 
 function editLink(view: EditorView, requestEdit?: (request: Cm6EditRequest) => void): void {
   const sel = view.state.selection.main;
   const link = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
-  if (!link) return;
+  if (!link) {
+    console.warn('editLink: 光标处未找到 Markdown 链接');
+    return;
+  }
   const coords = safeCoords(view, sel.from);
   requestEdit?.({ kind: 'link', x: coords.left, y: coords.bottom + 6, label: link.label, url: link.url, title: link.title ?? '', apply: ({ label, url, title }) => {
     const current = findMarkdownLinkAt(view.state.doc.toString(), sel.from);
@@ -404,15 +465,77 @@ function clearFormat(view: EditorView): void {
   view.focus();
 }
 
+const FENCE_LINE_RE = /^[ \t]{0,3}(`{3,}|~{3,})/;
+const FENCE_OPEN_RE = /^([ \t]*)(`{3,}|~{3,})(.*)$/;
+
+// 定位光标所在的 FencedCode 围栏块:优先语法树(真实编辑器挂载了 markdown
+// 语言扩展,块内任意位置都能命中节点),语法树不可用/未解析完成时回退为
+// 行扫描(从光标行向上找开 fence,再向下找同标记的闭合 fence)。
+function findFencedCodeRange(state: EditorState, pos: number): { from: number; to: number } | null {
+  let found: { from: number; to: number } | null = null;
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (found) return false;
+      if (node.name === 'FencedCode') {
+        if (pos >= node.from && pos <= node.to) found = { from: node.from, to: node.to };
+        return false;
+      }
+      return true;
+    },
+  });
+  return found ?? findFencedCodeRangeByScan(state, pos);
+}
+
+function findFencedCodeRangeByScan(state: EditorState, pos: number): { from: number; to: number } | null {
+  const doc = state.doc;
+  const startLine = doc.lineAt(pos);
+  let openFrom: number | null = null;
+  let marker = '';
+  for (let n = startLine.number; n >= 1; n -= 1) {
+    const m = doc.line(n).text.match(FENCE_LINE_RE);
+    if (m) {
+      openFrom = doc.line(n).from;
+      marker = m[1];
+      break;
+    }
+  }
+  if (openFrom === null) return null;
+  const openLineNumber = doc.lineAt(openFrom).number;
+  for (let n = openLineNumber + 1; n <= doc.lines; n += 1) {
+    const line = doc.line(n);
+    const m = line.text.match(FENCE_LINE_RE);
+    if (m && m[1][0] === marker[0] && m[1].length >= marker.length) {
+      return { from: openFrom, to: line.to };
+    }
+  }
+  return null;
+}
+
 function editCodeBlockLanguage(view: EditorView, requestEdit?: (request: Cm6EditRequest) => void): void {
-  const selection = view.state.selection.main;
-  const text = view.state.sliceDoc(selection.from, selection.to);
-  const match = text.match(/^```([^\n]*)\n([\s\S]*?)\n```$/);
-  if (!match) return;
-  const coords = safeCoords(view, selection.from);
-  requestEdit?.({ kind: 'code', x: coords.left, y: coords.bottom + 6, language: match[1], apply: (language) => {
-    const next = `\`\`\`${language}\n${match[2]}\n\`\`\``;
-    view.dispatch({ changes: { from: selection.from, to: selection.to, insert: next }, selection: { anchor: selection.from, head: selection.from + next.length } });
+  const sel = view.state.selection.main;
+  // 右键落点驱动(P0-A 已把光标移到落点);选区保留时优先探测选区起点。
+  const probe = sel.empty ? sel.head : sel.from;
+  const range = findFencedCodeRange(view.state, probe);
+  if (!range) return;
+  const openLine = view.state.doc.lineAt(range.from);
+  const fenceMatch = openLine.text.match(FENCE_OPEN_RE);
+  if (!fenceMatch) return;
+  const language = fenceMatch[3].trim();
+  const coords = safeCoords(view, range.from);
+  requestEdit?.({ kind: 'code', x: coords.left, y: coords.bottom + 6, language, apply: (nextLanguage) => {
+    // 弹窗确认前文档可能已变:原范围仍是 fence 行首则沿用,否则按光标重扫。
+    let from = range.from;
+    const verifyLine = view.state.doc.lineAt(Math.min(from, view.state.doc.length));
+    if (verifyLine.from !== range.from || !FENCE_LINE_RE.test(verifyLine.text)) {
+      const rescan = findFencedCodeRange(view.state, view.state.selection.main.head);
+      if (!rescan) return;
+      from = rescan.from;
+    }
+    const line = view.state.doc.lineAt(from);
+    const m = line.text.match(FENCE_OPEN_RE);
+    if (!m) return;
+    const next = `${m[1]}${m[2]}${nextLanguage}`;
+    view.dispatch({ changes: { from: line.from, to: line.to, insert: next }, selection: { anchor: line.from + next.length } });
     view.focus();
   } });
 }
@@ -426,18 +549,66 @@ function safeCoords(view: EditorView, pos: number): { left: number; bottom: numb
   }
 }
 
-async function pasteFromClipboard(view: EditorView): Promise<void> {
-  try {
-    const text = await navigator.clipboard.readText();
-    if (!text) return;
-    const sel = view.state.selection.main;
-    view.dispatch({
-      changes: { from: sel.from, to: sel.to, insert: text },
-    });
-    view.focus();
-  } catch (error) {
-    console.warn('Paste failed:', error);
+// 粘贴智能链路(键盘 onPaste 与右键菜单"粘贴"共用):
+// 表格(TSV/CSV/HTML 表格) → 结构化 HTML 转 Markdown → 调用方自行回退纯文本。
+// 返回 true 表示已消费,调用方不应再执行默认粘贴/插入。
+export function applyClipboardData(view: EditorView, plain: string, html?: string): boolean {
+  if (pasteTableData(view, plain, html)) return true;
+  if (html) {
+    const markdown = convertHtmlPasteToMarkdown(html);
+    if (markdown !== null) {
+      const selection = view.state.selection.main;
+      view.dispatch({
+        changes: { from: selection.from, to: selection.to, insert: markdown },
+        selection: { anchor: selection.from + markdown.length },
+      });
+      view.focus();
+      return true;
+    }
   }
+  return false;
+}
+
+function insertClipboardText(view: EditorView, text: string): void {
+  const sel = view.state.selection.main;
+  view.dispatch({
+    changes: { from: sel.from, to: sel.to, insert: text },
+    selection: { anchor: sel.from + text.length },
+  });
+  view.focus();
+}
+
+// 菜单"粘贴"与键盘 Ctrl+V 行为对齐(Typora 惯例):优先 clipboard.read() 拿
+// text/html + text/plain 走智能链路;read 不可用/失败时回退 readText 纯文本。
+async function pasteFromClipboard(view: EditorView): Promise<void> {
+  let plain = '';
+  let html: string | undefined;
+  if (typeof navigator.clipboard?.read === 'function') {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        if (html === undefined && item.types.includes('text/html')) {
+          html = await (await item.getType('text/html')).text();
+        }
+        if (!plain && item.types.includes('text/plain')) {
+          plain = await (await item.getType('text/plain')).text();
+        }
+      }
+    } catch (error) {
+      console.warn('clipboard.read failed, fallback to readText:', error);
+    }
+  }
+  if (html === undefined && !plain && typeof navigator.clipboard?.readText === 'function') {
+    try {
+      plain = await navigator.clipboard.readText();
+    } catch (error) {
+      console.warn('Paste failed:', error);
+      return;
+    }
+  }
+  if (!plain && !html) return;
+  if (applyClipboardData(view, plain, html)) return;
+  if (plain) insertClipboardText(view, plain);
 }
 
 function selectAll(view: EditorView): void {
