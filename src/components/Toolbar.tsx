@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import {
   ChevronDown,
   Bold,
@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
+  FloatingFocusManager,
   FloatingPortal,
   flip,
   offset,
@@ -44,6 +45,7 @@ import {
   useDismiss,
   useFloating,
   useInteractions,
+  useListNavigation,
   useRole,
 } from '@floating-ui/react';
 import { useSettings } from '../hooks/useSettings';
@@ -56,6 +58,130 @@ import type { FormatAction } from './EditorContextMenu';
 import { DefineColorToolbarButton } from './defineColor/DefineColorToolbarButton';
 
 export type EditorMode = 'wysiwyg' | 'source';
+
+const TOOLBAR_ICON_SIZE = 18;
+const TOOLBAR_STROKE_WIDTH = 1.6;
+
+type SplitMenuItem = {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  disabled?: boolean;
+  onSelect: () => void;
+};
+
+type ToolbarSplitMenuProps = {
+  mainLabel: string;
+  mainIcon: ReactNode;
+  onMainClick: () => void;
+  mainDisabled?: boolean;
+  chevronLabel: string;
+  items: SplitMenuItem[];
+};
+
+/**
+ * 工具栏分组按钮：同类动作共用一个槽位。
+ * 主按钮直连高频动作（打开/保存/插入表格），chevron 下拉收纳低频同类项
+ * （打开文件夹/另存为/插入图片），功能不丢、工具栏更窄。
+ * items 为空时退化为普通单按钮（等价于原独立按钮）。
+ */
+function ToolbarSplitMenu({ mainLabel, mainIcon, onMainClick, mainDisabled, chevronLabel, items }: ToolbarSplitMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const listRef = useRef<Array<HTMLButtonElement | null>>([]);
+  const floating = useFloating({
+    open,
+    onOpenChange: setOpen,
+    placement: 'bottom-start',
+    middleware: [offset(4), flip({ padding: 8 }), shift({ padding: 8 })],
+  });
+  const click = useClick(floating.context);
+  const dismiss = useDismiss(floating.context);
+  const role = useRole(floating.context, { role: 'menu' });
+  // 键盘可达性:菜单打开后首项聚焦、ArrowUp/ArrowDown 在菜单项间移动,
+  // Esc/outside 关闭后由 FloatingFocusManager 把焦点还给 chevron trigger。
+  const listNavigation = useListNavigation(floating.context, {
+    listRef,
+    activeIndex,
+    onNavigate: setActiveIndex,
+    loop: true,
+  });
+  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role, listNavigation]);
+  const setReferenceRef = useCallback((node: HTMLButtonElement | null) => {
+    floating.refs.setReference(node);
+  }, [floating.refs.setReference]);
+
+  if (items.length === 0) {
+    return (
+      <button
+        data-no-window-drag="true"
+        onClick={onMainClick}
+        disabled={mainDisabled}
+        data-tooltip={mainLabel}
+        aria-label={mainLabel}
+      >
+        {mainIcon}
+      </button>
+    );
+  }
+
+  return (
+    <div className="toolbar-split">
+      <button
+        data-no-window-drag="true"
+        className="split-main"
+        onClick={onMainClick}
+        disabled={mainDisabled}
+        data-tooltip={mainLabel}
+        aria-label={mainLabel}
+      >
+        {mainIcon}
+      </button>
+      <button
+        ref={setReferenceRef}
+        data-no-window-drag="true"
+        className="split-chevron"
+        data-tooltip={chevronLabel}
+        aria-label={chevronLabel}
+        aria-expanded={open}
+        aria-haspopup="true"
+        disabled={mainDisabled}
+        {...getReferenceProps()}
+      >
+        <ChevronDown size={10} strokeWidth={TOOLBAR_STROKE_WIDTH} className="split-chevron-icon" />
+      </button>
+      {open && (
+        <FloatingPortal>
+          <FloatingFocusManager context={floating.context} initialFocus={0}>
+            <div
+              ref={floating.refs.setFloating}
+              style={floating.floatingStyles}
+              className="export-menu"
+              role="menu"
+              aria-label={chevronLabel}
+              {...getFloatingProps()}
+            >
+              {items.map((item, index) => (
+                <button
+                  key={item.key}
+                  ref={(node) => { listRef.current[index] = node; }}
+                  type="button"
+                  role="menuitem"
+                  data-no-window-drag="true"
+                  disabled={item.disabled}
+                  onClick={() => { setOpen(false); item.onSelect(); }}
+                >
+                  <span className="export-menu-icon" aria-hidden="true">{item.icon}</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </FloatingFocusManager>
+        </FloatingPortal>
+      )}
+    </div>
+  );
+}
 
 type ToolbarProps = {
   editorMode: EditorMode;
@@ -106,8 +232,6 @@ export function Toolbar({
 }: ToolbarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
-  const iconSize = 18;
-  const strokeWidth = 1.6;
   const workspacePanelTooltip = workspacePanelVisible ? t('toolbarCollapseFileTree') : t('toolbarOpenFileTree');
   const [toolbarTooltip, setToolbarTooltip] = useState<{ label: string; reference: HTMLElement } | null>(null);
   const handleToolbarTooltipOver = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -127,7 +251,9 @@ export function Toolbar({
 
   // 导出下拉菜单(用 @floating-ui/react 挂到 body 规避 motion 引入后的 stacking trap)
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportActiveIndex, setExportActiveIndex] = useState<number | null>(null);
   const exporting = pdfExporting || wordExporting;
+  const exportListRef = useRef<Array<HTMLButtonElement | null>>([]);
   const exportFloating = useFloating({
     open: exportMenuOpen,
     onOpenChange: setExportMenuOpen,
@@ -137,10 +263,18 @@ export function Toolbar({
   const exportClick = useClick(exportFloating.context);
   const exportDismiss = useDismiss(exportFloating.context);
   const exportRole = useRole(exportFloating.context, { role: 'menu' });
+  // 与 ToolbarSplitMenu 同一焦点管线:首项聚焦 + 方向键导航 + Esc 返回 trigger。
+  const exportListNavigation = useListNavigation(exportFloating.context, {
+    listRef: exportListRef,
+    activeIndex: exportActiveIndex,
+    onNavigate: setExportActiveIndex,
+    loop: true,
+  });
   const { getReferenceProps: getExportReferenceProps, getFloatingProps: getExportFloatingProps } = useInteractions([
     exportClick,
     exportDismiss,
     exportRole,
+    exportListNavigation,
   ]);
   const setExportButtonRef = useCallback((node: HTMLButtonElement | null) => {
     exportFloating.refs.setReference(node);
@@ -172,55 +306,44 @@ export function Toolbar({
             aria-label={workspacePanelTooltip}
             aria-pressed={workspacePanelVisible}
           >
-            <PanelLeft size={iconSize} strokeWidth={strokeWidth} />
+            <PanelLeft size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
-          <DefineColorToolbarButton settings={settings} />
           {onOpenToc && (
             <button data-no-window-drag="true" onClick={onOpenToc} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
-              <ListTree size={iconSize} strokeWidth={strokeWidth} />
+              <ListTree size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
             </button>
           )}
         </div>
         <div className="toolbar-group toolbar-file-actions" aria-label={t('toolbarFileGroup')}>
           <button data-no-window-drag="true" onClick={onNew} data-tooltip={t('toolbarNewLabel')} aria-label={t('toolbarNewLabel')}>
-            <FilePlus size={iconSize} strokeWidth={strokeWidth} />
+            <FilePlus size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
-          <button data-no-window-drag="true" onClick={onOpen} data-tooltip={t('toolbarOpenLabel')} aria-label={t('toolbarOpenLabel')}>
-            <FolderDown size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          {onOpenFolder && (
-            <button data-no-window-drag="true" onClick={onOpenFolder} data-tooltip={t('toolbarOpenFolderTitle')} aria-label={t('toolbarOpenFolderLabel')}>
-              <FolderOpen size={iconSize} strokeWidth={strokeWidth} />
-            </button>
-          )}
-          <button data-no-window-drag="true" onClick={onSave} disabled={editingDisabled} data-tooltip={t('toolbarSaveLabel')} aria-label={t('toolbarSaveLabel')}>
-            <Save size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          <button data-no-window-drag="true" onClick={onSaveAs} disabled={editingDisabled} data-tooltip={t('toolbarSaveAsLabel')} aria-label={t('toolbarSaveAsLabel')}>
-            <SaveAll size={iconSize} strokeWidth={strokeWidth} />
-          </button>
-          {onFormat && (
-            <button
-              data-no-window-drag="true"
-              onClick={() => onFormat({ type: 'table-insert', rows: 2, cols: 3 })}
-              disabled={editingDisabled}
-              data-tooltip={t('toolbarInsertTableLabel')}
-              aria-label={t('toolbarInsertTableLabel')}
-            >
-              <Table2 size={iconSize} strokeWidth={strokeWidth} />
-            </button>
-          )}
-          {onInsertImage && (
-            <button
-              data-no-window-drag="true"
-              onClick={onInsertImage}
-              disabled={editingDisabled}
-              data-tooltip={t('toolbarInsertImageLabel')}
-              aria-label={t('toolbarInsertImageLabel')}
-            >
-              <ImagePlus size={iconSize} strokeWidth={strokeWidth} />
-            </button>
-          )}
+          <ToolbarSplitMenu
+            mainLabel={t('toolbarOpenLabel')}
+            mainIcon={<FolderDown size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
+            onMainClick={onOpen}
+            chevronLabel={t('toolbarOpenMenuLabel')}
+            items={onOpenFolder ? [{
+              key: 'open-folder',
+              label: t('toolbarOpenFolderLabel'),
+              icon: <FolderOpen size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />,
+              onSelect: onOpenFolder,
+            }] : []}
+          />
+          <ToolbarSplitMenu
+            mainLabel={t('toolbarSaveLabel')}
+            mainIcon={<Save size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
+            onMainClick={onSave}
+            mainDisabled={editingDisabled}
+            chevronLabel={t('toolbarSaveMenuLabel')}
+            items={[{
+              key: 'save-as',
+              label: t('toolbarSaveAsLabel'),
+              icon: <SaveAll size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />,
+              disabled: editingDisabled,
+              onSelect: onSaveAs,
+            }]}
+          />
           {onExportPdf && (
             <div className="toolbar-export-dropdown">
               <button
@@ -233,60 +356,95 @@ export function Toolbar({
                 aria-haspopup="true"
                 {...getExportReferenceProps()}
               >
-                <FileDown size={iconSize} strokeWidth={strokeWidth} />
-                <ChevronDown size={10} strokeWidth={strokeWidth} className="export-chevron" />
+                <FileDown size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
+                <ChevronDown size={10} strokeWidth={TOOLBAR_STROKE_WIDTH} className="export-chevron" />
               </button>
               {exportMenuOpen && (
                 <FloatingPortal>
-                  <div
-                    ref={exportFloating.refs.setFloating}
-                    style={exportFloating.floatingStyles}
-                    className="export-menu"
-                    role="menu"
-                    aria-label={t('toolbarExportMenuLabel')}
-                    {...getExportFloatingProps()}
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-no-window-drag="true"
-                      onClick={() => { setExportMenuOpen(false); onExportPdf(); }}
-                      disabled={editingDisabled}
+                  <FloatingFocusManager context={exportFloating.context} initialFocus={0}>
+                    <div
+                      ref={exportFloating.refs.setFloating}
+                      style={exportFloating.floatingStyles}
+                      className="export-menu"
+                      role="menu"
+                      aria-label={t('toolbarExportMenuLabel')}
+                      {...getExportFloatingProps()}
                     >
-                      {t('toolbarExportPdfLabel')}
-                    </button>
-                    {onExportWord && (
                       <button
+                        ref={(node) => { exportListRef.current[0] = node; }}
                         type="button"
                         role="menuitem"
                         data-no-window-drag="true"
-                        onClick={() => { setExportMenuOpen(false); onExportWord(); }}
+                        onClick={() => { setExportMenuOpen(false); onExportPdf(); }}
                         disabled={editingDisabled}
                       >
-                        {t('toolbarExportWordLabel')}
+                        {t('toolbarExportPdfLabel')}
                       </button>
-                    )}
-                  </div>
+                      {onExportWord && (
+                        <button
+                          ref={(node) => { exportListRef.current[1] = node; }}
+                          type="button"
+                          role="menuitem"
+                          data-no-window-drag="true"
+                          onClick={() => { setExportMenuOpen(false); onExportWord(); }}
+                          disabled={editingDisabled}
+                        >
+                          {t('toolbarExportWordLabel')}
+                        </button>
+                      )}
+                    </div>
+                  </FloatingFocusManager>
                 </FloatingPortal>
               )}
             </div>
           )}
         </div>
+        {(onFormat || onInsertImage) && (
+          <div className="toolbar-group toolbar-insert-actions" aria-label={t('toolbarInsertGroup')}>
+            {onFormat && (
+              <ToolbarSplitMenu
+                mainLabel={t('toolbarInsertTableLabel')}
+                mainIcon={<Table2 size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
+                onMainClick={() => onFormat({ type: 'table-insert', rows: 2, cols: 3 })}
+                mainDisabled={editingDisabled}
+                chevronLabel={t('toolbarInsertMenuLabel')}
+                items={onInsertImage ? [{
+                  key: 'insert-image',
+                  label: t('toolbarInsertImageLabel'),
+                  icon: <ImagePlus size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />,
+                  disabled: editingDisabled,
+                  onSelect: onInsertImage,
+                }] : []}
+              />
+            )}
+            {!onFormat && onInsertImage && (
+              <button
+                data-no-window-drag="true"
+                onClick={onInsertImage}
+                disabled={editingDisabled}
+                data-tooltip={t('toolbarInsertImageLabel')}
+                aria-label={t('toolbarInsertImageLabel')}
+              >
+                <ImagePlus size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
+              </button>
+            )}
+          </div>
+        )}
         {onFormat && (
           <div className="toolbar-group toolbar-format-actions" aria-label="Markdown 格式">
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip={t('toolbarBoldLabel')} aria-label={t('toolbarBoldLabel')}><Bold size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip={t('toolbarItalicLabel')} aria-label={t('toolbarItalicLabel')}><Italic size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'strike' })} data-tooltip={t('toolbarStrikethroughLabel')} aria-label={t('toolbarStrikethroughLabel')}><Strikethrough size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'highlight' })} data-tooltip={t('toolbarHighlightLabel')} aria-label={t('toolbarHighlightLabel')}><Highlighter size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip={t('toolbarLinkLabel')} aria-label={t('toolbarLinkLabel')}><Link size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'codeblock' })} data-tooltip={t('toolbarCodeBlockLabel')} aria-label={t('toolbarCodeBlockLabel')}><SquareCode size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'math-block' })} data-tooltip={t('toolbarMathBlockLabel')} aria-label={t('toolbarMathBlockLabel')}><SquareRadical size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip={t('toolbarQuoteLabel')} aria-label={t('toolbarQuoteLabel')}><Quote size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip={t('toolbarUnorderedListLabel')} aria-label={t('toolbarUnorderedListLabel')}><List size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip={t('toolbarOrderedListLabel')} aria-label={t('toolbarOrderedListLabel')}><ListOrdered size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip={t('toolbarTaskListLabel')} aria-label={t('toolbarTaskListLabel')}><ListTodo size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'hr' })} data-tooltip={t('toolbarHorizontalRuleLabel')} aria-label={t('toolbarHorizontalRuleLabel')}><Minus size={iconSize} strokeWidth={strokeWidth} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'format-painter' })} data-tooltip={t('toolbarFormatPainterLabel')} aria-label={t('toolbarFormatPainterLabel')}><Paintbrush size={iconSize} strokeWidth={strokeWidth} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip={t('toolbarBoldLabel')} aria-label={t('toolbarBoldLabel')}><Bold size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip={t('toolbarItalicLabel')} aria-label={t('toolbarItalicLabel')}><Italic size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'strike' })} data-tooltip={t('toolbarStrikethroughLabel')} aria-label={t('toolbarStrikethroughLabel')}><Strikethrough size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'highlight' })} data-tooltip={t('toolbarHighlightLabel')} aria-label={t('toolbarHighlightLabel')}><Highlighter size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip={t('toolbarLinkLabel')} aria-label={t('toolbarLinkLabel')}><Link size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'codeblock' })} data-tooltip={t('toolbarCodeBlockLabel')} aria-label={t('toolbarCodeBlockLabel')}><SquareCode size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'math-block' })} data-tooltip={t('toolbarMathBlockLabel')} aria-label={t('toolbarMathBlockLabel')}><SquareRadical size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip={t('toolbarQuoteLabel')} aria-label={t('toolbarQuoteLabel')}><Quote size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip={t('toolbarUnorderedListLabel')} aria-label={t('toolbarUnorderedListLabel')}><List size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip={t('toolbarOrderedListLabel')} aria-label={t('toolbarOrderedListLabel')}><ListOrdered size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip={t('toolbarTaskListLabel')} aria-label={t('toolbarTaskListLabel')}><ListTodo size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'hr' })} data-tooltip={t('toolbarHorizontalRuleLabel')} aria-label={t('toolbarHorizontalRuleLabel')}><Minus size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'format-painter' })} data-tooltip={t('toolbarFormatPainterLabel')} aria-label={t('toolbarFormatPainterLabel')}><Paintbrush size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
           </div>
         )}
       </div>
@@ -310,7 +468,7 @@ export function Toolbar({
             aria-label={t('toolbarRenderLabel')}
             aria-pressed={editorMode === 'wysiwyg'}
           >
-            <Eye size={iconSize} strokeWidth={strokeWidth} />
+            <Eye size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
           <button
             className={editorMode === 'source' ? 'active' : ''}
@@ -321,7 +479,7 @@ export function Toolbar({
             aria-label={t('toolbarSourceLabel')}
             aria-pressed={editorMode === 'source'}
           >
-            <Code2 size={iconSize} strokeWidth={strokeWidth} />
+            <Code2 size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
           <button
             className={wordPreviewVisible ? 'active' : ''}
@@ -332,7 +490,7 @@ export function Toolbar({
             aria-label={t('toolbarWordPreviewLabel')}
             aria-pressed={wordPreviewVisible}
           >
-            <FileText size={iconSize} strokeWidth={strokeWidth} />
+            <FileText size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
           <button
             className={wechatPreviewVisible ? 'active' : ''}
@@ -344,7 +502,7 @@ export function Toolbar({
             aria-pressed={wechatPreviewVisible}
           >
             {/* lucide 无 wechat 品牌图标,沿用 Newspaper(评审已确认) */}
-            <Newspaper size={iconSize} strokeWidth={strokeWidth} />
+            <Newspaper size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
           {onToggleArtifacts && (
             <button
@@ -356,7 +514,7 @@ export function Toolbar({
               aria-label={t('toolbarArtifactsLabel')}
               aria-pressed={Boolean(artifactsVisible)}
             >
-              <PackageOpen size={iconSize} strokeWidth={strokeWidth} />
+              <PackageOpen size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
             </button>
           )}
           {rightPanelAvailable && (
@@ -368,7 +526,7 @@ export function Toolbar({
               aria-label={rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel')}
               aria-pressed={rightPanelCollapsed}
             >
-              {rightPanelCollapsed ? <PanelRightOpen size={iconSize} strokeWidth={strokeWidth} /> : <PanelRightClose size={iconSize} strokeWidth={strokeWidth} />}
+              {rightPanelCollapsed ? <PanelRightOpen size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /> : <PanelRightClose size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
             </button>
           )}
           <button
@@ -379,8 +537,9 @@ export function Toolbar({
             aria-label={t('toolbarTerminalLabel')}
             aria-pressed={terminalVisible}
           >
-            <Terminal size={iconSize} strokeWidth={strokeWidth} />
+            <Terminal size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
+          <DefineColorToolbarButton settings={settings} />
         </div>
         <div className="toolbar-group toolbar-navigation-actions" aria-label={t('toolbarNavGroup')}>
           <button
@@ -392,7 +551,7 @@ export function Toolbar({
             data-tooltip={t('toolbarSettingsLabel')}
             aria-label={t('toolbarSettingsLabel')}
           >
-            <SlidersHorizontal size={iconSize} strokeWidth={strokeWidth} />
+            <SlidersHorizontal size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
         </div>
         <div className="toolbar-group toolbar-mode-group" aria-label="文档模式">

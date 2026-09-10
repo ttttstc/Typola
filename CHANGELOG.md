@@ -1,6 +1,42 @@
 # Changelog
 
+## \[2.0.5] - 2026-07-13
+
+- CM6 表格交互切换为 `codemirror-markdown-tables`：支持连续单元格选择、行列操作菜单、对齐、移动、复制/剪切/粘贴、Tab/Enter 导航与原生撤销；保留 Typola 中文右键菜单并补齐行列插入方向和三种对齐方式。
+
+- 清理旧 Atomic 表格样式，并补充右键点击指定列后的真实对齐回归测试。
+
+- 补齐 `codemirror-markdown-tables` 的运行时依赖 `@mobily/ts-belt`，确保 pnpm 严格安装后的测试与构建可解析。
+
 ## Unreleased
+
+- 修复 PR #269 检视意见（可达性与几何回归）：工具栏分组下拉（保存 / 打开 / 插入与导出菜单）补齐键盘焦点管理——菜单打开后首项自动聚焦、ArrowUp/ArrowDown 在菜单项间循环导航、Esc / 点击外部关闭后焦点返回 chevron 触发器；分组 chevron 命中区从 16px 放大到 24px（WCAG 2.2 最小目标，视觉图标仍为 10px）；左右栏 tab 头显式 38px，与编辑器标签栏三栏齐高（原先自动高度 39px 差 1px）；终端设置页 5 个表单控件（Shell 路径 / 字体 / 字号 / 光标样式 / 快捷键预设）恢复 label 关联（htmlFor/id），屏幕阅读器可正确朗读；工具栏「插入」「视图与外观」分组 aria-label 恢复走 i18n 三语（新增 toolbarInsertGroup），不再硬编码中文；补齐三组 E2E 回归——分组菜单键盘交互、三栏 tab 头 38px 几何断言、当前行选区可见性（普通行 + fenced code 行）。
+
+- 修复当前行选区不可见并改为 Typora 式行指示：CM6 选区层位于内容之下（z-index:-2），不透明的当前行底色会把本行选区整段盖住；现当前行不再上整行底色（选几个字符时整行不变色，与 Typora 一致），仅在行号槽保留轻微 wash 指示当前行，选区在所有行一致可见；代码块行的灰底豁免该规则，光标行不再打断代码块背景。
+
+- 终端设置页排版修复：设置项从无任何样式的裸 label（全部挤在一行）改为标准 settings-row 模式——长输入（Shell 路径 / 字体）独占整行，下拉与开关右对齐，行间细分隔线；新增「外观 / 行为」分组小标题拉开节奏。
+
+- 工具栏图标去重与分组梳理：define-color 调色入口改用 Palette 图标（原先与格式刷同为 Paintbrush，工具栏出现两把刷子）并移入视图组；插入（表格 / 图片）从文件组独立成组，分组语义统一为 导航 / 文档 / 插入 / 格式 / 视图与外观 / 设置。
+
+- 选区可读性与行为对齐 Typora：define-color 选区底色从 68% 深度降为 26% 浅色 wash，选中文字清晰可读；编辑器关闭 highlightSelectionMatches，选中单词不再把文中其他同词一并高亮。
+
+- 修复源码模式「搜索命中折叠区自动展开」失效：`handleSearchNavigate` 闭包捕获了 180ms 防抖的 `markdownAnalysis` 却未列入依赖，防抖未追上内容时的渲染会把过期（空）foldSections 永久锁进闭包，导致折叠区内命中不再自动展开。
+
+- 修复浮动大纲「悬停左缘展开」入口不可用：非固定态 `.floating-toc` 容器宽高为 0（子元素全部 absolute 定位），`edge-trigger` 热区高度被撑为 0，鼠标无法命中；为非固定态容器补显式高度后热区恢复可用。
+
+- 重新生成 `src/styles/themes.css`：main 上提交的产物落后于主题注册表（`themeCss` 单测与深海主题色值因此失同步）。
+
+- E2E 回归套件对齐当前产品行为（此前 Playwright 套件未纳入 CI，23 项用例随产品演进腐烂）：设置导航 10 项化与授权页移除、自定义预设槽位 0/8、工具栏 native title 移除、状态栏路径设置删除、define-color 未选色回退素笺、深海主题 canvas 色 #11161c、编辑区呼吸留白重构、TOC 交互模型（常驻 rail/tick 移除）、右键菜单插入子菜单、资源时序 buffer 上限；纸张纹理截图基线按本机 WebGL 光栅化重新生成。
+
+- 界面秩序收敛（Phase 1）：编辑器标签激活态由「药丸指示器 + accent 下划线 + 加粗」三重信号收敛为药丸指示器单一信号；标签栏 44px 降至 38px；未保存圆点改用 warning 语义色，与激活态可同时识别；工具栏 toggle 激活统一为柔和 tint 底色（原先文件树开关无激活反馈；前景维持全局高对比纪律）；tab 圆角统一 8px。
+
+- 字体双轨（Phase 3）：窗口 chrome（工具栏、编辑器标签、左右栏 tab、模式切换器、菜单）改用系统无衬线栈，--font-ui 与正文字体正式解耦；Windows 小字号不再退化到中易宋体，正文与文档内容保持思源宋体不变。
+
+- 面板 tab 语法归一（Phase 4）：编辑器标签、左栏（文件树 / AI 工作台）、右栏（Word / 微信）三处 tab 统一为同一药丸语法（30px 高、8px 圆角、13px 字号、共享滑动指示器、头部统一 38px）。
+
+- 工具栏同类动作归组：打开 / 保存 / 插入改为「主按钮 + chevron 下拉」分组按钮——打开下拉收纳「打开文件夹」，保存下拉收纳「另存为」，插入表格下拉收纳「插入图片」；全部原有动作与快捷键保持不变，分组菜单复用导出菜单的浮层管线和主题样式。
+
+- Issue #264（工作台体验优化前半）：CM6 写作区正文与编辑器边界增加随窗口宽度伸缩的呼吸留白，同时等量放宽阅读宽度基准，70ch 行宽不被压缩；当前文档标签改用 accent 下划线 + 加粗文字标识，未保存状态改为文件名旁的圆点，可与激活态同时识别；检视模式"修改前/候选稿"左右视图支持拖拽分隔条连续调宽，每侧保底 360px，比例本地持久化；固定大纲栏支持拖拽调宽（200–480px，持久化），长标题截断时悬停显示完整标题。两处拖拽共用新的 `usePaneResize` 指针管线；翻译能力（issue 第 5 项）拆分后续单独实施。
 
 - mermaid 图尺寸与缩放重做（编辑器 + 预览面板，导出管线保持自适应宽度不变）：① 渲染归一为自然尺寸——`normalizeMermaidSvgSize` 从 viewBox 取自然宽度改写为显式像素 width，图不再被 mermaid 默认 `useMaxWidth` 压进容器宽（窄窗口下宽流程图此前直接变成缩略图）；② 容器横向滚动——图超宽时在卡片内滚动，不撑破文档布局，放大后不再被裁切；③ hover 缩放控件组——图表右上角浮现「−/＋/适宽/1:1」按钮（模式与代码块复制按钮一致），与既有 Ctrl+滚轮缩放共用同一套倍率语义（0.5–4x，按倍率改写 width，1:1 清除覆盖回到自然尺寸）。新增 `normalizeMermaidSvgSize` 与 `naturalSize` 选项单测。
 
@@ -32,27 +68,9 @@
 
 - 新增真实渲染诊断测试（8 种图型走真实 mermaid 11 渲染 + 两条 sanitize 管线结构保留断言）与 CM6 语法树延迟补全、渲染超时、initialize 去重、Vditor 双管线短路回归测试。
 
-- Issue #264（工作台体验优化前半）：CM6 写作区正文与编辑器边界增加随窗口宽度伸缩的呼吸留白，同时等量放宽阅读宽度基准，70ch 行宽不被压缩；当前文档标签改用 accent 下划线 + 加粗文字标识，未保存状态改为文件名旁的圆点，可与激活态同时识别；检视模式"修改前/候选稿"左右视图支持拖拽分隔条连续调宽，每侧保底 360px，比例本地持久化；固定大纲栏支持拖拽调宽（200–480px，持久化），长标题截断时悬停显示完整标题。两处拖拽共用新的 `usePaneResize` 指针管线；翻译能力（issue 第 5 项）拆分后续单独实施。
-
-- 修复源码模式「搜索命中折叠区自动展开」失效：`handleSearchNavigate` 闭包捕获了 180ms 防抖的 `markdownAnalysis` 却未列入依赖，防抖未追上内容时的渲染会把过期（空）foldSections 永久锁进闭包，导致折叠区内命中不再自动展开。
-
-- 修复浮动大纲「悬停左缘展开」入口不可用：非固定态 `.floating-toc` 容器宽高为 0（子元素全部 absolute 定位），`edge-trigger` 热区高度被撑为 0，鼠标无法命中；为非固定态容器补显式高度后热区恢复可用。
-
-- 重新生成 `src/styles/themes.css`：main 上提交的产物落后于主题注册表（`themeCss` 单测与深海主题色值因此失同步）。
-
-- E2E 回归套件对齐当前产品行为（此前 Playwright 套件未纳入 CI，23 项用例随产品演进腐烂）：设置导航 10 项化与授权页移除、自定义预设槽位 0/8、工具栏 native title 移除、状态栏路径设置删除、define-color 未选色回退素笺、深海主题 canvas 色 #11161c、编辑区呼吸留白重构、TOC 交互模型（常驻 rail/tick 移除）、右键菜单插入子菜单、资源时序 buffer 上限；纸张纹理截图基线按本机 WebGL 光栅化重新生成。
-
 - 插入类功能入口补齐（对齐 Typora 惯例）：新增快捷键 Ctrl+Shift+K 插入代码块、Ctrl+T 插入表格、Ctrl+Shift+M 插入公式块（新格式命令，插入 `$$` 围栏并落光标于公式体空行）、Ctrl+Shift+I 插入本地图片（无图片回调时不拦截按键）、Ctrl+0 回到正文；Ctrl+K 从“AI 选区菜单”改为插入/编辑链接（AI 选区菜单保留选区浮条与右键入口），右键菜单“链接 (Ctrl+K)”“正文 (Ctrl+0)”提示从此与实际一致。工具栏格式组新增代码块/分隔线/删除线/高亮/公式块五个按钮，全部 tooltip 与 aria-label 改走 i18n（中/英/日三语）；右键“插入”子菜单新增“公式块”，插入类菜单项补齐快捷键提示。
 
-- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                             <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
-
-## \[2.0.5] - 2026-07-13
-
-- CM6 表格交互切换为 `codemirror-markdown-tables`：支持连续单元格选择、行列操作菜单、对齐、移动、复制/剪切/粘贴、Tab/Enter 导航与原生撤销；保留 Typola 中文右键菜单并补齐行列插入方向和三种对齐方式。
-
-- 清理旧 Atomic 表格样式，并补充右键点击指定列后的真实对齐回归测试。
-
-- 补齐 `codemirror-markdown-tables` 的运行时依赖 `@mobily/ts-belt`，确保 pnpm 严格安装后的测试与构建可解析。
+- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                              <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
 
 ## \[2.0.8-beta] - 2026-09-02
 

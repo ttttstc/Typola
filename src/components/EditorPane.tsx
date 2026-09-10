@@ -485,6 +485,8 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     lineNumbers: settings.editorLineNumbers && lineNumberMode === 'source',
     searchKeymap: true,
     history: true,
+    // 与 Typora 一致：选中不高亮文中其他同词（basicSetup 默认含 highlightSelectionMatches）。
+    highlightSelectionMatches: false,
   }), [settings.editorLineNumbers, lineNumberMode]);
 
   const extensions = useMemo(() => {

@@ -21,7 +21,7 @@ function liveEditorContent(page: Page) {
 async function typeMarkdown(page: Page, markdown: string): Promise<void> {
   await openEditor(page);
   await page.keyboard.insertText(markdown);
-  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
+  await page.getByLabel('视图与外观').getByRole('button', { name: 'Word 预览' }).click();
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 }
 
@@ -67,7 +67,7 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
     titleDrag: true,
     overlayCount: 0,
     fallback: 'manual',
-    groups: ['导航', '文件操作', 'Markdown 格式', '视图与导出', '导航设置', '文档模式'],
+    groups: ['导航', '文件操作', '插入', 'Markdown 格式', '视图与外观', '导航设置', '文档模式'],
   }));
   expect(toolbarState.centerOffset).toBeLessThanOrEqual(1);
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);
@@ -172,7 +172,7 @@ test('Word preview button opens and closes the right paper preview panel', async
   await expect(page.getByLabel('Word 导出预设')).toBeVisible();
   await expect(page.getByRole('button', { name: '导出 Word' })).toBeVisible();
 
-  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
+  await page.getByLabel('视图与外观').getByRole('button', { name: 'Word 预览' }).click();
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
 });
 
@@ -180,7 +180,7 @@ test('HTML preview uses the shared right panel and is mutually exclusive with Wo
   await page.goto('/');
 
   const editor = liveEditor(page);
-  const viewToolbar = page.getByLabel('视图与导出');
+  const viewToolbar = page.getByLabel('视图与外观');
   const wordButton = viewToolbar.getByRole('button', { name: 'Word 预览' });
   const htmlButton = viewToolbar.getByRole('button', { name: 'HTML 预览' });
 
@@ -616,7 +616,11 @@ test('toolbar buttons expose hover tooltips without native titles (ISS-153)', as
   const names: Array<RegExp | string> = [
     '打开文件',
     '保存当前文件',
-    '另存为新文件',
+    // 同类动作归组后：另存为/打开文件夹/插入图片收进各组 chevron 下拉,
+    // 工具栏上对应按钮为「主按钮 + 分组选项」。
+    '保存选项',
+    '打开选项',
+    '插入选项',
     '源码模式',
     'Word 预览',
     'HTML 预览',
@@ -629,6 +633,82 @@ test('toolbar buttons expose hover tooltips without native titles (ISS-153)', as
     expect(tooltip ?? '', `Toolbar button "${name}" should declare a data-tooltip`).not.toBe('');
     expect(await button.getAttribute('title'), `Toolbar button "${name}" should not keep a native title`).toBeNull();
   }
+});
+
+test('toolbar split menus are keyboard accessible (open, arrows, Esc return)', async ({ page }) => {
+  await page.goto('/');
+
+  // 保存分组:键盘聚焦 chevron → Enter 打开 → 首项聚焦 → Esc 关闭并还给 trigger 焦点。
+  const saveChevron = page.getByRole('button', { name: '保存选项' });
+  await saveChevron.focus();
+  await page.keyboard.press('Enter');
+  const saveMenu = page.getByRole('menu', { name: '保存选项' });
+  await expect(saveMenu).toBeVisible();
+  await expect(saveMenu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(saveMenu).toBeHidden();
+  await expect(saveChevron).toBeFocused();
+
+  // 导出菜单(两项):ArrowDown/ArrowUp 在菜单项间循环移动。
+  // 菜单可访问名来自 useRole 注入的 aria-labelledby(指向「导出」按钮)。
+  const exportButton = page.getByRole('button', { name: '导出', exact: true });
+  await exportButton.focus();
+  await page.keyboard.press('Enter');
+  const exportMenu = page.getByRole('menu', { name: '导出', exact: true });
+  await expect(exportMenu).toBeVisible();
+  const pdfItem = exportMenu.getByRole('menuitem', { name: '导出 PDF' });
+  const wordItem = exportMenu.getByRole('menuitem', { name: '导出 Word' });
+  await expect(pdfItem).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(wordItem).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(pdfItem).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(exportMenu).toBeHidden();
+  await expect(exportButton).toBeFocused();
+});
+
+test('chevron hit target stays at least 24px wide (WCAG 2.2)', async ({ page }) => {
+  await page.goto('/');
+
+  const widths = await page.evaluate(() => Array.from(
+    document.querySelectorAll<HTMLButtonElement>('.app-toolbar .toolbar-split > .split-chevron'),
+  ).map((button) => button.getBoundingClientRect().width));
+  expect(widths.length).toBeGreaterThan(0);
+  for (const width of widths) {
+    expect(width).toBeGreaterThanOrEqual(24);
+  }
+});
+
+test('editor/left/right tab bars share the same 38px header height', async ({ page }) => {
+  await page.goto('/');
+
+  // 新建一个命名 tab 让编辑器标签栏挂载(单未命名 tab 时 tabbar 隐藏)。
+  await page.getByRole('button', { name: '新建文档' }).click();
+  await expect(page.locator('.editor-tabbar')).toBeVisible();
+
+  // 文件树默认可能收起:仅在不可见时通过工具栏打开。
+  if (await page.locator('.left-rail-tabs').count() === 0) {
+    await page.getByRole('button', { name: '打开文件树' }).click();
+  }
+  await expect(page.locator('.left-rail-tabs')).toBeVisible();
+
+  // Word 预览打开右栏,让 right-rail-tabs 挂载。
+  await page.getByLabel('视图与外观').getByRole('button', { name: 'Word 预览' }).click();
+  await expect(page.locator('.right-rail-tabs')).toBeVisible();
+
+  const heights = await page.evaluate(() => {
+    const height = (selector: string) =>
+      document.querySelector(selector)?.getBoundingClientRect().height ?? 0;
+    return {
+      editor: height('.editor-tabbar'),
+      left: height('.left-rail-tabs'),
+      right: height('.right-rail-tabs'),
+    };
+  });
+  expect(heights.editor).toBe(38);
+  expect(heights.left).toBe(38);
+  expect(heights.right).toBe(38);
 });
 
 test('settings modal switches tabs by lazy loading each section on demand (ISS-152)', async ({ page }) => {
