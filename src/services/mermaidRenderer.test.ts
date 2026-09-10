@@ -120,6 +120,26 @@ describe('mermaidRenderer', () => {
     expect(normalizeMermaidSvgSize(svg)).toBe(svg);
   });
 
+  it('normalizeMermaidSvgViewport 收紧 WebView2 异常膨胀的 viewBox', async () => {
+    const { normalizeMermaidSvgViewport } = await import('./mermaidRenderer');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '2146');
+    svg.setAttribute('viewBox', '-138 -59 2146 2067');
+    Object.defineProperty(svg, 'getBBox', {
+      configurable: true,
+      value: () => ({ x: 8, y: 8, width: 1053.06640625, height: 558 }),
+    });
+
+    normalizeMermaidSvgViewport(svg, { naturalSize: true });
+
+    const viewBox = svg.getAttribute('viewBox')!.split(' ').map(Number);
+    expect(viewBox[0]).toBe(0);
+    expect(viewBox[1]).toBe(0);
+    expect(viewBox[2]).toBeCloseTo(1069.066, 3);
+    expect(viewBox[3]).toBe(574);
+    expect(svg.getAttribute('width')).toBe('1069');
+  });
+
   it('naturalSize 选项控制预览/导出尺寸策略', async () => {
     const { renderMermaidIn } = await import('./mermaidRenderer');
     renderMock.mockImplementation(async (id: string) => ({

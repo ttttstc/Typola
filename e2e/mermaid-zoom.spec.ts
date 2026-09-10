@@ -38,10 +38,28 @@ test('mermaid 按自然尺寸渲染,缩放控件可放大/复位,放大后容器
   const svg = mermaidSvg(page);
   await expect(svg).toBeVisible();
 
+  // 块 widget 的外边距不能参与 CM6 高度测量，否则图后会出现幻影空白。
+  const tailGap = await page.evaluate(() => {
+    const widget = document.querySelector<HTMLElement>('.typola-cm6-mermaid');
+    const tail = [...document.querySelectorAll<HTMLElement>('.cm-line')]
+      .find((line) => line.textContent?.includes('尾部段落'));
+    if (!widget || !tail) return Number.POSITIVE_INFINITY;
+    return tail.getBoundingClientRect().top - widget.getBoundingClientRect().bottom;
+  });
+  expect(tailGap).toBeLessThan(24);
+
   // 1) 归一为自然尺寸:width 是显式像素值,不再是 100%。
   const widthAttr = await svg.getAttribute('width');
   expect(Number(widthAttr)).toBeGreaterThan(0);
   expect(widthAttr).not.toBe('100%');
+
+  // WebView2 可能给同一图写入异常膨胀的 viewBox；归一后画布应接近实际内容。
+  const svgGeometry = await svg.evaluate((element) => {
+    const box = (element as SVGSVGElement).getBBox();
+    const viewBox = element.getAttribute('viewBox')!.split(/\s+/u).map(Number);
+    return { contentHeight: box.height, viewBoxHeight: viewBox[3] };
+  });
+  expect(svgGeometry.viewBoxHeight).toBeLessThan(svgGeometry.contentHeight * 1.25 + 32);
 
   // 2) hover 图表时缩放控件浮现,四个按钮齐全。
   const widget = page.locator('.typola-cm6-mermaid').first();

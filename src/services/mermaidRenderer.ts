@@ -106,6 +106,46 @@ export function normalizeMermaidSvgSize(svg: string): string {
   }
 }
 
+/**
+ * 收紧 Mermaid 在部分 WebView2 版本中被错误放大的 viewBox。
+ *
+ * 已知现象：同一份图在 release WebView2 中可能生成
+ * `viewBox="-138 -59 2146 2067"`，但实际绘制根节点的 getBBox 只有约
+ * 1053×558；width/height 仍按异常 viewBox 展开，于是图下方出现一整块
+ * 空白画布。DOM 插入后 getBBox 才可靠，因此这里不能在字符串阶段完成。
+ * 正常 viewBox 不动，仅在画布相对实际内容明显膨胀时裁剪，并保留 Mermaid
+ * 默认 8px diagram padding。
+ */
+export function normalizeMermaidSvgViewport(
+  svg: SVGSVGElement,
+  options: { naturalSize?: boolean } = {},
+): void {
+  try {
+    const bbox = svg.getBBox();
+    if (!(bbox.width > 0 && bbox.height > 0)) return;
+    const current = svg.getAttribute('viewBox')
+      ?.trim()
+      .split(/[\s,]+/u)
+      .map(Number);
+    if (!current || current.length !== 4 || current.some((value) => !Number.isFinite(value))) return;
+
+    const padding = 8;
+    const next = {
+      x: bbox.x - padding,
+      y: bbox.y - padding,
+      width: bbox.width + padding * 2,
+      height: bbox.height + padding * 2,
+    };
+    // 只处理异常膨胀的画布，避免改变正常 Mermaid 输出的边界语义。
+    if (current[2] <= next.width * 1.25 && current[3] <= next.height * 1.25) return;
+
+    svg.setAttribute('viewBox', `${next.x} ${next.y} ${next.width} ${next.height}`);
+    if (options.naturalSize) svg.setAttribute('width', `${Math.round(next.width)}`);
+  } catch {
+    // getBBox 在未挂载、jsdom 或不支持 SVG 布局的环境中不可用时保留原图。
+  }
+}
+
 async function loadMermaid(): Promise<MermaidModule> {
   mermaidModulePromise ??= import('mermaid');
   return mermaidModulePromise;
@@ -160,6 +200,8 @@ function insertMermaidSvg(pre: HTMLElement, svg: string, source: string, options
   // 预览面板（naturalSize）与编辑器一致按自然尺寸展示，超宽由容器
   // overflow-x 滚动承接；导出链路不传该选项，保持自适应容器宽。
   graph.innerHTML = options.naturalSize ? normalizeMermaidSvgSize(svg) : svg;
+  const renderedSvg = graph.querySelector('svg');
+  if (renderedSvg) normalizeMermaidSvgViewport(renderedSvg, options);
 
   if (options.editable) {
     // editable 模式:把 pre 隐藏(可点击图回到源码),也把 fence 头 pre 一起隐藏 + 恢复时还原。
