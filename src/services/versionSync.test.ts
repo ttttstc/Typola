@@ -53,9 +53,11 @@ describe('release version synchronization', () => {
       readFile('.github/workflows/package.yml', 'utf8'),
     ]);
     expect(tagWorkflow).toContain('node scripts/sync-version.mjs --tag "${{ github.ref_name }}"');
-    expect(tagWorkflow).toContain('--require-version-change "HEAD^"');
+    expect(tagWorkflow).toContain('$previousTag = git tag --merged HEAD --sort=-version:refname');
+    expect(tagWorkflow).toContain('--require-version-change $previousTag');
     expect(packageWorkflow).toContain('node scripts/sync-version.mjs --tag "v${{ inputs.version }}"');
-    expect(packageWorkflow).toContain('--require-version-change "HEAD^"');
+    expect(packageWorkflow).toContain('$previousTag = git tag --merged HEAD --sort=-version:refname');
+    expect(packageWorkflow).toContain('--require-version-change $previousTag');
   });
 
   it('keeps the local Tauri build independent from VERSION', async () => {
