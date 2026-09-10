@@ -1864,9 +1864,15 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-right: none;
 }
 
-.editor-pane .cm-editor .cm-activeLine,
+/* 当前行不上整行底色（对齐 Typora：只选几个字符时整行不应变色，着色的只有选中文字本身）；
+   行号槽保留轻微 wash 作当前行指示。另：CM6 选区层在内容之下（.cm-selectionLayer z-index:-2），
+   行底色若为实色会把本行选区整段盖住——此规则必须保持透明。 */
+.editor-pane .cm-editor .cm-activeLine:not(.cm-atomic-fenced-code) {
+  background: transparent;
+}
+
 .editor-pane .cm-editor .cm-activeLineGutter {
-  background: var(--theme-control-active-bg);
+  background: color-mix(in oklch, var(--theme-text-primary) 4%, transparent);
 }
 
 .editor-pane .cm-editor .cm-selectionBackground,
