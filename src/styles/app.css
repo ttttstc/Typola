@@ -5301,8 +5301,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  min-width: 260px;
-  max-width: 360px;
+  /* 固定宽度:列表控件长度保持一致(原先 260-360 随最长标题伸缩,每次打开宽窄不一) */
+  width: 300px;
+  box-sizing: border-box;
   background: var(--theme-surface);
   border: 1px solid var(--theme-border-soft);
   border-radius: 8px;
@@ -5382,7 +5383,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   justify-content: center;
   min-height: 20px;
   min-width: 20px;
-  opacity: 0;
+  /* 常驻显示(原先 hover 才现,各行控件视觉长度不一致);行 hover 时增强可见性 */
+  opacity: 0.55;
+  flex: none;
   transition: opacity 100ms, background 100ms;
 }
 
