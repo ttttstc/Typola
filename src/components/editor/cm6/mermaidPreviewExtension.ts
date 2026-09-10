@@ -7,6 +7,7 @@ import {
   MERMAID_RENDER_TIMEOUT_MS,
   ensureMermaidInitialized,
   normalizeMermaidSvgSize,
+  normalizeMermaidSvgViewport,
   withTimeout,
 } from '../../../services/mermaidRenderer';
 
@@ -223,6 +224,26 @@ class MermaidWidget extends WidgetType {
     this.requestMeasure(element);
   }
 
+  /**
+   * 异步渲染结果写入 widget 时保留缩放控件。
+   *
+   * 控件在首次 loading 状态后才挂载；直接 innerHTML 会把它们连同
+   * loading 文案一起清掉，导致异步渲染完成后 hover 控件消失。
+   */
+  private setRenderedHtml(element: HTMLElement, html: string): void {
+    const controls = element.querySelector('.typola-cm6-mermaid-zoom');
+    if (!controls) {
+      element.innerHTML = html;
+      return;
+    }
+    for (const child of Array.from(element.childNodes)) {
+      if (child !== controls) child.remove();
+    }
+    controls.insertAdjacentHTML('beforebegin', html);
+    const svg = element.querySelector('svg');
+    if (svg) normalizeMermaidSvgViewport(svg, { naturalSize: true });
+  }
+
   /** widget 异步变高后必须 requestMeasure，否则 heightmap 失同步。 */
   private requestMeasure(element: HTMLElement): void {
     try {
@@ -249,7 +270,7 @@ class MermaidWidget extends WidgetType {
       if (element.isConnected) this.paint(element);
     });
     if (result.state === 'ready') {
-      element.innerHTML = result.html;
+      this.setRenderedHtml(element, result.html);
       // SVG 异步到达会撑高 widget：立即重放当前缩放并通知测量，
       // 避免 heightmap 停留在"渲染中…"的单行高度。
       this.applyScale(element);

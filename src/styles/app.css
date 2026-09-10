@@ -1827,6 +1827,8 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 
 /* 放大溢出时容器内横向滚动（不撑破文档布局）。 */
 .cm6-markdown-editor-pane .typola-cm6-mermaid {
+  /* CM6 块 widget 的高度测量不计外边距；外边距会变成图后的幻影空白。 */
+  margin: 0;
   overflow-x: auto;
 }
 
