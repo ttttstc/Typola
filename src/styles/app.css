@@ -7345,6 +7345,14 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   line-height: 1.65;
 }
 
+/* 设置页内分组小标题：给长列表拉开段落节奏（如终端页的 外观/行为）。 */
+.settings-group-title {
+  margin: 20px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--theme-text-muted);
+}
+
 .settings-subnav {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
