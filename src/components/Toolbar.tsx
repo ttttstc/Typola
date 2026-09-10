@@ -274,7 +274,6 @@ export function Toolbar({
           >
             <PanelLeft size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
-          <DefineColorToolbarButton settings={settings} />
           {onOpenToc && (
             <button data-no-window-drag="true" onClick={onOpenToc} data-tooltip={t('openTocHint')} aria-label={t('openTocHint')}>
               <ListTree size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
@@ -311,33 +310,6 @@ export function Toolbar({
               onSelect: onSaveAs,
             }]}
           />
-          {onFormat && (
-            <ToolbarSplitMenu
-              mainLabel={t('toolbarInsertTableLabel')}
-              mainIcon={<Table2 size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
-              onMainClick={() => onFormat({ type: 'table-insert', rows: 2, cols: 3 })}
-              mainDisabled={editingDisabled}
-              chevronLabel={t('toolbarInsertMenuLabel')}
-              items={onInsertImage ? [{
-                key: 'insert-image',
-                label: t('toolbarInsertImageLabel'),
-                icon: <ImagePlus size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />,
-                disabled: editingDisabled,
-                onSelect: onInsertImage,
-              }] : []}
-            />
-          )}
-          {!onFormat && onInsertImage && (
-            <button
-              data-no-window-drag="true"
-              onClick={onInsertImage}
-              disabled={editingDisabled}
-              data-tooltip={t('toolbarInsertImageLabel')}
-              aria-label={t('toolbarInsertImageLabel')}
-            >
-              <ImagePlus size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
-            </button>
-          )}
           {onExportPdf && (
             <div className="toolbar-export-dropdown">
               <button
@@ -389,6 +361,37 @@ export function Toolbar({
             </div>
           )}
         </div>
+        {(onFormat || onInsertImage) && (
+          <div className="toolbar-group toolbar-insert-actions" aria-label="插入">
+            {onFormat && (
+              <ToolbarSplitMenu
+                mainLabel={t('toolbarInsertTableLabel')}
+                mainIcon={<Table2 size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
+                onMainClick={() => onFormat({ type: 'table-insert', rows: 2, cols: 3 })}
+                mainDisabled={editingDisabled}
+                chevronLabel={t('toolbarInsertMenuLabel')}
+                items={onInsertImage ? [{
+                  key: 'insert-image',
+                  label: t('toolbarInsertImageLabel'),
+                  icon: <ImagePlus size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />,
+                  disabled: editingDisabled,
+                  onSelect: onInsertImage,
+                }] : []}
+              />
+            )}
+            {!onFormat && onInsertImage && (
+              <button
+                data-no-window-drag="true"
+                onClick={onInsertImage}
+                disabled={editingDisabled}
+                data-tooltip={t('toolbarInsertImageLabel')}
+                aria-label={t('toolbarInsertImageLabel')}
+              >
+                <ImagePlus size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
+              </button>
+            )}
+          </div>
+        )}
         {onFormat && (
           <div className="toolbar-group toolbar-format-actions" aria-label="Markdown 格式">
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip="加粗 (Ctrl+B)" aria-label="加粗"><Bold size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
@@ -405,7 +408,7 @@ export function Toolbar({
       <div className="toolbar-title" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-spacer" data-tauri-drag-region aria-hidden="true" />
       <div className="toolbar-right">
-        <div className="toolbar-group toolbar-view-actions" aria-label={t('toolbarViewGroup')}>
+        <div className="toolbar-group toolbar-view-actions" aria-label="视图与外观">
           <button
             className={editorMode === 'source' ? 'active' : ''}
             onClick={onToggleEditorMode}
@@ -475,6 +478,7 @@ export function Toolbar({
           >
             <Terminal size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
           </button>
+          <DefineColorToolbarButton settings={settings} />
         </div>
         <div className="toolbar-group toolbar-navigation-actions" aria-label={t('toolbarNavGroup')}>
           <button

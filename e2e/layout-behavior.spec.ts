@@ -21,7 +21,7 @@ function liveEditorContent(page: Page) {
 async function typeMarkdown(page: Page, markdown: string): Promise<void> {
   await openEditor(page);
   await page.keyboard.insertText(markdown);
-  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
+  await page.getByLabel('视图与外观').getByRole('button', { name: 'Word 预览' }).click();
   await expect(page.locator('.word-preview-panel')).toBeVisible();
 }
 
@@ -67,7 +67,7 @@ test('toolbar hides the app name and keeps draggable space around controls', asy
     titleDrag: true,
     overlayCount: 0,
     fallback: 'manual',
-    groups: ['导航', '文件操作', 'Markdown 格式', '视图与导出', '导航设置', '文档模式'],
+    groups: ['导航', '文件操作', '插入', 'Markdown 格式', '视图与外观', '导航设置', '文档模式'],
   }));
   expect(toolbarState.centerOffset).toBeLessThanOrEqual(1);
   await expect(page.getByRole('button', { name: '大纲', exact: true })).toHaveCount(0);
@@ -172,7 +172,7 @@ test('Word preview button opens and closes the right paper preview panel', async
   await expect(page.getByLabel('Word 导出预设')).toBeVisible();
   await expect(page.getByRole('button', { name: '导出 Word' })).toBeVisible();
 
-  await page.getByLabel('视图与导出').getByRole('button', { name: 'Word 预览' }).click();
+  await page.getByLabel('视图与外观').getByRole('button', { name: 'Word 预览' }).click();
   await expect(page.locator('.word-preview-panel')).toHaveCount(0);
 });
 
@@ -180,7 +180,7 @@ test('HTML preview uses the shared right panel and is mutually exclusive with Wo
   await page.goto('/');
 
   const editor = liveEditor(page);
-  const viewToolbar = page.getByLabel('视图与导出');
+  const viewToolbar = page.getByLabel('视图与外观');
   const wordButton = viewToolbar.getByRole('button', { name: 'Word 预览' });
   const htmlButton = viewToolbar.getByRole('button', { name: 'HTML 预览' });
 

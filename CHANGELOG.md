@@ -10,6 +10,10 @@
 
 ## Unreleased
 
+- 工具栏图标去重与分组梳理：define-color 调色入口改用 Palette 图标（原先与格式刷同为 Paintbrush，工具栏出现两把刷子）并移入视图组；插入（表格 / 图片）从文件组独立成组，分组语义统一为 导航 / 文档 / 插入 / 格式 / 视图与外观 / 设置。
+
+- 选区可读性与行为对齐 Typora：define-color 选区底色从 68% 深度降为 26% 浅色 wash，选中文字清晰可读；编辑器关闭 highlightSelectionMatches，选中单词不再把文中其他同词一并高亮。
+
 - 修复源码模式「搜索命中折叠区自动展开」失效：`handleSearchNavigate` 闭包捕获了 180ms 防抖的 `markdownAnalysis` 却未列入依赖，防抖未追上内容时的渲染会把过期（空）foldSections 永久锁进闭包，导致折叠区内命中不再自动展开。
 
 - 修复浮动大纲「悬停左缘展开」入口不可用：非固定态 `.floating-toc` 容器宽高为 0（子元素全部 absolute 定位），`edge-trigger` 热区高度被撑为 0，鼠标无法命中；为非固定态容器补显式高度后热区恢复可用。

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Paintbrush } from 'lucide-react';
+import { Palette } from 'lucide-react';
 import {
   FloatingFocusManager, FloatingPortal, flip, offset, shift,
   useClick, useDismiss, useFloating, useInteractions, useRole,
@@ -39,7 +39,7 @@ export function DefineColorToolbarButton({ settings }: { settings: AppSettings }
         aria-expanded={open}
         className={settings.appearanceColorSystem === 'define-color' ? 'active' : ''}
         {...getReferenceProps()}
-      ><Paintbrush size={18} strokeWidth={1.6} /></button>
+      ><Palette size={18} strokeWidth={1.6} /></button>
       {open && (
         <FloatingPortal>
           <FloatingFocusManager context={floating.context} modal={false} returnFocus>

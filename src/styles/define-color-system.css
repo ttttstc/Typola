@@ -12,7 +12,7 @@ html[data-color-system='define-color'] {
   --theme-accent: var(--dc-neutral-dark-100);
   --theme-accent-soft: var(--dc-background-dark-muted);
   --theme-accent-muted: var(--dc-neutral-dark-30);
-  --theme-selection: color-mix(in oklch, var(--dc-neutral-dark-100) 68%, var(--dc-neutral-light-1000));
+  --theme-selection: color-mix(in oklch, var(--dc-neutral-dark-100) 26%, var(--dc-neutral-light-1000));
   --theme-panel-bg: var(--dc-base-light-loud);
   --theme-control-bg: var(--dc-background-light-loud);
   --theme-control-hover-bg: var(--dc-background-light-strong);
