@@ -142,6 +142,25 @@ export function markReviewCommentsApplied(
   return changed ? { comments, dirty: true } : state;
 }
 
+// AI 改稿应用后的逐意见确认:改稿 prompt 允许 AI 在锚点无法唯一定位时跳过该条意见,
+// 候选稿整体 apply 成功 ≠ 每条意见都落实。只有锚点原文在候选稿(应用后的完整
+// markdown)中不再原样出现(= 该段确被改动)的意见才算已落实;锚点仍原样保留、
+// 或空锚点无法验证的意见视为被 AI 跳过,保持待处理,避免批量关闭形成假闭环。
+export function resolveAppliedCommentIds(
+  merged: string,
+  comments: readonly ReviewComment[],
+  candidateIds: readonly string[],
+): string[] {
+  const byId = new Map(comments.map((comment) => [comment.id, comment]));
+  const appliedIds: string[] = [];
+  for (const id of candidateIds) {
+    const comment = byId.get(id);
+    if (!comment || !comment.anchor.originalText || merged.includes(comment.anchor.originalText)) continue;
+    appliedIds.push(id);
+  }
+  return appliedIds;
+}
+
 export function removeReviewComment(
   state: ReviewStateSnapshot,
   commentId: string,

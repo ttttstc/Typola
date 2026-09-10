@@ -109,4 +109,14 @@ describe('typora keymap', () => {
     pressKey(view, 'Tab');
     expect(view.state.doc.toString()).toBe('- one\nplain');
   });
+
+  it('多选列表项、选区 to 恰落在下一普通行行首时仍缩进(排他边界)', () => {
+    view = createView('- one\n- two\nplain');
+    const doc = view.state.doc;
+    // selection.to 是排他边界:选到最后一条列表项末尾时 to === 下一行 from,
+    // 实际覆盖的最后一行仍是列表行 two,不应把普通段落行算进覆盖范围。
+    view.dispatch({ selection: { anchor: 0, head: doc.line(3).from } });
+    pressKey(view, 'Tab');
+    expect(view.state.doc.toString()).toBe('    - one\n    - two\nplain');
+  });
 });

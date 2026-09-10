@@ -57,6 +57,7 @@ import {
   getActiveReviewComments,
   getExportableReviewComments,
   parseReviewMarkdown,
+  resolveAppliedCommentIds,
   type ReviewBasis,
   type ReviewComment,
 } from '../services/review/reviewState';
@@ -1149,6 +1150,9 @@ export function AppLayout() {
     // 意见闭环:本次 AI 改稿源自检视意见时,应用成功后把发送时收集的意见标记为已应用,
     // 锚点已 stale 的意见不再进入下一轮「AI 改稿」prompt 空转。
     // 仅当当前文档与打开的候选稿都对得上时才标记(应用历史版本不误标)。
+    // 逐意见确认(见 resolveAppliedCommentIds):prompt 允许 AI 在锚点无法唯一定位
+    // 时跳过该条意见,候选稿整体 apply 成功 ≠ 每条意见都落实。锚点原文在候选稿
+    // 中原样保留的意见视为被 AI 跳过,保持待处理,避免批量关闭形成假闭环。
     const pendingApplied = appliedPendingCommentsRef.current;
     let appliedNote = '';
     if (
@@ -1156,9 +1160,17 @@ export function AppLayout() {
       && file.path === pendingApplied.documentPath
       && diffReviewCandidateNameRef.current === pendingApplied.candidateFileName
     ) {
-      reviewStateApi.markApplied(pendingApplied.commentIds);
+      const appliedIds = resolveAppliedCommentIds(merged, reviewStateApi.state.comments, pendingApplied.commentIds);
+      const skippedCount = pendingApplied.commentIds.length - appliedIds.length;
+      if (appliedIds.length > 0) reviewStateApi.markApplied(appliedIds);
+      if (appliedIds.length > 0 && skippedCount > 0) {
+        appliedNote = ` ${appliedIds.length} 条检视意见已标记为已应用，${skippedCount} 条锚点未被改动、保持待处理。`;
+      } else if (appliedIds.length > 0) {
+        appliedNote = ` ${appliedIds.length} 条检视意见已标记为已应用。`;
+      } else {
+        appliedNote = ` 候选稿未改动任何意见锚点，${pendingApplied.commentIds.length} 条意见保持待处理。`;
+      }
       appliedPendingCommentsRef.current = null;
-      appliedNote = ` ${pendingApplied.commentIds.length} 条检视意见已标记为已应用。`;
     }
     setTransientMessage(`AI 改动已应用，并已保存应用前历史版本。${appliedNote}`);
   }, [convManager.activeConvId, file.path, outputBaseDir, refreshDocumentHistories, replaceCurrentContent, reviewStateApi]), candidatePersistenceKey);

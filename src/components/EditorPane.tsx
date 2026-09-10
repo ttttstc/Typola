@@ -162,13 +162,16 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     const view = editorViewRef.current;
     if (!view) return;
     const currentDoc = view.state.doc.toString();
-    if (source === currentDoc) {
-      lastSyncedSourceRef.current = source;
-      lastFilePathRef.current = filePath;
-      return;
-    }
     const prevPath = lastFilePathRef.current;
     const isDocSwitch = filePath !== prevPath;
+    // 提前返回必须同时满足"正文未变"与"路径未变":A/B 两文件内容完全一致时
+    // 仅凭 source 相等就返回,会把 lastFilePath 静默改成 B 却丢掉 A 的选区/滚动、
+    // 也不恢复 B 的历史状态;path 先更新、异步 source 后到时分阶段更新同理。
+    // 只要路径变化就走下方文档切换分支,即使正文相同。
+    if (source === currentDoc && !isDocSwitch) {
+      lastSyncedSourceRef.current = source;
+      return;
+    }
     const changes = { from: 0, to: currentDoc.length, insert: source };
     let anchor = 0;
     let head: number | undefined;

@@ -316,8 +316,7 @@ describe('createMarkdownExtensions format keymap', () => {
     const parent = document.createElement('div');
     document.body.appendChild(parent);
     const actions: FormatAction[] = [];
-    let editor: EditorView;
-    editor = new EditorView({
+    const editor = new EditorView({
       state: EditorState.create({
         doc,
         selection: { anchor: doc.length },

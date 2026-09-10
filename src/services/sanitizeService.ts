@@ -40,14 +40,20 @@ export function sanitizeHtml(html: string): string {
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
   });
-  return removeNonSvgInlineStyles(sanitized);
+  return removeNonSvgStyles(sanitized);
 }
 
-function removeNonSvgInlineStyles(html: string): string {
+// <style> 仅为 mermaid SVG 的节点配色放行(见 ALLOWED_TAGS 注释);清洗后
+// 显式移除不位于 <svg> 内的 <style> 节点与 style 属性,普通 Markdown/HTML
+// 的 <style> 注入面不因 SVG 兼容改动而扩大。
+function removeNonSvgStyles(html: string): string {
   const template = document.createElement('template');
   template.innerHTML = html;
   template.content.querySelectorAll<HTMLElement>('[style]').forEach((element) => {
     if (!element.closest('svg')) element.removeAttribute('style');
+  });
+  template.content.querySelectorAll('style').forEach((element) => {
+    if (!element.closest('svg')) element.remove();
   });
   return template.innerHTML;
 }

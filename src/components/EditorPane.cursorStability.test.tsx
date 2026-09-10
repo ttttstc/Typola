@@ -205,4 +205,62 @@ describe('EditorPane 光标稳定性', () => {
     expect(view.state.doc.toString()).toBe(docA);
     expect(view.state.selection.main.head).toBe(betaPos);
   });
+
+  it('同内容文件互切：仍按文档切换保存/恢复各自状态', async () => {
+    const doc = 'alpha\nbeta\ngamma';
+    const { handle } = await mountControlled(doc, '/tmp/a.md');
+    const view = handle.view!;
+
+    // 文档 A：光标放到 beta 前
+    const betaPos = 'alpha\n'.length;
+    act(() => {
+      view.dispatch({ selection: { anchor: betaPos } });
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    // 切到内容完全相同的文档 B：不能因 source 相等被当成"同文档"静默吞掉 A 的状态
+    await act(async () => {
+      handle.setFilePath('/tmp/b.md');
+      handle.setValue(doc);
+    });
+    expect(view.state.doc.toString()).toBe(doc);
+
+    // 切回文档 A：光标应恢复到 beta 前（切换到 B 时 A 的选区已被保存）
+    await act(async () => {
+      handle.setFilePath('/tmp/a.md');
+      handle.setValue(doc);
+    });
+    expect(view.state.selection.main.head).toBe(betaPos);
+  });
+
+  it('path 先更新、source 分阶段后到：不误判为同文档替换', async () => {
+    const docA = 'alpha\nbeta\ngamma';
+    const docB = 'one\ntwo';
+    const { handle } = await mountControlled(docA, '/tmp/a.md');
+    const view = handle.view!;
+
+    const betaPos = 'alpha\n'.length;
+    act(() => {
+      view.dispatch({ selection: { anchor: betaPos } });
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    // 分阶段切换：filePath 先变（source 仍是 A 的正文），source 稍后才到。
+    // path 单独变化必须立即走文档切换分支保存 A 的状态，不能因正文暂未变化而吞掉。
+    await act(async () => {
+      handle.setFilePath('/tmp/b.md');
+    });
+    await act(async () => {
+      handle.setValue(docB);
+    });
+    expect(view.state.doc.toString()).toBe(docB);
+
+    // 切回文档 A：光标应恢复到 beta 前
+    await act(async () => {
+      handle.setFilePath('/tmp/a.md');
+      handle.setValue(docA);
+    });
+    expect(view.state.doc.toString()).toBe(docA);
+    expect(view.state.selection.main.head).toBe(betaPos);
+  });
 });

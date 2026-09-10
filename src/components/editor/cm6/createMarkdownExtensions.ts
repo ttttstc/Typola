@@ -57,7 +57,13 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
   const selectionCoversOnlyListLines = (state: EditorState) => {
     const { from, to } = state.selection.main;
     const first = state.doc.lineAt(from).number;
-    const last = state.doc.lineAt(to).number;
+    // selection.to 是排他边界:非空选区选到最后一条列表项末尾时,to 恰好
+    // 等于下一行的 from,lineAt(to) 会落到下一行(可能是普通段落),造成
+    // "选区包含非列表行"的误判。to 落在行首时按 to-1 取实际覆盖的最后一行。
+    const toLine = state.doc.lineAt(to);
+    const last = to > from && toLine.from === to
+      ? state.doc.lineAt(to - 1).number
+      : toLine.number;
     for (let number = first; number <= last; number += 1) {
       if (!LIST_ITEM_RE.test(state.doc.line(number).text)) return false;
     }
