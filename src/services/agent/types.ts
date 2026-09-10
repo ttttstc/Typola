@@ -35,8 +35,8 @@ export type SelectionAnchor = {
   from: number;
   to: number;
   originalText: string;
-  // Vditor WYSIWYG 模式下使用:从选区起点往前 N 个字符的快照文本。
-  // Vditor IR 没有稳定的字符 from/to,用 prefixHint + originalText 在 source 中定位唯一匹配,
+  // 从选区起点往前 N 个字符的快照文本(CM6 选区 AI 动作取 24 字符;Vditor WYSIWYG 模式亦写入)。
+  // originalText 在 source 中多处重复时,用 prefixHint + originalText 定位唯一匹配,
   // 避免同文本多处出现时 indexOf 撞到错误位置。
   prefixHint?: string;
   /** 选区所在标题路径(根标题在外),用于结构化 prompt 拼装。 */

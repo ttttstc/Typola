@@ -206,4 +206,45 @@ describe('useDiffReview 持续候选稿', () => {
     await expect(act(async () => { await controller.apply(); })).rejects.toThrow('历史保存失败');
     expect(controller.state.isOpen).toBe(true);
   });
+
+  it('apply 进行中重复调用被守卫拦截,onApplyMerged 只执行一次', async () => {
+    let release!: () => void;
+    const onApply = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    await act(async () => root.render(
+      <Harness persistenceKey="conv-1::a.md" onController={(value) => { controller = value; }} onApply={onApply} />,
+    ));
+    await act(async () => controller.open({
+      source: 'review', originalContent: '原文', proposedContent: '候选稿',
+    }));
+    // 模拟双击:第一次 apply 尚未完成(历史快照落盘中),第二次立即进入。
+    let first!: Promise<boolean>;
+    let second!: Promise<boolean>;
+    await act(async () => {
+      first = controller.apply();
+      second = controller.apply();
+    });
+    expect(onApply).toHaveBeenCalledTimes(1);
+    await act(async () => { release(); });
+    expect(await first).toBe(true);
+    expect(await second).toBe(false);
+    expect(controller.state.isOpen).toBe(false);
+  });
+
+  it('apply 失败后守卫复位,可以重试', async () => {
+    let fail = true;
+    const onApply = vi.fn(async () => {
+      if (fail) throw new Error('历史保存失败');
+    });
+    await act(async () => root.render(
+      <Harness persistenceKey="conv-1::a.md" onController={(value) => { controller = value; }} onApply={onApply} />,
+    ));
+    await act(async () => controller.open({
+      source: 'review', originalContent: '原文', proposedContent: '候选稿',
+    }));
+    await expect(act(async () => { await controller.apply(); })).rejects.toThrow('历史保存失败');
+    fail = false;
+    await act(async () => { await controller.apply(); });
+    expect(onApply).toHaveBeenCalledTimes(2);
+    expect(controller.state.isOpen).toBe(false);
+  });
 });

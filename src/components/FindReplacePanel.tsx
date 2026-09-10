@@ -46,9 +46,12 @@ export function FindReplacePanel({
   // 关闭重新打开重置初始状态。
   const [expanded, setExpanded] = useState(() => visible && focusTarget === 'replace');
   const wasVisibleRef = useRef(visible);
+  // 导航去重键:面板重新打开时应重新跳到第一个匹配。
+  const lastNavKeyRef = useRef('');
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
       setExpanded(focusTarget === 'replace');
+      lastNavKeyRef.current = '';
     }
     wasVisibleRef.current = visible;
   }, [focusTarget, visible]);
@@ -95,6 +98,12 @@ export function FindReplacePanel({
 
   useEffect(() => {
     if (!visible || matches.length === 0) return;
+    // 仅在「查找词/选项变化」或「用户主动切换 activeIndex」时跳转;
+    // 文档内容变化导致的 matches 重算不拽光标 —— 用户可能正在编辑器里打字,
+    // 之前这里会在每次 matches 重算时自动 onNavigate,把打字中的光标拽到匹配处。
+    const navKey = `${deferredQuery}|${JSON.stringify(options)}|${Math.min(activeIndex, matches.length - 1)}`;
+    if (navKey === lastNavKeyRef.current) return;
+    lastNavKeyRef.current = navKey;
     onNavigate(matches[Math.min(activeIndex, matches.length - 1)], deferredQuery, options);
   }, [activeIndex, deferredQuery, matches, onNavigate, options, visible]);
 

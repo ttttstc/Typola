@@ -36,9 +36,30 @@ describe('EditorContextMenu new actions (quote-up/down, link-edit, clear-format,
     });
     const items = host.querySelectorAll('.editor-ctx-item');
     const labelTexts = new Set(Array.from(items).map((b: Element) => (b.firstChild as HTMLElement)?.textContent ?? ''));
-    for (const expected of ['编辑链接', '升级引用', '降级引用', '清除格式', '编辑语言', '插入表格']) {
+    for (const expected of ['编辑链接', '升级引用', '降级引用', '清除格式', '编辑语言', '插入表格', '公式块']) {
       expect(labelTexts.has(expected)).toBe(true);
     }
+  });
+
+  it('click 公式块 → onPick({type:"math-block"})', () => {
+    const onPick = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          onPick={onPick}
+          onClose={() => {}}
+        />,
+      );
+    });
+    const insert = Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((button) => (button.firstChild as HTMLElement)?.textContent === '公式块') as HTMLButtonElement;
+    expect(insert).toBeTruthy();
+    act(() => { insert.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'math-block' });
   });
 
   it('click 插入表格 → onPick default 2×3 table action', () => {
@@ -300,6 +321,123 @@ describe('EditorContextMenu quick format actions', () => {
     expect(buttons.map((button) => button.textContent)).toEqual(['B', 'I', '</>', '↗', '❝', '1.', '•', '☑']);
     act(() => { buttons[0].click(); });
     expect(onPick).toHaveBeenCalledWith({ type: 'bold' });
+    act(() => root.unmount());
+    host.remove();
+  });
+});
+
+describe('EditorContextMenu mermaid 复制为 SVG', () => {
+  const setup = (props: { hasMermaidSvg?: boolean }) => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onPick = vi.fn();
+    const onCopyMermaidSvg = vi.fn();
+    const onClose = vi.fn();
+    act(() => {
+      root.render(
+        <EditorContextMenu
+          open
+          x={0}
+          y={0}
+          hasSelection={false}
+          hasMermaidSvg={props.hasMermaidSvg}
+          onPick={onPick}
+          onCopyMermaidSvg={onCopyMermaidSvg}
+          onClose={onClose}
+        />,
+      );
+    });
+    const findItem = () => Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((b) => (b.firstChild as HTMLElement)?.textContent === '复制为 SVG') as HTMLButtonElement | undefined;
+    return { host, root, onPick, onCopyMermaidSvg, onClose, findItem };
+  };
+
+  it('默认不显示"复制为 SVG"', () => {
+    const { host, root, findItem } = setup({});
+    expect(findItem()).toBeUndefined();
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it('hasMermaidSvg 时显示"复制为 SVG",点击回调 onCopyMermaidSvg 并关闭菜单', () => {
+    const { host, root, onCopyMermaidSvg, onClose, findItem } = setup({ hasMermaidSvg: true });
+    const item = findItem();
+    expect(item).toBeTruthy();
+    act(() => { item!.click(); });
+    expect(onCopyMermaidSvg).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    act(() => root.unmount());
+    host.remove();
+  });
+});
+
+describe('EditorContextMenu 段落子菜单(Typora 对齐项)', () => {
+  it('渲染提升/降低标题等级、引用、无序列表、有序列表并分发动作', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onPick = vi.fn();
+    act(() => {
+      root.render(<EditorContextMenu open x={0} y={0} hasSelection={false} onPick={onPick} onClose={() => {}} />);
+    });
+
+    const findItem = (label: string) => Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((b) => (b.firstChild as HTMLElement)?.textContent === label) as HTMLButtonElement | undefined;
+    for (const label of ['提升标题等级', '降低标题等级', '引用', '无序列表', '有序列表']) {
+      expect(findItem(label)).toBeTruthy();
+    }
+    act(() => { findItem('提升标题等级')!.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'heading-up' });
+    act(() => { findItem('降低标题等级')!.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'heading-down' });
+    act(() => { findItem('引用')!.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'quote' });
+    act(() => { findItem('无序列表')!.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'ul' });
+    act(() => { findItem('有序列表')!.click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'ol' });
+    act(() => root.unmount());
+    host.remove();
+  });
+});
+
+describe('EditorContextMenu 剪贴板命令', () => {
+  const setup = (hasSelection: boolean) => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const onPick = vi.fn();
+    act(() => {
+      root.render(<EditorContextMenu open x={0} y={0} hasSelection={hasSelection} onPick={onPick} onClose={() => {}} />);
+    });
+    const findItem = (label: string) => Array.from(host.querySelectorAll('.editor-ctx-item'))
+      .find((b) => (b.firstChild as HTMLElement)?.textContent === label) as HTMLButtonElement;
+    return { host, root, onPick, findItem };
+  };
+
+  it('无选区时剪切/复制禁用,粘贴/全选可用', () => {
+    const { host, root, findItem } = setup(false);
+    expect(findItem('剪切').disabled).toBe(true);
+    expect(findItem('复制').disabled).toBe(true);
+    expect(findItem('粘贴').disabled).toBe(false);
+    expect(findItem('全选').disabled).toBe(false);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it('有选区时点击分发 cut/copy/paste/select-all', () => {
+    const { host, root, onPick, findItem } = setup(true);
+    expect(findItem('剪切').disabled).toBe(false);
+    expect(findItem('复制').disabled).toBe(false);
+    act(() => { findItem('剪切').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'cut' });
+    act(() => { findItem('复制').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'copy' });
+    act(() => { findItem('粘贴').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'paste' });
+    act(() => { findItem('全选').click(); });
+    expect(onPick).toHaveBeenCalledWith({ type: 'select-all' });
     act(() => root.unmount());
     host.remove();
   });

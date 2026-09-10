@@ -1,5 +1,6 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { FindReplacePanel } from './FindReplacePanel';
+import { GoToLinePopover } from './GoToLinePopover';
 import { QuickOpenPanel } from './QuickOpenPanel';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
 import type { RecentFile } from '../services/recentFilesService';
@@ -22,6 +23,10 @@ type AppLayoutOverlaysProps = {
   recentFiles: RecentFile[];
   onCloseQuickOpen: () => void;
   onQuickOpen: (path: string) => void;
+  /** 跳转到行弹窗(Ctrl+G):AppLayout 监听 'typola:goto-line' 后置 true。 */
+  gotoLineVisible: boolean;
+  onCloseGotoLine: () => void;
+  onGotoLine: (line: number, col?: number) => void;
   artifactPreviewNode: ReactNode;
   settingsNode: ReactNode;
   unsavedDialog: { message: string; allowSaveAll?: boolean; allowDiscardAll?: boolean } | null;
@@ -48,6 +53,9 @@ export function AppLayoutOverlays({
   recentFiles,
   onCloseQuickOpen,
   onQuickOpen,
+  gotoLineVisible,
+  onCloseGotoLine,
+  onGotoLine,
   artifactPreviewNode,
   settingsNode,
   unsavedDialog,
@@ -74,6 +82,12 @@ export function AppLayoutOverlays({
         files={recentFiles}
         onClose={onCloseQuickOpen}
         onOpen={onQuickOpen}
+      />
+      <GoToLinePopover
+        visible={gotoLineVisible}
+        totalLines={source ? source.split('\n').length : 1}
+        onClose={onCloseGotoLine}
+        onGoToLine={onGotoLine}
       />
       {artifactPreviewNode}
       {settingsNode}
