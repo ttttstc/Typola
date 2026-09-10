@@ -7,6 +7,7 @@ export type TableAlign = 'left' | 'center' | 'right';
 
 export type FormatAction =
   | { type: 'heading'; level: HeadingLevel }
+  | { type: 'heading-up' | 'heading-down' }
   | { type: 'bold' | 'italic' | 'strike' | 'underline' | 'sup' | 'sub' | 'highlight' | 'inline-code' }
   | { type: 'quote' | 'ul' | 'ol' | 'task' | 'codeblock' | 'hr' | 'link' | 'math-block' }
   | { type: 'quote-up' | 'quote-down' | 'clear-format' | 'codeblock-lang' }
@@ -199,6 +200,12 @@ export function EditorContextMenu({
           <button type="button" onClick={() => pick({ type: 'heading', level: 5 })} title="五级标题 (Ctrl+5)">H5</button>
           <button type="button" onClick={() => pick({ type: 'heading', level: 6 })} title="六级标题 (Ctrl+6)">H6</button>
         </div>
+        <div className="editor-ctx-separator" />
+        <MenuItem label="提升标题等级" hint="Ctrl+=" onClick={() => pick({ type: 'heading-up' })} />
+        <MenuItem label="降低标题等级" hint="Ctrl+-" onClick={() => pick({ type: 'heading-down' })} />
+        <MenuItem label="引用" onClick={() => pick({ type: 'quote' })} />
+        <MenuItem label="无序列表" onClick={() => pick({ type: 'ul' })} />
+        <MenuItem label="有序列表" onClick={() => pick({ type: 'ol' })} />
         <div className="editor-ctx-separator" />
         <MenuItem label="升级引用" hint="Ctrl+." onClick={() => pick({ type: 'quote-up' })} />
         <MenuItem label="降级引用" hint="Ctrl+," onClick={() => pick({ type: 'quote-down' })} />

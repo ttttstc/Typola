@@ -1793,6 +1793,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   margin: 0 auto;
 }
 
+/* Ctrl+滚轮缩放后的视觉提示：边框换成 accent 色，双击复位后消失。 */
+.cm6-markdown-editor-pane .typola-cm6-mermaid.typola-cm6-mermaid-scaled {
+  border-color: color-mix(in oklch, var(--theme-accent) 64%, transparent);
+}
+
 /* 代码块复制按钮:widget 挂在 fence 行行首,绝对定位到块首行右上角,
  * hover 代码块首行时显示;点击写入块内代码(样式见 codeBlockCopyExtension)。 */
 .cm6-markdown-editor-pane .cm-line:has(> .typola-cm6-code-copy),
@@ -11123,6 +11128,14 @@ button[data-tooltip]:disabled::before {
   background: color-mix(in oklch, var(--theme-accent) 12%, transparent);
   color: var(--theme-accent);
 }
+.review-sidebar-item-applied {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--theme-success) 14%, transparent);
+  color: var(--theme-success);
+  font-size: 9.5px;
+  line-height: 1.4;
+}
 .review-sidebar-item-basis {
   min-width: 0;
   overflow: hidden;
@@ -11229,6 +11242,7 @@ button[data-tooltip]:disabled::before {
 
 .review-sidebar-panel .review-sidebar-item-line,
 .review-sidebar-panel .review-sidebar-item-source,
+.review-sidebar-panel .review-sidebar-item-applied,
 .review-sidebar-panel .review-sidebar-item-basis {
   font-size: calc(var(--review-font-size, 14px) - 3.5px);
 }

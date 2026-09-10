@@ -7,7 +7,7 @@ import { updateSettings } from '../services/settingsService';
 import type { TypolaEditorKernel } from '../types/editorCore';
 import { EditorContextMenu, TableContextMenu, type FormatAction, type TableContextAction } from './EditorContextMenu';
 import { SelectionFloatingBar } from './selection/SelectionFloatingBar';
-import { applyCm6Format } from '../services/editor/cm6FormatService';
+import { applyCm6Format, applyClipboardData } from '../services/editor/cm6FormatService';
 import { Cm6EditPopover, type Cm6EditRequest } from './editor/cm6/Cm6EditPopover';
 import { ImageMetaPopover, type ImageMetaRequest } from './editor/cm6/ImageMetaPopover';
 import type { SelectionActionId } from '../services/agent/selectionActions';
@@ -16,7 +16,7 @@ import { createMarkdownExtensions } from './editor/cm6/createMarkdownExtensions'
 import { headingIndexAt } from './editor/cm6/previewSyncExtension';
 import { applyBaseSize } from './editor/cm6/wheelZoomExtension';
 import { setFoldedHeadings } from './editor/cm6/headingFoldExtension';
-import { deleteMarkdownTableAt, pasteTableData } from './editor/cm6/table/tableCommands';
+import { deleteMarkdownTableAt } from './editor/cm6/table/tableCommands';
 import { runTableMenuAction, tableCellFromEventTarget } from './editor/cm6/table/tableInteractionExtension';
 import {
   findMarkdownImageAt,
@@ -28,7 +28,6 @@ import { writeText as writeClipboardText } from '../services/clipboardService';
 import { resolveLocalResourcePath } from '../services/htmlPresentationService';
 import { formatImageSrc, serializeHtmlImage } from '../services/imageInsert';
 import { findSearchMatches } from '../services/documentSearchService';
-import { convertHtmlPasteToMarkdown } from '../services/htmlPasteService';
 import { sourceLineNumberGutter } from './editor/cm6/sourceLineNumberGutter';
 
 export type SourceHeadingScrollRequest = {
@@ -99,7 +98,14 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
   const sourceRef = useRef(source);
   const headingScrollRequestRef = useRef(headingScrollRequest);
   const onScrollRatioRef = useRef(onScrollRatio);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; hasSelection: boolean; hasImage: boolean } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number;
+    y: number;
+    hasSelection: boolean;
+    hasImage: boolean;
+    hasMermaidSvg: boolean;
+    mermaidEl: HTMLElement | null;
+  } | null>(null);
   const [tableCtxMenu, setTableCtxMenu] = useState<{ x: number; y: number; pos: number; cell: HTMLElement } | null>(null);
   const [editRequest, setEditRequest] = useState<Cm6EditRequest | null>(null);
   const [imageMetaRequest, setImageMetaRequest] = useState<ImageMetaRequest | null>(null);
@@ -225,6 +231,9 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       from: sel.from,
       to: sel.to,
       originalText: text,
+      // 选区前 24 字符快照:重复文本多处出现时,findUniqueAnchor 层 2 用
+      // prefixHint + originalText 消歧,人工检视意见/AI 改稿锚点定位不再撞错位置。
+      ...(sel.from > 0 ? { prefixHint: sourceText.slice(Math.max(0, sel.from - 24), sel.from) } : {}),
       headingPath: headingPathAt(sourceText, sel.from),
       block: (() => {
         const block = markdownBlockAt(sourceText, sel.from, sel.to);
@@ -302,6 +311,9 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       });
     };
     const onMouseDown = (event: MouseEvent) => {
+      // 只追踪左键拖选:右键/中键的 mousedown 不应置位 isDraggingRef,
+      // 否则右键松手后选区浮条会与右键菜单叠加浮现。
+      if (event.button !== 0) return;
       const target = event.target as Node | null;
       if (!target) return;
       // 只追踪编辑器正文内的拖选起始,不要吞掉浮条/菜单/工具栏的 mousedown。
@@ -361,6 +373,13 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     const sel = editor.state.selection.main;
     const inContent = editor.contentDOM.contains(target);
     const pos = inContent ? editor.posAtCoords({ x: event.clientX, y: event.clientY }) : null;
+    // 右键落点不在当前选区内时,先把光标移到落点 —— 段落/格式类命令(标题、
+    // 引用、编辑语言/链接等)作用于右键所在块而不是旧选区;落点在选区内则
+    // 保留选区(Typora 行为:右键选区不丢,剪切/复制仍可用)。
+    if (pos !== null && (pos < sel.from || pos > sel.to)) {
+      editor.dispatch({ selection: { anchor: pos, head: pos } });
+    }
+    const activeSel = editor.state.selection.main;
     const targetElement = target instanceof Element ? target : target?.parentElement;
     const onImage = targetElement?.closest('.cm-atomic-image') !== null;
     let hasImage = false;
@@ -368,11 +387,16 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       const sourceText = editor.state.doc.toString();
       hasImage = findMarkdownImageAt(sourceText, pos) !== null;
     }
+    // mermaid widget:渲染出 svg 后才提供"复制为 SVG"(错误态/渲染中不算)。
+    const mermaidEl = targetElement?.closest<HTMLElement>('.typola-cm6-mermaid') ?? null;
+    const hasMermaidSvg = mermaidEl !== null && mermaidEl.querySelector('svg') !== null;
     setCtxMenu({
       x: event.clientX,
       y: event.clientY,
-      hasSelection: !sel.empty,
+      hasSelection: !activeSel.empty,
       hasImage,
+      hasMermaidSvg,
+      mermaidEl,
     });
   }, []);
 
@@ -382,25 +406,21 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
     if (event.target instanceof Element && event.target.closest('.tbl-table-widget')) return;
     const html = event.clipboardData.getData('text/html');
     const plain = event.clipboardData.getData('text/plain');
-    // 粘贴优先级:表格(TSV/CSV/HTML 表格,现有链路) → 富文本 HTML 转
-    // Markdown(门控命中) → 默认行为(不 preventDefault,CM6 自己插纯文本)。
-    if (pasteTableData(editor, plain, html || undefined)) {
+    // 粘贴优先级:表格(TSV/CSV/HTML 表格) → 富文本 HTML 转 Markdown → 默认行为
+    // (不 preventDefault,CM6 自己插纯文本)。与右键菜单"粘贴"共用 applyClipboardData。
+    if (applyClipboardData(editor, plain, html || undefined)) {
       event.preventDefault();
-      return;
-    }
-    if (html) {
-      const markdown = convertHtmlPasteToMarkdown(html);
-      if (markdown !== null) {
-        event.preventDefault();
-        const selection = editor.state.selection.main;
-        editor.dispatch({
-          changes: { from: selection.from, to: selection.to, insert: markdown },
-          selection: { anchor: selection.from + markdown.length },
-        });
-        return;
-      }
     }
   }, []);
+
+  // mermaid"复制为 SVG":从右键命中的 widget DOM 取 svg 源码写入剪贴板。
+  const handleCopyMermaidSvg = useCallback(() => {
+    const svg = ctxMenu?.mermaidEl?.querySelector('svg') ?? null;
+    if (!svg) return;
+    void writeClipboardText(svg.outerHTML).catch((error) => {
+      console.warn('copy mermaid svg failed:', error);
+    });
+  }, [ctxMenu]);
 
   const handleTablePick = useCallback((action: TableContextAction) => {
     const editor = editorViewRef.current;
@@ -778,9 +798,11 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
         y={ctxMenu?.y ?? 0}
         hasSelection={ctxMenu?.hasSelection ?? false}
         hasImage={ctxMenu?.hasImage ?? false}
+        hasMermaidSvg={ctxMenu?.hasMermaidSvg ?? false}
         lineNumbersVisible={settings.editorLineNumbers}
         onToggleLineNumbers={handleToggleLineNumbers}
         onPick={handleFormatPick}
+        onCopyMermaidSvg={handleCopyMermaidSvg}
         onClose={() => setCtxMenu(null)}
       />
       <TableContextMenu

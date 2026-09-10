@@ -103,6 +103,9 @@ export function createMarkdownExtensions(options: CreateMarkdownExtensionsOption
       { key: 'Mod-k', preventDefault: true, run: () => options.onFormat?.({ type: 'link' }) ?? false },
       { key: 'Mod-.', preventDefault: true, run: () => options.onFormat?.({ type: 'quote-up' }) ?? false },
       { key: 'Mod-,', preventDefault: true, run: () => options.onFormat?.({ type: 'quote-down' }) ?? false },
+      // 提升标题等级(Ctrl/Cmd+=)、降低标题等级(Ctrl/Cmd+-),Typora 惯例
+      { key: 'Mod-=', preventDefault: true, run: () => options.onFormat?.({ type: 'heading-up' }) ?? false },
+      { key: 'Mod--', preventDefault: true, run: () => options.onFormat?.({ type: 'heading-down' }) ?? false },
     ]));
   }
 
