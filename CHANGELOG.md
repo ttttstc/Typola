@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+- 完善项目本地验证能力：Feature Map 从 5 条聚合项扩展为 15 个用户面和 27 个主要直接 exe 场景，覆盖启动分发、文档工作区、编辑器、导航、表格、图片、公式/Mermaid、预览交付、设置、终端、AI 工作台、产物中心、检视 Diff 及异常清理；`npm run verify:exe-core` 直接启动独立标识的 `src-tauri/target/debug/typola.exe`，通过 WebView2 CDP 串行驱动可达路径，并保存版本、工作树差异标识、动作、跳过原因、ARIA、截图和日志。当前真实 exe 已覆盖身份、文件关联打开/保存/新建、源码往返、格式撤销、导航入口、表格、图片失败占位、公式/Mermaid、Word/HTML 预览、主题、AI/产物/检视入口和 PTY 输出；原生对话框、发布物、外部 CLI、模型请求、真实导出文件及完整失败矩阵按实际条件明确标为未验证或受阻。
+
 - 修复 Mermaid 块在 release WebView2 中渲染图下方出现大块空白：针对实际绘制边界明显小于异常膨胀 `viewBox` 的 SVG，按 `getBBox()` 收紧画布并保留 8px 留白；同时保留 CM6 widget 的缩放控件。开发浏览器与 release WebView2 均附回归验证。
 - 修复 PR #269 检视意见（可达性与几何回归）：工具栏分组下拉（保存 / 打开 / 插入与导出菜单）补齐键盘焦点管理——菜单打开后首项自动聚焦、ArrowUp/ArrowDown 在菜单项间循环导航、Esc / 点击外部关闭后焦点返回 chevron 触发器；分组 chevron 命中区从 16px 放大到 24px（WCAG 2.2 最小目标，视觉图标仍为 10px）；左右栏 tab 头显式 38px，与编辑器标签栏三栏齐高（原先自动高度 39px 差 1px）；终端设置页 5 个表单控件（Shell 路径 / 字体 / 字号 / 光标样式 / 快捷键预设）恢复 label 关联（htmlFor/id），屏幕阅读器可正确朗读；工具栏「插入」「视图与外观」分组 aria-label 恢复走 i18n 三语（新增 toolbarInsertGroup），不再硬编码中文；补齐三组 E2E 回归——分组菜单键盘交互、三栏 tab 头 38px 几何断言、当前行选区可见性（普通行 + fenced code 行）。
 

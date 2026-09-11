@@ -238,3 +238,10 @@ The terminal is implemented with Tauri commands plus event streaming:
 
 - The inner Windows `typola.exe` is an implementation detail of the installer / portable package, not a supported standalone release artifact. Official Windows distribution artifacts are the installer and the portable zip.
 
+## 本地验证能力
+
+- `.nimo/verification/SKILL.md` 是项目验证入口，`.nimo/verification/features/` 是从用户入口、稳定句柄到可观察终态的 Feature Map。验证状态必须区分已在真实桌面 exe 执行、仅有渲染器回归和受外部条件阻塞的路径。
+- 真实二进制验证使用 `.nimo/verification/tauri-verification.conf.json` 构建独立标识的 debug exe：`& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'`。这仍执行仓库的 `npm run build`，但不生成安装包，也不与正式单实例共享标识。
+- `npm run verify:exe-core` 直接启动 `src-tauri/target/debug/typola.exe`，为 WebView2 注入一次性 profile 和动态 CDP 端口，通过 `http://tauri.localhost/` 的真实页面串行驱动 `.nimo/verification/features/` 中 15 个核心用户面的可达路径；`features/index.md` 同时维护 27 个主要 exe 场景的目标矩阵，并在 `.nimo/verification/evidence/<run-id>-exe-core-suite/` 保存版本、Git 工作树标识、动作、跳过原因、ARIA、截图和日志；`npm run verify:exe-editor` 保留旧的单一编辑器聚焦配方。
+- Vite `npm run dev` 与 `npm run test:e2e` 仍用于快速渲染器回归；它们不是 Tauri IPC、WebView2、单实例或 Windows 文件对话框的证明。涉及文件、导出、终端、AI 或产物的验证必须同时核对其真实副作用，并遵守 Feature Map 的未验证/受阻状态。
+
