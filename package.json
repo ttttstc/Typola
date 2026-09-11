@@ -12,6 +12,8 @@
     "typecheck": "tsc -b config/tsconfig.json",
     "test": "vitest run --config config/vite.config.ts",
     "test:e2e": "playwright test --config config/playwright.config.ts",
+    "verify:exe-editor": "node .nimo/verification/scripts/verify-exe-core-flow.mjs",
+    "verify:exe-core": "node .nimo/verification/scripts/verify-exe-core-suite.mjs",
     "preview": "vite preview --config config/vite.config.ts",
     "tauri": "tauri",
     "tauri:build:local": "tauri build --config \"{\\\"bundle\\\":{\\\"createUpdaterArtifacts\\\":false}}\"",
