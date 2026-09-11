@@ -9,9 +9,11 @@ function resolvePortableAsset() {
   return lines.at(-1);
 }
 
-const tag = process.env.GITHUB_REF_NAME;
+// GITHUB_REF_NAME is a read-only GitHub default variable. Manual workflow
+// dispatch therefore needs an explicit release tag variable.
+const tag = process.env.TYPOLA_RELEASE_TAG ?? process.env.GITHUB_REF_NAME;
 if (!tag) {
-  throw new Error('GITHUB_REF_NAME is required to upload portable assets');
+  throw new Error('TYPOLA_RELEASE_TAG or GITHUB_REF_NAME is required to upload portable assets');
 }
 
 const assetPath = resolvePortableAsset();

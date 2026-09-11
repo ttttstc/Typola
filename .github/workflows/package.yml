@@ -110,7 +110,7 @@ jobs:
         if: inputs.publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REF_NAME: v${{ inputs.version }}
+          TYPOLA_RELEASE_TAG: v${{ inputs.version }}
         run: node scripts/upload-portable-release.mjs
 
       - name: Validate draft assets and publish
