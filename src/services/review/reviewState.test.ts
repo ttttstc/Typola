@@ -1,374 +1,286 @@
 import { describe, expect, it } from 'vitest';
+import type { SelectionAnchor } from '../agent/types';
 import {
   EMPTY_REVIEW_STATE,
+  addAIReviewComment,
   addReviewComment,
-  buildReviewMarkdown,
   clearReviewState,
   getActiveReviewComments,
   getExportableReviewComments,
-  lineNumberForAnchor,
   markReviewClean,
   markReviewCommentsApplied,
-  parseReviewMarkdown,
   removeReviewComment,
   resolveAppliedCommentIds,
+  setReviewCommentIgnored,
   updateReviewComment,
 } from './reviewState';
-import type { SelectionAnchor } from '../agent/types';
 
-function mkAnchor(originalText: string, prefixHint?: string): SelectionAnchor {
-  return { filePath: 'a.md', from: 0, to: originalText.length, originalText, prefixHint };
+function makeAnchor(overrides: Partial<SelectionAnchor> = {}): SelectionAnchor {
+  return {
+    filePath: '/test/doc.md',
+    from: 0,
+    to: 5,
+    originalText: 'hello world',
+    ...overrides,
+  };
 }
 
-describe('reviewState - mutations', () => {
-  it('addReviewComment 给空文本不变更', () => {
-    const next = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '   ');
-    expect(next).toBe(EMPTY_REVIEW_STATE);
-    expect(next.dirty).toBe(false);
+describe('reviewState', () => {
+  describe('addReviewComment / addAIReviewComment', () => {
+    it('添加人工意见标记 dirty=true 与 source=human', () => {
+      const next = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), '建议改');
+      expect(next.dirty).toBe(true);
+      expect(next.comments).toHaveLength(1);
+      expect(next.comments[0].source).toBe('human');
+      expect(next.comments[0].text).toBe('建议改');
+      expect(next.comments[0].status).toBe('active');
+    });
+
+    it('AI 意见可带 basis（style / skill / request）', () => {
+      const next = addAIReviewComment(
+        EMPTY_REVIEW_STATE,
+        '/test/doc.md',
+        makeAnchor(),
+        'AI 建议',
+        { kind: 'skill', label: 'polish' },
+      );
+      expect(next.comments[0].source).toBe('ai');
+      expect(next.comments[0].basis).toEqual({ kind: 'skill', label: 'polish' });
+    });
+
+    it('空文本 / 全空白文本时不添加意见', () => {
+      const next1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), '');
+      const next2 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), '   ');
+      expect(next1.comments).toHaveLength(0);
+      expect(next2.comments).toHaveLength(0);
+      expect(next1).toBe(EMPTY_REVIEW_STATE);
+    });
+
+    it('意见 id 唯一（多次添加生成不同 id）', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), 'first');
+      const s2 = addReviewComment(s1, '/test/doc.md', makeAnchor(), 'second');
+      expect(s2.comments[0].id).not.toBe(s2.comments[1].id);
+    });
   });
 
-  it('addReviewComment 加一条意见 → dirty=true,id 唯一', () => {
-    const s1 = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('hello'), '太啰嗦');
-    expect(s1.comments).toHaveLength(1);
-    expect(s1.comments[0].text).toBe('太啰嗦');
-    expect(s1.dirty).toBe(true);
-    const s2 = addReviewComment(s1, 'a.md', mkAnchor('world'), '改成 hi');
-    expect(s2.comments).toHaveLength(2);
-    expect(s2.comments[0].id).not.toBe(s2.comments[1].id);
+  describe('updateReviewComment / removeReviewComment', () => {
+    it('更新意见文本触发 dirty=true', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), '原文');
+      const id = s1.comments[0].id;
+      const s2 = updateReviewComment(s1, id, '新文本');
+      expect(s2.dirty).toBe(true);
+      expect(s2.comments[0].text).toBe('新文本');
+    });
+
+    it('更新为空文本等价于删除', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), '原文');
+      const id = s1.comments[0].id;
+      const s2 = updateReviewComment(s1, id, '   ');
+      expect(s2.comments).toHaveLength(0);
+    });
+
+    it('更新不存在的 id 不触发 dirty 与 comments 变更', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), 'x');
+      const s2 = updateReviewComment(s1, 'not-exist', 'y');
+      expect(s2.comments).toBe(s1.comments);
+    });
+
+    it('removeReviewComment 删除指定意见', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), 'a');
+      const s2 = addReviewComment(s1, '/test/doc.md', makeAnchor(), 'b');
+      const id = s2.comments[0].id;
+      const s3 = removeReviewComment(s2, id);
+      expect(s3.comments).toHaveLength(1);
+      expect(s3.comments[0].text).toBe('b');
+      expect(s3.dirty).toBe(true);
+    });
+
+    it('removeReviewComment 删除不存在的 id 返回原 state', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), 'a');
+      const s2 = removeReviewComment(s1, 'not-exist');
+      expect(s2).toBe(s1);
+    });
   });
 
-  it('updateReviewComment 改文本 → dirty 重置为 true', () => {
-    const s1 = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '原意见');
-    const clean = markReviewClean(s1);
-    expect(clean.dirty).toBe(false);
-    const s2 = updateReviewComment(clean, s1.comments[0].id, '改后的意见');
-    expect(s2.comments[0].text).toBe('改后的意见');
-    expect(s2.dirty).toBe(true);
+  describe('setReviewCommentIgnored', () => {
+    it('忽略意见 → status=ignored', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), 'x');
+      const id = s1.comments[0].id;
+      const s2 = setReviewCommentIgnored(s1, id, true);
+      expect(s2.comments[0].status).toBe('ignored');
+    });
+
+    it('取消忽略 → status=active', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), 'x');
+      const id = s1.comments[0].id;
+      const s2 = setReviewCommentIgnored(setReviewCommentIgnored(s1, id, true), id, false);
+      expect(s2.comments[0].status).toBe('active');
+    });
+
+    it('重复设置同一状态不触发 dirty', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/test/doc.md', makeAnchor(), 'x');
+      const id = s1.comments[0].id;
+      const s2 = setReviewCommentIgnored(s1, id, false);
+      expect(s2).toBe(s1);
+    });
   });
 
-  it('updateReviewComment 改成相同文本不动状态', () => {
-    const s1 = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '原意见');
-    const clean = markReviewClean(s1);
-    const s2 = updateReviewComment(clean, s1.comments[0].id, '原意见');
-    expect(s2).toBe(clean);
+  describe('getActiveReviewComments / getExportableReviewComments', () => {
+    it('getActiveReviewComments 排除 ignored 与已应用', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/a.md', makeAnchor({ filePath: '/a.md' }), 'a');
+      const s2 = addReviewComment(s1, '/b.md', makeAnchor({ filePath: '/b.md' }), 'b');
+      const s3 = addReviewComment(s2, '/c.md', makeAnchor({ filePath: '/c.md' }), 'c');
+      const idA = s3.comments[0].id;
+      const idB = s3.comments[1].id;
+      const s4 = setReviewCommentIgnored(s3, idA, true);
+      const s5 = markReviewCommentsApplied(s4, [idB]);
+      const active = getActiveReviewComments(s5.comments);
+      expect(active).toHaveLength(1);
+      expect(active[0].text).toBe('c');
+    });
+
+    it('getExportableReviewComments 仅排除 ignored，保留已应用（PR #268 修复）', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/a.md', makeAnchor({ filePath: '/a.md' }), 'a');
+      const s2 = addReviewComment(s1, '/b.md', makeAnchor({ filePath: '/b.md' }), 'b');
+      const idA = s2.comments[0].id;
+      const idB = s2.comments[1].id;
+      const s3 = setReviewCommentIgnored(s2, idA, true);
+      const s4 = markReviewCommentsApplied(s3, [idB]);
+      const exportable = getExportableReviewComments(s4.comments);
+      expect(exportable).toHaveLength(1);
+      expect(exportable[0].text).toBe('b');
+      expect(exportable[0].appliedAt).toBeDefined();
+    });
   });
 
-  it('updateReviewComment 改成空文本 → 退化为删除', () => {
-    const s1 = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '原意见');
-    const s2 = updateReviewComment(s1, s1.comments[0].id, '   ');
-    expect(s2.comments).toHaveLength(0);
+  describe('markReviewCommentsApplied', () => {
+    it('标记 appliedAt 后意见保留但不再计入 active', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/a.md', makeAnchor({ filePath: '/a.md' }), 'x');
+      const id = s1.comments[0].id;
+      const s2 = markReviewCommentsApplied(s1, [id], 1700000000000);
+      expect(s2.comments[0].appliedAt).toBe(1700000000000);
+      expect(s2.dirty).toBe(true);
+      expect(getActiveReviewComments(s2.comments)).toHaveLength(0);
+    });
+
+    it('空数组 / 已应用的 id 不触发变更', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/a.md', makeAnchor({ filePath: '/a.md' }), 'x');
+      const id = s1.comments[0].id;
+      const s2 = markReviewCommentsApplied(s1, []);
+      expect(s2).toBe(s1);
+      const s3 = markReviewCommentsApplied(s1, [id], 100);
+      const s4 = markReviewCommentsApplied(s3, [id], 200);
+      expect(s4.comments[0].appliedAt).toBe(100);
+    });
   });
 
-  it('removeReviewComment 删一条', () => {
-    const s1 = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
-    const s2 = addReviewComment(s1, 'a.md', mkAnchor('y'), '意见 B');
-    const s3 = removeReviewComment(s2, s1.comments[0].id);
-    expect(s3.comments).toHaveLength(1);
-    expect(s3.comments[0].text).toBe('意见 B');
-    expect(s3.dirty).toBe(true);
+  describe('resolveAppliedCommentIds（PR #268 closure 检测）', () => {
+    it('锚点原文不再出现在合并稿中 → 该意见标记为 applied', () => {
+      const originalText = '这段要改';
+      const comment = {
+        id: 'rv-1',
+        filePath: '/a.md',
+        anchor: makeAnchor({ originalText }),
+        text: '改写这段',
+        createdAt: 0,
+        source: 'ai' as const,
+        status: 'active' as const,
+      };
+      const merged = '重写后的正文，不含原句';
+      const applied = resolveAppliedCommentIds(merged, [comment], ['rv-1']);
+      expect(applied).toEqual(['rv-1']);
+    });
+
+    it('锚点原文仍在合并稿中 → 视为 AI 跳过，不算 applied', () => {
+      const originalText = '这段要改';
+      const comment = {
+        id: 'rv-1',
+        filePath: '/a.md',
+        anchor: makeAnchor({ originalText }),
+        text: '改写这段',
+        createdAt: 0,
+        source: 'ai' as const,
+        status: 'active' as const,
+      };
+      const merged = '这段要改，但加了引言';
+      const applied = resolveAppliedCommentIds(merged, [comment], ['rv-1']);
+      expect(applied).toEqual([]);
+    });
+
+    it('空 originalText 的意见（无可验证锚点）保持待处理', () => {
+      const comment = {
+        id: 'rv-1',
+        filePath: '/a.md',
+        anchor: makeAnchor({ originalText: '' }),
+        text: '模糊意见',
+        createdAt: 0,
+        source: 'ai' as const,
+        status: 'active' as const,
+      };
+      const merged = '任何内容';
+      const applied = resolveAppliedCommentIds(merged, [comment], ['rv-1']);
+      expect(applied).toEqual([]);
+    });
+
+    it('不存在的 id 不出现在结果', () => {
+      const originalText = '要改的句';
+      const comment = {
+        id: 'rv-1',
+        filePath: '/a.md',
+        anchor: makeAnchor({ originalText }),
+        text: 'x',
+        createdAt: 0,
+        source: 'ai' as const,
+        status: 'active' as const,
+      };
+      const merged = '没原句';
+      const applied = resolveAppliedCommentIds(merged, [comment], ['rv-not-exist']);
+      expect(applied).toEqual([]);
+    });
+
+    it('多意见混合：合并稿完全替换原文的标记 applied，部分替换的不算', () => {
+      const c1 = {
+        id: 'rv-1',
+        filePath: '/a.md',
+        anchor: makeAnchor({ originalText: '需要完全替换的句子' }),
+        text: 'a',
+        createdAt: 0,
+        source: 'ai' as const,
+        status: 'active' as const,
+      };
+      const c2 = {
+        id: 'rv-2',
+        filePath: '/a.md',
+        anchor: makeAnchor({ originalText: '保留不动的句子' }),
+        text: 'b',
+        createdAt: 0,
+        source: 'ai' as const,
+        status: 'active' as const,
+      };
+      // c1 原文整句被改写 → applied
+      // c2 原文仍原样保留 → 未 applied
+      const merged = '这里是改写后的新版正文。保留不动的句子也还在。';
+      const applied = resolveAppliedCommentIds(merged, [c1, c2], ['rv-1', 'rv-2']);
+      expect(applied).toEqual(['rv-1']);
+    });
   });
 
-  it('clearReviewState 总是返回干净空状态', () => {
-    expect(clearReviewState()).toEqual(EMPTY_REVIEW_STATE);
-  });
-});
+  describe('clearReviewState / markReviewClean', () => {
+    it('clearReviewState 返回空 state 且 dirty=false', () => {
+      const result = clearReviewState();
+      expect(result).toEqual({ comments: [], dirty: false });
+    });
 
-describe('reviewState - 意见应用闭环 (appliedAt)', () => {
-  it('markReviewCommentsApplied 给指定意见设置 appliedAt → dirty=true,其余意见不动', () => {
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
-    state = addReviewComment(state, 'a.md', mkAnchor('y'), '意见 B');
-    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
-    expect(marked.comments[0].appliedAt).toBe(12345);
-    expect(marked.comments[1].appliedAt).toBeUndefined();
-    expect(marked.dirty).toBe(true);
-  });
+    it('markReviewClean 清除 dirty 但保留 comments', () => {
+      const s1 = addReviewComment(EMPTY_REVIEW_STATE, '/a.md', makeAnchor({ filePath: '/a.md' }), 'x');
+      const s2 = markReviewClean(s1);
+      expect(s2.dirty).toBe(false);
+      expect(s2.comments).toHaveLength(1);
+    });
 
-  it('已应用意见不再计入 getActiveReviewComments(AI 改稿收集时被过滤)', () => {
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
-    state = addReviewComment(state, 'a.md', mkAnchor('y'), '意见 B');
-    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
-    expect(getActiveReviewComments(marked.comments).map((comment) => comment.text)).toEqual(['意见 B']);
-    // 忽略 + 已应用都不计入
-    const ignored = marked.comments.map((comment) => ({ ...comment, status: 'ignored' as const }));
-    expect(getActiveReviewComments(ignored)).toHaveLength(0);
-  });
-
-  it('getExportableReviewComments 保留已应用意见,只排除忽略(导出不丢处理历史)', () => {
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
-    state = addReviewComment(state, 'a.md', mkAnchor('y'), '意见 B');
-    state = addReviewComment(state, 'a.md', mkAnchor('z'), '意见 C');
-    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
-    const ignored = marked.comments.map((comment) => (
-      comment.text === '意见 B' ? { ...comment, status: 'ignored' as const } : comment
-    ));
-    expect(getExportableReviewComments(ignored).map((comment) => comment.text)).toEqual(['意见 A', '意见 C']);
-  });
-
-  it('markReviewCommentsApplied 幂等:已应用的意见重复标记不变更状态', () => {
-    const state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('x'), '意见 A');
-    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
-    expect(markReviewCommentsApplied(marked, [marked.comments[0].id], 99999)).toBe(marked);
-    expect(marked.comments[0].appliedAt).toBe(12345);
-  });
-
-  it('buildReviewMarkdown 导出时已应用意见标注「已应用」,待处理意见照常输出', () => {
-    const src = '待处理段落。\n\n已完成段落。';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('待处理段落。'), '待处理意见');
-    state = addReviewComment(state, 'a.md', mkAnchor('已完成段落。'), '已完成意见');
-    const marked = markReviewCommentsApplied(state, [state.comments[1].id], 12345);
-    const out = buildReviewMarkdown(src, marked.comments);
-    // 行内标注
-    expect(out).toContain('> **检视意见，请处理**：待处理意见');
-    expect(out).toContain('> **检视意见（已应用）**：已完成意见');
-    // 文末汇总标注
-    expect(out).toMatch(/针对片段「待处理段落。」\n\n/);
-    expect(out).toMatch(/针对片段「已完成段落。」（已应用）\n\n/);
-  });
-
-  it('检视版元数据往返保留 appliedAt,恢复后仍不计入待处理', () => {
-    const src = '段落内容。\n\n下一段。';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('段落内容。'), '意见 A');
-    state = addReviewComment(state, 'a.md', mkAnchor('下一段。'), '意见 B');
-    const marked = markReviewCommentsApplied(state, [state.comments[0].id], 12345);
-    const out = buildReviewMarkdown(src, marked.comments);
-    const restored = parseReviewMarkdown(out, 'a.md');
-    expect(restored).toHaveLength(2);
-    expect(restored.find((comment) => comment.text === '意见 A')?.appliedAt).toBe(12345);
-    expect(restored.find((comment) => comment.text === '意见 B')?.appliedAt).toBeUndefined();
-    expect(getActiveReviewComments(restored).map((comment) => comment.text)).toEqual(['意见 B']);
-  });
-});
-
-describe('reviewState - AI 改稿逐意见确认 (resolveAppliedCommentIds)', () => {
-  it('两条意见 AI 只修改一条、跳过一条:只有锚点被改动的意见算已落实', () => {
-    // 原文两条意见:「啰嗦段落」AI 已改写;「完好段落」AI 跳过、原文保留。
-    const merged = '标题\n\n精简后的新段落。\n\n完好段落。\n';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('啰嗦段落。'), '意见 A');
-    state = addReviewComment(state, 'a.md', mkAnchor('完好段落。'), '意见 B');
-    const candidateIds = state.comments.map((comment) => comment.id);
-
-    const appliedIds = resolveAppliedCommentIds(merged, state.comments, candidateIds);
-
-    expect(appliedIds).toEqual([state.comments[0].id]);
-    // 端到端:只有意见 A 被关闭,意见 B 仍留在待处理集合。
-    const marked = markReviewCommentsApplied(state, appliedIds, 12345);
-    expect(getActiveReviewComments(marked.comments).map((comment) => comment.text)).toEqual(['意见 B']);
-  });
-
-  it('锚点原文在候选稿中原样保留(哪怕出现多次)→ 不标记,避免不唯一歧义误判', () => {
-    const merged = '重复文本。\n\n改写后的段落。\n\n重复文本。\n';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('重复文本。'), '意见 A');
-    state = addReviewComment(state, 'a.md', mkAnchor('中间段落。'), '意见 B');
-    const appliedIds = resolveAppliedCommentIds(merged, state.comments, state.comments.map((c) => c.id));
-    // 意见 B 的锚点已被改写 → 已落实;意见 A 的锚点仍出现(两处,不唯一)→ 无法确认,保持待处理。
-    expect(appliedIds).toEqual([state.comments[1].id]);
-  });
-
-  it('空锚点意见无法验证 → 不标记,保持待处理', () => {
-    const merged = '改写后的内容。';
-    const state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor(''), '空锚点意见');
-    const appliedIds = resolveAppliedCommentIds(merged, state.comments, [state.comments[0].id]);
-    expect(appliedIds).toEqual([]);
-  });
-
-  it('AI 全部落实 → 全部标记;AI 全部跳过 → 全部保持待处理', () => {
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('段落一。'), '意见 A');
-    state = addReviewComment(state, 'a.md', mkAnchor('段落二。'), '意见 B');
-    const ids = state.comments.map((comment) => comment.id);
-
-    const allApplied = resolveAppliedCommentIds('全新内容甲。\n\n全新内容乙。', state.comments, ids);
-    expect(allApplied).toEqual(ids);
-
-    const noneApplied = resolveAppliedCommentIds('段落一。\n\n段落二。', state.comments, ids);
-    expect(noneApplied).toEqual([]);
-  });
-
-  it('candidateIds 含未知 id 时安全忽略', () => {
-    const state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('段落。'), '意见 A');
-    expect(resolveAppliedCommentIds('新段落。', state.comments, ['不存在的 id'])).toEqual([]);
-  });
-});
-
-describe('buildReviewMarkdown', () => {
-  it('无意见 → 返回原文', () => {
-    const src = '# 标题\n\n段落 A。';
-    expect(buildReviewMarkdown(src, [])).toBe(src);
-  });
-
-  it('一条意见 → 在被批注段落末尾插入「检视意见,请处理」块,格式正确', () => {
-    const src = '# 标题\n\n这段太啰嗦了需要精简。\n\n下一段。';
-    const s1 = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('这段太啰嗦了需要精简。', '# 标题\n\n'), '保留核心信息');
-    const out = buildReviewMarkdown(src, s1.comments);
-    expect(out).toContain('> **检视意见，请处理**：保留核心信息');
-    // 检视块应该在「下一段」之前
-    const reviewIdx = out.indexOf('> **检视意见');
-    const nextSegIdx = out.indexOf('下一段');
-    expect(reviewIdx).toBeLessThan(nextSegIdx);
-    // 不带 emoji
-    expect(out).not.toMatch(/💬|📝|🔖/);
-  });
-
-  it('多条意见在不同段落 → 都被插入', () => {
-    const src = '段落一文本。\n\n段落二文本。\n\n段落三文本。';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('段落一文本。'), '改 1');
-    state = addReviewComment(state, 'a.md', mkAnchor('段落二文本。'), '改 2');
-    state = addReviewComment(state, 'a.md', mkAnchor('段落三文本。'), '改 3');
-    const out = buildReviewMarkdown(src, state.comments);
-    expect(out).toContain('> **检视意见，请处理**：改 1');
-    expect(out).toContain('> **检视意见，请处理**：改 2');
-    expect(out).toContain('> **检视意见，请处理**：改 3');
-  });
-
-  it('锚点定位失败的意见 → 走文档末「检视意见汇总」兜底,不丢', () => {
-    const src = '段落 A。\n\n段落 B。';
-    const orphan = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('已经被删掉的片段'), '改 orphan');
-    const out = buildReviewMarkdown(src, orphan.comments);
-    expect(out).toContain('## 检视意见汇总');
-    expect(out).toContain('改 orphan');
-    expect(out).toContain('已经被删掉的片段');
-  });
-
-  it('双轨保险:即使所有 anchor 都定位成功,文末汇总也照样输出(协作者/AI 兜底参照)', () => {
-    const src = '一二三段落。\n\n四五六段落。';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('一二三段落。'), '改一');
-    state = addReviewComment(state, 'a.md', mkAnchor('四五六段落。'), '改二');
-    const out = buildReviewMarkdown(src, state.comments);
-    // 段后内嵌
-    expect(out).toContain('> **检视意见，请处理**：改一');
-    expect(out).toContain('> **检视意见，请处理**：改二');
-    // 文末汇总(双轨)
-    expect(out).toContain('## 检视意见汇总');
-    expect(out).toMatch(/### 1\. 第 1 行 · 针对片段「一二三段落。」\n\n改一/);
-    expect(out).toMatch(/### 2\. 第 3 行 · 针对片段「四五六段落。」\n\n改二/);
-  });
-
-  it('回读元数据统一置于检视意见汇总末尾,不打断可读内容', () => {
-    const src = '第一段。\n\n第二段。';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('第一段。'), '改一');
-    state = addReviewComment(state, 'a.md', mkAnchor('第二段。', '第一段。\n\n'), '改二');
-    const out = buildReviewMarkdown(src, state.comments);
-    const lastSummary = out.lastIndexOf('改二');
-    const firstMetadata = out.indexOf('<!-- typola-review:v2:');
-
-    expect(firstMetadata).toBeGreaterThan(lastSummary);
-    expect(out.slice(0, firstMetadata)).not.toContain('typola-review:v2:');
-  });
-
-  it('用 prefixHint 区分多处重复 originalText 的歧义', () => {
-    // 同一句话出现两次,通过 prefixHint 能定位到第二次出现的那条
-    const src = '介绍\n\n关键观点。\n\n再来一段\n\n关键观点。';
-    const targetSecond = addReviewComment(
-      EMPTY_REVIEW_STATE,
-      'a.md',
-      mkAnchor('关键观点。', '再来一段\n\n'),
-      '是的就是这一处',
-    );
-    const out = buildReviewMarkdown(src, targetSecond.comments);
-    // 检视块应该在第二次「关键观点」之后,而不是第一次
-    const secondHitIdx = out.indexOf('关键观点。', src.indexOf('再来一段'));
-    const reviewIdx = out.indexOf('> **检视意见');
-    expect(reviewIdx).toBeGreaterThan(secondHitIdx);
-  });
-
-  it('同一段落多条意见 → 检视块按意见列表顺序出现,不反转', () => {
-    const src = '第一句与第二句与第三句都在同一段。\n\n下一段。';
-    let state = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('第一句'), '意见甲');
-    state = addReviewComment(state, 'a.md', mkAnchor('第二句'), '意见乙');
-    state = addReviewComment(state, 'a.md', mkAnchor('第三句'), '意见丙');
-    const out = buildReviewMarkdown(src, state.comments);
-    const idxA = out.indexOf('> **检视意见，请处理**：意见甲');
-    const idxB = out.indexOf('> **检视意见，请处理**：意见乙');
-    const idxC = out.indexOf('> **检视意见，请处理**：意见丙');
-    expect(idxA).toBeGreaterThanOrEqual(0);
-    expect(idxB).toBeGreaterThanOrEqual(0);
-    expect(idxC).toBeGreaterThanOrEqual(0);
-    expect(idxA).toBeLessThan(idxB);
-    expect(idxB).toBeLessThan(idxC);
-  });
-});
-
-describe('buildReviewMarkdown 行号前缀', () => {
-  it('anchor.from = 0 → 文末汇总显示「第 1 行」', () => {
-    const src = '第一行内容。\n\n第二行内容。';
-    const s = addReviewComment(EMPTY_REVIEW_STATE, 'a.md', mkAnchor('第一行内容。'), '改一');
-    const out = buildReviewMarkdown(src, s.comments);
-    expect(out).toContain('### 1. 第 1 行 · 针对片段「第一行内容。」');
-  });
-
-  it('anchor.from 指向第二段开头 → 文末汇总显示「第 3 行」', () => {
-    const src = '第一行内容。\n\n第二行内容。';
-    // '第一行内容。' 占 6 字符(索引 0..5),\n\n 在 6/7,'第二行内容。' 从索引 8 起
-    const s = addReviewComment(
-      EMPTY_REVIEW_STATE,
-      'a.md',
-      { filePath: 'a.md', from: 8, to: 13, originalText: '第二行内容。' },
-      '改二',
-    );
-    const out = buildReviewMarkdown(src, s.comments);
-    expect(out).toContain('### 1. 第 3 行 · 针对片段「第二行内容。」');
-  });
-
-  it('anchor.from 越界 → 文末汇总显示「定位失效」,意见正文仍保留', () => {
-    const src = '正常段落。\n\n另一段。';
-    const orphan = addReviewComment(
-      EMPTY_REVIEW_STATE,
-      'a.md',
-      { filePath: 'a.md', from: 9999, to: 9999, originalText: '已被改掉的文本' },
-      '改 orphan',
-    );
-    const out = buildReviewMarkdown(src, orphan.comments);
-    expect(out).toContain('### 1. 定位失效 · 针对片段「已被改掉的文本」');
-    expect(out).toContain('改 orphan');
-  });
-
-  it('文末汇总 escape 反引号/井号/星号,避免意见内容破坏 ### N. 标题行渲染', () => {
-    const src = '正文段落。';
-    const evil = addReviewComment(
-      EMPTY_REVIEW_STATE,
-      'a.md',
-      { filePath: 'a.md', from: 0, to: 2, originalText: '伪 ## 标题' },
-      '含 `伪#代码块` 和 *星号*',
-    );
-    const out = buildReviewMarkdown(src, evil.comments);
-    expect(out).toContain('\\`伪\\#代码块\\`');
-    expect(out).toContain('\\*星号\\*');
-    // ### N. 行仍保持完整标题结构,不被井号破坏(## → \#\#)；原文中不存在时明确标为定位失效。
-    expect(out).toContain('### 1. 定位失效 · 针对片段「伪 \\#\\# 标题」');
-  });
-
-  it('anchor.from 为负 → 文末汇总显示「定位失效」', () => {
-    const src = '正常段落。';
-    const s = addReviewComment(
-      EMPTY_REVIEW_STATE,
-      'a.md',
-      { filePath: 'a.md', from: -5, to: -5, originalText: '某段' },
-      '改',
-    );
-    const out = buildReviewMarkdown(src, s.comments);
-    expect(out).toContain('### 1. 定位失效 · 针对片段「某段」');
-  });
-});
-
-describe('lineNumberForAnchor', () => {
-  it('offset = 0 返回 1', () => {
-    expect(lineNumberForAnchor('abc', 0)).toBe(1);
-  });
-  it('offset 在第一行内返回 1', () => {
-    expect(lineNumberForAnchor('abc\ndef', 3)).toBe(1);
-  });
-  it('offset 跨过第一个 \\n 返回 2', () => {
-    expect(lineNumberForAnchor('abc\ndef', 4)).toBe(2);
-  });
-  it('多行多 \\n 累加', () => {
-    expect(lineNumberForAnchor('a\nb\nc', 4)).toBe(3);
-  });
-  it('offset 等于 source.length 返回最后一行的行号', () => {
-    expect(lineNumberForAnchor('a\nb\nc', 5)).toBe(3);
-  });
-  it('offset 为负 → null', () => {
-    expect(lineNumberForAnchor('abc', -1)).toBeNull();
-  });
-  it('offset 越界 → null', () => {
-    expect(lineNumberForAnchor('abc', 4)).toBeNull();
+    it('markReviewClean 在已 clean 时返回原 state（不复制）', () => {
+      const s2 = markReviewClean(EMPTY_REVIEW_STATE);
+      expect(s2).toBe(EMPTY_REVIEW_STATE);
+    });
   });
 });

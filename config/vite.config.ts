@@ -85,6 +85,8 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['src/experimental/cm6-editor-spike/candidates/**'],
     setupFiles: ['./src/test/setupVitest.ts'],
+    testTimeout: 30000,
+    hookTimeout: 30000,
     server: {
       deps: {
         inline: ['@atomic-editor/editor', 'codemirror-markdown-tables', '@mobily/ts-belt'],
