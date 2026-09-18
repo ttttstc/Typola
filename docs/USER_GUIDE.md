@@ -244,6 +244,8 @@ AI 会生成候选稿，不会直接写回正式文档。进入 Diff 页面后�
 
 ## 10. 快捷键速查（Windows）
 
+### 常用
+
 | 快捷键 | 功能 |
 | --- | --- |
 | `Ctrl+N` | 新建文档 |
@@ -253,7 +255,8 @@ AI 会生成候选稿，不会直接写回正式文档。进入 Diff 页面后�
 | `Ctrl+F` / `Ctrl+H` | 查找 / 替换 |
 | `F3` / `Shift+F3` | 下一个 / 上一个匹配 |
 | `Ctrl+Shift+P` | 快速打开 |
-| `Ctrl+K` | 打开选区 AI/编辑辅助入口 |
+| `Ctrl+G` | 跳转到行 |
+| `Ctrl+K` | 插入 / 编辑链接 |
 | `Ctrl+Alt+S` | 写作 / 源码模式 |
 | `Ctrl+Alt+P` | Word 纸张预览 |
 | `Ctrl+Alt+M` | HTML 预览 |
@@ -261,7 +264,22 @@ AI 会生成候选稿，不会直接写回正式文档。进入 Diff 页面后�
 | `Ctrl+Shift+E` | 导出 Word |
 | `Ctrl+Shift+A` | 阅读 / 心流模式 |
 | `Ctrl+`` / `Ctrl+Shift+`` | 终端开关 / 新建终端 |
+
+### 格式
+
+| 快捷键 | 功能 |
+| --- | --- |
 | `Ctrl+B` / `Ctrl+I` | 加粗 / 斜体 |
+| `Ctrl+0` | 正文（H1 切换为正文） |
+| `Ctrl+=` / `Ctrl+-` | 标题升一级 / 降一级 |
+| `Ctrl+\` | 清除格式 |
+| `Ctrl+Shift+K` | 插入代码块 |
+| `Ctrl+T` | 插入表格 |
+| `Ctrl+Shift+M` | 插入公式块 |
+| `Ctrl+Shift+I` | 插入本地图片 |
+| `Ctrl+Shift+\`` | 行内代码 |
+| `Ctrl+.` / `Ctrl+,` | 引用升降 |
+| `Tab` / `Shift+Tab` | 列表项缩进（仅作用于列表行） |
 | `Ctrl+Z` | 撤销，包括 AI 改稿应用 |
 
 界面提示中的 `Cmd` 是跨平台文案；Windows 用户使用对应的 `Ctrl`。

@@ -2,6 +2,8 @@
 
 Issues and PRDs for this repo live as GitHub issues at `ttttstc/Typola`. Use the `gh` CLI for all operations.
 
+> **2026-09-18 知识审计维护**：仓库根目录的 `pr2*.txt`、`pr2*-review.md`、`plans/`、`review-173/` 是 review 副产物或本地计划稿，不进入 GitHub issue tracker——按文件名搜 `gh issue` 不会命中。`docs/changes/` 下的 13 篇历史变更记录文件名是日期格式，不带 issue 号，需要关联时回查对应 PR 的 issue 编号。
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.

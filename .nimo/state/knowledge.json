@@ -1,0 +1,232 @@
+{
+  "formatVersion": 1,
+  "revision": 1,
+  "lastMaintainedRevision": "2.0.8",
+  "lastMaintainedAt": "2026-09-18T00:00:00.000Z",
+  "targets": {
+    "./AGENTS.md": {
+      "ownership": "user-managed",
+      "contentHash": "14848d4afb7e2dab55ab4dd6387e7d887472b2baa8141241e1414cf0f7b7be3d",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/app/AppLayout.tsx",
+        "src/components/EditorPane.tsx"
+      ]
+    },
+    "./CONTEXT.md": {
+      "ownership": "user-managed",
+      "contentHash": "eb6933c177b05b3e10bc66ab63217022a0488cea25dfa811e9bed936023763e3",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/agent/runtime/registry.ts",
+        "src/hooks/useAgentSession.ts"
+      ]
+    },
+    "./MISSION.md": {
+      "ownership": "user-managed",
+      "contentHash": "eb6016013a06c747b1c92e15dc72b09a76c7615a265ec1e9febcc1f9f9b3b247",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "docs/USER_GUIDE.md"
+      ]
+    },
+    "./PRODUCT.md": {
+      "ownership": "user-managed",
+      "contentHash": "d31bf6244d0ac89ff2d7a875371b3e40b98f8b2ee2132f4ff6bb6b90728bfd93",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "docs/ARCHITECTURE.md"
+      ]
+    },
+    "./docs/ARCHITECTURE.md": {
+      "ownership": "user-managed",
+      "contentHash": "e955710e9949561097192d1fd5c2990996df71f91e181cc1ab5cbd7cac17c4f0",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/app/AppLayout.tsx",
+        "src-tauri/src/lib.rs"
+      ]
+    },
+    "./docs/USER_GUIDE.md": {
+      "ownership": "user-managed",
+      "contentHash": "f8e72c9a86180777341d2bda41084899adbb8818290454eb84be5da6ba288851",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/components/editor/cm6/createMarkdownExtensions.ts",
+        "CHANGELOG.md"
+      ]
+    },
+    "./docs/MERMAID_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "67f99d21ea160c49fd99d0e71d79f16bc8c8c2cf7165288ea3d311258c7e4eb3",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/components/editor/cm6/mermaidPreviewExtension.ts"
+      ]
+    },
+    "./docs/PDF_EXPORT_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "0e761dfaa2ae03c23e9337e21f6e88369d60b7f0a749c74ff0c73f3e2072504e",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/pdfExport.ts",
+        "src-tauri/src/export.rs"
+      ]
+    },
+    "./docs/IMAGE_DISPLAY_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "a1c93d0298f4bdb1c26d3b71d51c73e797132d1339d988e89c087c2c17dc4a47",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/components/editor/cm6/imageAssetExtension.ts"
+      ]
+    },
+    "./docs/IMAGE_INSERT_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "1f6e14558cc6b93465f0ee7a816a3d1b48a267fde03707e048c8d5269283b440",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/imageInsert.ts"
+      ]
+    },
+    "./docs/AI_DIFF_PREVIEW_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "8e1ff65dde1d6c8469ba79a250537851bfd15ad1c263b30ec5a5b2c64b9b07a0",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/hooks/useDiffReview.ts"
+      ]
+    },
+    "./docs/AI_EDIT_AND_REVIEW_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "cdf37cb88d1bfde3baa8282e8df9c833a53c6bed69c4fa9c3c0d695cd0e3efe4",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/review/reviewState.ts"
+      ]
+    },
+    "./docs/AI_REVIEW_DESIGN.md": {
+      "ownership": "user-managed",
+      "contentHash": "b14fb6eb99d6efdb25074c54d7f0b37e8e72014752b5e6a19851b681a3303d1f",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/components/review/ReviewSidebarPanel.tsx"
+      ]
+    },
+    "./docs/AI_REVIEW_INTERACTION_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "620c9ccd87800e21dd955288f9aabfe423949f9acb8f3a563a21de61f3af2a75",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/components/selection/ReviewCommentEditor.tsx"
+      ]
+    },
+    "./docs/AI_WORKBENCH_OPENCODE_PRD.md": {
+      "ownership": "user-managed",
+      "contentHash": "1b3aaaa1ba1cedf10b18ef907d0b520b14ca7172b5a9d33c846ea81cf041a665",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/agent/opencodeStream.ts"
+      ]
+    },
+    "./docs/AI_WORKBENCH_SKILL_OS.md": {
+      "ownership": "user-managed",
+      "contentHash": "2ff7d800a03c2ee20262e01ce97dd307870d1152440b9bbcf18d9441a2bb36cf",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/agent/skillHub.ts",
+        "src/services/agent/skillScanner.ts"
+      ]
+    },
+    "./docs/AI_WORKBENCH_SPEC.md": {
+      "ownership": "user-managed",
+      "contentHash": "b80caaa5b2bb64a2ce5a991731cc102ea3c00d9da7a4be0f60519aaa3be95033",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/app/AppLayout.tsx",
+        "src-tauri/src/lib.rs"
+      ]
+    },
+    "./docs/AI_DOCUMENT_WORKBENCH_SCENARIO_ROADMAP.md": {
+      "ownership": "user-managed",
+      "contentHash": "8cdb47b0c35a6ec5eec57ac8043bcec0b35fbe8b718dfd4dfd1d9721a245457b",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/agent/runtime/registry.ts"
+      ]
+    },
+    "./docs/REVIEW_SKILL_OS_M1.md": {
+      "ownership": "user-managed",
+      "contentHash": "c8c2172a9f9a5a57915014138c4a6938c387a4ff922c9eec73c80b46718b7bbc",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/components/review/ReviewSidebarPanel.tsx"
+      ]
+    },
+    "./docs/TYPOLA_AI_RND_METHODS_SHARE.md": {
+      "ownership": "user-managed",
+      "contentHash": "06f4e20fa8e65d3dbfe72c9e21546c0a77a98e0183b98c83416ea99c76998ab6",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "docs/ARCHITECTURE.md"
+      ]
+    },
+    "./docs/TYPOLA_AI_RND_METHODS_SHARE_CONCEPTUAL.md": {
+      "ownership": "user-managed",
+      "contentHash": "64e1617423627e787298fc4836bccb5af2dca05279ce9a6a3a2aaa965e5db964",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "docs/ARCHITECTUAL.md"
+      ]
+    },
+    "./docs/handoff-skill-os-m1.md": {
+      "ownership": "user-managed",
+      "contentHash": "7ba7c2996b86ba9db08d9e2db6b6c74378312f1cb3220c91ea7863ae59b049aa",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/app/AppLayout.tsx",
+        "CHANGELOG.md"
+      ]
+    },
+    "./docs/typola_calm_workspace_design.md": {
+      "ownership": "user-managed",
+      "contentHash": "876bcf7183a92462f39973e5ac924bd3b2dc6757ae5012e8d804c059e4262fd1",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/components/AppLayoutChrome.tsx"
+      ]
+    },
+    "./docs/agents/issue-tracker.md": {
+      "ownership": "user-managed",
+      "contentHash": "0edf994be212437f26401011d8636b1ea3593b56bd860d818d5123cbb3b3e404",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        ".github"
+      ]
+    },
+    "./docs/agents/domain.md": {
+      "ownership": "user-managed",
+      "contentHash": "f39269422d1a1c137b53b81cb120570f52d54d1823a5005ec685f4458f3437dd",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "CONTEXT.md"
+      ]
+    },
+    "./docs/agents/triage-labels.md": {
+      "ownership": "user-managed",
+      "contentHash": "493d08d7a8007d3604cdf64d45717045034a5037c9e9917bae1ad9340fad75b8",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        ".github/PULL_REQUEST_TEMPLATE.md"
+      ]
+    },
+    "./docs/adr/0001-ai-workbench-opencode-cli-provider.md": {
+      "ownership": "user-managed",
+      "contentHash": "68f14c6079f4d5adc5d59460ff007cefde4987a266c78590952150979fdf0daa",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "src/services/agent/runtime/defs/opencode.ts"
+      ]
+    }
+  }
+}
