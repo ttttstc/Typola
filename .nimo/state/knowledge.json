@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
-  "revision": 1,
+  "revision": 2,
   "lastMaintainedRevision": "2.0.8",
-  "lastMaintainedAt": "2026-09-18T00:00:00.000Z",
+  "lastMaintainedAt": "2026-09-18T01:00:00.000Z",
   "targets": {
     "./AGENTS.md": {
       "ownership": "user-managed",
-      "contentHash": "14848d4afb7e2dab55ab4dd6387e7d887472b2baa8141241e1414cf0f7b7be3d",
+      "contentHash": "d273aa9f87bf455018009f1ce3890523aabd2a037c1c51d31ee431430bf6d765",
       "verifiedRevision": "2.0.8",
       "sources": [
         "src/app/AppLayout.tsx",
@@ -38,9 +38,18 @@
         "docs/ARCHITECTURE.md"
       ]
     },
+    "./docs/INDEX.md": {
+      "ownership": "managed-by-nimo",
+      "contentHash": "3f3a0a6417d05e8fbf55e84edbef2051faab968624265c6216e1d00c12c571a1",
+      "verifiedRevision": "2.0.8",
+      "sources": [
+        "docs/ARCHITECTURE.md",
+        "docs/AI_WORKBENCH_SPEC.md"
+      ]
+    },
     "./docs/ARCHITECTURE.md": {
       "ownership": "user-managed",
-      "contentHash": "e955710e9949561097192d1fd5c2990996df71f91e181cc1ab5cbd7cac17c4f0",
+      "contentHash": "1767d05915f1350df20627ccf3203b9621b295a590615ace3bf57ec63d674e4f",
       "verifiedRevision": "2.0.8",
       "sources": [
         "src/app/AppLayout.tsx",
@@ -176,12 +185,12 @@
       "contentHash": "64e1617423627e787298fc4836bccb5af2dca05279ce9a6a3a2aaa965e5db964",
       "verifiedRevision": "2.0.8",
       "sources": [
-        "docs/ARCHITECTUAL.md"
+        "docs/ARCHITECTURE.md"
       ]
     },
     "./docs/handoff-skill-os-m1.md": {
       "ownership": "user-managed",
-      "contentHash": "7ba7c2996b86ba9db08d9e2db6b6c74378312f1cb3220c91ea7863ae59b049aa",
+      "contentHash": "5b8766b40e03bfff5430dde1c907a2a17c7085b250e1b490dc784e0fb8941806",
       "verifiedRevision": "2.0.8",
       "sources": [
         "src/app/AppLayout.tsx",

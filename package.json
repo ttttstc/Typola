@@ -26,7 +26,10 @@
     "updater:manifest": "node scripts/create-updater-manifest.mjs",
     "perf:bundle": "node scripts/perf/capture-bundle-size.mjs",
     "perf:bundle:check": "node scripts/perf/assert-bundle-budget.mjs",
-    "perf:bundle:report": "node scripts/perf/collect-bundle-size.mjs"
+    "perf:bundle:report": "node scripts/perf/collect-bundle-size.mjs",
+    "verify:exe-core": "node .nimo/verification/scripts/verify-exe-core-suite.mjs",
+    "verify:exe-core:extended": "node .nimo/verification/scripts/verify-exe-core-extended.mjs",
+    "verify:exe-editor": "node .nimo/verification/scripts/verify-exe-core-flow.mjs"
   },
   "dependencies": {
     "@atomic-editor/editor": "0.4.3",
