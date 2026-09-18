@@ -1,5 +1,12 @@
 # Handoff: Skill OS M1 评审完成，待修 spec 后进入实现
 
+> ⚠️ **2026-09-18 知识审计维护**：本文档是 Skill OS M1 实现前的 handoff 节点（2026-06-18），**已不再作为权威事实**。当前实现以 [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md) 与 `CHANGELOG.md` 为准；本文档底部 §"Typola 现有文件"清单与 §"现有可复用资产"表中的事实引用已部分过期，需要时回查代码。
+>
+> **主要过期项**：
+> - §2 资产表 `WysiwygEditorPane（Vditor）` 已删除（见 `CHANGELOG.md` Unreleased §清理 Vditor 死代码），编辑场景全量运行于 CM6
+> - 底部 `AppLayout.tsx — 布局（~1781 行，注意膨胀）` 实际为 2929 行（2026-09-18 `wc -l` 核实）
+> - §2 资产表 `services/agentBridge.ts — 现有 PTY agent bridge` 当前主路径已切换到 headless 模式（`agent_session_start/resume/cancel`），原 agentBridge 仅保留兼容性
+>
 > ⚠️ **2026-06-18 第二轮研判修正**：本文档 P0/P1 定级已被修订，**实施以 `docs/AI_WORKBENCH_SKILL_OS.md` §14 为准**。要点：
 > - **P0-1（capability）是误报** —— 不要加 `shell:allow-execute`、不要做 task#0、不必先发 capability 测试。Rust 原生 `std::process::Command`/`portable_pty` spawn 不经 Tauri ACL，现有 `terminal_create`/`agent_detect` 已证明。
 > - **P0-2 / P1-4 / P1-5 降级**为非 M1 阻塞（内存 Map / diagnostics 兜底 / 现有解析够用）。
@@ -59,6 +66,8 @@ Skill OS M1 设计规约评审完成。评审报告：`docs/REVIEW_SKILL_OS_M1.m
 - `invocation.ts` (43) — Tauri 2 `invoke` 替代 Node `child_process.execFile`
 - `launch.ts` (202) — Rust 侧二进制解析 + PATH 构建
 - `agent-session-resume.ts` (114) — session UUID 持久化（Rust 简化版）
+
+> **2026-09-18 维护**：§2 资产表 `WysiwygEditorPane（Vditor）` 与 `agentBridge.ts` 已与当前实现不一致；以文档顶部 2026-09-18 声明为准。
 
 ---
 
@@ -126,7 +135,7 @@ src-tauri/src/lib.rs              — 现有 terminal + watcher 架构
 src-tauri/capabilities/default.json — 需追加 shell:allow-execute
 src/services/agentService.ts      — 现有 detectAgent
 src/services/agentBridge.ts       — 现有 PTY agent bridge（可保留）
-src/app/AppLayout.tsx             — 布局（~1781 行，注意膨胀）
+src/app/AppLayout.tsx             — 布局（2026-09-18 实际 2929 行，注意膨胀）
 src/components/TerminalPanel.tsx  — PTY 终端（保持不动）
 ```
 

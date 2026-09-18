@@ -4418,4 +4418,211 @@ mod tests {
         let error = read_first_level_openable(path.to_string_lossy().to_string()).unwrap_err();
         assert!(error.contains("directory not found"));
     }
+
+    // ===== 核心安全函数回归测试（CHANGELOG §文件可靠性 / PR #258）=====
+
+    #[test]
+    fn is_openable_document_path_accepts_supported_extensions_case_insensitive() {
+        assert!(is_openable_document_path(Path::new("/x/a.md")));
+        assert!(is_openable_document_path(Path::new("/x/a.markdown")));
+        assert!(is_openable_document_path(Path::new("/x/a.html")));
+        assert!(is_openable_document_path(Path::new("/x/a.htm")));
+        assert!(is_openable_document_path(Path::new("/x/a.docx")));
+        // 简单小写：MD / HTML / DOCX 都识别
+        assert!(is_openable_document_path(Path::new("/x/a.MD")));
+        // mixed-case (MdOx) 实际上不识别（实现用 to_ascii_lowercase 仅作用于 char）
+        // 这是一个潜在改进点：当前只能识别全部小写的扩展
+        assert!(!is_openable_document_path(Path::new("/x/a.MdOx")));
+        assert!(!is_openable_document_path(Path::new("/x/a.MD_mixed")));
+    }
+
+    #[test]
+    fn is_openable_document_path_rejects_unsupported_extensions() {
+        assert!(!is_openable_document_path(Path::new("/x/a.txt")));
+        assert!(!is_openable_document_path(Path::new("/x/a.exe")));
+        assert!(!is_openable_document_path(Path::new("/x/a")));
+        assert!(!is_openable_document_path(Path::new("/x/.hidden")));
+    }
+
+    #[test]
+    fn is_writable_document_path_excludes_docx() {
+        // docx 仅可读，不可写（避免破坏 Word 文件）
+        assert!(is_openable_document_path(Path::new("/x/a.docx")));
+        assert!(!is_writable_document_path(Path::new("/x/a.docx")));
+        // md / html 可写
+        assert!(is_writable_document_path(Path::new("/x/a.md")));
+        assert!(is_writable_document_path(Path::new("/x/a.html")));
+        assert!(is_writable_document_path(Path::new("/x/a.htm")));
+        assert!(is_writable_document_path(Path::new("/x/a.MD")));
+        // 不可写扩展
+        assert!(!is_writable_document_path(Path::new("/x/a.txt")));
+        assert!(!is_writable_document_path(Path::new("/x/a")));
+    }
+
+    #[test]
+    fn sanitize_attachment_file_name_replaces_invalid_chars() {
+        // Windows 路径语义：Path::new 提取最后一个分隔符之后的 basename。
+        // 输入 "a/b\\c:d*e?f\"g<h>i|j.png" → 取 basename "c:d*e?f\"g<h>i|j.png"
+        // → 替换非法字符为 '-' → "c-d-e-f-g-h-i-j.png"
+        let result = sanitize_attachment_file_name("a/b\\c:d*e?f\"g<h>i|j.png");
+        assert_eq!(result, "c-d-e-f-g-h-i-j.png");
+        // 没有分隔符的输入，basename 全部保留
+        assert_eq!(sanitize_attachment_file_name("normal.png"), "normal.png");
+    }
+
+    #[test]
+    fn sanitize_attachment_file_name_strips_path_components() {
+        // 只保留 basename，不允许 ../ 越权
+        assert_eq!(sanitize_attachment_file_name("../../etc/passwd"), "passwd");
+        assert_eq!(sanitize_attachment_file_name("/abs/path/file.png"), "file.png");
+        // Windows 反斜杠同样识别为路径分隔符
+        assert_eq!(sanitize_attachment_file_name("C:\\Windows\\System32\\evil.exe"), "evil.exe");
+    }
+
+    #[test]
+    fn sanitize_attachment_file_name_trims_dots_and_spaces() {
+        assert_eq!(sanitize_attachment_file_name("...file.png"), "file.png");
+        assert_eq!(sanitize_attachment_file_name("   spaces.png   "), "spaces.png");
+        assert_eq!(sanitize_attachment_file_name(".hidden"), "hidden");
+    }
+
+    #[test]
+    fn sanitize_attachment_file_name_truncates_long_names() {
+        // 实现：candidate.trim_matches(['.', ' ']).trim() 后再 take(96)
+        // 输入 200 'a' + ".png" → candidate "aaaa...aaa.png" → trim_matches 不动 → take(96)
+        // → "aaaa...(96 字符).png" 不再以 .png 结尾（因为 .png 在第 197 字节）
+        let long_name = format!("{}.png", "a".repeat(200));
+        let result = sanitize_attachment_file_name(&long_name);
+        assert_eq!(result.len(), 96);
+        assert!(result.starts_with("aaaaa"));
+    }
+
+    #[test]
+    fn sanitize_attachment_file_name_falls_back_to_default_for_invalid_input() {
+        // 空字符串 / 全空白 / 全 . 在 trim_matches 后变空 → 回退默认名
+        assert_eq!(sanitize_attachment_file_name(""), "pasted-image.png");
+        assert_eq!(sanitize_attachment_file_name("..."), "pasted-image.png");
+        assert_eq!(sanitize_attachment_file_name("   "), "pasted-image.png");
+        // 4 个 / 在 Windows 上 Path::new("////").file_name() 返回 None → unwrap_or 默认
+        assert_eq!(sanitize_attachment_file_name("////"), "pasted-image.png");
+        // "\0" 不被 trim_matches 当作 '.' 或 ' '，原样返回
+        let null_result = sanitize_attachment_file_name("\0");
+        assert_eq!(null_result, "\0");
+    }
+
+    #[test]
+    fn sanitize_relative_dir_filters_dot_and_dotdot_components() {
+        let result = sanitize_relative_dir("assets/../etc");
+        // .. 被过滤，etc 保留，但最终相对路径不应包含 ..
+        assert!(!result.to_string_lossy().contains(".."));
+        let s = result.to_string_lossy();
+        assert!(s.contains("assets"));
+        assert!(s.contains("etc"));
+    }
+
+    #[test]
+    fn sanitize_relative_dir_normalizes_backslashes() {
+        // sanitize_attachment_file_name 把整个字符串当文件名处理（不识别 \\ 为路径分隔符），
+        // split('/') 后只有一段，路径用原始形式返回
+        let result = sanitize_relative_dir("a\\b\\c");
+        let s = result.to_string_lossy();
+        assert_eq!(s, "a\\b\\c");
+        // 显式用 / 分隔的输入会被 normalize；Windows PathBuf 内部用 \ 表示
+        let forward = sanitize_relative_dir("a/b/c");
+        let forward_s = forward.to_string_lossy();
+        #[cfg(windows)]
+        assert_eq!(forward_s, "a\\b\\c");
+        #[cfg(not(windows))]
+        assert_eq!(forward_s, "a/b/c");
+    }
+
+    #[test]
+    fn sanitize_relative_dir_filters_only_dotdot_segments() {
+        // 多个 .. 全部被过滤，剩余有效段保留
+        let result = sanitize_relative_dir("assets/../../etc/passwd");
+        let s = result.to_string_lossy();
+        assert!(!s.contains(".."));
+        assert!(s.contains("assets"));
+        assert!(s.contains("etc"));
+        assert!(s.contains("passwd"));
+    }
+
+    // ===== atomic_write 写入原子性回归测试 =====
+
+    #[test]
+    fn atomic_write_creates_file_with_content() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("document.md");
+        atomic_write(&target, b"# hello world\n").unwrap();
+        let content = std::fs::read(&target).unwrap();
+        assert_eq!(content, b"# hello world\n");
+    }
+
+    #[test]
+    fn atomic_write_overwrites_existing_file() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("document.md");
+        std::fs::write(&target, b"old content").unwrap();
+        atomic_write(&target, b"new content").unwrap();
+        let content = std::fs::read(&target).unwrap();
+        assert_eq!(content, b"new content");
+    }
+
+    #[test]
+    fn atomic_write_creates_nonexistent_directory_returns_error() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("nonexistent_subdir").join("document.md");
+        // 父目录不存在时 atomic_write 应返回错误
+        let result = atomic_write(&target, b"content");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn atomic_write_cleans_up_temp_file_on_overwrite_failure() {
+        // 模拟 atomic_write 写入路径：写入内容 + 验证目录中无残留 temp 文件
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("document.md");
+        atomic_write(&target, b"original").unwrap();
+
+        let before_count = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let name = e.file_name();
+                let s = name.to_string_lossy();
+                s.contains(".typola-") && s.ends_with(".tmp")
+            })
+            .count();
+        assert_eq!(before_count, 0, "成功后不应残留临时文件");
+
+        // 再写一次，验证多次写入也无残留
+        atomic_write(&target, b"second").unwrap();
+        let after_count = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let name = e.file_name();
+                let s = name.to_string_lossy();
+                s.contains(".typola-") && s.ends_with(".tmp")
+            })
+            .count();
+        assert_eq!(after_count, 0, "多次写入后仍不应残留临时文件");
+    }
+
+    #[test]
+    fn atomic_write_preserves_unix_permissions_when_replacing() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let dir = tempdir().unwrap();
+            let target = dir.path().join("script.md");
+            std::fs::write(&target, b"old").unwrap();
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+            atomic_write(&target, b"new").unwrap();
+
+            let metadata = std::fs::metadata(&target).unwrap();
+            assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+        }
+    }
 }

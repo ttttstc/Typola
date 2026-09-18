@@ -1,6 +1,6 @@
-# Typola Architecture
+# Typola 架构
 
-Typola is a Tauri v2 desktop Markdown editor built with React 19, TypeScript, Vite 8, CodeMirror 6, a remark/rehype export renderer, and a Rust backend.
+Typola 是基于 Tauri v2 的桌面 Markdown 编辑器，技术栈：React 19、TypeScript、Vite 8、CodeMirror 6、remark/rehype 导出渲染器、Rust 后端。
 
 ## Core Shape
 
@@ -183,6 +183,8 @@ The terminal is implemented with Tauri commands plus event streaming:
 - Provider parsers may emit an `artifact_file` event when JSON output reports Write/Edit-style tool calls with a file path. The workspace watcher listens only to the effective `.typola-output/` directory as a provider-neutral fallback, avoiding recursive watches on the whole home/workspace tree. The artifact center scans `.typola-output/` through the Rust `scan_artifacts` command, which only accepts a canonical `.typola-output` root and returns manifest metadata plus legacy files without relying on frontend `fs:scope` grants for arbitrary workspaces. The UI shows artifacts as right-bottom filename chips and right-panel list entries; clicking a chip opens the file in the central editor, and `archive_artifact_to_workspace` moves a temporary artifact into the workspace with automatic name de-duplication. The artifact center persists lightweight `artifact.json` manifests and can overwrite or undo-overwrite a source document; those commands are guarded in Rust by canonical path checks, so the target must match the manifest/current document expectation or remain inside the explicit workspace root.
 
 - The headless workbench coexists with the terminal-based flow-mode agent path. The left rail is a single state machine (`none` / `workspace` / `aiWorkbench`), so file tree and AI Workbench are mutually exclusive and never create a fourth column. The existing bottom PTY terminal remains unchanged and flow mode no longer auto-opens it.
+
+历史设计快照（2026-06-16，标为历史节点）：[`docs/AI_WORKBENCH_SPEC.md`](./AI_WORKBENCH_SPEC.md)。事实以本 ARCHITECTURE.md 为准，AI_WORKBENCH_SPEC.md 仅供回查设计动机。
 
 ## AI Review and Revision
 

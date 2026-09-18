@@ -33,6 +33,12 @@ description: "使用真实 Typola Windows Tauri exe 和 WebView2 CDP 驱动核�
 npm run verify:exe-core
 ```
 
+扩展套件（补齐 9 个低/中难度非 AI 场景）：
+
+```powershell
+npm run verify:exe-core:extended
+```
+
 单一编辑器聚焦配方：
 
 ```powershell
@@ -141,6 +147,7 @@ Get-FileHash '.\src-tauri\target\debug\typola.exe' -Algorithm SHA256
 
 - `tauri-verification.conf.json`：构建时合并的独立应用标识配置，保留产品名 `Typola`，关闭安装包打包。
 - `scripts/verify-exe-core-suite.mjs`：直接启动 exe，串行驱动 Feature Map 的可达核心路径，采集证据并清理；调用方式是 `npm run verify:exe-core` 或 `node .nimo/verification/scripts/verify-exe-core-suite.mjs`。
+- `scripts/verify-exe-core-extended.mjs`：本次新增的扩展套件，补齐 9 个低/中难度非 AI 场景（模式切换、格式历史补充、Rich Markdown、预览、设置、终端多标签、表格 Tab、image 占位、failure Escape）。受原生对话框/重启/外部资源依赖的场景保留为受阻；调用方式是 `npm run verify:exe-core:extended` 或 `node .nimo/verification/scripts/verify-exe-core-extended.mjs`。
 - `scripts/verify-exe-core-flow.mjs`：保留旧的单一编辑器源码往返聚焦配方；调用方式是 `npm run verify:exe-editor` 或 `node .nimo/verification/scripts/verify-exe-core-flow.mjs`。
 - `features/index.md`：15 个功能条目和 27 个直接 exe 场景的索引与验证状态；每个功能文件是用户路径配方。
 - 维护时参考 `nimo-verification-maintain`：代码、菜单、启动链或证据边界变化后，先更新地图，再重新执行受影响的 exe 路径。

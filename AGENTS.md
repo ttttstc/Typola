@@ -22,7 +22,8 @@ Typola 是一个轻量 Markdown 桌面编辑器，提供所见即所得 Markdown
 |------|------|------|
 | README.md | 根目录 | 项目介绍、快速开始 |
 | CHANGELOG.md | 根目录 | 版本变更记录 |
-| ARCHITECTURE.md | docs/ | 系统架构、数据流、模块说明 |
+| ARCHITECTURE.md | docs/ | 系统架构、数据流、模块说明（事实性单一权威） |
+| CONTEXT.md | 根目录 | 项目定位与领域术语表 |
 
 ## 开发命令
 
@@ -38,7 +39,9 @@ npm run tauri:build:local
 
 ## 关键设计决策
 
-- 编辑器：CM6 同时承担写作与源码模式；Markdown 导出基座使用 remark/rehype，Vditor 仅保留既有兼容预览链路。
+事实层以 `docs/ARCHITECTURE.md` 为单一权威；本节只在新人 onboard 第一天时给一张总览图，避免跨文档事实漂移。
+
+- 编辑器：CM6 同时承担写作与源码模式；Markdown 导出基座使用 remark/rehype，Vditor 仅保留既有兼容预览资源（AI 消息渲染 + Word preview CSS reset）。
 - 布局：默认单页 WYSIWYG 编辑，右侧 Word / HTML 预览面板按需打开。
 - Word / HTML 导出：支持内置预设与用户自定义 JSON 预设；Word 使用内置 `docx` 生成器，不依赖 Pandoc 或其他外部可执行文件。
 - Vditor 资源：本地化到 `public/vditor/dist/`，不依赖外部 CDN。

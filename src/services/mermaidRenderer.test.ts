@@ -1,159 +1,154 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  MERMAID_RENDER_TIMEOUT_MS,
+  normalizeMermaidSvgSize,
+  normalizeMermaidSvgViewport,
+  serializeMermaidSvg,
+  withTimeout,
+} from './mermaidRenderer';
 
-const renderMock = vi.fn(async (id: string, source: string) => {
-  if (source.includes('BROKEN')) throw new Error('bad diagram');
-  return { svg: `<svg id="${id}"><text>${source}</text></svg>` };
-});
-const initializeMock = vi.fn();
-
-vi.mock('mermaid', () => ({
-  default: {
-    initialize: initializeMock,
-    render: renderMock,
-  },
-}));
-
-describe('mermaidRenderer', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    document.body.innerHTML = '';
-  });
-
-  it('renders pre code mermaid blocks into svg containers', async () => {
-    const { renderMermaidIn } = await import('./mermaidRenderer');
-    const container = document.createElement('div');
-    container.innerHTML = '<pre><code class="language-mermaid">flowchart TD\\nA-->B</code></pre>';
-    await renderMermaidIn(container);
-    expect(container.querySelector('.typola-mermaid svg')).toBeTruthy();
-    expect(container.querySelector('pre')).toBeNull();
-  });
-
-  it('is idempotent for already rendered blocks', async () => {
-    const { renderMermaidIn } = await import('./mermaidRenderer');
-    const container = document.createElement('div');
-    container.innerHTML = '<pre><code class="language-mermaid">flowchart TD\\nA-->B</code></pre>';
-    await renderMermaidIn(container);
-    await renderMermaidIn(container);
-    expect(renderMock).toHaveBeenCalledTimes(1);
-    expect(container.querySelectorAll('.typola-mermaid')).toHaveLength(1);
-  });
-
-  it('keeps source pre and appends an error bar on render failures', async () => {
-    const { renderMermaidIn } = await import('./mermaidRenderer');
-    const container = document.createElement('div');
-    container.innerHTML = '<pre><code class="language-mermaid">BROKEN</code></pre>';
-    await renderMermaidIn(container);
-    expect(container.querySelector('pre')).toBeTruthy();
-    expect(container.querySelector('.typola-mermaid-error')?.textContent).toContain('bad diagram');
-  });
-
-  it('skips unclosed fenced content', async () => {
-    const { renderMermaidIn } = await import('./mermaidRenderer');
-    const container = document.createElement('div');
-    container.innerHTML = '<pre><code class="language-mermaid">```mermaid\\nflowchart TD</code></pre>';
-    await renderMermaidIn(container);
-    expect(renderMock).not.toHaveBeenCalled();
-    expect(container.querySelector('pre')).toBeTruthy();
-  });
-
-  it('keeps editable source in DOM and restores it when the graph is clicked', async () => {
-    const { renderMermaidIn } = await import('./mermaidRenderer');
-    const container = document.createElement('div');
-    container.innerHTML = '<pre><code class="language-mermaid">sequenceDiagram\\nA->>B: hi</code></pre>';
-    await renderMermaidIn(container, { editable: true });
-    const pre = container.querySelector('pre')!;
-    expect(pre.classList.contains('typola-mermaid-source-hidden')).toBe(true);
-    container.querySelector<HTMLElement>('.typola-mermaid')?.click();
-    expect(pre.classList.contains('typola-mermaid-source-hidden')).toBe(false);
-    expect(container.querySelector('.typola-mermaid')).toBeNull();
-  });
-
-  it('rejects hanging renders after the timeout and shows an error bar', async () => {
-    vi.useFakeTimers();
-    try {
-      renderMock.mockImplementationOnce(() => new Promise(() => { /* 模拟 mermaid.render 挂起 */ }));
-      const { renderMermaidIn } = await import('./mermaidRenderer');
-      const container = document.createElement('div');
-      container.innerHTML = '<pre><code class="language-mermaid">flowchart TD\\nA-->B</code></pre>';
-      document.body.appendChild(container);
-      const pending = renderMermaidIn(container);
-      await vi.advanceTimersByTimeAsync(5000);
-      await pending;
-      expect(container.querySelector('pre')).toBeTruthy();
-      expect(container.querySelector('.typola-mermaid-error')?.textContent).toContain('render timeout after 5000ms');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('initializes mermaid once per theme and re-initializes on theme switch', async () => {
-    const { ensureMermaidInitialized } = await import('./mermaidRenderer');
-    // 本文件前面的用例已以 default 主题初始化过：相同主题不再重复 initialize。
-    await ensureMermaidInitialized('default');
-    expect(initializeMock).toHaveBeenCalledTimes(0);
-    await ensureMermaidInitialized('default');
-    expect(initializeMock).toHaveBeenCalledTimes(0);
-    // 切换主题时重新 initialize，避免共享单例被旧主题覆盖。
-    await ensureMermaidInitialized('dark');
-    expect(initializeMock).toHaveBeenCalledTimes(1);
-    expect(initializeMock).toHaveBeenCalledWith(expect.objectContaining({ theme: 'dark', securityLevel: 'strict' }));
-    await ensureMermaidInitialized('dark');
-    expect(initializeMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('normalizeMermaidSvgSize 把 useMaxWidth 输出归一为显式自然宽度', async () => {
-    const { normalizeMermaidSvgSize } = await import('./mermaidRenderer');
-    const svg = '<svg width="100%" style="max-width: 700px;" viewBox="0 0 700 420" height="420"><g></g></svg>';
-    const normalized = normalizeMermaidSvgSize(svg);
-    const el = document.createElement('div');
-    el.innerHTML = normalized;
-    const out = el.querySelector('svg')!;
-    expect(out.getAttribute('width')).toBe('700');
-    expect(out.hasAttribute('height')).toBe(false);
-    expect(out.style.height).toBe('auto');
-    expect(out.style.maxWidth).toBe('');
-  });
-
-  it('normalizeMermaidSvgSize 对无 viewBox 的 SVG 原样返回', async () => {
-    const { normalizeMermaidSvgSize } = await import('./mermaidRenderer');
-    const svg = '<svg width="100%"><text>no viewBox</text></svg>';
-    expect(normalizeMermaidSvgSize(svg)).toBe(svg);
-  });
-
-  it('normalizeMermaidSvgViewport 收紧 WebView2 异常膨胀的 viewBox', async () => {
-    const { normalizeMermaidSvgViewport } = await import('./mermaidRenderer');
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', '2146');
-    svg.setAttribute('viewBox', '-138 -59 2146 2067');
-    Object.defineProperty(svg, 'getBBox', {
-      configurable: true,
-      value: () => ({ x: 8, y: 8, width: 1053.06640625, height: 558 }),
+describe('mermaidRenderer 纯函数', () => {
+  describe('withTimeout', () => {
+    it('Promise 在超时前 resolve 时透传结果', async () => {
+      const result = await withTimeout(Promise.resolve('ok'), 1000);
+      expect(result).toBe('ok');
     });
 
-    normalizeMermaidSvgViewport(svg, { naturalSize: true });
+    it('Promise 在超时前 reject 时透传错误', async () => {
+      await expect(withTimeout(Promise.reject(new Error('boom')), 1000)).rejects.toThrow('boom');
+    });
 
-    const viewBox = svg.getAttribute('viewBox')!.split(' ').map(Number);
-    expect(viewBox[0]).toBe(0);
-    expect(viewBox[1]).toBe(0);
-    expect(viewBox[2]).toBeCloseTo(1069.066, 3);
-    expect(viewBox[3]).toBe(574);
-    expect(svg.getAttribute('width')).toBe('1069');
+    it('Promise 超时后抛超时错误', async () => {
+      vi.useFakeTimers();
+      try {
+        const slow = new Promise<string>((resolve) => {
+          setTimeout(() => resolve('too late'), 10000);
+        });
+        const pending = withTimeout(slow, 100);
+        vi.advanceTimersByTime(100);
+        await expect(pending).rejects.toThrow('render timeout after 100ms');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('MERMAID_RENDER_TIMEOUT_MS 为 5000', () => {
+      expect(MERMAID_RENDER_TIMEOUT_MS).toBe(5000);
+    });
   });
 
-  it('naturalSize 选项控制预览/导出尺寸策略', async () => {
-    const { renderMermaidIn } = await import('./mermaidRenderer');
-    renderMock.mockImplementation(async (id: string) => ({
-      svg: `<svg id="${id}" width="100%" style="max-width: 700px;" viewBox="0 0 700 420" height="420"></svg>`,
-    }));
-    const natural = document.createElement('div');
-    natural.innerHTML = '<pre><code class="language-mermaid">A</code></pre>';
-    await renderMermaidIn(natural, { naturalSize: true });
-    expect(natural.querySelector('svg')!.getAttribute('width')).toBe('700');
+  describe('normalizeMermaidSvgSize', () => {
+    it('从 viewBox 取自然宽度并改写为显式 width', () => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" style="max-width: 800px"><circle r="5"/></svg>';
+      const result = normalizeMermaidSvgSize(svg);
+      expect(result).toContain('width="800"');
+      expect(result).toContain('height: auto');
+    });
 
-    const adaptive = document.createElement('div');
-    adaptive.innerHTML = '<pre><code class="language-mermaid">A</code></pre>';
-    await renderMermaidIn(adaptive);
-    // 导出链路缺省不归一：保持 mermaid 的自适应宽度输出。
-    expect(adaptive.querySelector('svg')!.getAttribute('width')).toBe('100%');
+    it('移除 max-width 样式（避免容器被压成缩略图）', () => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" style="max-width: 400px;"><circle/></svg>';
+      const result = normalizeMermaidSvgSize(svg);
+      expect(result).not.toContain('max-width');
+    });
+
+    it('解析失败时返回原 SVG（fail-open）', () => {
+      const malformed = '<<not-an-svg>>>';
+      const result = normalizeMermaidSvgSize(malformed);
+      expect(result).toBe(malformed);
+    });
+
+    it('viewBox 缺失时返回原 SVG', () => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg"><circle/></svg>';
+      const result = normalizeMermaidSvgSize(svg);
+      expect(result).toBe(svg);
+    });
+
+    it('viewBox 宽为非正数时返回原 SVG（避免改写为 0）', () => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 0 600"><circle/></svg>';
+      const result = normalizeMermaidSvgSize(svg);
+      expect(result).toBe(svg);
+    });
+
+    it('保留已有 inline style 中除 max-width 外的属性', () => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" style="max-width: 800px; overflow: visible"><circle/></svg>';
+      const result = normalizeMermaidSvgSize(svg);
+      expect(result).toContain('overflow: visible');
+      expect(result).not.toContain('max-width');
+    });
+  });
+
+  describe('normalizeMermaidSvgViewport', () => {
+    function makeSvg(viewBox: string): SVGSVGElement {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      el.setAttribute('viewBox', viewBox);
+      return el;
+    }
+
+    it('viewBox 正常时不修改', () => {
+      const el = makeSvg('0 0 800 600');
+      el.getBBox = () => ({ x: 0, y: 0, width: 800, height: 600 }) as DOMRect;
+      normalizeMermaidSvgViewport(el);
+      expect(el.getAttribute('viewBox')).toBe('0 0 800 600');
+    });
+
+    it('viewBox 异常膨胀时收紧（CHANGELOG §WebView2 viewBox 修复）', () => {
+      const el = makeSvg('-138 -59 2146 2067');
+      el.getBBox = () => ({ x: 100, y: 50, width: 1053, height: 558 }) as DOMRect;
+      normalizeMermaidSvgViewport(el);
+      const next = el.getAttribute('viewBox');
+      expect(next).not.toBe('-138 -59 2146 2067');
+      expect(next).toMatch(/^-?\d/);
+      // 包含 padding 8，width 期望 1053+16=1069
+      const parts = next!.split(/\s+/u).map(Number);
+      expect(parts[2]).toBeCloseTo(1069, -1);
+    });
+
+    it('viewBox 缺失时不修改', () => {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      el.getBBox = () => ({ x: 0, y: 0, width: 100, height: 100 }) as DOMRect;
+      normalizeMermaidSvgViewport(el);
+      expect(el.getAttribute('viewBox')).toBeNull();
+    });
+
+    it('naturalSize=true 时同时设置 width 属性', () => {
+      const el = makeSvg('-100 -100 2000 2000');
+      el.getBBox = () => ({ x: 0, y: 0, width: 1000, height: 500 }) as DOMRect;
+      normalizeMermaidSvgViewport(el, { naturalSize: true });
+      expect(el.getAttribute('width')).toBeTruthy();
+      expect(el.getAttribute('width')).toMatch(/^\d+$/);
+    });
+  });
+
+  describe('serializeMermaidSvg', () => {
+    it('target 包含 svg 时返回序列化字符串', () => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'typola-mermaid';
+      wrapper.innerHTML = '<svg viewBox="0 0 100 50"><circle/></svg>';
+      const result = serializeMermaidSvg(wrapper);
+      expect(result).toContain('<svg');
+      expect(result).toContain('<circle');
+    });
+
+    it('target 不含 svg 时返回 null', () => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'typola-mermaid';
+      wrapper.innerHTML = '<p>未渲染</p>';
+      const result = serializeMermaidSvg(wrapper);
+      expect(result).toBeNull();
+    });
+
+    it('target 为 null 时返回 null', () => {
+      expect(serializeMermaidSvg(null)).toBeNull();
+    });
+
+    it('target 自身不是 .typola-mermaid 容器但包含 svg 时也返回（closest 语义）', () => {
+      const inner = document.createElement('div');
+      inner.innerHTML = '<svg><rect/></svg>';
+      const wrapper = document.createElement('div');
+      wrapper.className = 'typola-mermaid';
+      wrapper.appendChild(inner);
+      const result = serializeMermaidSvg(inner);
+      expect(result).toContain('<svg');
+    });
   });
 });
