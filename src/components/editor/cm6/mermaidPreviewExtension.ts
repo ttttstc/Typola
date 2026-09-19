@@ -34,7 +34,10 @@ export const MERMAID_SANITIZE_OPTIONS = {
 };
 
 function cursorTouches(state: EditorState, from: number, to: number): boolean {
-  return state.selection.ranges.some((range) => range.from <= to && range.to >= from);
+  return state.selection.ranges.some((range) => {
+    if (range.empty) return range.from >= from && range.from < to;
+    return range.from < to && range.to > from;
+  });
 }
 
 /**

@@ -1968,8 +1968,9 @@ export function AppLayout() {
         setSettingsVisible(true);
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    // 预览面板和终端控件可能阻止冒泡；全局快捷键必须在 capture 阶段接住。
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
   }, [
     handleOpen,
     handleOpenFolder,

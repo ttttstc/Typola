@@ -30,6 +30,10 @@ import {
 import type { MarkdownLink, MarkdownTask } from '../../../services/markdownAnalysisService';
 import type { AppLocale } from '../../../services/settingsService';
 import { tableInteractionExtension } from './table/tableInteractionExtension';
+import {
+  normalizeGfmTableSeparators,
+  normalizeTableSeparatorsForWidget,
+} from '../../../services/editor/tableFormatService';
 
 const typolaTableTheme = TableTheme.light.with({
   '--tbl-theme-row-background': 'var(--theme-paper)',
@@ -186,7 +190,12 @@ export function reconfigureLivePreviewExtensions(
     frontmatterFold = true,
     typewriterMode = false,
   } = options;
+  const source = view.state.doc.toString();
+  const sourceForPreview = livePreview ? normalizeTableSeparatorsForWidget(source) : source;
   view.dispatch({
+    ...(sourceForPreview !== source
+      ? { changes: { from: 0, to: view.state.doc.length, insert: sourceForPreview } }
+      : {}),
     effects: [
       compartments.preview.reconfigure(previewExtensions({ livePreview, themeId, frontmatterFold, locale })),
       compartments.wheelZoom.reconfigure(wheelZoomExtension({ baseSize, onChange: onZoomChange })),
@@ -201,4 +210,12 @@ export function reconfigureLivePreviewExtensions(
         : []),
     ],
   });
+  if (!livePreview) {
+    const canonicalSource = normalizeGfmTableSeparators(view.state.doc.toString());
+    if (canonicalSource !== view.state.doc.toString()) {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: canonicalSource },
+      });
+    }
+  }
 }

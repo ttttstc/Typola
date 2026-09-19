@@ -210,6 +210,14 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelector('.typola-cm6-mermaid script')).toBeNull();
   });
 
+  it('renders mermaid when the cursor is immediately after the closing fence', async () => {
+    view = createView(['```mermaid', 'flowchart TD', '  A --> B', '```'].join('\n'), true);
+    moveCursorToEnd(view);
+
+    expect(view.contentDOM.querySelector('.typola-cm6-mermaid')).not.toBeNull();
+    await waitForElement('[data-testid="mermaid-svg"]');
+  });
+
   it('rescans mermaid widgets after the syntax tree completes behind the init viewport', async () => {
     // 打开文档时语法树未解析到 mermaid 块（块在 init 局部树之外）——
     // 轮询补全解析后必须自动重算装饰，否则不动鼠标时图永远不渲染。
@@ -301,6 +309,41 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.state.doc.toString()).toBe('# 标题\n\n正文');
     expect(view.destroyed).toBe(false);
   });
+
+  it('keeps table Markdown canonical when toggling live preview', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const compartments = createLivePreviewCompartments();
+    view = new EditorView({
+      state: EditorState.create({
+        doc: '正文',
+        extensions: createMarkdownExtensions({
+          fontFamily: 'monospace',
+          fontSize: 14,
+          tabSize: 4,
+          wordWrap: true,
+          extraExtensions: createLivePreviewExtensions({ baseSize: 14, compartments }),
+        }),
+      }),
+      parent,
+    });
+    applyCm6Format(view, { type: 'table-insert', rows: 2, cols: 2 });
+    moveCursorToEnd(view);
+
+    reconfigureLivePreviewExtensions(view, {
+      livePreview: false,
+      baseSize: 14,
+    }, compartments);
+
+    expect(view.state.doc.toString()).toContain('| --- | --- |');
+
+    reconfigureLivePreviewExtensions(view, {
+      livePreview: true,
+      baseSize: 14,
+    }, compartments);
+    moveCursorToEnd(view);
+    expect(view.contentDOM.querySelector('.tbl-table-widget .tbl-table')).not.toBeNull();
+  });
 });
 
 describe('createMarkdownExtensions format keymap', () => {
@@ -358,7 +401,7 @@ describe('createMarkdownExtensions format keymap', () => {
     ({ view } = createKeymapView('正文'));
     pressKey(view, 't', 84);
     expect(view.state.doc.toString()).toContain('|   |   |   |');
-    expect(view.state.doc.toString()).toContain('| - | - | - |');
+    expect(view.state.doc.toString()).toContain('| --- | --- | --- |');
   });
 
   it('Mod-Shift-M inserts a math block', () => {

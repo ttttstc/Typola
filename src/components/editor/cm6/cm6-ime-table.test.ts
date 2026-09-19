@@ -101,6 +101,8 @@ describe('CM6 Markdown table integration', () => {
     applyTableFormat(view, { type: 'table-insert', rows: 2, cols: 3 });
 
     expect(view.state.doc.toString()).toContain('|   |   |   |');
+    // 上游 widget 挂载期间保留单横线内部形态；切到源码模式时由
+    // reconfigureLivePreviewExtensions 规范化为 GFM 三横线。
     expect(view.state.doc.toString()).toContain('| - | - | - |');
   });
 
