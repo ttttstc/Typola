@@ -2,11 +2,9 @@
 
 ## Unreleased
 
-- 完善项目本地验证能力：Feature Map 从 5 条聚合项扩展为 15 个用户面和 27 个主要直接 exe 场景，覆盖启动分发、文档工作区、编辑器、导航、表格、图片、公式/Mermaid、预览交付、设置、终端、AI 工作台、产物中心、检视 Diff 及异常清理；`npm run verify:exe-core` 直接启动独立标识的 `src-tauri/target/debug/typola.exe`，通过 WebView2 CDP 串行驱动可达路径，并保存版本、工作树差异标识、动作、跳过原因、ARIA、截图和日志。当前真实 exe 已覆盖身份、文件关联打开/保存/新建、源码往返、格式撤销、导航入口、表格、图片失败占位、公式/Mermaid、Word/HTML 预览、主题、AI/产物/检视入口和 PTY 输出；原生对话框、发布物、外部 CLI、模型请求、真实导出文件及完整失败矩阵按实际条件明确标为未验证或受阻。
+- mermaid 图尺寸与缩放重做（编辑器 + 预览面板，导出管线保持自适应宽度不变）：① 渲染归一为自然尺寸——`normalizeMermaidSvgSize` 从 viewBox 取自然宽度改写为显式像素 width，图不再被 mermaid 默认 `useMaxWidth` 压进容器宽（窄窗口下宽流程图此前直接变成缩略图）；② 容器横向滚动——图超宽时在卡片内滚动，不撑破文档布局，放大后不再被裁切；③ hover 缩放控件组——图表右上角浮现「−/＋/适宽/1:1」按钮（模式与代码块复制按钮一致），与既有 Ctrl+滚轮缩放共用同一套倍率语义（0.5–4x，按倍率改写 width，1:1 清除覆盖回到自然尺寸）。新增 `normalizeMermaidSvgSize` 与 `naturalSize` 选项单测。
 
-- 提升单测完备性，补齐关键模块回归保护：vitest `testTimeout/hookTimeout` 提升到 30s 让 mermaid 真实渲染链路在并行下稳定（`mermaidRenderDiagnostics.test.ts` 8 个 case + `mermaidIndentedSource.test.ts` 2 个 case）；新增 `services/sanitizeService.test.ts`（CHANGELOG §sanitizeService 多次修复的保护网，PR #268 `<style>` SVG 边界、mermaid 11 SVG 关键结构、`script`/`on*`/`javascript:`/`iframe`/`data:text/html` 剥离）、`services/mermaidRenderer.test.ts`（`withTimeout`/`normalizeMermaidSvgSize`/`normalizeMermaidSvgViewport`/`serializeMermaidSvg` 纯函数）、`services/review/reviewState.test.ts`（add/update/ignore/remove/clear/markClean/markApplied/`resolveAppliedCommentIds` PR #268 closure 检测）；Rust 端在 `src-tauri/src/lib.rs` `tests` 模块新增 17 个核心安全函数单测（`is_openable_document_path` 大小写扩展白名单、`is_writable_document_path` docx 排除、`sanitize_attachment_file_name` 非法字符替换/路径越权截断/`trim` dots+spaces/96 字符截断/空输入回退默认名、`sanitize_relative_dir` `..` 过滤/Windows 路径规范化、`atomic_write` 创建/覆盖/父目录不存在报错/不残留 temp 文件/Unix 权限保留）。
-
-- 扩展真实 exe 验证覆盖：新增 `npm run verify:exe-core:extended`（`.nimo/verification/scripts/verify-exe-core-extended.mjs`），独立 debug exe + WebView2 CDP 扩展 harness 补齐 9 个低/中难度非 AI 场景——模式切换（exe-edit-01，source 不变断言）、格式历史补充（exe-edit-02：斜体+撤销+选区拖动重选）、表格 Tab（exe-table-02：单元格跳转且末尾追加新行）、Rich Markdown（exe-rich-01：代码/公式/Mermaid 插入+源码回读）、预览（exe-preview-01：Word 页数+HTML 预设 option 数）、设置（exe-settings-01：主题卡片切换 + data-theme 变化）、终端多标签（exe-terminal-01：tab 计数）、image 失败占位（exe-image-01：不崩溃）、查找 Escape 干净关闭（exe-failure-01）；受原生对话框/重启/外部资源依赖的 8 个场景（exe-doc-03 / exe-doc-04 / exe-export-01 / exe-image-01 原生选择 / exe-startup-02/03/04 / exe-ai-01/02 / exe-artifact-01 / exe-review-01/02）按实际条件明确标为受阻或未覆盖，不假装通过。
+- AI 工作台 session 列表（会话下拉）排版统一：下拉宽度固定 300px（原先 260-360px 随最长标题伸缩，每次打开宽窄不一），重命名/关闭按钮常驻显示（原先 hover 才浮现，各行控件视觉长度不一致），列表项内容保持左对齐、标题超长省略。
 
 - 修复「选中文字无法选中本行、一直选中下一行」：CM6 默认在已有选区内按下并拖动会启动原生拖放（dragstart），把选中文字移动/复制到松手位置——用户想调整选区时表现为文字跑进下一行、段落结构被破坏。现拦截编辑器内发起的 dragstart，选区内按下拖动变为普通重新选择（Typora 行为）；从外部拖文字/文件进编辑器不受影响。新增 E2E 回归（选区内拖动文字不移动 + 普通拖选不受影响）。
 
@@ -46,7 +44,7 @@
 
 - 插入类功能入口补齐（对齐 Typora 惯例）：新增快捷键 Ctrl+Shift+K 插入代码块、Ctrl+T 插入表格、Ctrl+Shift+M 插入公式块（新格式命令，插入 `$$` 围栏并落光标于公式体空行）、Ctrl+Shift+I 插入本地图片（无图片回调时不拦截按键）、Ctrl+0 回到正文；Ctrl+K 从“AI 选区菜单”改为插入/编辑链接（AI 选区菜单保留选区浮条与右键入口），右键菜单“链接 (Ctrl+K)”“正文 (Ctrl+0)”提示从此与实际一致。工具栏格式组新增代码块/分隔线/删除线/高亮/公式块五个按钮，全部 tooltip 与 aria-label 改走 i18n（中/英/日三语）；右键“插入”子菜单新增“公式块”，插入类菜单项补齐快捷键提示。
 
-- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                            <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
+- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                              <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
 
 ## \[2.0.5] - 2026-07-13
 
@@ -1093,3 +1091,4 @@ All notable changes to this project will be documented in this file.
 - DOMPurify 安全清洗，禁止 script / 事件属性 / javascript: 链接
 
 - Tauri v2 桌面应用，macOS 原生 WebView
+
