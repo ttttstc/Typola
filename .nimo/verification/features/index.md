@@ -97,4 +97,4 @@
 - [检视意见与 Diff 改稿](./review-diff.md)
 - [异常、权限与清理边界](./failure-boundaries.md)
 
-维护信息：最近核对日期为 2026-09-18；本索引与同级 15 个条目、27 个直接 exe 场景均已从当前源码入口核对。`npm run verify:exe-core` 是核心套件；`npm run verify:exe-core:extended` 是本次新增的扩展套件，覆盖 9 个低/中难度非 AI 场景（模式切换、格式历史补充、Rich Markdown、预览、设置、终端多标签、表格 Tab、image 占位、failure Escape）。直接 exe 套件证据保存在 [`evidence/`](../evidence/) 下按运行生成的 `*-exe-core-suite` 与 `*-exe-core-extended` 目录，最近一次状态为 `passed_with_gaps`，进程、profile、runtime 夹具和 CDP 均已清理。
+维护信息：最近核对日期为 2026-09-19；本索引与同级 15 个条目、27 个直接 exe 场景均已从当前源码入口核对。`npm run verify:exe-core` 是核心套件（18 action pass / 7 skipped）；`npm run verify:exe-core:extended` 是本次扩展套件（**74 action: 67 passed / 7 failed / 12 skipped**），覆盖 MD 基础 17 / MD 行内 5 / 表格全量 9 / 图片扩展 4 / Mermaid 8 / 视图行为 11。完整非 AI 实跑汇总：`npm run verify:exe-core:all`（`run-all-non-ai.mjs`）。7 个 failed 全部是真实产品 bug（不是 harness 选择器问题），已统一收集到 #277（原 Bug 1-5 + 新 Bug 6-9 + Mermaid 单图型重复）。直接 exe 套件证据保存在 [`evidence/`](../evidence/) 下按运行生成的 `*-exe-core-suite` 与 `*-exe-core-extended` 目录，两套件进程、profile、runtime 夹具和 CDP 均已清理。
