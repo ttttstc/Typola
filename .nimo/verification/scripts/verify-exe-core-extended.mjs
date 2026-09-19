@@ -505,8 +505,9 @@ async function main() {
       assert.ok(gridCells >= 4, `默认表格应 ≥ 4 cell，实际 ${gridCells}`);
       await page.getByRole('button', { name: '源码模式', exact: true }).click();
       await delay(150);
-      const source = await page.locator('.cm-content').textContent();
-      assert.ok(source?.includes('|') && source?.includes('---'), '源码未保留表格 Markdown');
+      const source = await page.locator('.cm-content').innerText().catch(() => '');
+      const hasTableSeparator = /^\|\s*-+\s*(?:\|\s*-+\s*)+\|$/mu.test(source ?? '');
+      assert.ok(hasTableSeparator, `源码未保留合法表格 Markdown：${source}`);
       await ensureWriting(page);
     },
     async () => ({
@@ -646,25 +647,24 @@ async function main() {
       ];
       const results = {};
       for (const d of diagrams) {
-        await replaceEditorContent(page, '```' + d.name + '\n' + d.src + '\n```\n');
+        await replaceEditorContent(page, '```mermaid\n' + d.src + '\n```\n');
         await ensureWriting(page);
         await delay(2500);
         const svgVisible = await page.locator('.typola-cm6-mermaid svg, .typola-mermaid svg').first().isVisible().catch(() => false);
         const hasError = await page.locator('.typola-mermaid-error').first().isVisible().catch(() => false);
-        const src = await page.locator('.cm-content').textContent().catch(() => '');
+        await ensureSource(page);
+        const src = await page.locator('.cm-content').innerText().catch(() => '');
         results[d.name] = {
           svgRendered: svgVisible,
           hasErrorCard: hasError,
-          sourcePreserved: src?.includes(d.src.split('\n')[1] ?? d.src) ?? false,
+          sourcePreserved: src?.includes(d.src) ?? false,
         };
+        await ensureWriting(page);
       }
-      const rendered = Object.values(results).filter((r) => r.svgRendered).length;
-      const error = Object.values(results).filter((r) => r.hasErrorCard).length;
-      const preserved = Object.values(results).filter((r) => r.sourcePreserved).length;
-      // 严格断言：8 种图型必须全部保留源码（核心约束）
-      assert.ok(preserved === 8, `Mermaid 8 种图型源码未全部保留：preserved=${preserved}/8, ${JSON.stringify(results)}`);
-      // 软断言：至少 1 种渲染为 SVG（jsdom 限制下不强求 8）
-      assert.ok(rendered + error >= 1, `Mermaid 8 种图型既未渲染为 SVG 也未出现错误卡：${JSON.stringify(results)}`);
+      const unresolved = Object.entries(results).filter(([, result]) => !result.svgRendered && !result.hasErrorCard);
+      const sourceLoss = Object.entries(results).filter(([, result]) => !result.sourcePreserved);
+      assert.ok(unresolved.length === 0, `Mermaid 8 种图型存在静默不渲染：${JSON.stringify(results)}`);
+      assert.ok(sourceLoss.length === 0, `Mermaid 8 种图型源码未保留：${JSON.stringify(results)}`);
     },
     async () => ({
       pageErrors: runtimeMessages.pageErrors.length,
@@ -1726,6 +1726,9 @@ async function main() {
       // 占位文案必须含失败/缺失语义（不能是纯乱码）
       const hasFailureHint = /失败|缺失|加载|broken|missing|fail/i.test(writingText);
       assert.ok(hasReadableText || hasFailureHint, `缺失图片占位文案不可读（疑似乱码）：${writingText?.slice(0, 200)}`);
+      const fallback = page.locator('.cm-atomic-image--failed').first();
+      const fallbackContent = await fallback.evaluate((element) => getComputedStyle(element, '::before').content).catch(() => '');
+      assert.ok(/(?:图片|失败|缺失|加载)/u.test(fallbackContent), `缺失图片 CSS 占位文案不可读：${fallbackContent}`);
     },
     async () => ({ writingText: await page.locator('.cm6-markdown-editor-pane').textContent().catch(() => '') }),
   );

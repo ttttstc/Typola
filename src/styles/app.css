@@ -1785,14 +1785,14 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-radius: 8px;
 }
 
-/* 鍥剧墖鍔犺浇澶辫触鍥為€€:imageFallbackExtension 鐩戝惉 error 浜嬩欢缁欏鍣ㄥ姞 --failed 绫?
- * 杩欓噷鎶婂潖鍥捐棌鎺夈€佺敤 ::before 鏄剧ず鎻愮ず鏂囨湰銆傚師濮?markdown 婧愪粛鍙,
- * 鐢ㄦ埛鍙互璇?URL銆佹鏌?alt,鎴栬€呭垏鍒?source 妯″紡閲嶅啓銆?*/
+/* 图片加载失败回退：imageFallbackExtension 监听 error 事件给容器加 --failed 类，
+ * 这里隐藏坏图并用 ::before 显示提示文本。原始 Markdown 源仍可见，
+ * 用户可以读取 URL、检查 alt，或者切换到 source 模式重写。 */
 .cm6-markdown-editor-pane .cm-atomic-image--failed img {
   display: none;
 }
 .cm6-markdown-editor-pane .cm-atomic-image--failed::before {
-  content: '鈿?鍥剧墖鍔犺浇澶辫触';
+  content: '图片加载失败';
   display: block;
   color: var(--theme-text-secondary);
   font-style: italic;
