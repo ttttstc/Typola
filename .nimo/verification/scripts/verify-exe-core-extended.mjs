@@ -505,8 +505,9 @@ async function main() {
       assert.ok(gridCells >= 4, `默认表格应 ≥ 4 cell，实际 ${gridCells}`);
       await page.getByRole('button', { name: '源码模式', exact: true }).click();
       await delay(150);
-      const source = await page.locator('.cm-content').textContent();
-      assert.ok(source?.includes('|') && source?.includes('---'), '源码未保留表格 Markdown');
+      const source = await page.locator('.cm-content').innerText().catch(() => '');
+      const hasTableSeparator = /^\|\s*-+\s*(?:\|\s*-+\s*)+\|$/mu.test(source ?? '');
+      assert.ok(hasTableSeparator, `源码未保留合法表格 Markdown：${source}`);
       await ensureWriting(page);
     },
     async () => ({
@@ -651,17 +652,19 @@ async function main() {
         await delay(2500);
         const svgVisible = await page.locator('.typola-cm6-mermaid svg, .typola-mermaid svg').first().isVisible().catch(() => false);
         const hasError = await page.locator('.typola-mermaid-error').first().isVisible().catch(() => false);
-        const src = await page.locator('.cm-content').textContent().catch(() => '');
+        await ensureSource(page);
+        const src = await page.locator('.cm-content').innerText().catch(() => '');
         results[d.name] = {
           svgRendered: svgVisible,
           hasErrorCard: hasError,
-          sourcePreserved: src?.includes(d.src.split('\n')[1] ?? d.src) ?? false,
+          sourcePreserved: src?.includes(d.src) ?? false,
         };
+        await ensureWriting(page);
       }
-      const unresolved = Object.entries(results).filter(([, result]) => !result.svgRendered && !result.hasErrorCard && !result.sourcePreserved);
-      // 写视图中的成功渲染会用 widget 隐藏源码，因此每种图型只需满足：SVG、
-      // 可读错误卡或源码仍可见三者之一；不能把 widget 的正常源码隐藏判成失败。
-      assert.ok(unresolved.length === 0, `Mermaid 8 种图型既未渲染为 SVG、未出现错误卡也未保留源码：${JSON.stringify(results)}`);
+      const unresolved = Object.entries(results).filter(([, result]) => !result.svgRendered && !result.hasErrorCard);
+      const sourceLoss = Object.entries(results).filter(([, result]) => !result.sourcePreserved);
+      assert.ok(unresolved.length === 0, `Mermaid 8 种图型存在静默不渲染：${JSON.stringify(results)}`);
+      assert.ok(sourceLoss.length === 0, `Mermaid 8 种图型源码未保留：${JSON.stringify(results)}`);
     },
     async () => ({
       pageErrors: runtimeMessages.pageErrors.length,

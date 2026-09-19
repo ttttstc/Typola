@@ -22,7 +22,7 @@ describe('applyTableFormat', () => {
     const { view } = createView('hello', 0, 0);
     applyTableFormat(view, { type: 'table-insert', rows: 3, cols: 3 });
     expect(view.state.doc.toString()).toContain('|   |   |   |');
-    expect(view.state.doc.toString()).toContain('| --- | --- | --- |');
+    expect(view.state.doc.toString()).toContain('| - | - | - |');
     view.destroy();
   });
 

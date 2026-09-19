@@ -171,6 +171,33 @@ describe('AppLayout update flow', () => {
     expect(document.documentElement.style.getPropertyValue('--app-ui-font-size')).toBe('14px');
   });
 
+  it('keeps terminal-owned shortcuts local while capturing Ctrl+F globally', async () => {
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+    });
+    const terminal = document.createElement('div');
+    terminal.tabIndex = 0;
+    terminal.addEventListener('keydown', (event) => event.stopPropagation());
+    host.append(terminal);
+
+    await act(async () => {
+      terminal.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true }));
+      terminal.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', ctrlKey: true, bubbles: true, cancelable: true }));
+      await flushPromises();
+    });
+
+    expect(host.querySelector('.export-toast')).toBeNull();
+    expect(host.querySelector('.find-panel')).toBeNull();
+
+    await act(async () => {
+      terminal.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true }));
+      await flushPromises();
+    });
+
+    expect(host.querySelector('.find-panel')).not.toBeNull();
+  });
+
   it('prompts first, then downloads and installs after one click', async () => {
     const availableUpdate = {
       status: 'available',

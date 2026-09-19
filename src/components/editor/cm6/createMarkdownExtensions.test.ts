@@ -310,13 +310,13 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.destroyed).toBe(false);
   });
 
-  it('keeps table Markdown canonical when toggling live preview', () => {
+  it('does not rewrite fenced code or source when toggling live preview', () => {
     const parent = document.createElement('div');
     document.body.appendChild(parent);
     const compartments = createLivePreviewCompartments();
     view = new EditorView({
       state: EditorState.create({
-        doc: '正文',
+        doc: '```md\n| - | - |\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n正文',
         extensions: createMarkdownExtensions({
           fontFamily: 'monospace',
           fontSize: 14,
@@ -327,15 +327,16 @@ describe('createMarkdownExtensions live preview', () => {
       }),
       parent,
     });
-    applyCm6Format(view, { type: 'table-insert', rows: 2, cols: 2 });
     moveCursorToEnd(view);
+    const sourceBeforeToggle = view.state.doc.toString();
 
     reconfigureLivePreviewExtensions(view, {
       livePreview: false,
       baseSize: 14,
     }, compartments);
 
-    expect(view.state.doc.toString()).toContain('| --- | --- |');
+    expect(view.state.doc.toString()).toBe(sourceBeforeToggle);
+    expect(view.state.doc.toString()).toContain('```md\n| - | - |\n```');
 
     reconfigureLivePreviewExtensions(view, {
       livePreview: true,
@@ -401,7 +402,7 @@ describe('createMarkdownExtensions format keymap', () => {
     ({ view } = createKeymapView('正文'));
     pressKey(view, 't', 84);
     expect(view.state.doc.toString()).toContain('|   |   |   |');
-    expect(view.state.doc.toString()).toContain('| --- | --- | --- |');
+    expect(view.state.doc.toString()).toContain('| - | - | - |');
   });
 
   it('Mod-Shift-M inserts a math block', () => {

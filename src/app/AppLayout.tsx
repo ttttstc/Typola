@@ -1968,9 +1968,20 @@ export function AppLayout() {
         setSettingsVisible(true);
       }
     };
-    // 预览面板和终端控件可能阻止冒泡；全局快捷键必须在 capture 阶段接住。
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
+    // 只有 Find 需要跨越预览/终端控件的 stopPropagation；其余快捷键保留
+    // bubble 顺序，让终端继续拥有 Ctrl+P/H/S 等原生键位。
+    const captureFindHandler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key !== 'f') return;
+      e.preventDefault();
+      e.stopPropagation();
+      openFindPanel('find');
+    };
+    window.addEventListener('keydown', handler);
+    window.addEventListener('keydown', captureFindHandler, true);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener('keydown', captureFindHandler, true);
+    };
   }, [
     handleOpen,
     handleOpenFolder,
