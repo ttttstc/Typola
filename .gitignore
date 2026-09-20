@@ -35,6 +35,8 @@ src-tauri/target/
 .worktrees/
 .typola-output/
 .typola-spike-tmp/
+.nimo/verification/evidence/
+.nimo/verification/runtime/
 docs/DECISIONS.md
 docs/TASKS.md
 test-results/
