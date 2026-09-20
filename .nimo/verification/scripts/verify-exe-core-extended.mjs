@@ -1799,14 +1799,21 @@ async function main() {
       await delay(300);
       const pane = page.locator('.cm6-markdown-editor-pane');
       const writingText = await pane.textContent();
-      const structureCount = await pane.locator('br, p').count();
+      const breakCount = await pane.locator('br').count();
+      const lineBlockTexts = await pane.locator('p, .cm-line').evaluateAll((elements) => elements
+        .map((element) => element.textContent ?? '')
+        .filter((text) => text.includes('第一行') || text.includes('第二行')));
       assert.ok(writingText?.includes('第一行') && writingText.includes('第二行'), `软换行写作视图缺少行文本：${writingText}`);
-      assert.ok(structureCount >= 1, `软换行未保留 br 或 p 结构，节点数：${structureCount}`);
+      const hasDistinctLineBlocks = lineBlockTexts.length >= 2
+        && lineBlockTexts.some((text) => text.includes('第一行'))
+        && lineBlockTexts.some((text) => text.includes('第二行'));
+      assert.ok(breakCount >= 1 || hasDistinctLineBlocks, `软换行未保留 br 或两个可区分行块：br=${breakCount}, lineBlocks=${JSON.stringify(lineBlockTexts)}`);
     },
     async () => ({
       source: await page.locator('.cm-content').textContent(),
       writingText: await page.locator('.cm6-markdown-editor-pane').textContent(),
-      structureCount: await page.locator('.cm6-markdown-editor-pane br, .cm6-markdown-editor-pane p').count(),
+      breakCount: await page.locator('.cm6-markdown-editor-pane br').count(),
+      lineBlockCount: await page.locator('.cm6-markdown-editor-pane p, .cm6-markdown-editor-pane .cm-line').count(),
     }),
   );
   await captureUi(page, '21-p0-soft-break');
@@ -2002,22 +2009,48 @@ async function main() {
       await delay(400);
       const link = page.locator('.cm6-markdown-editor-pane a[href*="example.com/page"]').first();
       assert.ok(await link.count() >= 1, `嵌套链接未生成外层 a：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
+      const image = link.locator('img[src*="img.png"]').first();
+      assert.ok(await image.count() >= 1, `嵌套链接内缺少目标图片：${await link.innerHTML()}`);
+      const href = await link.getAttribute('href');
+      const src = await image.getAttribute('src');
+      assert.ok(href?.includes('example.com/page'), `嵌套链接 href 不正确：${href}`);
+      assert.ok(src?.includes('example.com/img.png'), `嵌套图片 src 不正确：${src}`);
     },
-    async () => ({ linkCount: await page.locator('.cm6-markdown-editor-pane a[href*="example.com/page"]').count() }),
+    async () => ({
+      linkCount: await page.locator('.cm6-markdown-editor-pane a[href*="example.com/page"]').count(),
+      imageCount: await page.locator('.cm6-markdown-editor-pane a[href*="example.com/page"] img[src*="img.png"]').count(),
+    }),
   );
   await captureUi(page, '31-p0-nested-link');
 
   await recordAction(
     page,
     'editor-format-history',
-    'P0-12 格式刷按钮可达且源段落保留粗体',
+    'P0-12 格式刷捕获并应用粗体到目标段落',
     async () => {
-      await replaceEditorContent(page, '**source style**\n\nplain target');
+      await replaceEditorContent(page, 'source style\n\nplain target');
       await ensureSource(page);
-      const source = await page.locator('.cm-content').textContent();
-      assert.ok(source?.includes('**source style**'), `格式刷探针段落未保留粗体源码：${source}`);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.press('Control+Home');
+      await page.keyboard.press('Shift+End');
+      await page.getByRole('button', { name: /^加粗/ }).click();
+      await delay(150);
+      let source = await content.textContent();
+      assert.ok(source?.includes('**source style**'), `格式刷源段落未生成粗体源码：${source}`);
       const painter = page.getByRole('button', { name: '格式刷', exact: true });
       assert.ok(await painter.count() >= 1, '工具栏没有可达的格式刷按钮');
+      await content.click();
+      await page.keyboard.press('Control+Home');
+      await page.keyboard.press('Shift+End');
+      await painter.click();
+      await content.click();
+      await page.keyboard.press('Control+End');
+      await page.keyboard.press('Shift+Home');
+      await painter.click();
+      await delay(150);
+      source = await content.textContent();
+      assert.ok(source?.includes('**source style**') && source.includes('**plain target**'), `格式刷未把粗体应用到目标段落：${source}`);
     },
     async () => ({
       source: await page.locator('.cm-content').textContent(),
@@ -2148,10 +2181,17 @@ async function main() {
       await delay(350);
       const pane = page.locator('.cm6-markdown-editor-pane');
       const text = await pane.textContent();
+      const subCount = await pane.locator('sub').count();
+      const markCount = await pane.locator('mark').count();
       assert.ok(!text?.includes('\uFFFD'), `嵌套 HTML 出现替换字符：${text}`);
-      assert.ok(text?.includes('H') && text.includes('O'), `嵌套 HTML 丢失外围文字：${text}`);
+      assert.ok(text?.includes('H') && text.includes('重') && text.includes('O'), `嵌套 HTML 丢失内容：${text}`);
+      assert.ok(subCount >= 1 && markCount >= 1, `嵌套 HTML 未保留 sub + mark 结构：sub=${subCount}, mark=${markCount}`);
     },
-    async () => ({ text: await page.locator('.cm6-markdown-editor-pane').textContent() }),
+    async () => ({
+      text: await page.locator('.cm6-markdown-editor-pane').textContent(),
+      subCount: await page.locator('.cm6-markdown-editor-pane sub').count(),
+      markCount: await page.locator('.cm6-markdown-editor-pane mark').count(),
+    }),
   );
   await captureUi(page, '38-p1-nested-html-highlight');
 
@@ -2255,8 +2295,17 @@ async function main() {
       const href = await link.getAttribute('href');
       assert.ok(href?.includes('example.com'), `中文链接 href 丢失域名：${href}`);
       assert.ok(!href?.includes('\uFFFD'), `中文链接 href 出现替换字符：${href}`);
+      let decodedHref = href ?? '';
+      try {
+        decodedHref = decodeURIComponent(decodedHref);
+      } catch {
+        // 保留原始 href，让下面的语义路径断言给出失败证据。
+      }
+      assert.ok(decodedHref.includes('/中文路径'), `中文链接路径语义丢失：${href}`);
     },
-    async () => ({ href: await page.locator('.cm6-markdown-editor-pane a').first().getAttribute('href') }),
+    async () => ({
+      href: await page.locator('.cm6-markdown-editor-pane a').first().getAttribute('href'),
+    }),
   );
   await captureUi(page, '43-p1-chinese-link-url');
 
@@ -2273,7 +2322,8 @@ async function main() {
       const pane = page.locator('.cm6-markdown-editor-pane');
       const text = await pane.textContent();
       const markCount = await pane.locator('mark').count();
-      assert.ok(markCount >= 1 || text?.includes('高亮文本'), `mark 高亮和文本均不可见：${await pane.innerHTML()}`);
+      assert.ok(markCount >= 1, `mark 高亮节点缺失：${await pane.innerHTML()}`);
+      assert.ok(text?.includes('高亮文本'), `mark 高亮文字缺失：${text}`);
     },
     async () => ({
       text: await page.locator('.cm6-markdown-editor-pane').textContent(),
@@ -2290,10 +2340,23 @@ async function main() {
       await replaceEditorContent(page, '<details><summary>点击展开</summary>隐藏内容</details>\n\n普通段落');
       await ensureWriting(page);
       await delay(350);
-      const text = await page.locator('.cm6-markdown-editor-pane').textContent();
+      const pane = page.locator('.cm6-markdown-editor-pane');
+      const details = pane.locator('details').first();
+      assert.ok(await details.count() >= 1, `写作视图缺少 details 节点：${await pane.innerHTML()}`);
+      const summary = details.locator('summary').first();
+      assert.ok(await summary.count() >= 1, `写作视图缺少 summary 节点：${await details.innerHTML()}`);
+      const text = await pane.textContent();
       assert.ok(text?.includes('点击展开') && text.includes('隐藏内容') && text.includes('普通段落'), `details/summary 内容缺失：${text}`);
+      await summary.click();
+      await delay(150);
+      const isOpen = await details.evaluate((element) => element instanceof HTMLDetailsElement && element.open);
+      assert.ok(isOpen, '点击 summary 后 details 未打开');
     },
-    async () => ({ text: await page.locator('.cm6-markdown-editor-pane').textContent() }),
+    async () => ({
+      text: await page.locator('.cm6-markdown-editor-pane').textContent(),
+      detailsCount: await page.locator('.cm6-markdown-editor-pane details').count(),
+      openDetailsCount: await page.locator('.cm6-markdown-editor-pane details[open]').count(),
+    }),
   );
   await captureUi(page, '45-p2-details-summary');
 
@@ -2416,6 +2479,8 @@ async function main() {
       await secondHeading.click();
       await delay(250);
       assert.ok(await page.locator('.cm6-markdown-editor-pane').isVisible(), '点击大纲后编辑器不可见');
+      const activeOutlineCount = await page.locator('.floating-toc-row.active .floating-toc-item').filter({ hasText: '二级' }).count();
+      assert.ok(activeOutlineCount >= 1, `点击大纲后二级标题未成为 active：${activeOutlineCount}`);
     },
     async () => ({
       editorVisible: await page.locator('.cm6-markdown-editor-pane').isVisible(),
@@ -2516,17 +2581,12 @@ async function main() {
       await ensureSource(page);
       const content = page.locator('.cm-content');
       await content.click();
-      await page.evaluate((text) => {
-        const target = document.querySelector('.cm-content');
-        if (!target) throw new Error('找不到源码编辑器');
-        const transfer = new DataTransfer();
-        transfer.setData('text/plain', text);
-        target.dispatchEvent(new ClipboardEvent('paste', {
-          bubbles: true,
-          cancelable: true,
-          clipboardData: transfer,
-        }));
-      }, '粘贴 fallback 第一行\n粘贴 fallback 第二行');
+      const pasteText = '粘贴 fallback 第一行\n粘贴 fallback 第二行';
+      await page.evaluate(async (text) => {
+        if (!navigator.clipboard?.writeText) throw new Error('WebView 不支持系统剪贴板写入');
+        await navigator.clipboard.writeText(text);
+      }, pasteText);
+      await page.keyboard.press('Control+v');
       await delay(300);
       const lines = await content.locator('.cm-line').allTextContents();
       const pasted = lines.join('\n');
