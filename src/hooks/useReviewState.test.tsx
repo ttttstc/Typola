@@ -62,7 +62,7 @@ describe('useReviewState 持久化', () => {
   });
 
   it('意见变更写回后,跨挂载按规范化路径恢复 comments 与 dirty', async () => {
-    const originalPath = String.raw`D:\Docs\Article.md`;
+    const originalPath = String.raw`d:\docs\article.md`;
 
     await act(async () => root.render(
       <Harness filePath={originalPath} onController={(value) => { controller = value; }} />,
@@ -87,7 +87,7 @@ describe('useReviewState 持久化', () => {
 
   it('文档路径切换时恢复目标文档的已持久化状态', async () => {
     const firstPath = 'D:/docs/first.md';
-    const secondPath = String.raw`D:\Docs\Second.md`;
+    const secondPath = String.raw`d:\docs\second.md`;
     const snapshot: ReviewStateSnapshot = {
       comments: [persistedComment(secondPath, '第二份文档意见', 'ignored')],
       dirty: false,

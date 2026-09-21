@@ -188,7 +188,7 @@ The terminal is implemented with Tauri commands plus event streaming:
 
 ## AI Review and Revision
 
-- Review mode owns one unified comment list. Human comments keep their original text and have no required category; AI comments carry an optional review basis (`style.md`, Skill, or user requirement). Review comments and their `active` / `ignored` / `applied` state persist in versioned local storage keyed by normalized document path; a damaged record does not block opening the document. Ignored comments are terminal records kept for history, excluded from default display, revision prompts, and review-export output, with no restore action in the product path.
+- Review mode owns one unified comment list. Human comments keep their original text and have no required category; AI comments carry an optional review basis (`style.md`, Skill, or user requirement). Review comments and their `active` / `ignored` / `applied` state persist in versioned local storage keyed by normalized document path, with host-specific case sensitivity; a damaged record does not block opening the document, and deleting a workspace file or directory clears its records. Ignored comments are terminal records kept for history, excluded from default display, revision prompts, and review-export output, with no restore action in the product path.
 
 - Review actions derive their gates independently: export is available when any non-ignored comment remains, including applied history; AI revision is available only when pending comments remain. The panel does not use a single mixed count for these actions.
 

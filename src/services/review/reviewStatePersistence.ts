@@ -13,7 +13,11 @@ const REVIEW_BLOCK_KINDS = new Set<NonNullable<SelectionAnchor['block']>['kind']
 ]);
 
 export function normalizeReviewDocumentPath(filePath: string): string {
-  return filePath.replace(/\\/gu, '/').toLowerCase();
+  const normalized = filePath.replace(/\\/gu, '/');
+  if (typeof navigator !== 'undefined' && /windows|win32|win64/iu.test(`${navigator.platform} ${navigator.userAgent}`)) {
+    return normalized.toLowerCase();
+  }
+  return normalized;
 }
 
 export function reviewStateStorageKey(filePath: string): string {
@@ -42,7 +46,23 @@ export function saveReviewState(filePath: string | undefined, state: ReviewState
       comments: state.comments,
       dirty: state.dirty,
     }));
-  } catch {}
+  } catch {
+    return;
+  }
+}
+
+export function removeReviewStatesUnder(path: string | undefined): void {
+  if (!path || typeof localStorage === 'undefined') return;
+  const normalizedPath = normalizeReviewDocumentPath(path).replace(/\/+$/u, '');
+  const nestedPrefix = `${normalizedPath}/`;
+  const keysToRemove: string[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key || !key.startsWith(REVIEW_STATE_STORAGE_PREFIX)) continue;
+    const storedPath = key.slice(REVIEW_STATE_STORAGE_PREFIX.length);
+    if (storedPath === normalizedPath || storedPath.startsWith(nestedPrefix)) keysToRemove.push(key);
+  }
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
 }
 
 function isPersistedReviewState(value: unknown): value is { version: 1; comments: ReviewComment[]; dirty: boolean } {
