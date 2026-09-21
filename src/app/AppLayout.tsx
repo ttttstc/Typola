@@ -64,6 +64,7 @@ import {
 import { ensureArtifactManifest } from '../services/artifacts/manifest';
 import type { ArtifactRecord } from '../services/artifacts/types';
 import { saveFileDialog } from '../services/dialogService';
+import { removeReviewStatesUnder } from '../services/review/reviewStatePersistence';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import type { SelectionAnchor } from '../services/agent/types';
 import { resolveWorkbenchWorkspaceRoot } from '../services/agent/workbenchWorkspace';
@@ -2429,6 +2430,7 @@ export function AppLayout() {
     try {
       const { deleteWorkspaceEntry } = await import('../services/workspaceService');
       await deleteWorkspaceEntry(entry.path, workspaceRoot);
+      removeReviewStatesUnder(entry.path);
       forceCloseTabsUnder(entry.path);
       bumpWorkspaceTreeVersion();
     } catch (error) {

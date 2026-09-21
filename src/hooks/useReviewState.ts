@@ -1,6 +1,6 @@
 // 检视意见 hook —— 同一列表管理人工与 AI 意见,按文档保留状态。
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   EMPTY_REVIEW_STATE,
   addAIReviewComment,
@@ -16,6 +16,11 @@ import {
   type ReviewStateSnapshot,
 } from '../services/review/reviewState';
 import type { SelectionAnchor } from '../services/agent/types';
+import {
+  loadReviewState,
+  normalizeReviewDocumentPath,
+  saveReviewState,
+} from '../services/review/reviewStatePersistence';
 
 type DocStates = Map<string, ReviewStateSnapshot>;
 
@@ -35,24 +40,36 @@ type UseReviewStateResult = {
 };
 
 export function useReviewState(currentFilePath: string | undefined): UseReviewStateResult {
+  const documentKey = currentFilePath ? normalizeReviewDocumentPath(currentFilePath) : undefined;
+  const persistedState = useMemo(
+    () => (currentFilePath ? loadReviewState(currentFilePath) : undefined),
+    [currentFilePath],
+  );
   const [docStates, setDocStates] = useState<DocStates>(() => new Map());
 
   const state = useMemo<ReviewStateSnapshot>(() => {
-    if (!currentFilePath) return EMPTY_REVIEW_STATE;
-    return docStates.get(currentFilePath) ?? EMPTY_REVIEW_STATE;
-  }, [docStates, currentFilePath]);
+    if (!documentKey) return EMPTY_REVIEW_STATE;
+    return docStates.get(documentKey) ?? persistedState ?? EMPTY_REVIEW_STATE;
+  }, [docStates, documentKey, persistedState]);
+
+  useEffect(() => {
+    if (!currentFilePath || !documentKey) return;
+    const current = docStates.get(documentKey) ?? persistedState;
+    if (!current) return;
+    saveReviewState(currentFilePath, current);
+  }, [currentFilePath, documentKey, docStates, persistedState]);
 
   const mutate = useCallback((transform: (prev: ReviewStateSnapshot) => ReviewStateSnapshot) => {
-    if (!currentFilePath) return;
+    if (!documentKey) return;
     setDocStates((prev) => {
-      const current = prev.get(currentFilePath) ?? EMPTY_REVIEW_STATE;
+      const current = prev.get(documentKey) ?? persistedState ?? EMPTY_REVIEW_STATE;
       const next = transform(current);
       if (next === current) return prev;
       const map = new Map(prev);
-      map.set(currentFilePath, next);
+      map.set(documentKey, next);
       return map;
     });
-  }, [currentFilePath]);
+  }, [documentKey, persistedState]);
 
   const addComment = useCallback((anchor: SelectionAnchor, text: string) => {
     if (!currentFilePath) return;
@@ -90,14 +107,14 @@ export function useReviewState(currentFilePath: string | undefined): UseReviewSt
   }, [mutate]);
 
   const hydrateComments = useCallback((comments: ReviewComment[]) => {
-    if (!currentFilePath || comments.length === 0) return;
+    if (!documentKey || comments.length === 0) return;
     setDocStates((prev) => {
-      if (prev.has(currentFilePath)) return prev;
+      if (prev.has(documentKey) || persistedState) return prev;
       const map = new Map(prev);
-      map.set(currentFilePath, { comments, dirty: false });
+      map.set(documentKey, { comments, dirty: false });
       return map;
     });
-  }, [currentFilePath]);
+  }, [documentKey, persistedState]);
 
   return {
     state,
