@@ -1,6 +1,7 @@
 import { StateField, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType } from '@codemirror/view';
 import { sanitizeHtml } from '../../../services/sanitizeService';
+import { collectRawHtmlRanges } from './markdownSyntaxRanges';
 
 function selectionIntersects(selection: EditorView['state']['selection']['ranges'][number], from: number, to: number): boolean {
   if (selection.empty) return selection.from > from && selection.from < to;
@@ -54,11 +55,9 @@ class HtmlWidget extends WidgetType {
 
 function build(state: EditorView['state']) {
   const source = state.doc.toString(); const ranges = [];
-  const pattern = /<!--[\s\S]*?-->|<(details|div|table|figure|blockquote)\b[^>]*>[\s\S]*?<\/\1>|<(kbd|mark|sub|sup)\b[^>]*>[^\n]*?<\/\2>|<(script|style|textarea|template)\b[^>]*>[\s\S]*?<\/\3>/giu;
-  for (const match of source.matchAll(pattern)) {
-    const from = match.index ?? 0; const to = from + match[0].length;
-    if (state.selection.ranges.some((selection) => selectionIntersects(selection, from, to))) continue;
-    ranges.push(Decoration.replace({ widget: new HtmlWidget(match[0]), block: /^(details|div|table|figure|blockquote)/iu.test(match[1] ?? '') }).range(from, to));
+  for (const range of collectRawHtmlRanges(state)) {
+    if (state.selection.ranges.some((selection) => selectionIntersects(selection, range.from, range.to))) continue;
+    ranges.push(Decoration.replace({ widget: new HtmlWidget(source.slice(range.from, range.to)), block: range.block }).range(range.from, range.to));
   }
   return Decoration.set(ranges, true);
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { markdown } from '@codemirror/lang-markdown';
 import {
   findLinkAtSelection,
   linkOpenExtension,
@@ -14,7 +15,7 @@ function createView(doc: string, extensions: ReturnType<typeof taskToggleExtensi
   const parent = document.createElement('div');
   document.body.appendChild(parent);
   return new EditorView({
-    state: EditorState.create({ doc, extensions }),
+    state: EditorState.create({ doc, extensions: [markdown(), ...extensions] }),
     parent,
   });
 }
@@ -108,6 +109,27 @@ it('click handler only triggers on ctrl/meta modifier', () => {
     const event = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: rect.left + 1, clientY: rect.top + 1 });
     fakeAnchor.dispatchEvent(event);
     expect(onOpenLink).not.toHaveBeenCalled();
+    view.destroy();
+  });
+
+  it('opens an atomic link widget on Ctrl/Cmd-click', () => {
+    const source = '[![alt](https://example.com/img.png)](https://example.com/中文路径)';
+    const onOpenLink = vi.fn();
+    const view = createView(source, linkOpenExtension({ onOpenLink }));
+    const image = document.createElement('span');
+    image.className = 'cm-atomic-image';
+    const link = document.createElement('span');
+    link.className = 'cm-atomic-link';
+    image.append(link);
+    view.contentDOM.append(image);
+    vi.spyOn(view, 'posAtCoords').mockReturnValue(source.indexOf('alt') + 1);
+    vi.spyOn(view, 'posAtDOM').mockReturnValue(source.indexOf('alt') + 1);
+
+    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
+
+    expect(onOpenLink).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://example.com/中文路径',
+    }));
     view.destroy();
   });
 

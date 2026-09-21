@@ -134,6 +134,25 @@ describe('createMarkdownExtensions live preview', () => {
     expect(image?.getAttribute('src')).toContain('文件');
   });
 
+  it('reveals a special-path image source when the caret enters its Markdown range', () => {
+    const source = '![中文图片](中文 文件 名.png)';
+    view = createView(source, true);
+    moveCursorToEnd(view);
+    expect(view.contentDOM.querySelector('.cm-atomic-image')).not.toBeNull();
+
+    view.dispatch({ selection: { anchor: source.indexOf('中文图片') } });
+
+    expect(view.contentDOM.querySelector('.cm-atomic-image')).toBeNull();
+    expect(view.contentDOM.textContent).toContain('中文 文件 名.png');
+  });
+
+  it('does not replace image-looking text inside fenced code', () => {
+    view = createView(['```', '![中文图片](中文 文件 名.png)', '```'].join('\n'), true);
+
+    expect(view.contentDOM.querySelector('.cm-atomic-image')).toBeNull();
+    expect(view.contentDOM.textContent).toContain('中文 文件 名.png');
+  });
+
   it('sanitizes inline raw HTML widgets', () => {
     view = createView('<mark onclick="alert(1)">重点</mark> <sup>2</sup>', true);
     moveCursorToEnd(view);

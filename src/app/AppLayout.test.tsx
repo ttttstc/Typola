@@ -369,7 +369,13 @@ describe('AppLayout update flow', () => {
   });
 
   it('opens a file path delivered by the desktop system open event', async () => {
-    tauriCoreMock.invoke.mockResolvedValue(['/tmp/系统打开.md']);
+    // PR #284 review:打开分流新增 path_is_directory 查询,mock 需按命令分流,
+    // 不能对全部 invoke 返回同一真值数组(否则路径被误判为目录,文件树渲染畸形 entries)。
+    tauriCoreMock.invoke.mockImplementation(async (command: string) => {
+      if (command === 'pending_opened_paths') return ['/tmp/系统打开.md'];
+      if (command === 'path_is_directory') return false;
+      return [];
+    });
 
     await act(async () => {
       root.render(<AppLayout />);

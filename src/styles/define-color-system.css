@@ -123,6 +123,28 @@ html[data-color-system='define-color'] #root :is(button, [role='button'], [role=
   border-color: var(--dc-border-strong);
 }
 
+/* #283:开关/选中态不受统一控件底色影响 —— 上面的统一控件规则特异性压过
+   .toggle-switch.on 等选中态样式,把开/关、选/未选刷成同底色,无法辨认。
+   同特异性、后声明覆盖;hover 变体用于压过上面 :hover 统一规则。 */
+html[data-color-system='define-color'] #root :is(.toggle-switch):not(.dc-editor):not(.dc-editor *),
+html[data-color-system='define-color'] #root :is(.toggle-switch):hover:not(.dc-editor):not(.dc-editor *) {
+  background-color: color-mix(in oklch, var(--theme-border) 72%, var(--theme-surface));
+  border-color: var(--theme-border-hover);
+}
+
+html[data-color-system='define-color'] #root :is(.toggle-switch.on):not(.dc-editor):not(.dc-editor *),
+html[data-color-system='define-color'] #root :is(.toggle-switch.on:hover):not(.dc-editor):not(.dc-editor *) {
+  background-color: var(--theme-accent);
+  border-color: var(--theme-accent);
+}
+
+html[data-color-system='define-color'] #root :is(.appearance-mode-switch button.active, .theme-card.active):not(.dc-editor):not(.dc-editor *),
+html[data-color-system='define-color'] #root :is(.appearance-mode-switch button.active:hover, .theme-card.active:hover):not(.dc-editor):not(.dc-editor *) {
+  background-color: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: var(--theme-paper);
+}
+
 html[data-color-system='define-color'] #root :is(.app-toolbar button, .left-rail-tabs button, .right-rail-tabs button, .settings-icon-button, .floating-toc-action, .floating-toc-chevron) {
   color: var(--dc-icon-shout);
   background-color: transparent;

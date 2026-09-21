@@ -82,6 +82,7 @@ type UseFileTabsResult = {
   handleOpenPath: (path: string) => Promise<void>;
   handleSwitchTab: (tabId: string) => void;
   handleCloseTab: (tabId: string) => void;
+  forceCloseTabsUnder: (deletedPath: string) => void;
   handleRequestRename: (tabId?: string) => void;
   handleConfirmRename: () => Promise<void>;
   handleSave: () => Promise<void>;
@@ -96,8 +97,14 @@ function sameDocumentPath(a: string, b: string): boolean {
   return documentPathKey(a) === documentPathKey(b);
 }
 
+// PR #284 review:路径比较仅统一分隔符;大小写只在 Windows(大小写不敏感文件系统)折叠,
+// Linux/macOS 上 /ws/Foo 与 /ws/foo 是两个不同文件,无条件 toLowerCase 会误匹配。
+const PATH_KEY_CASE_INSENSITIVE = typeof navigator !== 'undefined'
+  && /windows/i.test(navigator.userAgent);
+
 function documentPathKey(path: string): string {
-  return path.replace(/\\/g, '/').toLowerCase();
+  const normalized = path.replace(/\\/g, '/');
+  return PATH_KEY_CASE_INSENSITIVE ? normalized.toLowerCase() : normalized;
 }
 
 function fileTabId(file: OpenedFile, fallback = ''): string {
@@ -647,6 +654,48 @@ export function useFileTabs({
     })();
   }, [canChangeDocument, clearSaveVisualTimer, confirmCloseTabWithDirtyFile, extractToc, setToc]);
 
+  // Issue #283:删除工作区文件/文件夹后,强制关闭位于该路径之下(含等于)的所有标签。
+  // 删除确认对话框已提示未保存修改将随之丢弃,故不弹二次 dirty 确认;
+  // activeTab 被关掉时按 handleCloseTab 相同策略重选相邻标签。
+  const forceCloseTabsUnder = useCallback((deletedPath: string) => {
+    const key = documentPathKey(deletedPath).replace(/\/+$/, '');
+    const matches = (tabPath: string) => {
+      const tabKey = documentPathKey(tabPath);
+      return tabKey === key || tabKey.startsWith(`${key}/`);
+    };
+    const closingActive = openTabsRef.current.some((tab) => (
+      tab.id === activeTabIdRef.current && tab.file.path && matches(tab.file.path)
+    ));
+    const removedIndex = Math.max(0, openTabsRef.current.findIndex((tab) => (
+      tab.file.path && matches(tab.file.path)
+    )));
+    const nextTabs = openTabsRef.current.filter((tab) => !(tab.file.path && matches(tab.file.path)));
+    if (nextTabs.length === openTabsRef.current.length) return;
+    openTabsRef.current = nextTabs;
+    setOpenTabs(nextTabs);
+    dirtyFilesRef.current = nextTabs.some((tab) => tab.file.dirty);
+    if (!closingActive) return;
+    const nextActive = nextTabs[Math.max(0, removedIndex - 1)] ?? nextTabs[0];
+    if (nextActive) {
+      activeTabIdRef.current = nextActive.id;
+      fileRef.current = nextActive.file;
+      setActiveTabId(nextActive.id);
+      setFile(nextActive.file);
+      clearSaveVisualTimer();
+      setSaveVisualState(nextActive.file.dirty ? 'dirty' : 'idle');
+      setToc(nextActive.file.fileType === 'docx' ? [] : extractToc(nextActive.file.content));
+    } else {
+      const emptyFile = createEmptyFile();
+      activeTabIdRef.current = '';
+      fileRef.current = emptyFile;
+      setActiveTabId('');
+      setFile(emptyFile);
+      clearSaveVisualTimer();
+      setSaveVisualState('idle');
+      setToc([]);
+    }
+  }, [clearSaveVisualTimer, extractToc, setToc]);
+
   const handleRequestRename = useCallback((tabId = activeTabIdRef.current) => {
     const target = openTabsRef.current.find((tab) => tab.id === tabId);
     const targetFile = target?.file ?? fileRef.current;
@@ -1008,6 +1057,7 @@ export function useFileTabs({
     handleOpenPath,
     handleSwitchTab,
     handleCloseTab,
+    forceCloseTabsUnder,
     handleRequestRename,
     handleConfirmRename,
     handleSave,

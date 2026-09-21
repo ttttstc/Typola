@@ -1,6 +1,7 @@
-import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
+import { syntaxTree } from '@codemirror/language';
 import { StateField, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType } from '@codemirror/view';
+import { collectCodeRanges, isContainedByRange } from './markdownSyntaxRanges';
 
 class ImagePathWidget extends WidgetType {
   private readonly src: string;
@@ -30,7 +31,7 @@ class ImagePathWidget extends WidgetType {
       const position = view.posAtDOM(wrap);
       if (position < 0) return;
       view.focus();
-      view.dispatch({ selection: { anchor: Math.max(0, position - 1) }, scrollIntoView: false });
+      view.dispatch({ selection: { anchor: position }, scrollIntoView: false });
     });
     return wrap;
   }
@@ -59,7 +60,12 @@ function parseImageSource(raw: string): { alt: string; src: string } | null {
 
 function build(state: EditorView['state']): ReturnType<typeof Decoration.set> {
   const ranges = [];
-  const tree = ensureSyntaxTree(state, state.doc.length, 200) ?? syntaxTree(state);
+  // Do not synchronously force the parser to the end of a large document on
+  // every keystroke. The current tree is enough to distinguish standard images;
+  // the raw scan below only fills the parser gap for destinations containing
+  // spaces or CJK characters.
+  const tree = syntaxTree(state);
+  const codeRanges = collectCodeRanges(state);
   const standardImages: Array<{ from: number; to: number }> = [];
   tree.iterate({
     enter: (node) => {
@@ -73,6 +79,12 @@ function build(state: EditorView['state']): ReturnType<typeof Decoration.set> {
     const from = match.index ?? 0;
     const to = from + match[0].length;
     if (standardImages.some((range) => range.from === from && range.to === to)) continue;
+    if (codeRanges.some((range) => isContainedByRange(range, from, to))) continue;
+    if (state.selection.ranges.some((selection) => (
+      selection.empty
+        ? selection.from >= from && selection.from < to
+        : selection.from < to && selection.to > from
+    ))) continue;
     const parsed = parseImageSource(match[0]);
     if (!parsed) continue;
     ranges.push(Decoration.replace({
@@ -86,7 +98,9 @@ function build(state: EditorView['state']): ReturnType<typeof Decoration.set> {
 export function imagePathExtension(): Extension {
   const field = StateField.define({
     create: build,
-    update: (value, transaction) => transaction.docChanged ? build(transaction.state) : value.map(transaction.changes),
+    update: (value, transaction) => transaction.docChanged || transaction.selection
+      ? build(transaction.state)
+      : value.map(transaction.changes),
     provide: (field) => EditorView.decorations.from(field),
   });
   return field;

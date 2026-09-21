@@ -22,3 +22,10 @@ export function listWorkspaceEntries(path: string): Promise<WorkspaceEntry[]> {
 export function workspaceNameFromPath(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() || path;
 }
+
+/** Issue #283:工作区文件树右键删除 —— 永久删除文件或文件夹(后端校验必须位于工作区内)。 */
+export function deleteWorkspaceEntry(path: string, workspaceRoot: string): Promise<void> {
+  return invoke('delete_workspace_entry', {
+    request: { path, workspace_root: workspaceRoot },
+  });
+}

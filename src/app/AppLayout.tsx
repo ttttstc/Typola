@@ -413,6 +413,7 @@ export function AppLayout() {
     handleOpenPath,
     handleSwitchTab,
     handleCloseTab,
+    forceCloseTabsUnder,
     handleRequestRename,
     handleConfirmRename,
     handleSave,
@@ -494,6 +495,17 @@ export function AppLayout() {
     maxWidth: LEFT_PANEL_MAX_WIDTH,
     initialMode: workspaceRoot ? 'workspace' : 'none',
   });
+  // Issue #283:工作区根在运行期被设置时（argv 目录启动 / 手动「打开文件夹」），
+  // 把左栏从 none 带到 workspace —— initialMode 只在首渲染求值，不联动的话
+  // 「用 Typola 打开」文件夹后界面没有任何可见反馈，文件树要重启才出现。
+  // PR #284 review:只响应 workspaceRoot 变化的边沿(空→非空或换根)且只触发一次,
+  // 不持续把用户主动收起的 none 纠正回 workspace —— 否则文件树永远无法收起。
+  const lastAutoOpenedWorkspaceRootRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!workspaceRoot || workspaceRoot === lastAutoOpenedWorkspaceRootRef.current) return;
+    lastAutoOpenedWorkspaceRootRef.current = workspaceRoot;
+    setLeftRailMode((mode) => (mode === 'none' ? 'workspace' : mode));
+  }, [setLeftRailMode, workspaceRoot]);
   const { docMode, setDocMode } = useDocumentMode({
     enabled: file.fileType !== 'docx',
     isTauriRuntime,
@@ -2094,11 +2106,28 @@ export function AppLayout() {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
 
-    const openFirstSystemPath = (paths: unknown) => {
+    const openFirstSystemPath = async (paths: unknown) => {
       if (!Array.isArray(paths)) return;
-      const path = firstOpenableDocumentPath(paths.filter((candidate): candidate is string => (
+      const candidates = paths.filter((candidate): candidate is string => (
         typeof candidate === 'string'
-      )));
+      ));
+      if (candidates.length === 0) return;
+      // PR #284 review:「用 Typola 打开」的目录分流用后端真实文件系统元数据判断,
+      // 不按扩展名反推 —— 名为 notes.md 的目录也会被放行,不能误判为文档。
+      const { invoke: invokeTauri } = await import('@tauri-apps/api/core');
+      let folderPath: string | null = null;
+      for (const candidate of candidates) {
+        if (await invokeTauri<boolean>('path_is_directory', { request: { path: candidate } })) {
+          folderPath = candidate;
+          break;
+        }
+      }
+      if (folderPath) {
+        reopenAttempted.current = true;
+        setWorkspaceRoot(folderPath);
+        return;
+      }
+      const path = firstOpenableDocumentPath(candidates);
       if (!path) return;
 
       reopenAttempted.current = true;
@@ -2123,7 +2152,7 @@ export function AppLayout() {
       unlisten = listener;
       const pendingPaths = await invoke<string[]>('pending_opened_paths');
       if (!cancelled) {
-        openFirstSystemPath(pendingPaths);
+        void openFirstSystemPath(pendingPaths);
         setSystemOpenChecked(true);
       }
     }).catch((error) => {
@@ -2137,7 +2166,7 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
     };
-  }, [handleOpenPath, isTauriRuntime]);
+  }, [handleOpenPath, isTauriRuntime, setWorkspaceRoot]);
 
   useEffect(() => {
     if (!systemOpenChecked || !settings.reopenLastFile || file.path || reopenAttempted.current) return;
@@ -2385,6 +2414,28 @@ export function AppLayout() {
       await messageDialog(String(error), { title: '打开所在文件夹失败' });
     }
   }, []);
+
+  // Issue #283:工作区文件树右键「删除」—— 永久删除(后端校验必须位于工作区内)。
+  // 删除后强制关闭对应标签(未保存修改随删除丢弃,确认对话框已提示)并刷新文件树。
+  const handleDeleteWorkspaceEntry = useCallback(async (entry: { name: string; path: string; isDir: boolean }) => {
+    if (!workspaceRoot) return;
+    const label = entry.isDir ? `文件夹“${entry.name}”及其全部内容` : `“${entry.name}”`;
+    const confirmed = await confirmDialog(`永久删除${label}？该操作不可撤销，也不会移入回收站。`, {
+      title: '删除',
+      okLabel: '删除',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { deleteWorkspaceEntry } = await import('../services/workspaceService');
+      await deleteWorkspaceEntry(entry.path, workspaceRoot);
+      forceCloseTabsUnder(entry.path);
+      bumpWorkspaceTreeVersion();
+    } catch (error) {
+      console.warn('Failed to delete workspace entry:', error);
+      await messageDialog(String(error), { title: '删除失败' });
+    }
+  }, [bumpWorkspaceTreeVersion, forceCloseTabsUnder, messageDialog, workspaceRoot]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -2682,6 +2733,7 @@ export function AppLayout() {
           },
           onRevealInFolder: (path) => { void handleRevealPathInFolder(path); },
           onOpenExternal: (path) => { void handleOpenArtifactExternally(path); },
+          onDeleteEntry: (entry) => { void handleDeleteWorkspaceEntry(entry); },
         }}
         onLeftPanelResize={handleLeftPanelResizerPointerDown}
         showToc={!isDocx}

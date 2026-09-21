@@ -206,6 +206,43 @@ async function ensureWriting(page) {
   await page.locator('.cm6-markdown-editor-pane').waitFor({ state: 'visible' });
 }
 
+async function installOpenUrlProbe(page) {
+  return page.evaluate(() => {
+    const internals = window.__TAURI_INTERNALS__;
+    if (!internals || typeof internals.invoke !== 'function') return false;
+    const existing = internals.invoke;
+    const calls = [];
+    window.__typolaOpenUrlCalls = calls;
+    window.__typolaLinkClickProbe = [];
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      const link = target instanceof Element ? target.closest('.cm-atomic-link, .cm-atomic-image, a') : null;
+      if (!link) return;
+      const rect = link.getBoundingClientRect();
+      window.__typolaLinkClickProbe.push({
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        tag: link.tagName,
+        className: link.className,
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      });
+    }, true);
+    internals.invoke = (command, args, options) => {
+      if (command === 'plugin:opener|open_url') calls.push(args?.url ?? args);
+      return existing.call(internals, command, args, options);
+    };
+    return true;
+  });
+}
+
+async function readOpenUrlCalls(page) {
+  return page.evaluate(() => window.__typolaOpenUrlCalls ?? []);
+}
+
+async function readLinkClickProbe(page) {
+  return page.evaluate(() => window.__typolaLinkClickProbe ?? []);
+}
+
 async function replaceEditorContent(page, markdown) {
   await ensureSource(page);
   const content = page.locator('.cm-content');
@@ -2014,14 +2051,16 @@ async function main() {
       assert.ok(await link.count() >= 1, `嵌套链接未生成 live-preview link widget：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
       const image = page.locator('.cm6-markdown-editor-pane .cm-atomic-image img[src*="img.png"]').first();
       assert.ok(await image.count() >= 1, `嵌套链接内图片 widget 缺失：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
-      // live preview 会用 widget 隐藏 Markdown URL；切回源码模式后再读取真实 source。
-      await ensureSource(page);
-      const source = await page.locator('.cm6-markdown-editor-pane .cm-content').textContent();
-      assert.ok(source?.includes('https://example.com/page') && source.includes('https://example.com/img.png'), `嵌套链接 source 丢失目标：${source}`);
+      assert.ok(await installOpenUrlProbe(page), '无法安装 Tauri opener 观测钩子');
+      await link.click();
+      await delay(300);
+      const calls = await readOpenUrlCalls(page);
+      assert.ok(calls.some((url) => String(url).includes('https://example.com/page')), `点击未打开嵌套链接目标：calls=${JSON.stringify(calls)} probe=${JSON.stringify(await readLinkClickProbe(page))}`);
     },
     async () => ({
       linkWidgetCount: await page.locator('.cm6-markdown-editor-pane .cm-atomic-link').count(),
       imageCount: await page.locator('.cm6-markdown-editor-pane .cm-atomic-image img[src*="img.png"]').count(),
+      openUrlCalls: await readOpenUrlCalls(page),
     }),
   );
   await captureUi(page, '31-p0-nested-link');
@@ -2297,14 +2336,18 @@ async function main() {
       const pane = page.locator('.cm6-markdown-editor-pane');
       const link = pane.locator('.cm-atomic-link').first();
       assert.ok(await link.count() >= 1, `中文链接未生成 live-preview link widget：${await pane.innerHTML()}`);
-      // atomic-editor 的写作视图用 span widget 隐藏 Markdown URL；切源码模式验证 URL 仍完整保留。
-      await ensureSource(page);
-      const source = await page.locator('.cm-content').textContent();
-      assert.ok(source?.includes('https://example.com/中文路径'), `中文链接 source 丢失 URL：${source}`);
+      assert.ok(await installOpenUrlProbe(page), '无法安装 Tauri opener 观测钩子');
+      await link.click();
+      await delay(300);
+      const calls = await readOpenUrlCalls(page);
+      const decodedCalls = calls.map((url) => {
+        try { return decodeURIComponent(String(url)); } catch { return String(url); }
+      });
+      assert.ok(decodedCalls.some((url) => url.includes('https://example.com/中文路径')), `点击未打开中文链接目标：calls=${JSON.stringify(calls)} probe=${JSON.stringify(await readLinkClickProbe(page))}`);
     },
     async () => ({
       linkWidgetCount: await page.locator('.cm6-markdown-editor-pane .cm-atomic-link').count(),
-      source: await page.locator('.cm-content').textContent(),
+      openUrlCalls: await readOpenUrlCalls(page),
     }),
   );
   await captureUi(page, '43-p1-chinese-link-url');

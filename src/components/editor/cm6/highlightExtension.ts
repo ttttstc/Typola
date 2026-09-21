@@ -1,5 +1,6 @@
 import { StateField, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType } from '@codemirror/view';
+import { collectCodeRanges, collectRawHtmlRanges, isContainedByRange } from './markdownSyntaxRanges';
 
 class HighlightWidget extends WidgetType {
   private readonly content: string;
@@ -26,24 +27,14 @@ function selectionIntersects(selection: EditorView['state']['selection']['ranges
   return selection.from < to && selection.to > from;
 }
 
-function rawHtmlRanges(source: string): Array<{ from: number; to: number }> {
-  const ranges: Array<{ from: number; to: number }> = [];
-  const pattern = /<!--[\s\S]*?-->|<(details|div|table|figure|blockquote)\b[^>]*>[\s\S]*?<\/\1>|<(kbd|mark|sub|sup)\b[^>]*>[^\n]*?<\/\2>|<(script|style|textarea|template)\b[^>]*>[\s\S]*?<\/\3>/giu;
-  for (const match of source.matchAll(pattern)) {
-    const from = match.index ?? 0;
-    ranges.push({ from, to: from + match[0].length });
-  }
-  return ranges;
-}
-
 function build(state: EditorView['state']) {
   const source = state.doc.toString();
-  const htmlRanges = rawHtmlRanges(source);
+  const excludedRanges = [...collectCodeRanges(state), ...collectRawHtmlRanges(state)];
   const ranges = [];
   for (const match of source.matchAll(/==([^=\n]+)==/gu)) {
     const from = match.index ?? 0;
     const to = from + match[0].length;
-    if (htmlRanges.some((range) => from >= range.from && to <= range.to)) continue;
+    if (excludedRanges.some((range) => isContainedByRange(range, from, to))) continue;
     if (state.selection.ranges.some((selection) => selectionIntersects(selection, from, to))) continue;
     ranges.push(Decoration.replace({ widget: new HighlightWidget(match[1]) }).range(from, to));
   }
