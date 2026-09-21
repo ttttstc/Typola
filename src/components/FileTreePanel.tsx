@@ -32,6 +32,8 @@ type FileTreePanelProps = {
   onOpenFile: (path: string) => void;
   onRevealInFolder?: (path: string) => void;
   onOpenExternal?: (path: string) => void;
+  /** Issue #283:右键删除工作区文件/文件夹(含二次确认,由上层实现)。 */
+  onDeleteEntry?: (entry: WorkspaceEntry) => void;
 };
 
 type TreeNodeProps = {
@@ -45,6 +47,7 @@ type TreeNodeProps = {
   onOpenFile: (path: string) => void;
   onRevealInFolder?: (path: string) => void;
   onOpenExternal?: (path: string) => void;
+  onDeleteEntry?: (entry: WorkspaceEntry) => void;
   styleIndex?: number;
 };
 
@@ -69,6 +72,7 @@ function TreeNode({
   onOpenFile,
   onRevealInFolder,
   onOpenExternal,
+  onDeleteEntry,
   styleIndex = 0,
 }: TreeNodeProps) {
   const [{ expanded, childrenMounted }, setExpansion] = useState({
@@ -239,6 +243,11 @@ function TreeNode({
               打开所在文件夹
             </button>
           )}
+          {onDeleteEntry && (
+            <button type="button" role="menuitem" className="file-tree-menu-delete" onClick={() => { onDeleteEntry(entry); setMenu(null); }}>
+              删除
+            </button>
+          )}
           <button type="button" role="menuitem" onClick={() => { void copyPath(); }}>
             {copyFeedback === 'copied' ? '已复制' : copyFeedback === 'failed' ? '复制失败' : '复制路径'}
           </button>
@@ -269,6 +278,7 @@ function TreeNode({
                 onOpenFile={onOpenFile}
                 onRevealInFolder={onRevealInFolder}
                 onOpenExternal={onOpenExternal}
+                onDeleteEntry={onDeleteEntry}
                 styleIndex={index}
               />
             ))}
@@ -290,6 +300,7 @@ export function FileTreePanel({
   onOpenFile,
   onRevealInFolder,
   onOpenExternal,
+  onDeleteEntry,
 }: FileTreePanelProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
@@ -354,6 +365,7 @@ export function FileTreePanel({
             onOpenFile={onOpenFile}
             onRevealInFolder={onRevealInFolder}
             onOpenExternal={onOpenExternal}
+            onDeleteEntry={onDeleteEntry}
             styleIndex={index}
           />
         ))}

@@ -10,6 +10,11 @@
   WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.htm\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
   WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.docx\shell\Typola.open" "" "用 Typola 打开"
   WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.docx\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
+  ; Issue #283:文件夹右键「用 Typola 打开」—— 目录右键用 %1,文件夹空白处右键用 %V。
+  WriteRegStr HKCU "Software\Classes\Directory\shell\Typola.open" "" "用 Typola 打开"
+  WriteRegStr HKCU "Software\Classes\Directory\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\Directory\Background\shell\Typola.open" "" "用 Typola 打开"
+  WriteRegStr HKCU "Software\Classes\Directory\Background\shell\Typola.open\command" "" '"$INSTDIR\Typola.exe" "%V"'
   DetailPrint "Checking Microsoft Edge WebView2 Runtime..."
 
   ClearErrors
@@ -47,4 +52,6 @@
   DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.html\shell\Typola.open"
   DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.htm\shell\Typola.open"
   DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.docx\shell\Typola.open"
+  DeleteRegKey HKCU "Software\Classes\Directory\shell\Typola.open"
+  DeleteRegKey HKCU "Software\Classes\Directory\Background\shell\Typola.open"
 !macroend

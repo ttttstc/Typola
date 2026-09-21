@@ -5,7 +5,7 @@
 //    widget 闪跳、光标视觉乱飞）；
 // 2) 外部整篇替换（AI 候选稿/agent 写盘重载）时光标应按 ChangeSet 映射保留；
 // 3) 切换文档后再切回，光标应恢复为该文档上次的状态。
-import { act, createRef, useState } from 'react';
+import { act, createRef, useCallback, useState } from 'react';
 import type { RefObject } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { StateEffect } from '@codemirror/state';
@@ -57,21 +57,30 @@ async function mountControlled(initial: string, initialPath = '/tmp/a.md'): Prom
     setFilePath: () => {},
     view: null,
     reconfigureCount: () => 0,
+    onChangeCalls: () => 0,
   };
   let reconfigureCount = 0;
+  let onChangeCalls = 0;
 
   function Harness() {
     const [value, setValue] = useState(initial);
     const [filePath, setFilePath] = useState(initialPath);
+    // onChange 必须引用稳定:内联箭头函数会让 EditorPane 的 useCallback 链失效,
+    // @uiw 的 reconfigure effect 对 onChange 变化触发全量重配(正是第 1 个用例防的回归)。
+    const handleChange = useCallback((next: string) => {
+      onChangeCalls += 1;
+      setValue(next);
+    }, []);
     handle.value = value;
     handle.filePath = filePath;
     handle.setValue = setValue;
     handle.setFilePath = setFilePath;
+    handle.onChangeCalls = () => onChangeCalls;
     return (
       <EditorPane
         ref={kernelRef}
         source={value}
-        onChange={setValue}
+        onChange={handleChange}
         filePath={filePath}
         onEditorReady={(view) => {
           if (handle.view) return;
@@ -262,5 +271,54 @@ describe('EditorPane 光标稳定性', () => {
     });
     expect(view.state.doc.toString()).toBe(docA);
     expect(view.state.selection.main.head).toBe(betaPos);
+  });
+
+  // Issue #283:程序性外部替换不得触发 onChange —— 打开/切标签/磁盘重载走的是
+  // EditorPane 的外部同步 dispatch,一旦像用户输入一样触发 onChange,上层
+  // handleContentChange 会重算 dirty/误 bump revision,出现「打开或点击正文就显示已修改」。
+  it('外部同步替换不触发 onChange（打开/切标签不误标已修改）', async () => {
+    const docA = 'alpha\nbeta\ngamma';
+    const docB = 'one\ntwo';
+    const { handle } = await mountControlled(docA, '/tmp/a.md');
+    const view = handle.view!;
+    expect(handle.onChangeCalls()).toBe(0);
+
+    // 打开文件 B（source 整篇替换 + 路径变化）
+    await act(async () => {
+      handle.setFilePath('/tmp/b.md');
+      handle.setValue(docB);
+    });
+    expect(view.state.doc.toString()).toBe(docB);
+    expect(handle.onChangeCalls()).toBe(0);
+
+    // 磁盘重载式替换（同路径、正文变化）
+    await act(async () => {
+      handle.setValue('one\ntwo\nreloaded');
+    });
+    expect(view.state.doc.toString()).toBe('one\ntwo\nreloaded');
+    expect(handle.onChangeCalls()).toBe(0);
+
+    // 同内容文件互切（A/B 正文完全一致）也不触发 onChange
+    await act(async () => {
+      handle.setFilePath('/tmp/c.md');
+      handle.setValue('one\ntwo\nreloaded');
+    });
+    expect(handle.onChangeCalls()).toBe(0);
+
+    // 对照:用户输入必须照常触发 onChange（否则 dirty 标记丢失）
+    const len = view.state.doc.length;
+    act(() => {
+      view.dispatch({ changes: { from: len, to: len, insert: '!' }, selection: { anchor: len + 1 } });
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(handle.onChangeCalls()).toBe(1);
+    expect(handle.value).toBe('one\ntwo\nreloaded!');
+
+    // 对照:纯光标移动(点击正文)不触发 onChange
+    act(() => {
+      view.dispatch({ selection: { anchor: 0 } });
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(handle.onChangeCalls()).toBe(1);
   });
 });

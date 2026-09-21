@@ -1959,7 +1959,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .editor-pane .cm-editor .cm-gutters {
   width: 44px;
   font-size: 11px;
-  color: var(--theme-border);
+  /* #283:源码模式行号此前用 --theme-border(边框色,对比度过低),与写作模式
+     gutter 的 --theme-editor-gutter-text 统一,保证行号可读。 */
+  color: var(--theme-editor-gutter-text);
   background: transparent;
   border-right: none;
 }
@@ -3661,12 +3663,27 @@ html[data-theme-id='brutalist'] .theme-card:hover {
   box-shadow: 6px 6px 0 0 #000 !important;
 }
 
-html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.floating-toc-chevron):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):active:not(:disabled),
+html[data-theme-id='brutalist'] button:not(.floating-toc-action):not(.floating-toc-rail):not(.floating-toc-pin-toggle):not(.floating-toc-close):not(.floating-toc-preference):not(.floating-toc-item):not(.floating-toc-chevron):not(.editor-tab):not(.editor-tab-close):not(.skill-hub-item-main):not(.skill-hub-item-action):not(.file-tree-item):not(.file-tree-folder):not(.file-tree-action):not(.selection-floating-bar-item):not(.toggle-switch):not(.appearance-mode-switch button):active:not(:disabled),
 html[data-theme-id='brutalist'] a:active {
   background-color: #4ECDC4 !important;
   color: #000 !important;
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0 0 #000 !important;
+}
+
+/* #283:绿色(brutalist)主题下选中态高对比 ——
+   - 外观模式切换:active 用深绿底 + 纸色字,与未选中的透明底拉开差距
+     (默认 --theme-paper 底与容器 --theme-control-bg 几乎同色,不可辨);
+   - 主题卡:黑边 !important 盖掉了 .theme-card.active 的 accent 描边,
+     用 accent 光环 + 深绿浅底把「当前主题」标出来。 */
+html[data-theme-id='brutalist'] .appearance-mode-switch button.active {
+  background: var(--theme-accent);
+  color: var(--theme-paper);
+}
+
+html[data-theme-id='brutalist'] .theme-card.active {
+  background: color-mix(in oklab, var(--theme-accent) 16%, var(--theme-paper)) !important;
+  box-shadow: 4px 4px 0 0 #000, 0 0 0 3px var(--theme-accent) !important;
 }
 
 /* === 四类展示控件:整体不要硬阴影 / 黑边 / translate 反馈 === */
@@ -4707,6 +4724,15 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .file-tree-context-menu button:hover {
   background: var(--theme-control-hover-bg);
+}
+
+/* Issue #283:删除是危险操作,用 danger 色与普通菜单项区分。 */
+.file-tree-context-menu button.file-tree-menu-delete {
+  color: var(--theme-danger);
+}
+
+.file-tree-context-menu button.file-tree-menu-delete:hover {
+  background: color-mix(in oklch, var(--theme-danger) 12%, transparent);
 }
 
 @keyframes agent-changed-pulse {
@@ -11375,14 +11401,23 @@ button[data-tooltip]:disabled::before {
   background: var(--theme-editor-gutter-bg);
   border-right: 1px solid var(--theme-border-soft);
 }
+/* #283:行号数字必须锁定等宽字体 —— 否则 fallback 到中文字体(SF Mono→PingFang SC)
+   时数字取形不一致,行号列宽度抖动、基线不齐;tabular-nums 保证 1/4 位数同宽,
+   4 位行号不再被 38px 固定宽裁掉。字号与源码模式 gutter(11px)对齐。 */
 .cm-block-source-line-number {
   display: inline-block;
-  width: 100%;
+  max-width: 100%;
   padding-right: 7px;
+  padding-left: 4px;
   box-sizing: border-box;
-  font-size: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
   text-align: right;
   opacity: 0.72;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 /* Issue #241: Beyond Compare-like candidate workspace */

@@ -250,4 +250,29 @@ describe('useFileTabs 保存可靠性', () => {
     expect(value.file.fileType).toBe('html');
     expect(value.openTabs[0]?.file.fileType).toBe('html');
   });
+
+  // PR #284 review 回归:大小写敏感文件系统上 /ws/Note.md 与 /ws/note.md 是两个文件,
+  // 删除前者的路径不得把后者(可能带未保存修改)误判为待删除而静默关闭。
+  // jsdom 环境的 userAgent 不含 Windows,documentPathKey 走大小写敏感分支。
+  it('forceCloseTabsUnder 在大小写敏感平台只关闭精确匹配的标签', async () => {
+    disk = new Map([
+      ['/ws/Note.md', opened('/ws/Note.md', 'Upper')],
+      ['/ws/note.md', opened('/ws/note.md', 'lower with edits')],
+    ]);
+    await act(async () => root.render(<Harness isTauriRuntime onValue={(next) => { value = next; }} />));
+    await act(async () => value.handleOpenPath('/ws/Note.md'));
+    await act(async () => value.handleOpenPath('/ws/note.md'));
+
+    const upperTabId = value.openTabs.find((tab) => tab.file.path === '/ws/Note.md')!.id;
+    const lowerTab = value.openTabs.find((tab) => tab.file.path === '/ws/note.md')!;
+
+    act(() => {
+      value.forceCloseTabsUnder('/ws/Note.md');
+    });
+
+    expect(value.openTabs.some((tab) => tab.id === upperTabId)).toBe(false);
+    const surviving = value.openTabs.find((tab) => tab.id === lowerTab.id);
+    expect(surviving?.file.path).toBe('/ws/note.md');
+    expect(surviving?.file.content).toBe('lower with edits');
+  });
 });

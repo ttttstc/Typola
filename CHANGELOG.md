@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 修复 Issue #283 的六个问题：① 打开文件/点击正文可能误标「已修改」——EditorPane 外部同步（打开/切标签/磁盘重载的整篇替换）此前不带来源标记，会像用户输入一样触发 onChange 触发 dirty 重算；现在这些程序性替换带 `ExternalChange` 标记，不再触发 onChange（AI 改稿等真实编辑不受影响），新增回归测试；② Windows 安装器注册文件夹右键「用 Typola 打开」（目录右键 + 文件夹空白处右键），传目录启动时以工作区方式打开，并联动把左栏文件树带出（此前运行期设置工作区根不会让左栏从隐藏变为可见，打开文件夹后要重启才能看到文件树）；③ 绿色主题（brutalist/自定义绿色）下设置页开关与选项选中态不可辨——主题的 `!important` 按钮规则与 define-color 统一控件底色不再吞掉选中态，toggle/外观模式/主题卡选中时用高对比 accent 标识；④ 工作区文件树右键菜单新增「删除」——永久删除文件或文件夹（含二次确认、危险色菜单项），后端校验目标必须位于工作区根目录内、拒删根目录，删除后自动关闭对应标签并刷新文件树；⑤ Markdown 标题折叠箭头方向反了（收起时显示倒三角），两处（CM6 写作模式/Vditor 预览）统一为「收起 ▶ / 展开 ▼」；⑥ 行号渲染——写作模式行号锁定等宽字体 + 等宽数字（数字形变/列宽抖动消失），4 位行号不再被固定宽裁掉，源码模式行号颜色从过淡的边框色改为 gutter 文字色，两种模式字号统一 11px。全部六项已通过真实 exe（WebView2 CDP）定向验证，证据见 `.nimo/verification/evidence/issue283-*-exe-283/`；删除的二次确认与安装器注册表写入因原生对话框/需安装包保留为受阻项。
+
 - 修复 Issue #277 实跑暴露的编辑器问题：表格插入与模式切换保持稳定合法的 GFM 源码；Mermaid 光标停在闭合 fence 后不再被误判为源码编辑而静默不渲染；终端或预览控件聚焦时全局 `Ctrl/Cmd+F` 仍能打开查找；缺失图片占位文案改为可读的“图片加载失败”。
 
 - mermaid 图尺寸与缩放重做（编辑器 + 预览面板，导出管线保持自适应宽度不变）：① 渲染归一为自然尺寸——`normalizeMermaidSvgSize` 从 viewBox 取自然宽度改写为显式像素 width，图不再被 mermaid 默认 `useMaxWidth` 压进容器宽（窄窗口下宽流程图此前直接变成缩略图）；② 容器横向滚动——图超宽时在卡片内滚动，不撑破文档布局，放大后不再被裁切；③ hover 缩放控件组——图表右上角浮现「−/＋/适宽/1:1」按钮（模式与代码块复制按钮一致），与既有 Ctrl+滚轮缩放共用同一套倍率语义（0.5–4x，按倍率改写 width，1:1 清除覆盖回到自然尺寸）。新增 `normalizeMermaidSvgSize` 与 `naturalSize` 选项单测。
@@ -46,7 +48,7 @@
 
 - 插入类功能入口补齐（对齐 Typora 惯例）：新增快捷键 Ctrl+Shift+K 插入代码块、Ctrl+T 插入表格、Ctrl+Shift+M 插入公式块（新格式命令，插入 `$$` 围栏并落光标于公式体空行）、Ctrl+Shift+I 插入本地图片（无图片回调时不拦截按键）、Ctrl+0 回到正文；Ctrl+K 从“AI 选区菜单”改为插入/编辑链接（AI 选区菜单保留选区浮条与右键入口），右键菜单“链接 (Ctrl+K)”“正文 (Ctrl+0)”提示从此与实际一致。工具栏格式组新增代码块/分隔线/删除线/高亮/公式块五个按钮，全部 tooltip 与 aria-label 改走 i18n（中/英/日三语）；右键“插入”子菜单新增“公式块”，插入类菜单项补齐快捷键提示。
 
-- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                              <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
+- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                                <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
 
 ## \[2.0.5] - 2026-07-13
 

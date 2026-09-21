@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
+import CodeMirror, { ExternalChange } from '@uiw/react-codemirror';
 import { EditorView, type ViewUpdate } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import { useSettings } from '../hooks/useSettings';
@@ -201,7 +201,12 @@ export const EditorPane = forwardRef<TypolaEditorKernel, EditorPaneProps>(functi
       anchor = remapped.anchor;
       head = remapped.head;
     }
-    view.dispatch({ changes, selection: { anchor, head } });
+    // #283:外部同步替换必须带 ExternalChange 标记 —— @uiw 的 updateListener 只豁免
+    // 该标记的事务,否则打开/切标签/磁盘重载的程序性替换会与用户输入一样触发 onChange,
+    // 上层 handleContentChange 无法区分来源而误算 dirty/误 bump revision,造成
+    // 「打开或点击正文就显示已修改」。上层 file 状态是外部内容的权威源,无需 onChange
+    // 回写;AI 改稿(commitAIReplacement)保持无标记,需要正常走 dirty 标记。
+    view.dispatch({ changes, selection: { anchor, head }, annotations: [ExternalChange.of(true)] });
     if (savedScroll !== null) {
       const scrollTop = savedScroll;
       window.requestAnimationFrame(() => { view.scrollDOM.scrollTop = scrollTop; });

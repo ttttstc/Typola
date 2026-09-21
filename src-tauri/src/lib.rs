@@ -1353,6 +1353,78 @@ fn delete_artifact_file(request: DeleteArtifactRequest) -> Result<(), String> {
         .map_err(|error| format!("failed to delete artifact: {error}"))
 }
 
+// Issue #283:工作区文件树右键「删除」—— 永久删除(remove_file / remove_dir_all)。
+// 安全边界:目标必须 canonicalize 后位于工作区根目录内,且不等于根目录本身,
+// 拦下 `..`、符号链接逃逸与误删整个工作区。
+#[derive(Debug, Deserialize)]
+struct DeleteWorkspaceEntryRequest {
+    path: String,
+    workspace_root: String,
+}
+
+#[tauri::command]
+fn delete_workspace_entry(request: DeleteWorkspaceEntryRequest) -> Result<(), String> {
+    let target = PathBuf::from(&request.path);
+    let root = PathBuf::from(&request.workspace_root);
+    if !root.is_dir() {
+        return Err("workspace root is not a directory".into());
+    }
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve workspace root: {error}"))?;
+    // PR #284 review:符号链接(含 Windows junction)只删除链接本身 —— canonicalize 会把
+    // 链接解析成真实目标,直接对解析结果 remove_dir_all 会清空目标目录而留下断链;
+    // 因此用 symlink_metadata(不 follow)区分链接,边界校验基于「链接所在目录规范化
+    // + 文件名」的未解析组合,删除也作用于该未解析路径而非 canonicalize 结果。
+    let metadata = std::fs::symlink_metadata(&target)
+        .map_err(|error| format!("failed to resolve path: {error}"))?;
+    let file_type = metadata.file_type();
+    let target_name = target
+        .file_name()
+        .ok_or_else(|| "refusing to delete the workspace root".to_string())?
+        .to_owned();
+    let canonical_parent = target
+        .parent()
+        .ok_or_else(|| "refusing to delete the workspace root".to_string())?
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve parent directory: {error}"))?;
+    let unresolved_target = canonical_parent.join(&target_name);
+    if unresolved_target == canonical_root {
+        return Err("refusing to delete the workspace root".into());
+    }
+    if !unresolved_target.starts_with(&canonical_root) {
+        return Err("path is outside the workspace".into());
+    }
+    if file_type.is_symlink() {
+        // 只删除链接本身,目标内容不动。remove_file 对 unix symlink 与 Windows
+        // 文件类 symlink 生效;Windows junction 是目录类 reparse point,需要
+        // remove_dir 才能只移除链接(两者都不递归进真实目标)。
+        std::fs::remove_file(&unresolved_target)
+            .or_else(|_| std::fs::remove_dir(&unresolved_target))
+            .map_err(|error| format!("failed to delete symlink: {error}"))
+    } else if file_type.is_dir() {
+        std::fs::remove_dir_all(&unresolved_target)
+            .map_err(|error| format!("failed to delete folder: {error}"))
+    } else if file_type.is_file() {
+        std::fs::remove_file(&unresolved_target)
+            .map_err(|error| format!("failed to delete file: {error}"))
+    } else {
+        Err("workspace entry not found".into())
+    }
+}
+
+// PR #284 review:「用 Typola 打开」的目录分流不能按扩展名反推 —— 名为 notes.md 的
+// 目录会被前端误判为文档而走打开文档失败。前端用真实文件系统元数据判断。
+#[derive(Debug, Deserialize)]
+struct PathIsDirectoryRequest {
+    path: String,
+}
+
+#[tauri::command]
+fn path_is_directory(request: PathIsDirectoryRequest) -> Result<bool, String> {
+    Ok(PathBuf::from(&request.path).is_dir())
+}
+
 #[tauri::command]
 fn agent_session_start(
     app: tauri::AppHandle,
@@ -1900,6 +1972,8 @@ pub fn run() {
             overwrite_artifact_to_document,
             undo_artifact_overwrite,
             delete_artifact_file,
+            delete_workspace_entry,
+            path_is_directory,
             write_attachment_file,
             process_inserted_image,
             upload_image_via_command,
@@ -1986,7 +2060,8 @@ fn opened_paths_from_urls(urls: Vec<tauri::Url>) -> Vec<String> {
 }
 
 fn openable_path_to_string(path: PathBuf) -> Option<String> {
-    if !is_openable_document_path(&path) {
+    // Issue #283:目录也放行 —— Explorer「用 Typola 打开」文件夹时前端以工作区方式打开。
+    if !is_openable_document_path(&path) && !path.is_dir() {
         return None;
     }
 
@@ -4151,6 +4226,147 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert!(paths.iter().any(|path| path.ends_with("notes.md")));
         assert!(paths.iter().any(|path| path.ends_with("page.html")));
+    }
+
+    // Issue #283:「用 Typola 打开」文件夹 —— argv 中的真实目录被保留,前端分流为工作区;
+    // 无扩展名的普通文件仍被过滤。
+    #[test]
+    fn opened_paths_from_args_keeps_directories() {
+        let cwd = std::env::temp_dir();
+        let paths = opened_paths_from_args(
+            vec![
+                "typola.exe".into(),
+                cwd.to_string_lossy().to_string(),
+                cwd.join("plain-no-ext").to_string_lossy().to_string(),
+            ],
+            cwd.to_string_lossy().as_ref(),
+        );
+
+        assert_eq!(paths.len(), 1);
+        assert!(paths.iter().any(|path| *path == cwd.to_string_lossy().to_string()));
+    }
+
+    // PR #284 review 回归:delete_workspace_entry 的安全边界。
+    #[test]
+    fn delete_workspace_entry_removes_file_inside_workspace() {
+        let workspace = temp_path("ws-entry-file");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let file = workspace.join("note.md");
+        std::fs::write(&file, b"content").unwrap();
+
+        delete_workspace_entry(DeleteWorkspaceEntryRequest {
+            path: file.to_string_lossy().to_string(),
+            workspace_root: workspace.to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        assert!(!file.exists());
+        assert!(workspace.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn delete_workspace_entry_rejects_target_outside_workspace() {
+        let workspace = temp_path("ws-entry-inside");
+        let outside = temp_path("ws-entry-outside-file");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::write(&outside, b"keep").unwrap();
+
+        let result = delete_workspace_entry(DeleteWorkspaceEntryRequest {
+            path: outside.to_string_lossy().to_string(),
+            workspace_root: workspace.to_string_lossy().to_string(),
+        });
+
+        assert!(result.is_err());
+        assert!(outside.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+        let _ = std::fs::remove_file(&outside);
+    }
+
+    #[test]
+    fn delete_workspace_entry_refuses_workspace_root() {
+        let workspace = temp_path("ws-entry-root");
+        std::fs::create_dir_all(&workspace).unwrap();
+
+        let result = delete_workspace_entry(DeleteWorkspaceEntryRequest {
+            path: workspace.to_string_lossy().to_string(),
+            workspace_root: workspace.to_string_lossy().to_string(),
+        });
+
+        assert_eq!(result.unwrap_err(), "refusing to delete the workspace root");
+        assert!(workspace.exists());
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    // PR #284 review 回归:删除符号链接只删除链接本身,目标目录内容必须原样保留。
+    // Windows 用 junction(无需特权,同为 reparse point),unix 用 symlink_dir。
+    #[test]
+    fn delete_workspace_entry_removes_only_the_link_not_its_target() {
+        let workspace = temp_path("ws-entry-link");
+        let real_dir = workspace.join("real");
+        std::fs::create_dir_all(&real_dir).unwrap();
+        std::fs::write(real_dir.join("keep.md"), b"must survive").unwrap();
+        let link = workspace.join("alias");
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real_dir, &link).unwrap();
+        #[cfg(windows)]
+        {
+            let output = std::process::Command::new("cmd")
+                .args([
+                    "/C",
+                    "mklink",
+                    "/J",
+                    &link.to_string_lossy().to_string(),
+                    &real_dir.to_string_lossy().to_string(),
+                ])
+                .output()
+                .expect("failed to spawn cmd for mklink /J");
+            assert!(
+                output.status.success(),
+                "mklink /J failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        delete_workspace_entry(DeleteWorkspaceEntryRequest {
+            path: link.to_string_lossy().to_string(),
+            workspace_root: workspace.to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        assert!(!link.exists(), "链接本身应被删除");
+        assert!(real_dir.is_dir(), "真实目标目录必须保留");
+        assert!(
+            real_dir.join("keep.md").exists(),
+            "目标目录内容必须原样保留,不得递归删除"
+        );
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    // PR #284 review 回归:path_is_directory 用真实元数据判断,供目录分流。
+    #[test]
+    fn path_is_directory_matches_real_metadata() {
+        let workspace = temp_path("ws-entry-isdir");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let file = workspace.join("note.md");
+        std::fs::write(&file, b"content").unwrap();
+        let md_named_dir = workspace.join("notes.md");
+        std::fs::create_dir_all(&md_named_dir).unwrap();
+
+        let check = |path: &Path| {
+            path_is_directory(PathIsDirectoryRequest {
+                path: path.to_string_lossy().to_string(),
+            })
+            .unwrap()
+        };
+
+        assert!(check(&workspace));
+        assert!(check(&md_named_dir), "带 .md 扩展名的目录也必须识别为目录");
+        assert!(!check(&file));
+        assert!(!check(&workspace.join("missing.md")));
+
+        let _ = std::fs::remove_dir_all(&workspace);
     }
 
     #[test]
