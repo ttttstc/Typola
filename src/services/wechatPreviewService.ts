@@ -135,6 +135,27 @@ export const DEFAULT_CODE_HIGHLIGHT_CSS = `
 }
 `;
 
+const DEFAULT_HTML_TABLE_CSS = `
+.${WECHAT_ARTICLE_CLASS} table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.94em;
+}
+.${WECHAT_ARTICLE_CLASS} th,
+.${WECHAT_ARTICLE_CLASS} td {
+  padding: 0.5em 0.65em;
+  border: 1px solid #ddd6cb;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.${WECHAT_ARTICLE_CLASS} th {
+  background-color: #f8f4ec;
+  font-weight: 600;
+}
+`;
+
 export type WechatPreviewWarning = {
   type: 'local-relative-image';
   src: string;
@@ -413,6 +434,9 @@ function resolveHtmlExportPresetCss(preset: HtmlExportPreset = defaultHtmlExport
 function resolveHtmlExportCss(options: HtmlExportOptions = {}): string {
   const presetCss = resolveHtmlExportPresetCss(options.preset ?? defaultHtmlExportPreset());
   return [
+    // The preset themes own visual accents, while this shared baseline keeps
+    // structural tables visible across every preset.
+    DEFAULT_HTML_TABLE_CSS,
     presetCss,
     DEFAULT_CODE_HIGHLIGHT_CSS,
     options.customCss ?? '',

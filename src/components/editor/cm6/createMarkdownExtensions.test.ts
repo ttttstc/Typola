@@ -124,6 +124,16 @@ describe('createMarkdownExtensions live preview', () => {
     expect(view.contentDOM.querySelector<HTMLImageElement>('.cm-atomic-image img')?.src).toBe('https://example.com/a.png');
   });
 
+  it('renders images whose relative path contains spaces and CJK characters', () => {
+    view = createView('![中文图片](中文 文件 名.png)', true);
+    moveCursorToEnd(view);
+
+    const image = view.contentDOM.querySelector<HTMLImageElement>('.cm-atomic-image img');
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute('src')).toContain('中文');
+    expect(image?.getAttribute('src')).toContain('文件');
+  });
+
   it('sanitizes inline raw HTML widgets', () => {
     view = createView('<mark onclick="alert(1)">重点</mark> <sup>2</sup>', true);
     moveCursorToEnd(view);

@@ -231,6 +231,23 @@ describe('wechatPreviewService', () => {
     expect(result.clipboardHtml).not.toContain("html[data-color-scheme='dark']");
   });
 
+  it('keeps tables visible in every public HTML export preset', () => {
+    for (const preset of BUILT_IN_HTML_EXPORT_PRESETS) {
+      const previewStyles = createHtmlExportPreviewStyles(preset);
+      expect(previewStyles).toContain(`.${HTML_EXPORT_ARTICLE_CLASS} table`);
+      expect(previewStyles).toContain(`.${HTML_EXPORT_ARTICLE_CLASS} th`);
+      expect(previewStyles).toContain(`.${HTML_EXPORT_ARTICLE_CLASS} td`);
+
+      const inlineHtml = createHtmlExportInlineArticleHtml(wrapWechatArticleHtml(`
+        <table><thead><tr><th>表头</th></tr></thead><tbody><tr><td>正文</td></tr></tbody></table>
+      `), preset);
+      const body = getDocumentBody(inlineHtml);
+      expect(queryRequired<HTMLTableElement>(body, 'table').style.width).toBe('100%');
+      expect(queryRequired<HTMLElement>(body, 'th').style.border).toContain('1px solid');
+      expect(queryRequired<HTMLElement>(body, 'td').style.padding).not.toBe('');
+    }
+  });
+
   it('uses the same preset-driven inline article for clipboard and HTML export documents', () => {
     const preset = BUILT_IN_HTML_EXPORT_PRESETS.find((item) => item.id === 'html-ip');
     if (!preset) throw new Error('missing ip preset');

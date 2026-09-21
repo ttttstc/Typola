@@ -4,18 +4,37 @@ import { Decoration, EditorView, WidgetType } from '@codemirror/view';
 class FootnoteWidget extends WidgetType {
   private readonly id: string;
   private readonly definition: boolean;
-  constructor(id: string, definition = false) { super(); this.id = id; this.definition = definition; }
+  private readonly content: string;
+  constructor(id: string, definition = false, content = '') {
+    super();
+    this.id = id;
+    this.definition = definition;
+    this.content = content;
+  }
   toDOM(): HTMLElement {
     const element = document.createElement('button');
     element.type = 'button'; element.className = this.definition ? 'cm6-footnote-definition' : 'cm6-footnote-ref';
-    element.dataset.footnote = this.id; element.textContent = this.definition ? `脚注 [${this.id}] · 点击展开` : `[${this.id}]`;
+    element.dataset.footnote = this.id;
+    element.textContent = this.definition
+      ? `脚注 [${this.id}]：${this.content} · 点击定位`
+      : `[${this.id}]`;
     return element;
   }
 }
 
+function selectionEntersDefinition(selection: EditorView['state']['selection']['ranges'][number], definition: { from: number; to: number }): boolean {
+  if (selection.empty) {
+    return selection.from > definition.from && selection.from < definition.to;
+  }
+  return selection.from < definition.to && selection.to > definition.from;
+}
+
 function decorations(state: EditorView['state']) {
-  const source = state.doc.toString(); const definitions = new Map<string, { from: number; to: number }>();
-  for (const match of source.matchAll(/^\[\^([^\]]+)\]:[^\n]*/gmu)) { const from = match.index ?? 0; definitions.set(match[1], { from, to: from + match[0].length }); }
+  const source = state.doc.toString(); const definitions = new Map<string, { from: number; to: number; content: string }>();
+  for (const match of source.matchAll(/^\[\^([^\]]+)\]:\s*([^\n]*)/gmu)) {
+    const from = match.index ?? 0;
+    definitions.set(match[1], { from, to: from + match[0].length, content: match[2] ?? '' });
+  }
   const ranges = [];
   for (const match of source.matchAll(/\[\^([^\]]+)\](?!:)/gu)) {
     const from = match.index ?? 0;
@@ -23,8 +42,8 @@ function decorations(state: EditorView['state']) {
     ranges.push(Decoration.replace({ widget: new FootnoteWidget(match[1]) }).range(from, from + match[0].length));
   }
   for (const [id, definition] of definitions) {
-    if (state.selection.ranges.some((selection) => selection.from <= definition.to && selection.to >= definition.from)) continue;
-    ranges.push(Decoration.replace({ widget: new FootnoteWidget(id, true), block: true }).range(definition.from, definition.to));
+    if (state.selection.ranges.some((selection) => selectionEntersDefinition(selection, definition))) continue;
+    ranges.push(Decoration.replace({ widget: new FootnoteWidget(id, true, definition.content), block: true }).range(definition.from, definition.to));
   }
   return Decoration.set(ranges, true);
 }
