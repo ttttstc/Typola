@@ -498,9 +498,14 @@ export function AppLayout() {
   // Issue #283:工作区根在运行期被设置时（argv 目录启动 / 手动「打开文件夹」），
   // 把左栏从 none 带到 workspace —— initialMode 只在首渲染求值，不联动的话
   // 「用 Typola 打开」文件夹后界面没有任何可见反馈，文件树要重启才出现。
+  // PR #284 review:只响应 workspaceRoot 变化的边沿(空→非空或换根)且只触发一次,
+  // 不持续把用户主动收起的 none 纠正回 workspace —— 否则文件树永远无法收起。
+  const lastAutoOpenedWorkspaceRootRef = useRef<string | null>(null);
   useEffect(() => {
-    if (workspaceRoot && leftRailMode === 'none') setLeftRailMode('workspace');
-  }, [leftRailMode, setLeftRailMode, workspaceRoot]);
+    if (!workspaceRoot || workspaceRoot === lastAutoOpenedWorkspaceRootRef.current) return;
+    lastAutoOpenedWorkspaceRootRef.current = workspaceRoot;
+    setLeftRailMode((mode) => (mode === 'none' ? 'workspace' : mode));
+  }, [setLeftRailMode, workspaceRoot]);
   const { docMode, setDocMode } = useDocumentMode({
     enabled: file.fileType !== 'docx',
     isTauriRuntime,
@@ -2101,14 +2106,22 @@ export function AppLayout() {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
 
-    const openFirstSystemPath = (paths: unknown) => {
+    const openFirstSystemPath = async (paths: unknown) => {
       if (!Array.isArray(paths)) return;
       const candidates = paths.filter((candidate): candidate is string => (
         typeof candidate === 'string'
       ));
-      // Issue #283:「用 Typola 打开」文件夹 —— Rust 侧已过滤,候选只含支持文档与目录,
-      // 不匹配支持扩展名的候选即文件夹,分流为打开工作区;其余仍按文档打开。
-      const folderPath = candidates.find((candidate) => !isOpenableDocumentPath(candidate));
+      if (candidates.length === 0) return;
+      // PR #284 review:「用 Typola 打开」的目录分流用后端真实文件系统元数据判断,
+      // 不按扩展名反推 —— 名为 notes.md 的目录也会被放行,不能误判为文档。
+      const { invoke: invokeTauri } = await import('@tauri-apps/api/core');
+      let folderPath: string | null = null;
+      for (const candidate of candidates) {
+        if (await invokeTauri<boolean>('path_is_directory', { request: { path: candidate } })) {
+          folderPath = candidate;
+          break;
+        }
+      }
       if (folderPath) {
         reopenAttempted.current = true;
         setWorkspaceRoot(folderPath);
@@ -2139,7 +2152,7 @@ export function AppLayout() {
       unlisten = listener;
       const pendingPaths = await invoke<string[]>('pending_opened_paths');
       if (!cancelled) {
-        openFirstSystemPath(pendingPaths);
+        void openFirstSystemPath(pendingPaths);
         setSystemOpenChecked(true);
       }
     }).catch((error) => {

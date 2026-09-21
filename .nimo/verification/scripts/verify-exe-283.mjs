@@ -336,7 +336,8 @@ async function phaseA() {
   } finally {
     const cleanup = await stopPhase(phase);
     record('cleanup', `Phase A 实例清理（PID ${phase.ownedProcess.pid}）`, cleanup.processStopped && cleanup.cdpClosed ? 'passed' : 'failed', cleanup);
-    return phase;
+    // PR #284 review:finally 中不得 return —— 否则会吞掉 try 中抛出的断言异常,
+    // 失败场景被汇总成 passed_with_gaps(假阳性)。
   }
 }
 

@@ -167,4 +167,52 @@ describe('AppLayout system open source editing', () => {
     expect(cm6EditorMock.source).toContain('<h1 align="right">材料清单</h1>');
     expect(cm6EditorMock.source).toContain('white-space: pre-wrap');
   });
+
+  // PR #284 review 回归:① 目录分流用后端真实元数据,名为 notes.md 的目录不得按
+  // 扩展名误判为文档;② 打开工作区带出左栏后,用户手动收起必须保持收起。
+  it('opens a .md-named directory argument as workspace and keeps the collapsed rail collapsed', async () => {
+    tauriFsMock.readTextFile.mockRejectedValue(new Error('frontend fs scope denied'));
+    tauriCoreMock.invoke.mockImplementation(async (command: string) => {
+      if (command === 'pending_opened_paths') return ['/tmp/notes.md'];
+      if (command === 'path_is_directory') return true;
+      if (command === 'list_directory_entries') return [
+        { name: 'a.md', path: '/tmp/notes.md/a.md', isDir: false, isSupported: true },
+      ];
+      return undefined;
+    });
+
+    await act(async () => {
+      root.render(<AppLayout />);
+      await flushPromises();
+      await flushPromises();
+      await vi.dynamicImportSettled();
+    });
+
+    // .md 结尾的目录按真实元数据识别为目录,以工作区方式打开
+    await act(async () => {
+      await waitUntil(() => Boolean(host.querySelector('aside.workspace-sidebar')));
+    });
+    expect(host.querySelector('.workspace-root-path')?.textContent ?? '').toContain('/tmp/notes.md');
+    expect(tauriCoreMock.invoke.mock.calls.some(([command, payload]) => (
+      command === 'read_opened_document'
+        && (payload as { path: string } | undefined)?.path === '/tmp/notes.md'
+    ))).toBe(false);
+
+    // 打开后左栏自动带出(按钮显示「收起文件树」),手动收起后必须保持收起
+    await act(async () => {
+      await waitUntil(() => Boolean(host.querySelector<HTMLButtonElement>('button[aria-label="收起文件树"]')));
+    });
+    const collapseButton = host.querySelector<HTMLButtonElement>('button[aria-label="收起文件树"]')!;
+    await act(async () => {
+      collapseButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushPromises();
+      // left-rail 经 framer-motion exit 动画卸载,等待收起完成而不是固定 tick。
+      for (let attempt = 0; attempt < 50 && host.querySelector('button[aria-label="收起文件树"]'); attempt += 1) {
+        await waitForMacrotask();
+      }
+    });
+
+    expect(host.querySelector('button[aria-label="收起文件树"]')).toBeNull();
+    expect(host.querySelector('aside.workspace-sidebar')).toBeNull();
+  });
 });

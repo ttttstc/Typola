@@ -97,8 +97,14 @@ function sameDocumentPath(a: string, b: string): boolean {
   return documentPathKey(a) === documentPathKey(b);
 }
 
+// PR #284 review:路径比较仅统一分隔符;大小写只在 Windows(大小写不敏感文件系统)折叠,
+// Linux/macOS 上 /ws/Foo 与 /ws/foo 是两个不同文件,无条件 toLowerCase 会误匹配。
+const PATH_KEY_CASE_INSENSITIVE = typeof navigator !== 'undefined'
+  && /windows/i.test(navigator.userAgent);
+
 function documentPathKey(path: string): string {
-  return path.replace(/\\/g, '/').toLowerCase();
+  const normalized = path.replace(/\\/g, '/');
+  return PATH_KEY_CASE_INSENSITIVE ? normalized.toLowerCase() : normalized;
 }
 
 function fileTabId(file: OpenedFile, fallback = ''): string {
