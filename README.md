@@ -109,6 +109,20 @@ npm run tauri:build:update     # tauri:build 的兼容别名
 npm run version:check          # 可选本地诊断；发布 CI 会自动同步并校验
 ```
 
+### Windows exe 全量验收
+
+这组命令运行真实 Tauri + WebView2 exe，不是 Vite 页面或 Playwright 渲染器替代品。先构建验证专用 debug exe，再运行 core 与 extended 两套套件：
+
+```powershell
+& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
+npm run verify:exe-core:all       # 全量非 AI exe 验收：core + extended
+# 也可单独运行：
+npm run verify:exe-core           # core
+npm run verify:exe-core:extended  # extended
+```
+
+结果和跳过原因会写入 `.nimo/verification/evidence/`。`verify:exe-core:all` 当前覆盖非 AI 核心与扩展场景；真实 Claude / OpenCode Provider 的完整链路仍需按 Feature Map 做专项验证，不能把这条命令当成 AI 全量证明。
+
 正式发版先在 `main` 合入根目录 `VERSION` 的版本提交，再由维护者手动触发 GitHub Actions 的 `Package (manual dispatch)`，选择 `main`、填写版本并将 `publish` 设为 `true`。Workflow 会校验版本跃迁，自动创建同版本 Tag、同步 package / Tauri / Cargo 与锁文件版本，构建签名的 Windows 安装包和 portable 包，生成 `latest.json`，完成资产校验后公开 Release；不要手动创建发布 Tag，也无需手动运行 `version:sync` 或 `version:check`。本地执行 `npm run tauri:build` 时仍会自动同步版本，并要求设置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 
 ## 技术与文档
