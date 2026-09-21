@@ -4,6 +4,8 @@
 
 **Typola is a Windows desktop workbench for Markdown writing, AI revision, and document delivery.**
 
+Current release: 2.0.9.
+
 Write, review, collaborate with AI, and ship a document without shuttling between an editor, a chat page, a terminal, and export tools.
 
 > Markdown editor + AI document assistant + local artifact center.
@@ -26,6 +28,7 @@ Write, review, collaborate with AI, and ship a document without shuttling betwee
 
 - Select text to polish, rewrite, shorten, expand, proofread, or explain it. Review a diff before applying it.
 - Attach review comments to passages, manage them together, and export `review.md`.
+- Review state is persisted per document path, so reopening a document resumes the same queue. Ignored comments stay terminal; applied comments remain in history and exports without entering the next AI revision.
 - Connect the Claude Code and OpenCode CLIs already installed on your machine. Your CLI remains in charge of models, permissions, MCP, and quota.
 
 ### Deliverables return to local files
@@ -101,8 +104,26 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ```bash
 npm run tauri:build:local      # NSIS setup.exe + MSI
 npm run tauri:build:portable   # portable zip
-npm run tauri:build:update     # release build with updater artifacts
+npm run tauri:build            # sync VERSION and build signed release artifacts
+npm run tauri:build:update     # compatibility alias for tauri:build
+npm run version:check          # optional local diagnostic
 ```
+
+### Full Windows exe verification
+
+These commands exercise the real Tauri + WebView2 exe, not a Vite page or a renderer-only Playwright substitute. Build the dedicated verification debug exe first, then run both the core and extended suites:
+
+```powershell
+& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
+npm run verify:exe-core:all       # full non-AI exe verification: core + extended
+# Or run one suite:
+npm run verify:exe-core           # core
+npm run verify:exe-core:extended  # extended
+```
+
+Results and skip reasons are written to `.nimo/verification/evidence/`. `verify:exe-core:all` currently covers the non-AI core and extended scenarios. Complete real-provider Claude / OpenCode journeys still require Feature Map-based focused verification, so this command is not proof of full AI coverage.
+
+For a formal release, merge the root `VERSION` change into `main`, then have a maintainer manually dispatch GitHub Actions `Package (manual dispatch)` from `main`, enter the version, and set `publish` to `true`. The workflow validates the version transition, creates the matching tag, synchronizes package / Tauri / Cargo and lockfile versions, builds signed Windows installer and portable assets, generates `latest.json`, and publishes the Release after asset validation. Do not create the release tag manually; there is no need to run `version:sync` or `version:check` by hand in CI.
 
 ## Technology and docs
 

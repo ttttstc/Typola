@@ -4,6 +4,8 @@
 
 **Typola 是面向 Windows 的 Markdown 写作、AI 改稿与文档交付桌面工作台。**
 
+当前发布版本：2.0.9。
+
 一份文档，从写作、审阅、AI 协作到交付，不必在编辑器、聊天网页、终端和导出工具之间反复搬运。
 
 > Markdown 编辑器 + AI 文档助手 + 本地产物中心。
@@ -26,6 +28,7 @@
 
 - 选中内容即可润色、改写、缩写、扩写、校对或解释术语；结果先以差异展示，再由你确认是否写回正文。
 - 检视意见可附着到具体段落、集中管理并导出 `review.md`。
+- 检视状态按文档路径保存，重新打开文档仍可继续处理；忽略意见保持终态，已应用意见保留在历史并可导出，但不再进入下一轮 AI 改稿。
 - 支持接入本机已有的 Claude Code 与 OpenCode；模型、权限、MCP 和额度继续由你的 CLI 环境管理。
 
 ### 交付物回到本地文件
@@ -106,7 +109,21 @@ npm run tauri:build:update     # tauri:build 的兼容别名
 npm run version:check          # 可选本地诊断；发布 CI 会自动同步并校验
 ```
 
-正式发版只需修改并提交根目录 `VERSION`，随后在该提交创建并推送同版本 Tag（例如 `v2.0.6`）。发布版本必须相对上一个已存在的 release tag 修改 `VERSION`；代码提交可以在版本提交与正式发布之间合入，CI 会按上一 release tag 校验版本跃迁。GitHub Actions 会自动同步 package、Tauri、Cargo 与锁文件版本，构建 Draft Release，校验后公开；无需手动运行 `version:sync` 或 `version:check`。本地执行 `npm run tauri:build` 时仍会自动同步版本，并要求设置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
+### Windows exe 全量验收
+
+这组命令运行真实 Tauri + WebView2 exe，不是 Vite 页面或 Playwright 渲染器替代品。先构建验证专用 debug exe，再运行 core 与 extended 两套套件：
+
+```powershell
+& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
+npm run verify:exe-core:all       # 全量非 AI exe 验收：core + extended
+# 也可单独运行：
+npm run verify:exe-core           # core
+npm run verify:exe-core:extended  # extended
+```
+
+结果和跳过原因会写入 `.nimo/verification/evidence/`。`verify:exe-core:all` 当前覆盖非 AI 核心与扩展场景；真实 Claude / OpenCode Provider 的完整链路仍需按 Feature Map 做专项验证，不能把这条命令当成 AI 全量证明。
+
+正式发版先在 `main` 合入根目录 `VERSION` 的版本提交，再由维护者手动触发 GitHub Actions 的 `Package (manual dispatch)`，选择 `main`、填写版本并将 `publish` 设为 `true`。Workflow 会校验版本跃迁，自动创建同版本 Tag、同步 package / Tauri / Cargo 与锁文件版本，构建签名的 Windows 安装包和 portable 包，生成 `latest.json`，完成资产校验后公开 Release；不要手动创建发布 Tag，也无需手动运行 `version:sync` 或 `version:check`。本地执行 `npm run tauri:build` 时仍会自动同步版本，并要求设置 `TAURI_SIGNING_PRIVATE_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 
 ## 技术与文档
 
