@@ -188,7 +188,9 @@ The terminal is implemented with Tauri commands plus event streaming:
 
 ## AI Review and Revision
 
-- Review mode owns one unified comment list. Human comments keep their original text and have no required category; AI comments carry an optional review basis (`style.md`, Skill, or user requirement). Ignored comments remain recoverable but are excluded from default display, revision prompts, and review-export output.
+- Review mode owns one unified comment list. Human comments keep their original text and have no required category; AI comments carry an optional review basis (`style.md`, Skill, or user requirement). Review comments and their `active` / `ignored` / `applied` state persist in versioned local storage keyed by normalized document path; a damaged record does not block opening the document. Ignored comments are terminal records kept for history, excluded from default display, revision prompts, and review-export output, with no restore action in the product path.
+
+- Review actions derive their gates independently: export is available when any non-ignored comment remains, including applied history; AI revision is available only when pending comments remain. The panel does not use a single mixed count for these actions.
 
 - AI inspection and revision reuse the active provider-bound conversation. Conversation messages, active conversation id, and the Provider session UUID are persisted locally; after an application restart, Rust rebuilds its in-memory session registry from that UUID before resuming the native CLI session. Switching documents keeps generic conversation history but sends an explicit document-context boundary: the previous source, anchors, candidate, and local requirements become invalid, while the newly active file is passed as the only source document.
 

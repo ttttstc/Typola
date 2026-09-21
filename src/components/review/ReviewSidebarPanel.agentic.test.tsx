@@ -174,17 +174,22 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     expect(onStopAIReview).toHaveBeenCalledOnce();
   });
 
-  it('只有忽略项时不允许导出或发 AI 修改', async () => {
+  it('只有忽略项时准确显示忽略数量，且不允许导出或发 AI 修改', async () => {
     const values = props([comment({ status: 'ignored', text: '已忽略意见' })]);
     await act(async () => root.render(<ReviewSidebarPanel {...values} />));
+    const ignoredFilter = Array.from(host.querySelectorAll<HTMLButtonElement>('.review-sidebar-filter'))
+      .find((button) => button.textContent?.includes('已忽略'))!;
+    expect(ignoredFilter.textContent).toBe('已忽略 1');
+    expect(host.querySelector('.review-sidebar-comments-heading')?.textContent).toContain('0 条');
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-export')?.disabled).toBe(true);
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-send')?.disabled).toBe(true);
   });
 
-  it('已应用意见显示「已应用」徽标,不计入待处理,但保留在列表不丢历史', async () => {
+  it('已应用意见保留查看和导出，混合场景只按状态计算忽略与待处理数量', async () => {
     const values = props([
       comment({ id: 'applied', text: '已应用意见', appliedAt: 12345 }),
       comment({ id: 'pending', text: '待处理意见' }),
+      comment({ id: 'ignored', text: '已忽略意见', status: 'ignored' }),
     ]);
     await act(async () => root.render(<ReviewSidebarPanel {...values} />));
 
@@ -194,17 +199,23 @@ describe('ReviewSidebarPanel 统一意见列表', () => {
     expect(badges[0].textContent).toBe('已应用');
     // 计数只算待处理(active)
     expect(host.querySelector('.review-sidebar-comments-heading')?.textContent).toContain('1 条');
+    const ignoredFilter = Array.from(host.querySelectorAll<HTMLButtonElement>('.review-sidebar-filter'))
+      .find((button) => button.textContent?.includes('已忽略'))!;
+    expect(ignoredFilter.textContent).toBe('已忽略 1');
     // 两条都可见,已应用的历史不丢
     expect(host.textContent).toContain('已应用意见');
     expect(host.textContent).toContain('待处理意见');
-    // 仍有待处理意见 → 允许发起 AI 改稿
+    expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-export')?.disabled).toBe(false);
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-send')?.disabled).toBe(false);
   });
 
-  it('只剩已应用意见时不允许导出或发 AI 修改,但意见仍可见', async () => {
+  it('只剩已应用意见时允许导出但不允许发 AI 修改，且意见仍可见', async () => {
     const values = props([comment({ id: 'applied-only', text: '只有已应用', appliedAt: 1 })]);
     await act(async () => root.render(<ReviewSidebarPanel {...values} />));
-    expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-export')?.disabled).toBe(true);
+    const exportButton = host.querySelector<HTMLButtonElement>('.review-sidebar-action-export')!;
+    expect(exportButton.disabled).toBe(false);
+    expect(exportButton.title).toBe('另存为带检视意见记录的 Markdown');
+    expect(exportButton.title).not.toContain('可恢复');
     expect(host.querySelector<HTMLButtonElement>('.review-sidebar-action-send')?.disabled).toBe(true);
     expect(host.querySelector('.review-sidebar-item-applied')?.textContent).toBe('已应用');
     expect(host.textContent).toContain('只有已应用');

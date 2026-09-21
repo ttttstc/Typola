@@ -21,6 +21,7 @@ import {
 import { useState, type CSSProperties } from 'react';
 import {
   getActiveReviewComments,
+  getExportableReviewComments,
   type ReviewComment,
 } from '../../services/review/reviewState';
 import type { RevisionEntry } from '../../hooks/useRevisionList';
@@ -121,9 +122,11 @@ export function ReviewSidebarPanel({
   onReturnFromRevision,
 }: Props) {
   const activeComments = getActiveReviewComments(comments);
-  const ignoredCount = comments.length - activeComments.length;
-  const hasComments = activeComments.length > 0;
-  const canAct = hasComments && !!currentFilePath;
+  const exportableComments = getExportableReviewComments(comments);
+  const ignoredCount = comments.filter((comment) => comment.status === 'ignored').length;
+  const hasPendingComments = activeComments.length > 0;
+  const canExport = exportableComments.length > 0 && !!currentFilePath;
+  const canSendToAI = hasPendingComments && !!currentFilePath;
   const [view, setView] = useState<View>('review');
 
   return (
@@ -136,7 +139,7 @@ export function ReviewSidebarPanel({
         <div className="review-sidebar-title">
           <MessageSquare size={14} />
           <span>检视意见</span>
-          {hasComments && <span className="review-sidebar-count">{activeComments.length}</span>}
+          {hasPendingComments && <span className="review-sidebar-count">{activeComments.length}</span>}
           {dirty && <span className="review-sidebar-dot" title="有未保存的检视意见" aria-label="未保存" />}
         </div>
         <button
@@ -159,7 +162,7 @@ export function ReviewSidebarPanel({
           onClick={() => setView('review')}
         >
           检视列表
-          {hasComments && <span className="review-sidebar-view-count">{activeComments.length}</span>}
+          {hasPendingComments && <span className="review-sidebar-view-count">{activeComments.length}</span>}
         </button>
         <button
           type="button"
@@ -178,7 +181,8 @@ export function ReviewSidebarPanel({
           comments={comments}
           activeComments={activeComments}
           ignoredCount={ignoredCount}
-          canAct={canAct}
+          canExport={canExport}
+          canSendToAI={canSendToAI}
           currentFilePath={currentFilePath}
           currentSource={currentSource}
           onJump={onJump}
@@ -217,7 +221,8 @@ function ReviewListView({
   comments,
   activeComments,
   ignoredCount,
-  canAct,
+  canExport,
+  canSendToAI,
   currentFilePath,
   currentSource,
   onJump,
@@ -235,7 +240,8 @@ function ReviewListView({
   comments: ReviewComment[];
   activeComments: ReviewComment[];
   ignoredCount: number;
-  canAct: boolean;
+  canExport: boolean;
+  canSendToAI: boolean;
   currentFilePath?: string;
   currentSource: string;
   onJump: (comment: ReviewComment) => void;
@@ -500,18 +506,18 @@ function ReviewListView({
         <button
           type="button"
           className="review-sidebar-action review-sidebar-action-export"
-          disabled={!canAct}
+          disabled={!canExport}
           onClick={onExport}
-          title={canAct ? '另存为带可恢复检视意见的 Markdown' : '没有有效意见或未打开文档'}
+          title={canExport ? '另存为带检视意见记录的 Markdown' : '没有可导出的非忽略意见或未打开文档'}
         >
           <FileDown size={13} /> 导出检视版
         </button>
         <button
           type="button"
           className="review-sidebar-action review-sidebar-action-send"
-          disabled={!canAct || aiRewriteRunning}
+          disabled={!canSendToAI || aiRewriteRunning}
           onClick={onSendToAI}
-          title={canAct ? '按所有未忽略意见发起 AI 改稿' : '没有未忽略意见或未打开文档'}
+          title={canSendToAI ? '按所有待处理意见发起 AI 改稿' : '没有待处理意见或未打开文档'}
         >
           <Send size={13} /> {aiRewriteRunning ? '改稿中…' : 'AI 改稿'}
         </button>
