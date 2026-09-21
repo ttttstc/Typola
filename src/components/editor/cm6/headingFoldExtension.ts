@@ -85,7 +85,7 @@ class FoldToggleWidget extends WidgetType {
   toDOM() {
     const span = document.createElement('span');
     span.className = FOLD_TOGGLE_CLASS;
-    span.textContent = this.folded ? '▼' : '▶';
+    span.textContent = this.folded ? '▶' : '▼';
     span.setAttribute('role', 'button');
     span.setAttribute('aria-label', this.folded ? '展开' : '折叠');
     span.setAttribute('aria-expanded', String(!this.folded));

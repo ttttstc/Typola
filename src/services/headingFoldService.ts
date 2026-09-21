@@ -144,7 +144,7 @@ export function applyHeadingFolds(
     toggle.setAttribute('aria-label', foldedHeadings.has(key) ? '展开' : '折叠');
     toggle.setAttribute('aria-expanded', String(!foldedHeadings.has(key)));
     toggle.tabIndex = 0;
-    toggle.textContent = foldedHeadings.has(key) ? '▼' : '▶';
+    toggle.textContent = foldedHeadings.has(key) ? '▶' : '▼';
     headingEl.insertBefore(toggle, headingEl.firstChild);
   }
 

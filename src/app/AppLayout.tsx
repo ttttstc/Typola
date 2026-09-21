@@ -413,6 +413,7 @@ export function AppLayout() {
     handleOpenPath,
     handleSwitchTab,
     handleCloseTab,
+    forceCloseTabsUnder,
     handleRequestRename,
     handleConfirmRename,
     handleSave,
@@ -2096,9 +2097,18 @@ export function AppLayout() {
 
     const openFirstSystemPath = (paths: unknown) => {
       if (!Array.isArray(paths)) return;
-      const path = firstOpenableDocumentPath(paths.filter((candidate): candidate is string => (
+      const candidates = paths.filter((candidate): candidate is string => (
         typeof candidate === 'string'
-      )));
+      ));
+      // Issue #283:「用 Typola 打开」文件夹 —— Rust 侧已过滤,候选只含支持文档与目录,
+      // 不匹配支持扩展名的候选即文件夹,分流为打开工作区;其余仍按文档打开。
+      const folderPath = candidates.find((candidate) => !isOpenableDocumentPath(candidate));
+      if (folderPath) {
+        reopenAttempted.current = true;
+        setWorkspaceRoot(folderPath);
+        return;
+      }
+      const path = firstOpenableDocumentPath(candidates);
       if (!path) return;
 
       reopenAttempted.current = true;
@@ -2137,7 +2147,7 @@ export function AppLayout() {
       cancelled = true;
       unlisten?.();
     };
-  }, [handleOpenPath, isTauriRuntime]);
+  }, [handleOpenPath, isTauriRuntime, setWorkspaceRoot]);
 
   useEffect(() => {
     if (!systemOpenChecked || !settings.reopenLastFile || file.path || reopenAttempted.current) return;
@@ -2385,6 +2395,28 @@ export function AppLayout() {
       await messageDialog(String(error), { title: '打开所在文件夹失败' });
     }
   }, []);
+
+  // Issue #283:工作区文件树右键「删除」—— 永久删除(后端校验必须位于工作区内)。
+  // 删除后强制关闭对应标签(未保存修改随删除丢弃,确认对话框已提示)并刷新文件树。
+  const handleDeleteWorkspaceEntry = useCallback(async (entry: { name: string; path: string; isDir: boolean }) => {
+    if (!workspaceRoot) return;
+    const label = entry.isDir ? `文件夹“${entry.name}”及其全部内容` : `“${entry.name}”`;
+    const confirmed = await confirmDialog(`永久删除${label}？该操作不可撤销，也不会移入回收站。`, {
+      title: '删除',
+      okLabel: '删除',
+      cancelLabel: '取消',
+    });
+    if (!confirmed) return;
+    try {
+      const { deleteWorkspaceEntry } = await import('../services/workspaceService');
+      await deleteWorkspaceEntry(entry.path, workspaceRoot);
+      forceCloseTabsUnder(entry.path);
+      bumpWorkspaceTreeVersion();
+    } catch (error) {
+      console.warn('Failed to delete workspace entry:', error);
+      await messageDialog(String(error), { title: '删除失败' });
+    }
+  }, [bumpWorkspaceTreeVersion, forceCloseTabsUnder, messageDialog, workspaceRoot]);
 
   useEffect(() => {
     if (!isTauriRuntime) return;
@@ -2682,6 +2714,7 @@ export function AppLayout() {
           },
           onRevealInFolder: (path) => { void handleRevealPathInFolder(path); },
           onOpenExternal: (path) => { void handleOpenArtifactExternally(path); },
+          onDeleteEntry: (entry) => { void handleDeleteWorkspaceEntry(entry); },
         }}
         onLeftPanelResize={handleLeftPanelResizerPointerDown}
         showToc={!isDocx}

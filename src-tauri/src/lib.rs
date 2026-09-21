@@ -1353,6 +1353,45 @@ fn delete_artifact_file(request: DeleteArtifactRequest) -> Result<(), String> {
         .map_err(|error| format!("failed to delete artifact: {error}"))
 }
 
+// Issue #283:工作区文件树右键「删除」—— 永久删除(remove_file / remove_dir_all)。
+// 安全边界:目标必须 canonicalize 后位于工作区根目录内,且不等于根目录本身,
+// 拦下 `..`、符号链接逃逸与误删整个工作区。
+#[derive(Debug, Deserialize)]
+struct DeleteWorkspaceEntryRequest {
+    path: String,
+    workspace_root: String,
+}
+
+#[tauri::command]
+fn delete_workspace_entry(request: DeleteWorkspaceEntryRequest) -> Result<(), String> {
+    let target = PathBuf::from(&request.path);
+    let root = PathBuf::from(&request.workspace_root);
+    if !root.is_dir() {
+        return Err("workspace root is not a directory".into());
+    }
+    let canonical_target = target
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve path: {error}"))?;
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve workspace root: {error}"))?;
+    if canonical_target == canonical_root {
+        return Err("refusing to delete the workspace root".into());
+    }
+    if !canonical_target.starts_with(&canonical_root) {
+        return Err("path is outside the workspace".into());
+    }
+    if canonical_target.is_dir() {
+        std::fs::remove_dir_all(&canonical_target)
+            .map_err(|error| format!("failed to delete folder: {error}"))
+    } else if canonical_target.is_file() {
+        std::fs::remove_file(&canonical_target)
+            .map_err(|error| format!("failed to delete file: {error}"))
+    } else {
+        Err("workspace entry not found".into())
+    }
+}
+
 #[tauri::command]
 fn agent_session_start(
     app: tauri::AppHandle,
@@ -1900,6 +1939,7 @@ pub fn run() {
             overwrite_artifact_to_document,
             undo_artifact_overwrite,
             delete_artifact_file,
+            delete_workspace_entry,
             write_attachment_file,
             process_inserted_image,
             upload_image_via_command,
@@ -1986,7 +2026,8 @@ fn opened_paths_from_urls(urls: Vec<tauri::Url>) -> Vec<String> {
 }
 
 fn openable_path_to_string(path: PathBuf) -> Option<String> {
-    if !is_openable_document_path(&path) {
+    // Issue #283:目录也放行 —— Explorer「用 Typola 打开」文件夹时前端以工作区方式打开。
+    if !is_openable_document_path(&path) && !path.is_dir() {
         return None;
     }
 
@@ -4151,6 +4192,24 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert!(paths.iter().any(|path| path.ends_with("notes.md")));
         assert!(paths.iter().any(|path| path.ends_with("page.html")));
+    }
+
+    // Issue #283:「用 Typola 打开」文件夹 —— argv 中的真实目录被保留,前端分流为工作区;
+    // 无扩展名的普通文件仍被过滤。
+    #[test]
+    fn opened_paths_from_args_keeps_directories() {
+        let cwd = std::env::temp_dir();
+        let paths = opened_paths_from_args(
+            vec![
+                "typola.exe".into(),
+                cwd.to_string_lossy().to_string(),
+                cwd.join("plain-no-ext").to_string_lossy().to_string(),
+            ],
+            cwd.to_string_lossy().as_ref(),
+        );
+
+        assert_eq!(paths.len(), 1);
+        assert!(paths.iter().any(|path| *path == cwd.to_string_lossy().to_string()));
     }
 
     #[test]
