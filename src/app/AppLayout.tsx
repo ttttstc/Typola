@@ -495,6 +495,12 @@ export function AppLayout() {
     maxWidth: LEFT_PANEL_MAX_WIDTH,
     initialMode: workspaceRoot ? 'workspace' : 'none',
   });
+  // Issue #283:工作区根在运行期被设置时（argv 目录启动 / 手动「打开文件夹」），
+  // 把左栏从 none 带到 workspace —— initialMode 只在首渲染求值，不联动的话
+  // 「用 Typola 打开」文件夹后界面没有任何可见反馈，文件树要重启才出现。
+  useEffect(() => {
+    if (workspaceRoot && leftRailMode === 'none') setLeftRailMode('workspace');
+  }, [leftRailMode, setLeftRailMode, workspaceRoot]);
   const { docMode, setDocMode } = useDocumentMode({
     enabled: file.fileType !== 'docx',
     isTauriRuntime,

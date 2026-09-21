@@ -66,7 +66,7 @@ Typola 是基于 Tauri v2 的桌面 Markdown 编辑器，技术栈：React 19、
 
 - The left workspace tree and right preview panel are width-adjustable. The right Word preview can shrink to a compact width and keeps paper pages close to the resizer to reduce dead space. The review-mode sidebar (document + review workbench split) reuses the same right-rail resizer: it defaults to a 50/50 split, remembers dragged widths across restarts via `reviewPanelWidth` (null = default), and double-clicking the resizer clears the persisted value. The pinned floating TOC column is also drag-resizable (200–480px, persisted as `tocPanelWidth`), and the diff-review baseline/candidate columns use a draggable split resizer with a 360px per-side minimum (ratio persisted as `diffReviewSplitRatio`, clamped to 0.15–0.85). Both resizers share `src/hooks/usePaneResize.ts` — one rAF-coalesced pointer pipeline with cleanup on pointerup/pointercancel — so new panes must not grow their own drag logic; user-adjusted layout state is persisted through `settingsService`. The CM6 writing pane keeps breathing room between prose and the editor boundary via `--editor-inline-breathing` (clamped with viewport width), and the reading measure is widened by the same amount so the 70ch line length is not compressed. The right preview/workflow panel is also collapsible via a toolbar button: collapsing keeps the panel mounted (DOM not unmounted) but zeroes its layout width and disables interaction (`aria-hidden` + `inert`); expanding reuses the same node. Switching panel mode automatically un-collapses. The collapse toggle lives in `useRightPanel` (`rightPanelCollapsed` / `toggleRightPanelCollapsed`), and the toolbar button only renders when `rightPanelAvailable` is true (a non-`none` mode on a non-docx document).
 
-- `tauri-plugin-single-instance` forwards secondary process argv paths to the running window through the existing `opened-paths` event. The NSIS installer also registers an Explorer context-menu entry (`用 Typola 打开`) for directories and directory backgrounds (Issue #283); the path filter keeps supported documents plus directories, and the frontend routes directory paths to workspace-root open instead of the document open flow.
+- `tauri-plugin-single-instance` forwards secondary process argv paths to the running window through the existing `opened-paths` event. The NSIS installer also registers an Explorer context-menu entry (`用 Typola 打开`) for directories and directory backgrounds (Issue #283); the path filter keeps supported documents plus directories, and the frontend routes directory paths to workspace-root open instead of the document open flow. Because the left rail's `initialMode` only resolves at first render, setting the workspace root at runtime (argv directory launch or manual `打开文件夹`) also brings the left rail from `none` to `workspace`, so the file tree is visible immediately instead of requiring a restart.
 
 - The active file is watched by Rust `notify` through `watch_opened_document` / `unwatch_opened_document`. External changes emit `file-changed`; the frontend compares the event fingerprint with the fingerprint returned by its own write instead of using a fixed time window. When a background tab becomes active, its fingerprint is checked first: clean tabs reload from disk, while dirty tabs enter the existing conflict flow. The workspace tree is loaded lazily and `打开文件夹` only changes the workspace root; it does not open every first-level document as a tab.
 
@@ -84,7 +84,7 @@ Typola 是基于 Tauri v2 的桌面 Markdown 编辑器，技术栈：React 19、
 
 - Both writing and source modes expose precise CM6 transaction-backed insert, replace, undo, and reveal operations through `TypolaEditorKernel`. Find/replace supplies source ranges to `replaceRanges`, so single and all replacements each become one CM6 history entry instead of a React-side content rewrite.
 
-- Toolbar controls, Markdown shortcuts, and the editor context menu all call `TypolaEditorKernel.format`; the sole CM6 formatter dispatches each document change, including quote depth, link URL, format clearing, and fenced-code language edits. Typora-aligned shortcuts cover code blocks (Ctrl+Shift+K), tables (Ctrl+T), math blocks (Ctrl+Shift+M), images (Ctrl+Shift+I), inline code (Ctrl+Shift+`), links (Ctrl+K), body text (Ctrl+0), jump-to-line (Ctrl+G via `kernel.gotoLine`), and list Tab/Shift-Tab indentation gated to list-item lines only.
+- Toolbar controls, Markdown shortcuts, and the editor context menu all call `TypolaEditorKernel.format`; the sole CM6 formatter dispatches each document change, including quote depth, link URL, format clearing, and fenced-code language edits. Typora-aligned shortcuts cover code blocks (Ctrl+Shift+K), tables (Ctrl+T), math blocks (Ctrl+Shift+M), images (Ctrl+Shift+I), inline code (Ctrl+Shift+`), links (Ctrl+K), body text (Ctrl+0), jump-to-line (Ctrl+G via `  kernel.gotoLine\`), and list Tab/Shift-Tab indentation gated to list-item lines only.
 
 - The CM6 formatter also provides paired inline toggles for underline, superscript, subscript, and source-preserved `==highlight==`; the export pipeline converts the latter to sanitized `<mark>` markup.
 
@@ -184,7 +184,7 @@ The terminal is implemented with Tauri commands plus event streaming:
 
 - The headless workbench coexists with the terminal-based flow-mode agent path. The left rail is a single state machine (`none` / `workspace` / `aiWorkbench`), so file tree and AI Workbench are mutually exclusive and never create a fourth column. The existing bottom PTY terminal remains unchanged and flow mode no longer auto-opens it.
 
-历史设计快照（2026-06-16，标为历史节点）：[`docs/AI_WORKBENCH_SPEC.md`](./AI_WORKBENCH_SPEC.md)。事实以本 ARCHITECTURE.md 为准，AI_WORKBENCH_SPEC.md 仅供回查设计动机。
+历史设计快照（2026-06-16，标为历史节点）：[`docs/AI_WORKBENCH_SPEC.md`](./AI_WORKBENCH_SPEC.md)。事实以本 ARCHITECTURE.md 为准，AI\_WORKBENCH\_SPEC.md 仅供回查设计动机。
 
 ## AI Review and Revision
 
@@ -243,7 +243,10 @@ The terminal is implemented with Tauri commands plus event streaming:
 ## 本地验证能力
 
 - `.nimo/verification/SKILL.md` 是项目验证入口，`.nimo/verification/features/` 是从用户入口、稳定句柄到可观察终态的 Feature Map。验证状态必须区分已在真实桌面 exe 执行、仅有渲染器回归和受外部条件阻塞的路径。
+
 - 真实二进制验证使用 `.nimo/verification/tauri-verification.conf.json` 构建独立标识的 debug exe：`& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'`。这仍执行仓库的 `npm run build`，但不生成安装包，也不与正式单实例共享标识。
+
 - `npm run verify:exe-core` 直接启动 `src-tauri/target/debug/typola.exe`，为 WebView2 注入一次性 profile 和动态 CDP 端口，通过 `http://tauri.localhost/` 的真实页面串行驱动 `.nimo/verification/features/` 中 15 个核心用户面的可达路径；`features/index.md` 同时维护 27 个主要 exe 场景的目标矩阵，并在 `.nimo/verification/evidence/<run-id>-exe-core-suite/` 保存版本、Git 工作树标识、动作、跳过原因、ARIA、截图和日志；`npm run verify:exe-editor` 保留旧的单一编辑器聚焦配方。
+
 - Vite `npm run dev` 与 `npm run test:e2e` 仍用于快速渲染器回归；它们不是 Tauri IPC、WebView2、单实例或 Windows 文件对话框的证明。涉及文件、导出、终端、AI 或产物的验证必须同时核对其真实副作用，并遵守 Feature Map 的未验证/受阻状态。
 
