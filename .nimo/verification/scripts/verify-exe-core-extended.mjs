@@ -206,6 +206,43 @@ async function ensureWriting(page) {
   await page.locator('.cm6-markdown-editor-pane').waitFor({ state: 'visible' });
 }
 
+async function installOpenUrlProbe(page) {
+  return page.evaluate(() => {
+    const internals = window.__TAURI_INTERNALS__;
+    if (!internals || typeof internals.invoke !== 'function') return false;
+    const existing = internals.invoke;
+    const calls = [];
+    window.__typolaOpenUrlCalls = calls;
+    window.__typolaLinkClickProbe = [];
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      const link = target instanceof Element ? target.closest('.cm-atomic-link, .cm-atomic-image, a') : null;
+      if (!link) return;
+      const rect = link.getBoundingClientRect();
+      window.__typolaLinkClickProbe.push({
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        tag: link.tagName,
+        className: link.className,
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      });
+    }, true);
+    internals.invoke = (command, args, options) => {
+      if (command === 'plugin:opener|open_url') calls.push(args?.url ?? args);
+      return existing.call(internals, command, args, options);
+    };
+    return true;
+  });
+}
+
+async function readOpenUrlCalls(page) {
+  return page.evaluate(() => window.__typolaOpenUrlCalls ?? []);
+}
+
+async function readLinkClickProbe(page) {
+  return page.evaluate(() => window.__typolaLinkClickProbe ?? []);
+}
+
 async function replaceEditorContent(page, markdown) {
   await ensureSource(page);
   const content = page.locator('.cm-content');
@@ -1485,6 +1522,7 @@ async function main() {
       await ensureSource(page);
       await page.locator('.cm-content').click();
       await page.keyboard.type('first');
+      await delay(600);
       await page.keyboard.type(' second');
       let source = await page.locator('.cm-content').textContent();
       assert.ok(source?.includes('first second'), '输入未生效');
@@ -1513,10 +1551,10 @@ async function main() {
       await delay(300);
       await replaceEditorContent(page, 'doc-2 内容');
       // 切换回第一个 tab：点击 tab 列表中含 "doc-1 内容" 的 tab
-      const tabs = page.locator('[role="tab"]');
+      const tabs = page.locator('[role="tablist"][aria-label="打开的文件"] [role="tab"]');
       const tabCount = await tabs.count();
-      if (tabCount < 2) return;
-      // 切回含 "未保存" 或第一个 tab
+      assert.ok(tabCount >= 2, `打开的文件 tab 数不足：${tabCount}`);
+      // 切回第一个文件 tab；文档模式 tab 也使用 role=tab，不能混选。
       await tabs.first().click();
       await delay(300);
       const source = await page.locator('.cm-content').textContent();
@@ -1743,11 +1781,13 @@ async function main() {
       await delay(1500);
       const writingVisible = await page.locator('.cm6-markdown-editor-pane').isVisible();
       assert.ok(writingVisible, '写视图必须可见');
-      // 检测 SVG img / svg 元素
-      const hasSvg = await page.locator('.cm6-markdown-editor-pane svg img, .cm6-markdown-editor-pane img[src$=".svg"]').first().isVisible().catch(() => false);
-      assert.ok(hasSvg, 'SVG 图片未渲染为 img/svg 元素');
+      // 远端 SVG 可能因网络失败进入图片占位，但写作视图仍必须保留 image widget 和源地址。
+      const svgSources = await page.locator('.cm6-markdown-editor-pane .cm-atomic-image img').evaluateAll((images) => images
+        .map((image) => image.getAttribute('src') ?? '')
+        .filter((src) => src.toLowerCase().includes('.svg')));
+      assert.ok(svgSources.length >= 1, `SVG 图片未生成 image widget：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
     },
-    async () => ({ hasSvg: await page.locator('.cm6-markdown-editor-pane svg img, .cm6-markdown-editor-pane img[src$=".svg"]').first().isVisible().catch(() => false) }),
+    async () => ({ svgSources: await page.locator('.cm6-markdown-editor-pane .cm-atomic-image img').evaluateAll((images) => images.map((image) => image.getAttribute('src') ?? '').filter((src) => src.toLowerCase().includes('.svg'))) }),
   );
 
   await recordAction(
@@ -2007,18 +2047,20 @@ async function main() {
       await replaceEditorContent(page, '[![alt](https://example.com/img.png)](https://example.com/page)');
       await ensureWriting(page);
       await delay(400);
-      const link = page.locator('.cm6-markdown-editor-pane a[href*="example.com/page"]').first();
-      assert.ok(await link.count() >= 1, `嵌套链接未生成外层 a：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
-      const image = link.locator('img[src*="img.png"]').first();
-      assert.ok(await image.count() >= 1, `嵌套链接内缺少目标图片：${await link.innerHTML()}`);
-      const href = await link.getAttribute('href');
-      const src = await image.getAttribute('src');
-      assert.ok(href?.includes('example.com/page'), `嵌套链接 href 不正确：${href}`);
-      assert.ok(src?.includes('example.com/img.png'), `嵌套图片 src 不正确：${src}`);
+      const link = page.locator('.cm6-markdown-editor-pane .cm-atomic-link').first();
+      assert.ok(await link.count() >= 1, `嵌套链接未生成 live-preview link widget：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
+      const image = page.locator('.cm6-markdown-editor-pane .cm-atomic-image img[src*="img.png"]').first();
+      assert.ok(await image.count() >= 1, `嵌套链接内图片 widget 缺失：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
+      assert.ok(await installOpenUrlProbe(page), '无法安装 Tauri opener 观测钩子');
+      await link.click();
+      await delay(300);
+      const calls = await readOpenUrlCalls(page);
+      assert.ok(calls.some((url) => String(url).includes('https://example.com/page')), `点击未打开嵌套链接目标：calls=${JSON.stringify(calls)} probe=${JSON.stringify(await readLinkClickProbe(page))}`);
     },
     async () => ({
-      linkCount: await page.locator('.cm6-markdown-editor-pane a[href*="example.com/page"]').count(),
-      imageCount: await page.locator('.cm6-markdown-editor-pane a[href*="example.com/page"] img[src*="img.png"]').count(),
+      linkWidgetCount: await page.locator('.cm6-markdown-editor-pane .cm-atomic-link').count(),
+      imageCount: await page.locator('.cm6-markdown-editor-pane .cm-atomic-image img[src*="img.png"]').count(),
+      openUrlCalls: await readOpenUrlCalls(page),
     }),
   );
   await captureUi(page, '31-p0-nested-link');
@@ -2271,7 +2313,9 @@ async function main() {
       assert.ok(await image.count() >= 1, `中文图片路径未生成 img：${await pane.innerHTML()}`);
       const src = await image.getAttribute('src');
       const text = await pane.textContent();
-      assert.ok(src && src.includes('中文'), `图片 src 未保留中文路径：${src}`);
+      const readableSrc = src ? decodeURIComponent(src) : '';
+      assert.ok(readableSrc.includes('中文'), `图片 src 未保留中文路径：${src}`);
+      assert.ok(readableSrc.includes('文件 名.png'), `图片 src 未保留空格路径：${src}`);
       assert.ok(!text?.includes('\uFFFD'), `中文图片路径出现替换字符：${text}`);
     },
     async () => ({
@@ -2290,21 +2334,20 @@ async function main() {
       await ensureWriting(page);
       await delay(350);
       const pane = page.locator('.cm6-markdown-editor-pane');
-      const link = pane.locator('a').first();
-      assert.ok(await link.count() >= 1, `中文链接未生成 a：${await pane.innerHTML()}`);
-      const href = await link.getAttribute('href');
-      assert.ok(href?.includes('example.com'), `中文链接 href 丢失域名：${href}`);
-      assert.ok(!href?.includes('\uFFFD'), `中文链接 href 出现替换字符：${href}`);
-      let decodedHref = href ?? '';
-      try {
-        decodedHref = decodeURIComponent(decodedHref);
-      } catch {
-        // 保留原始 href，让下面的语义路径断言给出失败证据。
-      }
-      assert.ok(decodedHref.includes('/中文路径'), `中文链接路径语义丢失：${href}`);
+      const link = pane.locator('.cm-atomic-link').first();
+      assert.ok(await link.count() >= 1, `中文链接未生成 live-preview link widget：${await pane.innerHTML()}`);
+      assert.ok(await installOpenUrlProbe(page), '无法安装 Tauri opener 观测钩子');
+      await link.click();
+      await delay(300);
+      const calls = await readOpenUrlCalls(page);
+      const decodedCalls = calls.map((url) => {
+        try { return decodeURIComponent(String(url)); } catch { return String(url); }
+      });
+      assert.ok(decodedCalls.some((url) => url.includes('https://example.com/中文路径')), `点击未打开中文链接目标：calls=${JSON.stringify(calls)} probe=${JSON.stringify(await readLinkClickProbe(page))}`);
     },
     async () => ({
-      href: await page.locator('.cm6-markdown-editor-pane a').first().getAttribute('href'),
+      linkWidgetCount: await page.locator('.cm6-markdown-editor-pane .cm-atomic-link').count(),
+      openUrlCalls: await readOpenUrlCalls(page),
     }),
   );
   await captureUi(page, '43-p1-chinese-link-url');
@@ -2372,12 +2415,12 @@ async function main() {
       assert.ok(source?.includes('template') && source.includes('not close'), `嵌套 fence 源码缺失：${source}`);
       await ensureWriting(page);
       await delay(350);
-      const code = page.locator('.cm6-markdown-editor-pane pre code');
-      assert.ok(await code.count() >= 1, `嵌套 fence 未生成 pre code：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
+      const code = page.locator('.cm6-markdown-editor-pane .cm-atomic-fenced-code');
+      assert.ok(await code.count() >= 1, `嵌套 fence 未生成 fenced-code widget：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
     },
     async () => ({
       source: await page.locator('.cm-content').textContent(),
-      codeBlockCount: await page.locator('.cm6-markdown-editor-pane pre code').count(),
+      codeBlockCount: await page.locator('.cm6-markdown-editor-pane .cm-atomic-fenced-code').count(),
     }),
   );
   await captureUi(page, '46-p2-nested-fence');

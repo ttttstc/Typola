@@ -34,10 +34,10 @@
 | `editor-source-roundtrip` | 写作视图与源码模式往返 | `源码模式`、`渲染模式`、编辑器 | **已验证** | 2026-09-18 core suite + extended suite 编辑器往返动作和截图全部通过 |
 | `editor-format-history` | Markdown 格式按钮与撤销 | `加粗`、代码块、列表、`Ctrl/Cmd+Z` | **部分验证** | 2026-09-18 core suite 加粗 + 撤销通过；2026-09-18 extended suite 斜体 + 行内代码 + 引用 + 多步撤销通过；选区拖动重选通过；其他格式按钮（标题升降 / 任务 / 列表 / 格式刷）未实现 |
 | `find-navigation` | 查找替换、快速打开、跳转到行和大纲 | `Ctrl/Cmd+F/H/P/G`、`查看大纲` | **部分验证** | 2026-09-18 core suite 查找替换 / 快速打开 / 跳转 / 大纲入口通过；命中定位 / 键盘深度导航 / 折叠层级断言未完整实现 |
-| `table-editing` | 表格网格、行列操作和键盘导航 | `插入表格`、单元格右键、`Tab` | **部分验证** | 2026-09-18 core suite 插入 + 源码/网格回读通过；2026-09-18 extended suite Tab 单元格跳转 + 末尾追加新行通过；右键行列菜单 / 复制粘贴 / 撤销未实现 |
-| `image-assets` | 图片插入、资产复制和失败回退 | `插入图片`、拖拽/粘贴、`设置 → 图像` | **部分验证** | 2026-09-18 core suite 缺失图片语法 + 失败占位通过；2026-09-18 extended suite 验证不崩溃通过；原生图片选择 + 资产写盘 + 上传（exe-image-01）受阻 |
-| `rich-markdown` | 公式、Mermaid、代码块和富文本粘贴 | 公式/代码按钮、源码 fenced code | **已验证** | 2026-09-18 core + extended suite 代码块 / 公式块 / Mermaid 块插入 + 源码回读 + SVG 渲染全部通过；富文本 HTML 粘贴和代码复制按钮点击未实现 |
-| `markdown-preview-export` | Word/HTML 预览与 PDF/Word/HTML 交付 | `Word 预览`、`HTML 预览`、`导出` | **部分验证** | 2026-09-18 core suite 预览面板入口通过；2026-09-18 extended suite 页数 + 预设 option 数断言通过；原生 PDF/Word/HTML 文件导出（exe-export-01）受阻 |
+| `table-editing` | 表格网格、行列操作和键盘导航 | `插入表格`、单元格右键、`Tab` | **部分验证** | 2026-09-21 core suite 插入 + 源码/网格回读通过；2026-09-21 extended suite Tab 单元格跳转 + 末尾追加新行通过；右键行列菜单 / 复制粘贴 / 撤销未实现 |
+| `image-assets` | 图片插入、资产复制和失败回退 | `插入图片`、拖拽/粘贴、`设置 → 图像` | **部分验证** | 2026-09-21 core suite 缺失图片语法 + 失败占位通过；2026-09-21 extended suite 覆盖 SVG、中文/空格路径和失败回退；原生图片选择 + 资产写盘 + 上传（exe-image-01）受阻 |
+| `rich-markdown` | 公式、Mermaid、代码块和富文本粘贴 | 公式/代码按钮、源码 fenced code | **已验证** | 2026-09-21 core + extended suite 代码块 / 公式块 / Mermaid 块插入 + 源码回读 + SVG、HTML、mark、原始 HTML 安全边界全部通过；富文本 HTML 粘贴和代码复制按钮点击未实现 |
+| `markdown-preview-export` | Word/HTML 预览与 PDF/Word/HTML 交付 | `Word 预览`、`HTML 预览`、`导出` | **部分验证** | 2026-09-21 core suite Word/HTML 预览中的表格真实可见；2026-09-21 extended suite 页数 + 预设 option 数断言通过；原生 PDF/Word/HTML 文件导出（exe-export-01）受阻 |
 | `settings-appearance` | 外观、编辑器、预览和导出预设 | `设置`、外观主题卡片 | **部分验证** | 2026-09-18 core suite 设置入口 + 主题入口通过；2026-09-18 extended suite 设置 modal + 外观段 + 主题卡片存在性通过；data-theme 切换 + 字体 / 持久化 / 预设未实现 |
 | `terminal` | 真实 PTY、多标签和离线边界 | `终端`、终端快捷键 | **部分验证** | 2026-09-18 core suite PTY 创建 + 输入 + 输出回读通过；2026-09-18 extended suite 多标签新建 + tab 计数通过；离线依赖未实现 |
 | `ai-workbench-skillhub` | Provider、Composer、SkillHub 和 AI 请求 | `打开 AI 工作台`、`设置 → AI 执行` | **受阻** | 工作台入口已通过；Provider 检测 / SkillHub 扫描 / 模型请求需要外部 CLI 认证 |
@@ -67,8 +67,8 @@
 | `exe-table-01` | 插入表格，编辑单元格，在网格和 source 间往返 | 网格可见，表头/分隔线/数据行可回读 | **已覆盖**（2026-09-18 core suite） | `table-editing` |
 | `exe-table-02` | 右键行列操作、Tab/Enter、复制粘贴和撤销 | 行列结构、对齐、剪贴板和 source 正确 | **已覆盖**（2026-09-18 extended suite Tab 在单元格间跳转且末尾追加新行） | `table-editing` |
 | `exe-image-01` | 选择、拖拽、粘贴图片并复制到 `assets/` | 实际资源文件、相对路径、预览和重新打开均正确 | **受阻**（原生图片选择无可用桌面自动化） | `image-assets` |
-| `exe-rich-01` | 编辑公式、Mermaid、普通代码块并粘贴富文本 | widget/错误态可读，原始语法和粘贴结果可回读 | **已覆盖**（2026-09-18 core + extended suite 代码块 / 公式块 / Mermaid 块插入 + 源码回读 + SVG 验证） | `rich-markdown` |
-| `exe-preview-01` | 打开 Word/HTML 预览并切换预设 | 页数、文章区域、预设和正文变化同步 | **已覆盖**（2026-09-18 extended suite 页数 + HTML 预设 option 数） | `markdown-preview-export` |
+| `exe-rich-01` | 编辑公式、Mermaid、普通代码块并粘贴富文本 | widget/错误态可读，原始语法和粘贴结果可回读 | **已覆盖**（2026-09-21 core + extended suite 代码块 / 公式块 / Mermaid 块插入 + 源码回读 + SVG、HTML、mark 和原始 HTML 安全边界验证） | `rich-markdown` |
+| `exe-preview-01` | 打开 Word/HTML 预览并切换预设 | 页数、文章区域、预设和正文变化同步 | **已覆盖**（2026-09-21 core suite 表格在 Word/HTML 预览可见，extended suite 页数 + HTML 预设 option 数） | `markdown-preview-export` |
 | `exe-export-01` | 导出 PDF、Word、HTML，选择保存位置 | 实际文件存在、大小大于零、类型可读取 | **受阻**（原生保存对话框无可用桌面自动化） | `markdown-preview-export` |
 | `exe-settings-01` | 修改主题、字体、行距、缩放、自动保存和预设 | 重开设置后值持久化，source 和文件字节不变 | **部分覆盖**（2026-09-18 extended suite 主题卡片存在性通过；data-theme 变化断言改为骨架级避免依赖具体 class） | `settings-appearance` |
 | `exe-terminal-01` | 创建多个 PTY，切换/关闭标签并执行命令 | 各 shell 输出、关闭状态和离线本地能力正确 | **已覆盖**（2026-09-18 extended suite 多标签新建 + tab 计数） | `terminal` |
@@ -77,7 +77,7 @@
 | `exe-artifact-01` | 生成产物，扫描、预览、打开、对比、覆盖、撤销和归档 | `.typola-output` 实际文件与生命周期正确 | **受阻**（需要 AI 会话） | `artifact-center` |
 | `exe-review-01` | 选择正文，添加/编辑/忽略/定位人工意见，运行 AI 检视 | 意见锚点、来源、行号、筛选和导出正确 | **受阻**（需要 AI 会话） | `review-diff` |
 | `exe-review-02` | 生成候选稿，逐处采纳/拒绝，应用或恢复历史 | 应用前源文档不变，应用后 source/磁盘/历史一致 | **受阻**（需要 AI 会话） | `review-diff` |
-| `exe-failure-01` | 取消对话框、触发权限/资源/导出/AI 失败并结束运行 | 错误可读、无越权副作用、实例和夹具清理 | **部分覆盖**（2026-09-11 suite 跑过统一 cleanup；extended harness 写好但未实跑 Escape 与失败注入矩阵） | `failure-boundaries` |
+| `exe-failure-01` | 取消对话框、触发权限/资源/导出/AI 失败并结束运行 | 错误可读、无越权副作用、实例和夹具清理 | **部分覆盖**（2026-09-21 extended suite 查找 Escape 干净关闭并完成实例/profile/runtime 清理；取消 / 权限 / 资源失败注入矩阵仍未覆盖） | `failure-boundaries` |
 
 条目详情：
 
@@ -97,4 +97,4 @@
 - [检视意见与 Diff 改稿](./review-diff.md)
 - [异常、权限与清理边界](./failure-boundaries.md)
 
-维护信息：最近核对日期为 2026-09-20；本索引与同级 15 个条目、27 个直接 exe 场景均已从当前源码入口核对。`npm run verify:exe-core` 是核心套件（18 action pass / 7 skipped，run `2026-09-20T12-01-53-725Z-38584`）；`npm run verify:exe-core:extended` 是本次扩展套件（**111 action: 96 passed / 15 failed / 12 skipped**，run `2026-09-20T11-55-23-831Z-42608`），其中新增 Issue #280 的 P0/P1/P2 共 37 action（12 / 11 / 14），截图编号续至 57。完整非 AI 实跑汇总：`npm run verify:exe-core:all`（`run-all-non-ai.mjs`）。15 个 failed 保留严格断言证据，其中 4 个为原有基线失败、11 个由本次 #280 渲染边界场景暴露；未为追求通过率放宽断言。直接 exe 套件证据保存在 [`evidence/`](../evidence/) 下按运行生成的 `*-exe-core-suite` 与 `*-exe-core-extended` 目录，两套件进程、profile、runtime 夹具和 CDP 均已清理。
+维护信息：最近核对日期为 2026-09-21；本索引与同级 15 个条目、27 个直接 exe 场景均已从当前源码入口核对。`npm run verify:exe-core` 是核心套件（18 action pass / 7 skipped，run `2026-09-21T00-40-32-476Z-34308`；同一 Markdown 表格已在 Word 与 HTML 预览中实跑确认）；最近一次 `npm run verify:exe-core:extended` 是扩展套件（**111 action: 109 passed / 2 failed / 12 skipped**，run `2026-09-21T12-49-40-897Z-41832`），P0-11 图片嵌套链接和 P1-11 中文链接的真实点击打开终态仍失败，未退回 source-preservation 断言。完整非 AI 实跑汇总：`npm run verify:exe-core:all`（`run-all-non-ai.mjs`，汇总文件 `.nimo/verification/evidence/_summary-non-ai.json`）。当前 core 无失败，extended 保留 2 个严格失败；12 个 extended skip 与 7 个 core skip 保留为真实外部前置缺口，未把原生对话框、发布物或 AI 认证路径冒充为通过。直接 exe 套件证据保存在 [`evidence/`](../evidence/) 下按运行生成的 `*-exe-core-suite` 与 `*-exe-core-extended` 目录，两套件进程、profile、runtime 夹具和 CDP 均已清理。

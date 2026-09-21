@@ -555,7 +555,7 @@ async function main() {
     'rich-markdown',
     '渲染公式和 Mermaid，并保留原始语法',
     async () => {
-      await replaceEditorContent(page, '$$\nx^2 + 1\n$$\n\n```mermaid\nflowchart LR\n  A[开始] --> B[结束]\n```\n');
+      await replaceEditorContent(page, '| 预览列 | 内容 |\n| --- | --- |\n| 1 | 表格 |\n\n$$\nx^2 + 1\n$$\n\n```mermaid\nflowchart LR\n  A[开始] --> B[结束]\n```\n');
       await ensureWriting(page);
       await page.locator('.typola-cm6-math-block').waitFor({ state: 'visible' });
       await page.locator('.typola-cm6-mermaid').waitFor({ state: 'visible' });
@@ -568,6 +568,7 @@ async function main() {
       assert.ok(await mermaid.locator('svg, .typola-cm6-mermaid-error').count() > 0, 'Mermaid 没有进入可读的成功或错误状态');
       await ensureSource(page);
       const source = await page.locator('.cm-content').textContent();
+      assert.ok(source?.includes('| 预览列 | 内容 |'), '预览表格 Markdown 源码未保留');
       assert.ok(source?.includes('x^2 + 1'));
       assert.ok(source?.includes('flowchart LR'));
       await ensureWriting(page);
@@ -575,6 +576,12 @@ async function main() {
     async () => ({
       mathVisible: await page.locator('.typola-cm6-math-block').isVisible(),
       mermaidVisible: await page.locator('.typola-cm6-mermaid').isVisible(),
+      tableSourceRetained: (await (async () => {
+        await ensureSource(page);
+        const source = await page.locator('.cm-content').textContent();
+        await ensureWriting(page);
+        return source?.includes('| 预览列 | 内容 |') ?? false;
+      })()),
       mermaidSvg: await page.locator('.typola-cm6-mermaid svg').count(),
       mermaidError: await page.locator('.typola-cm6-mermaid-error').count(),
     }),
@@ -589,10 +596,12 @@ async function main() {
       await page.getByRole('button', { name: 'Word 预览', exact: true }).click();
       await page.locator('.word-preview-panel').waitFor({ state: 'visible' });
       await waitForContains(page.locator('.word-preview-meta'), '页');
+      await page.locator('.word-preview-panel .word-paper-content table').first().waitFor({ state: 'visible' });
     },
     async () => ({
       panelVisible: await page.locator('.word-preview-panel').isVisible(),
       meta: await page.locator('.word-preview-meta').innerText(),
+      tableVisible: await page.locator('.word-preview-panel .word-paper-content table').first().isVisible(),
     }),
   );
   await captureUi(page, '10-word-preview');
@@ -607,11 +616,15 @@ async function main() {
       await page.getByRole('button', { name: 'HTML 预览', exact: true }).click();
       await page.locator('.wechat-preview-panel').waitFor({ state: 'visible' });
       await page.locator('.wechat-preview-article-shell').waitFor({ state: 'visible' });
+      await page.locator('.wechat-preview-article-shell table').waitFor({ state: 'visible' });
+      const previewStyles = await page.locator('.wechat-preview-panel > style').textContent();
+      assert.ok(previewStyles?.includes('.typola-html-article table'), 'HTML 预览缺少表格样式');
     },
     async () => ({
       panelVisible: await page.locator('.wechat-preview-panel').isVisible(),
       presetSelectorVisible: await page.locator('select[aria-label="HTML 导出预设"]').isVisible(),
       articleVisible: await page.locator('.wechat-preview-article-shell').isVisible(),
+      tableVisible: await page.locator('.wechat-preview-article-shell table').isVisible(),
     }),
   );
   await captureUi(page, '11-html-preview');

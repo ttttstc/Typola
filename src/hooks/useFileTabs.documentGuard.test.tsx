@@ -116,4 +116,37 @@ describe('useFileTabs 文档切换守卫', () => {
     expect(value.file.content).toBe('候选正文');
     expect(value.file.dirty).toBe(true);
   });
+
+  it('新建未命名文档后切换保留各自正文', async () => {
+    await act(async () => {
+      value.handleNewFile();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const firstTabId = value.activeTabId;
+    await act(async () => { value.handleContentChange('doc-1 内容'); });
+
+    await act(async () => {
+      value.handleNewFile();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const secondTabId = value.activeTabId;
+    expect(secondTabId).not.toBe(firstTabId);
+    await act(async () => { value.handleContentChange('doc-2 内容'); });
+
+    await act(async () => {
+      value.handleSwitchTab(firstTabId);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(value.file.content).toBe('doc-1 内容');
+
+    await act(async () => {
+      value.handleSwitchTab(secondTabId);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(value.file.content).toBe('doc-2 内容');
+  });
 });

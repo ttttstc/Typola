@@ -11,6 +11,7 @@ import {
 import { codeBlockCopyExtension } from './codeBlockCopyExtension';
 import { imageFallbackExtension } from './imageFallbackExtension';
 import { imageAssetExtension } from './imageAssetExtension';
+import { imagePathExtension } from './imagePathExtension';
 import { mathPreviewExtension } from './mathPreviewExtension';
 import { mermaidPreviewExtension } from './mermaidPreviewExtension';
 import { wheelZoomExtension } from './wheelZoomExtension';
@@ -18,6 +19,8 @@ import { previewSyncExtension, type PreviewHeadingChange } from './previewSyncEx
 import { headingFoldExtension } from './headingFoldExtension';
 import { frontmatterFoldExtension } from './frontmatterFoldExtension';
 import { footnoteExtension } from './footnoteExtension';
+import { hardBreakExtension } from './hardBreakExtension';
+import { highlightExtension } from './highlightExtension';
 import { htmlPreviewExtension } from './htmlPreviewExtension';
 import { typewriterExtension } from './typewriterExtension';
 import type { FoldKey } from '../../../services/headingFoldService';
@@ -119,11 +122,14 @@ function previewExtensions(options: Pick<CreateLivePreviewExtensionsOptions, 'li
   return [
     ...(options.frontmatterFold ? [frontmatterFoldExtension()] : []),
     footnoteExtension(),
+    hardBreakExtension(),
+    highlightExtension(),
     htmlPreviewExtension(),
     inlinePreview(),
     typolaTableExtension,
     ...tableInteractionExtension(options.locale),
     imageBlocks(),
+    imagePathExtension(),
     imageFallbackExtension(),
     imageAssetExtension(),
     mathPreviewExtension(options.themeId),
