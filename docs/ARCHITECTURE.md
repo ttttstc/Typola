@@ -84,7 +84,7 @@ Typola 是基于 Tauri v2 的桌面 Markdown 编辑器，技术栈：React 19、
 
 - Both writing and source modes expose precise CM6 transaction-backed insert, replace, undo, and reveal operations through `TypolaEditorKernel`. Find/replace supplies source ranges to `replaceRanges`, so single and all replacements each become one CM6 history entry instead of a React-side content rewrite.
 
-- Toolbar controls, Markdown shortcuts, and the editor context menu all call `TypolaEditorKernel.format`; the sole CM6 formatter dispatches each document change, including quote depth, link URL, format clearing, and fenced-code language edits. Typora-aligned shortcuts cover code blocks (Ctrl+Shift+K), tables (Ctrl+T), math blocks (Ctrl+Shift+M), images (Ctrl+Shift+I), inline code (Ctrl+Shift+`), links (Ctrl+K), body text (Ctrl+0), jump-to-line (Ctrl+G via `  kernel.gotoLine\`), and list Tab/Shift-Tab indentation gated to list-item lines only.
+- Toolbar controls, Markdown shortcuts, and the editor context menu all call `TypolaEditorKernel.format`; the sole CM6 formatter dispatches each document change, including quote depth, link URL, format clearing, and fenced-code language edits. Typora-aligned shortcuts cover code blocks (Ctrl+Shift+K), tables (Ctrl+T), math blocks (Ctrl+Shift+M), images (Ctrl+Shift+I), inline code (Ctrl+Shift+`), links (Ctrl+K), body text (Ctrl+0), jump-to-line (Ctrl+G via `kernel.gotoLine`), and list Tab/Shift-Tab indentation gated to list-item lines only.
 
 - The CM6 formatter also provides paired inline toggles for underline, superscript, subscript, and source-preserved `==highlight==`; the export pipeline converts the latter to sanitized `<mark>` markup.
 
@@ -184,7 +184,7 @@ The terminal is implemented with Tauri commands plus event streaming:
 
 - The headless workbench coexists with the terminal-based flow-mode agent path. The left rail is a single state machine (`none` / `workspace` / `aiWorkbench`), so file tree and AI Workbench are mutually exclusive and never create a fourth column. The existing bottom PTY terminal remains unchanged and flow mode no longer auto-opens it.
 
-历史设计快照（2026-06-16，标为历史节点）：[`docs/AI_WORKBENCH_SPEC.md`](./AI_WORKBENCH_SPEC.md)。事实以本 ARCHITECTURE.md 为准，AI\_WORKBENCH\_SPEC.md 仅供回查设计动机。
+历史设计快照（2026-06-16，标为历史节点）：[`docs/AI_WORKBENCH_SPEC.md`](./AI_WORKBENCH_SPEC.md)。事实以本 ARCHITECTURE.md 为准，AI_WORKBENCH_SPEC.md 仅供回查设计动机。
 
 ## AI Review and Revision
 

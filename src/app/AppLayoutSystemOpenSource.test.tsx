@@ -198,21 +198,27 @@ describe('AppLayout system open source editing', () => {
         && (payload as { path: string } | undefined)?.path === '/tmp/notes.md'
     ))).toBe(false);
 
-    // 打开后左栏自动带出(按钮显示「收起文件树」),手动收起后必须保持收起
+    // 打开后左栏自动带出(main-content 带 left-panel-open 状态类),手动收起后必须保持收起。
+    // PR #284 review:断言基于持久的 .main-content 元素状态类,不依赖 AnimatePresence
+    // exit 节点在 jsdom 中的卸载时机(固定次数 setTimeout(0) 不等价于退出动画完成)。
+    const mainContent = () => host.querySelector<HTMLElement>('.main-content')!;
     await act(async () => {
-      await waitUntil(() => Boolean(host.querySelector<HTMLButtonElement>('button[aria-label="收起文件树"]')));
+      await waitUntil(() => mainContent()?.classList.contains('left-panel-open') === true);
     });
     const collapseButton = host.querySelector<HTMLButtonElement>('button[aria-label="收起文件树"]')!;
+    expect(collapseButton).toBeTruthy();
     await act(async () => {
       collapseButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushPromises();
-      // left-rail 经 framer-motion exit 动画卸载,等待收起完成而不是固定 tick。
-      for (let attempt = 0; attempt < 50 && host.querySelector('button[aria-label="收起文件树"]'); attempt += 1) {
+    });
+    // 状态语义:left-panel-open 随收起立即移除;再让出若干宏任务,若存在回弹 bug,
+    // effect 会在此期间把 leftRailMode 拉回 workspace,类名会重新出现。
+    expect(mainContent().classList.contains('left-panel-open')).toBe(false);
+    await act(async () => {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
         await waitForMacrotask();
       }
     });
-
-    expect(host.querySelector('button[aria-label="收起文件树"]')).toBeNull();
-    expect(host.querySelector('aside.workspace-sidebar')).toBeNull();
+    expect(mainContent().classList.contains('left-panel-open')).toBe(false);
   });
 });
