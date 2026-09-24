@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  autoUpdate,
   FloatingPortal,
   flip,
   offset,
@@ -34,6 +35,9 @@ export function Tooltip({
     onOpenChange: setUncontrolledOpen,
     placement,
     middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
+    // 布局变化(面板开合/标签增删导致 anchor 位移)时跟随重算,
+    // 否则 tooltip 停留在旧坐标,表现为"卡在屏幕上"。
+    whileElementsMounted: autoUpdate,
   });
   const hover = useHover(context, { delay: { open: 350, close: 0 } });
   const focus = useFocus(context);
@@ -44,7 +48,9 @@ export function Tooltip({
     refs.setReference(reference);
   }, [reference, refs]);
 
-  if (!reference || !open || !label) {
+  // anchor 已从 DOM 移除时(按钮重渲染/卸载)直接不渲染——
+  // 失去 anchor 的 floating 会回落到视口左上角(0,0),即"卡死的 tooltip"。
+  if (!reference || !reference.isConnected || !open || !label) {
     return null;
   }
 

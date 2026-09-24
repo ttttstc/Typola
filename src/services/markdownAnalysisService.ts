@@ -90,6 +90,12 @@ const cache = new Map<string, { source: string; result: MarkdownAnalysisResult }
 const CACHE_LIMIT = 24;
 const taskPattern = /^(\s*)(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s+(.*)$/u;
 const linkPattern = /(!?)\[([^\]\n]*)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/gu;
+// setext 标题的文本行必须是裸段落(CommonMark §4.3):列表项、引用、ATX、围栏、
+// 主题分割线等前缀行不可能是 setext 标题文本。mergeHeadings 的正则补充扫描用
+// 它守卫,防止 "- item\n---"(列表 + 分割线)、列表换行续输 "-" 等组合被误判为
+// 标题导致折叠角标误注入。注意只排除单个列表标记符(--、** 等仍是段落文本,
+// 可作合法 setext 标题),以及完整主题分割线(***、- - - 等)。
+const nonParagraphPrefix = /^[ \t]{0,3}(?:#{1,6}(?:[ \t]+|$)|>|[-*+](?:[ \t]+|$)|\d+[.)](?:[ \t]+|$)|`{3,}|~{3,}|(?:\*[ \t]*){3,}$|(?:-[ \t]*){3,}$|(?:_[ \t]*){3,}$)/u;
 
 type TreeNode = { name: string; from: number; to: number };
 
@@ -395,6 +401,11 @@ function mergeHeadings(source: string, parsed: MarkdownHeading[]): MarkdownHeadi
       continue;
     }
     if (inFence || headings.has(line.from)) continue;
+    // 前缀行(列表/引用/ATX/围栏/分割线)不是段落,不可能作 setext 标题文本。
+    if (nonParagraphPrefix.test(lineText)) continue;
+    // 行落在已有 heading 节点范围内(如 lezer 的多行 SetextHeading)时不再补充,
+    // 防止 "para1\npara2\n---" 被算成两个标题(角标/TOC 双条目)。
+    if ([...headings.values()].some((heading) => line.from > heading.from && line.from < heading.to)) continue;
     const underline = lines[index + 1]!.text.trim();
     const level = /^=+$/u.test(underline) ? 1 : /^-+$/u.test(underline) ? 2 : null;
     const text = lineText.trim().normalize('NFC');

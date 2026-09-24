@@ -220,6 +220,7 @@ const zhCN = {
   fileTreeLoadingChild: '读取中...',
   fileTreeAriaLabel: '文件工作区',
   statusBarNoFile: '未打开文件',
+  editorEmptyHint: 'Ctrl+O 打开文件 · 直接输入开始写作',
   statusBarUnsaved: '未保存',
   statusBarSaving: '保存中',
   statusBarSaved: '已保存',
@@ -474,6 +475,7 @@ const enUS: Record<I18nKey, string> = {
   fileTreeLoadingChild: 'Loading...',
   fileTreeAriaLabel: 'File workspace',
   statusBarNoFile: 'No file opened',
+  editorEmptyHint: 'Ctrl+O to open a file · just start typing',
   statusBarUnsaved: 'Unsaved',
   statusBarSaving: 'Saving',
   statusBarSaved: 'Saved',
@@ -726,6 +728,7 @@ const jaJP: Record<I18nKey, string> = {
   fileTreeLoadingChild: '読み込み中...',
   fileTreeAriaLabel: 'ファイルワークスペース',
   statusBarNoFile: 'ファイル未選択',
+  editorEmptyHint: 'Ctrl+O でファイルを開く · そのまま入力して開始',
   statusBarUnsaved: '未保存',
   statusBarSaving: '保存中',
   statusBarSaved: '保存済み',
@@ -770,6 +773,11 @@ const dictionaries: Record<AppLocale, Record<I18nKey, string>> = {
   'ja-JP': jaJP,
 };
 
+// 字典文案统一按 macOS 惯例书写 Cmd；Typola 是 Windows 优先的桌面产品，
+// 非 macOS 平台渲染为 Ctrl，避免用户按 tooltip 里的 Cmd 键无响应。
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+
 export function translate(locale: AppLocale, key: I18nKey): string {
-  return dictionaries[locale]?.[key] ?? zhCN[key];
+  const text = dictionaries[locale]?.[key] ?? zhCN[key];
+  return IS_MAC ? text : text.replace(/\bCmd\b/g, 'Ctrl');
 }

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- 易用性走查修复（UX 诊断报告全量项）：① Windows 平台 tooltip 快捷键不再显示 mac 的 Cmd——`translate()` 统一按平台把字典里的 Cmd 渲染为 Ctrl（新增 i18n 回归）；② 状态栏在编辑未命名文档时显示文档名（如「未命名 2.md」）而非误导性的"未打开文件"（新增 StatusBar 回归）；③ 工具栏 tooltip 卡死修复——点击后立即消失、anchor 卸载时不再回落到视口左上角、布局变化时跟随重算（Tooltip 组件 autoUpdate + Toolbar click 清理）；④ 浮动大纲：底色从 72% 半透明改为不透明（主题注册表重新生成，文字不再穿透）、非固定展开态支持 Esc 关闭（新增 FloatingToc 回归）；⑤ 终端 cwd 行与状态栏文件目录相同时不再重复显示；⑥ 右侧预览面板标签「微信」统一为「HTML 预览」，与工具栏入口命名一致；⑦ 查找/替换面板从工具栏下缘下移到标签栏之下，不再与模式按钮组同排相叠；⑧ 切换标签后焦点自动还给编辑器，可直接续打（此前焦点留在标签按钮上键盘落空）；⑨ 空白未命名文档首屏显示一行引导提示（Ctrl+O 打开文件 · 直接输入开始写作），开始输入即消失。
+
+- `taskToggleExtension` 死链路修复：选择器从不存在的 `typola-cm-task-checkbox` 改为实际渲染的 `cm-atomic-task-checkbox`，监听改挂捕获阶段（atomic checkbox 在 target 阶段 stopPropagation，冒泡监听永远收不到），扩展只发 `onTaskToggle` 通知、切换动作仍由 atomic 完成，不再重复 dispatch。
+
+- 修复标题折叠角标在列表/引用等前缀行上误注入且删不掉的问题：`analyzeMarkdown` 的 setext 标题正则补充扫描此前不检查文本行是否为裸段落，「列表项/引用/有序列表/任务项 + 下一行 `-`/`---`/`===`」会被误判为 setext 标题——列表换行续输 `-`、在列表下方敲分割线的瞬间上一行出现 ▼ 角标（Decoration 非文本，删字符删不掉，逐字删成单个 `-` 仍命中），并连带污染 TOC/大纲与预览滚动定位。现按 CommonMark 守卫：前缀行不作 setext 标题文本；同时修正多行段落 setext（`para1\npara2\n---`）被 lezer 节点与正则补充双算、产生两个角标/两条 TOC 的问题。新增 146 项「标题识别 × 编辑交互」单元回归（前缀行 × 下划线全矩阵、换行逐字输入/删除、合法 ATX/setext/引用内 setext 对照不回归）。
+
+- exe 全量验收补齐 Markdown 编辑交互空白（真实 WebView2 键盘逐字输入）：新增 `heading-fold-editing` 六项（ATX 角标折叠展开往返、列表换行续输 `-` 无假角标、前缀行 + 分割线符合 CommonMark——裸分割线无角标/引用延续 `> ---` 合法 setext 恰好一个角标、前缀行下逐字删除始终无角标、合法 setext 与多行段落单标题、大纲不含假标题）与 `md-editing-interactions` 九项（Enter 无序/任务列表延续与空项退出、有序列表编号递增、引用块延续、标题行尾与代码块内纯换行、列表行中拆分延续、Backspace 删 markup、逐字输入标题即时格式化且角标唯一、任务 checkbox 点击切换）。另新增 `heavy-user` 重度用户套件九项（2000 行长文档工作流 + 13 项性能基线 + 内存采样）与 UX 走查采集脚本。
+
 ## 2.0.9 - 2026-09-21
 
 - 补齐 Issue #280 暴露的 Markdown 写作视图边界：原始 HTML 的注释、脚本和模板标签不再泄漏为可见源码，`==高亮==` 在写作视图保留 mark 语义，光标位于文档末尾时上标仍能渲染；兼容中文与空格图片路径，并校正 SVG、链接和围栏代码块的 exe 验证断言。相关扩展场景已纳入严格 exe 验收，未通过的链接点击终态保留为失败证据。
@@ -13,6 +21,7 @@
 - 修复编辑器基础 Markdown 写作视图回归：脚注定义折叠后仍显示脚注内容（光标位于定义末尾时不误展开源码），反斜杠硬换行显示为可见换行；补充脚注、硬换行和未命名多标签隔离回归用例，并校正嵌套图片链接与撤销/多标签 exe 验证边界。
 
 - 修复 Issue #283 的六个问题：① 打开文件/点击正文可能误标「已修改」——EditorPane 外部同步（打开/切标签/磁盘重载的整篇替换）此前不带来源标记，会像用户输入一样触发 onChange 触发 dirty 重算；现在这些程序性替换带 `ExternalChange` 标记，不再触发 onChange（AI 改稿等真实编辑不受影响），新增回归测试；② Windows 安装器注册文件夹右键「用 Typola 打开」（目录右键 + 文件夹空白处右键），传目录启动时以工作区方式打开，并联动把左栏文件树带出（此前运行期设置工作区根不会让左栏从隐藏变为可见，打开文件夹后要重启才能看到文件树）；③ 绿色主题（brutalist/自定义绿色）下设置页开关与选项选中态不可辨——主题的 `!important` 按钮规则与 define-color 统一控件底色不再吞掉选中态，toggle/外观模式/主题卡选中时用高对比 accent 标识；④ 工作区文件树右键菜单新增「删除」——永久删除文件或文件夹（含二次确认、危险色菜单项），后端校验目标必须位于工作区根目录内、拒删根目录，删除后自动关闭对应标签并刷新文件树；⑤ Markdown 标题折叠箭头方向反了（收起时显示倒三角），两处（CM6 写作模式/Vditor 预览）统一为「收起 ▶ / 展开 ▼」；⑥ 行号渲染——写作模式行号锁定等宽字体 + 等宽数字（数字形变/列宽抖动消失），4 位行号不再被固定宽裁掉，源码模式行号颜色从过淡的边框色改为 gutter 文字色，两种模式字号统一 11px。全部六项已通过真实 exe（WebView2 CDP）定向验证，证据见 `.nimo/verification/evidence/issue283-*-exe-283/`；删除的二次确认与安装器注册表写入因原生对话框/需安装包保留为受阻项。
+
 - 修复检视意见状态闭环：意见按规范化文档路径持久化，重新打开文档可恢复待处理、已忽略和已应用状态；检视侧栏分别计算忽略与待处理数量，已应用意见仍可导出但不再参与 AI 改稿，忽略意见保持终态。
 
 - 修复 Issue #277 实跑暴露的编辑器问题：表格插入与模式切换保持稳定合法的 GFM 源码；Mermaid 光标停在闭合 fence 后不再被误判为源码编辑而静默不渲染；终端或预览控件聚焦时全局 `Ctrl/Cmd+F` 仍能打开查找；缺失图片占位文案改为可读的“图片加载失败”。
@@ -59,7 +68,7 @@
 
 - 插入类功能入口补齐（对齐 Typora 惯例）：新增快捷键 Ctrl+Shift+K 插入代码块、Ctrl+T 插入表格、Ctrl+Shift+M 插入公式块（新格式命令，插入 `$$` 围栏并落光标于公式体空行）、Ctrl+Shift+I 插入本地图片（无图片回调时不拦截按键）、Ctrl+0 回到正文；Ctrl+K 从“AI 选区菜单”改为插入/编辑链接（AI 选区菜单保留选区浮条与右键入口），右键菜单“链接 (Ctrl+K)”“正文 (Ctrl+0)”提示从此与实际一致。工具栏格式组新增代码块/分隔线/删除线/高亮/公式块五个按钮，全部 tooltip 与 aria-label 改走 i18n（中/英/日三语）；右键“插入”子菜单新增“公式块”，插入类菜单项补齐快捷键提示。
 
-- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                                <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
+- 补齐五项 Typora 高频功能：①打字机模式（设置项 `editorTypewriterMode`，默认关闭）：打字或移动光标时把当前行滚动到编辑区视口约 40% 处，偏差小于 40px 不调整避免抖动，用户滚轮/触摸滚动后 400ms 抑制窗口内不抢滚动，鼠标拖选进行中不干预；②跳转到行（Ctrl/Cmd+G，Typora 惯例，`Prec.high` 覆盖 searchKeymap 的 find-next；行内代码快捷键改绑 Typora 键位 Ctrl+Shift+`）：编辑区顶部弹窗支持“行号”与“行:列”（均 1-based，越界自动 clamp）输入，Enter 跳转 Esc 关闭，`TypolaEditorKernel`新增`gotoLine`方法；③代码块复制按钮：光标不在块内时在 fence 行渲染复制按钮（绝对定位到块首行右上角，hover 显示），点击复制块内代码并短暂显示“已复制”，mermaid/math 围栏跳过；④列表 Tab/Shift-Tab 缩进：选区覆盖的所有行均为列表项时按`indentUnit`（与设置中 Tab 宽度对齐）整体缩进/反缩进，非列表行（含表格行）不拦截，让位表格 Tab 导航；⑤富文本 HTML 粘贴转 Markdown（turndown + turndown-plugin-gfm）：粘贴优先级为表格（TSV/CSV/HTML 表格，现有链路）→ HTML 转 Markdown → 纯文本，仅当 HTML 含结构性标签（table/pre/code/img/a/strong/b/em/i/del/s/h1-h6/ul/ol/blockquote/hr）才转换，纯 `                                   <p>`/`<span>\` 包装返回 null 走纯文本，输出列表标记收敛为 Typora 风格单空格。新增打字机、复制按钮、keymap、粘贴服务与 kernel gotoLine 回归测试。
 
 ## \[2.0.5] - 2026-07-13
 

@@ -2478,6 +2478,10 @@ export function AppLayout() {
     </Suspense>
   ) : (
     <Suspense fallback={<div className="cm6-markdown-editor-pane lazy-pane"><span>CM6 编辑器加载中</span></div>}>
+      {/* 空白未命名文档的首屏引导:零文档用户第一眼知道能做什么。 */}
+      {file.content.length === 0 && !file.path && (
+        <div className="editor-empty-hint" aria-hidden="true">{t('editorEmptyHint')}</div>
+      )}
       <Cm6MarkdownEditorPane
         ref={editorCommandRef}
         mode={editorMode}
@@ -2758,7 +2762,11 @@ export function AppLayout() {
         activeTabId={activeTabId}
         renameTitle={t('toolbarRenameTitle')}
         renameTitleUnsaved={t('toolbarRenameTitleUnsaved')}
-        onSwitchTab={handleSwitchTab}
+        onSwitchTab={(tabId) => {
+          handleSwitchTab(tabId);
+          // 切标签后焦点留在标签按钮上,用户直接续打会落空;异步把焦点还给编辑器。
+          window.setTimeout(() => editorCommandRef.current?.focus(), 50);
+        }}
         onRequestRename={handleRequestRename}
         onCloseTab={handleCloseTab}
         isDocx={isDocx}
@@ -2813,6 +2821,7 @@ export function AppLayout() {
         statusBarNode={(
           <StatusBar
             filePath={file.path}
+            fileName={file.name}
             dirty={file.dirty}
             saveState={saveVisualState}
             message={autoSaveError || diskChangeMessage || transientMessage}

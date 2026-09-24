@@ -517,7 +517,10 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           />
         ))}
       </div>
-      {activeTab?.cwd && <div className="terminal-cwd">{activeTab.cwd}</div>}
+      {/* cwd 与状态栏文件目录相同时不再重复显示——两行近似路径堆叠是噪音。 */}
+      {activeTab?.cwd && activeTab.cwd !== directoryFromPath(currentFilePath) && (
+        <div className="terminal-cwd">{activeTab.cwd}</div>
+      )}
     </section>
   );
 });

@@ -96,7 +96,9 @@ function cssVariablesForTheme(theme) {
     ['theme-overlay-bg', mix(cssVar('text-primary'), 35)],
     ['theme-shadow-soft', mix(cssVar('text-primary'), 18)],
     ['theme-paper-shadow', mix(cssVar('text-primary'), 8)],
-    ['theme-toc-panel-bg', mix(cssVar('paper'), 72)],
+    // 大纲面板用不透明底色:72% 半透明 + backdrop-blur 在文字密集区会"穿透",
+    // 长文档导航时条目难读(UX 走查发现)。
+    ['theme-toc-panel-bg', cssVar('paper')],
     ['theme-ai-primary', core.aiPrimary],
     ['theme-ai-inserted', core.aiInserted],
     ['theme-ai-deleted', core.aiDeleted],

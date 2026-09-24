@@ -30,6 +30,7 @@
     "verify:exe-core": "node .nimo/verification/scripts/verify-exe-core-suite.mjs",
     "verify:exe-core:extended": "node .nimo/verification/scripts/verify-exe-core-extended.mjs",
     "verify:exe-core:all": "node .nimo/verification/scripts/run-all-non-ai.mjs",
+    "verify:exe-heavy-user": "node .nimo/verification/scripts/verify-exe-heavy-user.mjs",
     "verify:exe-editor": "node .nimo/verification/scripts/verify-exe-core-flow.mjs"
   },
   "dependencies": {

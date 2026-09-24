@@ -21,7 +21,7 @@ import {
   type MarkdownTask,
 } from '../../../services/markdownAnalysisService';
 
-export const TASK_TOGGLE_CLASS = 'typola-cm-task-checkbox';
+export const TASK_TOGGLE_CLASS = 'cm-atomic-task-checkbox';
 export const LINK_OPEN_CLASS = 'typola-cm-link';
 
 export function findTaskForClick(view: EditorView, source: string, offset: number): MarkdownTask | null {
@@ -141,9 +141,14 @@ type TaskToggleOptions = {
 
 export function taskToggleExtension(options: TaskToggleOptions = {}): Extension[] {
   const { onToggle } = options;
+  // checkbox 由 @atomic-editor 渲染为 input.cm-atomic-task-checkbox,其自带
+  // click handler(在 target 阶段 stopPropagation 并改写 [ ]/[x])。冒泡阶段的
+  // domEventHandlers 因此永远收不到事件——必须挂捕获阶段,先一步命中并只发
+  // 通知,不重复 dispatch,切换动作仍由 atomic 完成。
   return [
-    EditorView.domEventHandlers({
-      click(event: MouseEvent, view) {
+    ViewPlugin.define((view) => {
+      const handler = (event: MouseEvent) => {
+        if (!onToggle) return;
         const target = event.target;
         if (!(target instanceof Element)) return;
         const checkbox = target.closest(`input.${TASK_TOGGLE_CLASS}, .${TASK_TOGGLE_CLASS} input[type="checkbox"]`);
@@ -152,15 +157,14 @@ export function taskToggleExtension(options: TaskToggleOptions = {}): Extension[
         if (offset === null) return;
         const task = findTaskForClick(view, view.state.doc.toString(), offset);
         if (!task) return;
-        event.preventDefault();
-        const nextText = toggleTaskSource(view.state.doc.toString(), task);
-        view.dispatch({
-          changes: { from: task.from, to: task.to, insert: nextText },
-          selection: { anchor: task.from + nextText.length },
-          annotations: Transaction.userEvent.of('task.toggle'),
-        });
-        onToggle?.(task, !task.checked);
-      },
+        onToggle(task, !task.checked);
+      };
+      view.contentDOM.addEventListener('click', handler, true);
+      return {
+        destroy() {
+          view.contentDOM.removeEventListener('click', handler, true);
+        },
+      };
     }),
   ];
 }
