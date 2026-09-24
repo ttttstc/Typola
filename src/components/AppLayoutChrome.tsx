@@ -362,11 +362,11 @@ export function AppLayoutChrome({
                   className={rightPanelMode === 'wechat' ? 'active' : ''}
                   data-indicator-active={rightPanelMode === 'wechat' ? 'true' : undefined}
                   onClick={() => onSetRightPanelMode('wechat')}
-                  aria-label="微信预览"
-                  title="微信预览"
+                  aria-label="HTML 预览"
+                  title="HTML 预览"
                 >
                   <Newspaper size={14} />
-                  <span>微信</span>
+                  <span>HTML</span>
                 </button>
                 <button
                   type="button"

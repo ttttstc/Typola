@@ -1638,6 +1638,24 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   flex: 1;
 }
 
+/* 空白未命名文档的首屏引导(零文档用户第一眼):绝对定位于编辑区上方,
+   不拦截点击/输入,开始打字即随 content 非空自动消失。 */
+.editor-empty-hint {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--theme-surface);
+  color: var(--theme-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 10px var(--theme-paper-shadow);
+}
+
 .editor-paper-background {
   position: relative;
   display: flex;
@@ -4934,7 +4952,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
  */
 .find-panel {
   position: fixed;
-  top: 54px;
+  /* 工具栏(48px) + 编辑器标签栏(38px) + 间距:完整落在编辑区内,
+     不与工具栏右侧的模式按钮组(阅读/心流/检视)同排相叠。 */
+  top: 96px;
   right: 18px;
   display: flex;
   align-items: flex-start;

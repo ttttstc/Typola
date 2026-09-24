@@ -137,6 +137,18 @@ export function FloatingToc({
     setExpanded(true);
   }, [openRequest]);
 
+  // 非固定展开态按 Esc 关闭(与查找/快速打开等浮层一致);固定态不响应,
+  // 固定大纲是布局的一部分而非浮层。不 stopPropagation:同层其他浮层面板
+  // 的 Esc 关闭不受影响。
+  useEffect(() => {
+    if (!expanded || pinned) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExpanded(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [expanded, pinned]);
+
   if (items.length === 0) return null;
 
   const handlePinToggle = () => {

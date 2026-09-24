@@ -7,6 +7,8 @@ import type { SaveVisualState } from '../hooks/useFileTabs';
 
 type StatusBarProps = {
   filePath: string;
+  /** 未保存（无路径）文档的显示名，如「未命名 2.md」；为空时回落到"未打开文件"。 */
+  fileName?: string;
   dirty: boolean;
   saveState?: SaveVisualState;
   message?: string;
@@ -68,7 +70,7 @@ function getSaveStateLabel(state: SaveVisualState, t: (key: Parameters<typeof tr
   return t('statusBarUnsaved');
 }
 
-export function StatusBar({ filePath, dirty, saveState, message, stats }: StatusBarProps) {
+export function StatusBar({ filePath, fileName, dirty, saveState, message, stats }: StatusBarProps) {
   const settings = useSettings();
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const hasPath = filePath.length > 0;
@@ -138,7 +140,7 @@ export function StatusBar({ filePath, dirty, saveState, message, stats }: Status
           hasPath ? { cursor: 'copy', userSelect: 'text' } : undefined
         }
       >
-        {hasPath ? filePath : t('statusBarNoFile')}
+        {hasPath ? filePath : (fileName || t('statusBarNoFile'))}
       </span>
       {copyState !== 'idle' && (
         <span

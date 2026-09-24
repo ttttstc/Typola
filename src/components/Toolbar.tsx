@@ -295,6 +295,9 @@ export function Toolbar({
       onPointerLeave={clearToolbarTooltip}
       onFocusCapture={handleToolbarTooltipFocus}
       onBlurCapture={clearToolbarTooltip}
+      // 点击后 tooltip 必须消失(标准 UX);受控 open 不会因 click 自动关闭,
+      // 否则按钮动作触发面板开合后 tooltip 长期滞留屏幕。
+      onClickCapture={clearToolbarTooltip}
     >
       <div className="toolbar-left">
         <div className="toolbar-group toolbar-nav-actions" aria-label="导航">

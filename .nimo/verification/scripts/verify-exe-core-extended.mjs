@@ -483,6 +483,432 @@ async function main() {
   );
   await captureUi(page, '06-md-divider');
 
+  // ============================ 标题折叠 × 编辑交互 ============================
+  // 回归 Issue：前缀行（列表/引用/任务项）+ 下划线被误判为 setext 标题，折叠角标
+  // 误注入且删不掉。这里用真实键盘逐字输入复现"换行续输列表符号"的中间态，
+  // 并断言合法 ATX / setext 的角标与折叠行为不回归。
+
+  await recordAction(
+    page,
+    'heading-fold-editing',
+    '合法 ATX 标题显示折叠角标且点击折叠/展开往返',
+    async () => {
+      await replaceEditorContent(page, '# 标题甲\n\n第一段正文\n\n## 标题乙\n\n第二段正文\n');
+      await ensureWriting(page);
+      await delay(300);
+      const toggles = page.locator('.cm-content .typola-heading-fold-toggle');
+      const count = await toggles.count();
+      assert.ok(count === 2, `ATX 标题应各有 1 个角标，实际 ${count}`);
+
+      // 点击第一个标题的角标折叠
+      await toggles.first().click();
+      await delay(200);
+      const foldedLines = await page.locator('.cm-content .typola-cm-line-folded').count();
+      assert.ok(foldedLines > 0, '折叠后应有隐藏的正文行');
+      const bodyVisible = await page.locator('.cm-content').getByText('第一段正文').isVisible().catch(() => false);
+      assert.ok(!bodyVisible, '折叠后第一段正文应不可见');
+
+      // 再点展开恢复
+      await page.locator('.cm-content .typola-heading-fold-toggle').first().click();
+      await delay(200);
+      const bodyVisibleAgain = await page.locator('.cm-content').getByText('第一段正文').isVisible();
+      assert.ok(bodyVisibleAgain, '展开后第一段正文应恢复可见');
+    },
+    async () => ({ toggleCount: await page.locator('.cm-content .typola-heading-fold-toggle').count() }),
+  );
+  await captureUi(page, '06a-fold-atx-roundtrip');
+
+  await recordAction(
+    page,
+    'heading-fold-editing',
+    '列表项换行续输 "-" 不产生假折叠角标（换行核心回归）',
+    async () => {
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      // 模拟真实输入：列表项 → Enter → 逐字输入 "-"
+      await page.keyboard.type('- item one');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('-');
+      await delay(300);
+      let count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 0, `列表续输 "-" 不应出现角标，实际 ${count}`);
+      // 停留在空列表项（持续态）
+      await page.keyboard.type(' ');
+      await delay(300);
+      count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 0, `空列表项 "- " 持续态不应有角标，实际 ${count}`);
+      // 补全文字后仍无角标
+      await page.keyboard.type('item two');
+      await delay(300);
+      count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 0, `补全 "- item two" 后不应有角标，实际 ${count}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06b-fold-list-continue');
+
+  await recordAction(
+    page,
+    'heading-fold-editing',
+    '列表 / 引用 / 有序列表下一行输入分割线的角标行为符合 CommonMark',
+    async () => {
+      // 列表/有序列表:写作模式逐字输入,Enter + "---" → 不得出现假角标
+      for (const prefix of ['- item', '1. item']) {
+        await replaceEditorContent(page, '');
+        await ensureWriting(page);
+        const content = page.locator('.cm-content');
+        await content.click();
+        await page.keyboard.insertText(prefix);
+        await page.keyboard.press('Enter');
+        await page.keyboard.type('---');
+        await delay(300);
+        const count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+        assert.ok(count === 0, `"${prefix}" + 分割线不应出现角标，实际 ${count}`);
+      }
+
+      // 引用:源码直接构造 "> quote\n---"(下划线不带 > 前缀,是 thematic break)→ 无角标
+      await replaceEditorContent(page, '> quote\n---\n');
+      await ensureWriting(page);
+      await delay(300);
+      let count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 0, `"> quote" + 裸分割线不应出现角标，实际 ${count}`);
+
+      // 引用:写作模式 Enter 自动延续 "> ",再输入 --- 形成 "> ---" ——
+      // CommonMark 合法的引用块内 setext 标题,角标应当出现(且恰好 1 个)
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.insertText('> quote');
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('---');
+      await delay(300);
+      count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 1, `"> ---"(引用延续 setext)应恰好 1 个角标，实际 ${count}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06c-fold-prefix-hr');
+
+  await recordAction(
+    page,
+    'heading-fold-editing',
+    '假角标"删不掉"回归：前缀行 + --- 下逐字删除始终无角标',
+    async () => {
+      await replaceEditorContent(page, '- item\n---\n');
+      await ensureWriting(page);
+      await delay(300);
+      let count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 0, `初始即含 "- item\\n---" 不应有角标，实际 ${count}`);
+      // 光标移到末行逐字删 "-"：--- → -- → - → 空，全过程中不得出现角标
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.press('Control+End');
+      for (let i = 0; i < 3; i += 1) {
+        await page.keyboard.press('Backspace');
+        await delay(200);
+        count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+        assert.ok(count === 0, `删除下划线第 ${i + 1} 个字符后不应出现角标，实际 ${count}`);
+      }
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06d-fold-delete-underline');
+
+  await recordAction(
+    page,
+    'heading-fold-editing',
+    '合法 setext 标题保留角标；多行段落 setext 只算一个标题',
+    async () => {
+      await replaceEditorContent(page, '正文段落\n---\n');
+      await ensureWriting(page);
+      await delay(300);
+      let count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 1, `合法 setext（段落 + ---）应有 1 个角标，实际 ${count}`);
+
+      // 多行段落 setext：lezer 节点覆盖多行，正则补充不得双算
+      await replaceEditorContent(page, '段落一行\n段落二行\n---\n');
+      await ensureWriting(page);
+      await delay(300);
+      count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 1, `多行段落 setext 应只算 1 个标题（1 个角标），实际 ${count}`);
+    },
+    async () => ({ toggleCount: await page.locator('.cm-content .typola-heading-fold-toggle').count() }),
+  );
+  await captureUi(page, '06e-fold-setext-legit');
+
+  await recordAction(
+    page,
+    'heading-fold-editing',
+    '大纲不含假标题：前缀行文档的大纲条目数正确',
+    async () => {
+      await replaceEditorContent(page, '- 列表项一\n- 列表项二\n---\n\n## 真标题\n\n正文\n');
+      await ensureWriting(page);
+      await delay(400);
+      await page.getByRole('button', { name: '查看大纲', exact: true }).click();
+      const entries = page.locator('.floating-toc-item');
+      await entries.first().waitFor({ state: 'visible', timeout: 5_000 });
+      const outlineText = await entries.allInnerTexts();
+      assert.ok(outlineText.length === 1, `大纲应只有 1 个条目（真标题），实际 ${outlineText.length}：${outlineText.join(' | ')}`);
+      assert.ok(!outlineText.join(' ').includes('列表项'), `大纲不应包含列表项假标题，实际：${outlineText.join(' | ')}`);
+      await page.getByRole('button', { name: '关闭', exact: true }).click().catch(() => page.keyboard.press('Escape'));
+    },
+    async () => ({ outlineEntries: await page.locator('.floating-toc-item').allInnerTexts().catch(() => []) }),
+  );
+  await captureUi(page, '06f-fold-outline-clean');
+
+  // ============================ Markdown 编辑交互（Enter / Backspace / 逐字输入） ============================
+  // 覆盖 @atomic-editor insertTightListItem（bullet 列表延续 / 空项退出）与
+  // @codemirror/lang-markdown insertNewlineContinueMarkup（有序列表编号递增、引用延续）
+  // 的真实键盘行为，以及 deleteMarkupBackward 删前缀。此前 exe 完全没有测过 Enter
+  // 延续族，Issue 的"换行自动带前缀/假角标"类低级编辑问题就漏在这个空白。
+
+  async function sourceText(page) {
+    // CM6 把每行渲染为独立 .cm-line div，content.textContent 不含换行符；
+    // 按行取 textContent 再 join，保留真实源码行结构（含折叠角标 ▼ 前缀）。
+    await ensureSource(page);
+    const lines = await page.locator('.cm-content .cm-line').allTextContents();
+    return lines.join('\n');
+  }
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    'Enter 无序/任务列表延续 + 空列表项 Enter 退出列表',
+    async () => {
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.type('- 甲');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      // 空项 Enter → 退出列表（atomic insertTightListItem 清空当前行）
+      await page.keyboard.press('Enter');
+      await delay(150);
+      let source = await sourceText(page);
+      assert.ok(source.trim() === '- 甲', `空列表项 Enter 应退出列表，源码：${JSON.stringify(source)}`);
+
+      // 任务列表：Enter 延续 "- [ ] "
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      await content.click();
+      await page.keyboard.type('- [ ] 任务');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      source = await sourceText(page);
+      assert.ok(source.includes('- [ ] 任务') && /\n- \[ \] ?$/.test(source), `任务列表 Enter 应延续 "- [ ] "，源码：${JSON.stringify(source)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06g-enter-list-continue');
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    'Enter 有序列表延续并递增编号',
+    async () => {
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.type('1. 第一');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      await page.keyboard.type('第二');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      await page.keyboard.type('第三');
+      await delay(150);
+      const source = await sourceText(page);
+      assert.ok(source.includes('1. 第一'), `有序列表第一项缺失，源码：${JSON.stringify(source)}`);
+      assert.ok(source.includes('2. 第二'), `Enter 应延续编号 "2. "，源码：${JSON.stringify(source)}`);
+      assert.ok(source.includes('3. 第三'), `Enter 应继续编号 "3. "，源码：${JSON.stringify(source)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06h-enter-ol-renumber');
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    'Enter 引用块延续 "> " 前缀',
+    async () => {
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.type('> 甲');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      await page.keyboard.type('乙');
+      await delay(150);
+      const source = await sourceText(page);
+      assert.ok(source.includes('> 甲\n> 乙'), `引用 Enter 应延续 "> "，源码：${JSON.stringify(source)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06i-enter-quote-continue');
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    'Enter 在标题行尾与代码块内不延续任何前缀',
+    async () => {
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.type('# 标题');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      await page.keyboard.type('正文');
+      await delay(150);
+      let source = await sourceText(page);
+      assert.ok(source.includes('# 标题\n正文'), `标题行尾 Enter 应纯换行，源码：${JSON.stringify(source)}`);
+      assert.ok(!/\n[#>-]/.test(source), `新行不得延续前缀，源码：${JSON.stringify(source)}`);
+
+      // 代码块内 Enter：纯换行
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      await content.click();
+      await page.keyboard.type('```js');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      await page.keyboard.type('code1');
+      await page.keyboard.press('Enter');
+      await delay(150);
+      await page.keyboard.type('code2');
+      await delay(150);
+      source = await sourceText(page);
+      assert.ok(source.includes('```js'), '代码块 fence 未生成');
+      assert.ok(source.includes('code1\ncode2'), `代码块内 Enter 应纯换行，源码：${JSON.stringify(source)}`);
+      assert.ok(!/code1\n[#>-]/.test(source), `代码块内不得延续 Markdown 前缀，源码：${JSON.stringify(source)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06j-enter-no-continue');
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    'Enter 在列表项中间拆分并延续前缀到后半',
+    async () => {
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.type('- abcdef');
+      // 光标移到 "- ab|cdef"：Home 到行首再右移 5 格（"- ab" 2+3 字符）
+      await page.keyboard.press('Home');
+      for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('Enter');
+      await delay(200);
+      const source = await sourceText(page);
+      assert.ok(source.includes('- abc\n- def'), `列表行中 Enter 应拆分并延续 "- "，源码：${JSON.stringify(source)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06k-enter-list-split');
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    'Backspace 删除 markup（列表 / 引用一次删净；标题两次删净）',
+    async () => {
+      // deleteMarkupBackward 契约：列表/引用前缀一次 Backspace 整体删除；
+      // 标题 "#" 不属于 ListMark/QuoteMark，走默认逐字符删除（空格 + # 共两次）。
+      const cases = [
+        { prefix: '- ', backspaces: 1 },
+        { prefix: '> ', backspaces: 1 },
+        { prefix: '# ', backspaces: 2 },
+      ];
+      for (const { prefix, backspaces } of cases) {
+        await replaceEditorContent(page, '');
+        await ensureWriting(page);
+        const content = page.locator('.cm-content');
+        await content.click();
+        await page.keyboard.type(prefix);
+        await delay(100);
+        for (let i = 0; i < backspaces; i += 1) {
+          await page.keyboard.press('Backspace');
+          await delay(100);
+        }
+        const source = (await page.locator('.cm-content').textContent()) ?? '';
+        assert.ok(!source.trim(), `Backspace×${backspaces} 应删除前缀 "${prefix.trim()}"，剩余：${JSON.stringify(source)}`);
+      }
+      // Backspace 后可继续正常输入（编辑器未崩）
+      await page.keyboard.type('恢复');
+      const source = await sourceText(page);
+      assert.ok(source.includes('恢复'), `删除前缀后应可继续输入，源码：${JSON.stringify(source)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06l-backspace-markup');
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    '逐字输入标题即时格式化且角标唯一（输入中间态回归）',
+    async () => {
+      await replaceEditorContent(page, '');
+      await ensureWriting(page);
+      const content = page.locator('.cm-content');
+      await content.click();
+      await page.keyboard.type('# 标题甲');
+      await delay(300);
+      let count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 1, `逐字输入标题后应有且仅有 1 个角标，实际 ${count}`);
+      // 继续编辑标题文字：角标不得双算
+      await page.keyboard.type('乙');
+      await delay(300);
+      count = await page.locator('.cm-content .typola-heading-fold-toggle').count();
+      assert.ok(count === 1, `编辑标题文字后角标应仍为 1 个，实际 ${count}`);
+      const source = await sourceText(page);
+      assert.ok(source.includes('# 标题甲乙'), `标题源码缺失，源码：${JSON.stringify(source)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06m-typing-heading');
+
+  await recordAction(
+    page,
+    'md-editing-interactions',
+    '写作模式点击任务 checkbox 切换完成状态',
+    async () => {
+      // inline preview 对光标所在行冻结为源码，checkbox 只在光标离开该行后渲染；
+      // 用第二段正文承接光标。
+      await replaceEditorContent(page, '- [ ] 未完成任务\n\n正文段落\n');
+      await ensureWriting(page);
+      await delay(300);
+      await page.getByText('正文段落').first().click();
+      await delay(300);
+      // checkbox 由 @atomic-editor 渲染为 input.cm-atomic-task-checkbox，
+      // 其自带 click handler 直接改写源码 [ ] ↔ [x]。
+      const checkbox = page.locator('.cm-content .cm-atomic-task-checkbox');
+      const boxCount = await checkbox.count();
+      assert.ok(boxCount >= 1, `写作视图应有任务 checkbox，实际 ${boxCount}`);
+      await checkbox.first().click();
+      await delay(300);
+      const source = await sourceText(page);
+      assert.ok(source.includes('[x]'), `点击 checkbox 应写入 [x]，源码：${JSON.stringify(source)}`);
+      // 再点切回未完成
+      await ensureWriting(page);
+      await delay(200);
+      await page.getByText('正文段落').first().click();
+      await delay(200);
+      await page.locator('.cm-content .cm-atomic-task-checkbox').first().click();
+      await delay(300);
+      const source2 = await sourceText(page);
+      assert.ok(!source2.includes('[x]'), `再次点击应切回 [ ]，源码：${JSON.stringify(source2)}`);
+    },
+    async () => ({ source: await page.locator('.cm-content').textContent() }),
+  );
+  await captureUi(page, '06n-task-checkbox-toggle');
+
+
   await recordAction(
     page,
     'markdown-basic',

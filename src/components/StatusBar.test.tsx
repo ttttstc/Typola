@@ -65,6 +65,19 @@ describe('StatusBar', () => {
     expect(host.querySelector('.status-dirty')).toBeNull();
   });
 
+  it('shows the untitled file name instead of "未打开文件" when path is empty', () => {
+    render({ filePath: '', fileName: '未命名 2.md', dirty: true });
+    const path = host.querySelector<HTMLSpanElement>('.status-path');
+    expect(path?.textContent).toBe('未命名 2.md');
+    // 无路径时仍不可双击复制
+    expect(path?.getAttribute('role')).toBeNull();
+  });
+
+  it('falls back to "未打开文件" when neither path nor name exists', () => {
+    render({ filePath: '', dirty: false });
+    expect(host.querySelector<HTMLSpanElement>('.status-path')?.textContent).toBe('未打开文件');
+  });
+
   it('renders explicit save states for the calmer save feedback', () => {
     render({ filePath: '/Users/demo/case.md', dirty: false, saveState: 'saving' });
     const saving = host.querySelector('.status-save-state');

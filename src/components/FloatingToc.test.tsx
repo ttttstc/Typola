@@ -187,6 +187,28 @@ describe('FloatingToc — edge drawer trigger', () => {
     expect(h.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(true);
     h.cleanup();
   });
+
+  it('非固定展开态按 Esc 关闭;固定态不响应 Esc', async () => {
+    // 非固定:Esc 关闭
+    const floating = await mountFloatingToc(makeItems(), 0, false);
+    await floating.requestOpen();
+    expect(floating.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(true);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(floating.host.querySelector('.floating-toc')?.classList.contains('expanded')).toBe(false);
+    floating.cleanup();
+
+    // 固定:Esc 不改变展开状态(固定大纲是布局的一部分)
+    const pinnedHarness = await mountFloatingToc(makeItems(), 0, true);
+    const panel = pinnedHarness.host.querySelector('.floating-toc-panel');
+    expect(panel?.getAttribute('aria-hidden')).toBe('false');
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(pinnedHarness.host.querySelector('.floating-toc-panel')?.getAttribute('aria-hidden')).toBe('false');
+    pinnedHarness.cleanup();
+  });
 });
 
 describe('FloatingToc — 拖拽调宽与悬停提示 (issue #264)', () => {
