@@ -617,6 +617,7 @@ export function AppLayout() {
     rememberArtifact,
     clearArtifacts: handleClearArtifacts,
     forgetArtifact,
+    forgetArtifactsUnder,
     bumpWorkspaceTreeVersion,
   } = useWorkspaceWatch({
     isTauriRuntime,
@@ -635,10 +636,6 @@ export function AppLayout() {
     pluginDirs: settings.aiPluginDirs,
     onArtifactFile: (artifact) => {
       rememberArtifact(artifact.path);
-      // 生成制品后自动滑出右侧制品面板(设置项可关);与 review 自动打开(:2989)同一模式。
-      if (settings.autoOpenArtifactPanel) {
-        setRightPanelMode('artifacts');
-      }
     },
   });
 
@@ -2247,6 +2244,28 @@ export function AppLayout() {
 
   const artifactUnreadCount = Math.max(0, artifactRecords.length - settings.artifactSeenCount);
 
+  // 制品总数缩小时(删除 / 归档清理 / 切到制品更少的工作区)同步下调水位。否则旧水位高于
+  // 当前总数,之后新增制品只要没超过旧水位就一直算 0,未读角标会长期漏报。
+  useEffect(() => {
+    if (artifactRecords.length >= settings.artifactSeenCount) return;
+    updateSettings({ artifactSeenCount: artifactRecords.length });
+  }, [artifactRecords.length, settings.artifactSeenCount]);
+
+  // 生成制品后自动滑出右侧制品面板(设置项可关)。挂在「新出现的制品路径」上,而不是只挂
+  // provider 的 artifact_file 回调——输出格式未被解析器识别、只能靠工作区 watcher 兜底发现的
+  // 制品,此前不会触发自动打开。首帧只建基线,避免打开已有制品时抢走面板。
+  const seenArtifactPathsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const paths = new Set(artifactItems.map((item) => item.path));
+    if (seenArtifactPathsRef.current === null) {
+      seenArtifactPathsRef.current = paths;
+      return;
+    }
+    const hasNew = [...paths].some((path) => !seenArtifactPathsRef.current!.has(path));
+    seenArtifactPathsRef.current = paths;
+    if (hasNew && settings.autoOpenArtifactPanel) setRightPanelMode('artifacts');
+  }, [artifactItems, settings.autoOpenArtifactPanel]);
+
   // 「存为文件」命名弹窗:默认名取 manifest 语义标题(去扩展名),回落文件名 stem。
   const [archivePrompt, setArchivePrompt] = useState<{ path: string; defaultName: string } | null>(null);
 
@@ -2264,20 +2283,28 @@ export function AppLayout() {
     setArchivePrompt(null);
     if (!prompt) return;
     const archivedPath = await handleArchiveArtifact(prompt.path, name);
-    if (archivedPath) {
+    if (!archivedPath) return;
+    try {
       await markArtifactArchived(prompt.path, archivedPath, name);
-      setArtifactLibraryRefreshKey((key) => key + 1);
+    } catch (error) {
+      // 文件已经存进工作区了,只是归档留痕没落盘:卡片不会显示「已归档」,必须让用户知道,
+      // 不能像以前那样把失败静默吞掉。
+      await messageDialog(`已保存到工作区，但制品留痕写入失败：${String(error)}`, { title: '存为文件' });
     }
+    setArtifactLibraryRefreshKey((key) => key + 1);
   }, [archivePrompt, handleArchiveArtifact]);
 
   // 关闭会话 = 清理临时制品(conv-N 目录)。有未归档制品/覆盖备份时先确认;
-  // 运行中的会话禁止关闭,防与 AI 进程写盘竞态。
+  // 生成中/等待用户回答的会话禁止关闭,防与 AI 进程写盘竞态。
   const handleCloseConversation = useCallback(async (convId: string) => {
     const conv = convManager.conversations.get(convId);
-    if (conv?.runState === 'running') {
-      await messageDialog('该会话正在生成中，请先停止后再关闭。', { title: '关闭会话' });
+    // waitingForUser 时后端进程尚未退出(流式输出里出现未闭合 <question-form>),
+    // 此时删目录同样会与写盘竞态,必须一并拦截。
+    if (conv?.runState === 'running' || conv?.runState === 'waitingForUser') {
+      await messageDialog('该会话仍在处理中，请先停止后再关闭。', { title: '关闭会话' });
       return;
     }
+    const convDir = outputBaseDir ? joinLocalPath(outputBaseDir, safeOutputSegment(convId)) : undefined;
     if (outputBaseDir) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
@@ -2300,13 +2327,19 @@ export function AppLayout() {
             request: { outputRoot: outputBaseDir, conversationId: convId },
           });
           setArtifactLibraryRefreshKey((key) => key + 1);
+          // 目录整体删除时 watcher 未必逐个文件报 remove,chips 会留下指向已删文件的死路径
+          // (点了只报文件不存在)。这里按会话目录前缀显式清掉。
+          if (convDir) forgetArtifactsUnder(convDir);
         }
       } catch (error) {
-        console.warn('Failed to cleanup conversation output:', error);
+        // 清理失败不能继续关闭:否则目录仍留在磁盘、会话却已从 UI 消失,用户失去重试入口,
+        // 又变回这次改版要解决的 orphan 临时目录。
+        await messageDialog(`清理会话临时目录失败，已取消关闭以免残留：${String(error)}`, { title: '关闭会话' });
+        return;
       }
     }
     convManager.closeConversation(convId);
-  }, [convManager, outputBaseDir]);
+  }, [convManager, forgetArtifactsUnder, outputBaseDir]);
 
   useEffect(() => {
     if (!outputBaseDir || agentChangedPaths.size === 0) return;

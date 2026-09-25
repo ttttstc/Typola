@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { deriveArtifactTitle } from './manifest';
+import { deriveArtifactTitle, isArtifactCandidatePath } from './manifest';
+
+describe('isArtifactCandidatePath', () => {
+  it('收有扩展名的文件', () => {
+    expect(isArtifactCandidatePath('D:/ws/.typola-output/conv-1/report.html')).toBe(true);
+    expect(isArtifactCandidatePath('D:/ws/.typola-output/conv-1/notes.md')).toBe(true);
+    expect(isArtifactCandidatePath('D:\\ws\\.typola-output\\conv-1\\data.json')).toBe(true);
+  });
+
+  it('排除会话目录(watcher 的 mkdir 事件)与 manifest 元数据', () => {
+    expect(isArtifactCandidatePath('D:/ws/.typola-output/conv-1')).toBe(false);
+    expect(isArtifactCandidatePath('D:/ws/.typola-output/conv-1/artifact.json')).toBe(false);
+    expect(isArtifactCandidatePath('D:/ws/.typola-output/conv-1/ARTIFACT.JSON')).toBe(false);
+    expect(isArtifactCandidatePath('D:/ws/.typola-output/conv-1/README')).toBe(false);
+  });
+});
 
 describe('deriveArtifactTitle', () => {
   it('HTML 制品优先取 <title>', () => {

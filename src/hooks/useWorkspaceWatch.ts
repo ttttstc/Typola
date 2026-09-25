@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { filterSelfWritePaths } from '../services/selfWriteFilter';
+import { isArtifactCandidatePath } from '../services/artifacts/manifest';
 
 function pathStartsWith(path: string, root: string): boolean {
   const normalize = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/u, '').toLowerCase();
@@ -22,6 +23,8 @@ type UseWorkspaceWatchResult = {
   rememberArtifact: (path: string) => void;
   clearArtifacts: () => void;
   forgetArtifact: (path: string) => void;
+  /** 按目录前缀批量移除(关闭会话清理 conv-N 后,watcher 未必逐个文件报 remove)。 */
+  forgetArtifactsUnder: (prefix: string) => void;
   bumpWorkspaceTreeVersion: () => void;
 };
 
@@ -57,12 +60,19 @@ export function useWorkspaceWatch({
         return onWorkspaceChanged((payload) => {
           const now = Date.now();
           const paths = filterSelfWritePaths(payload.paths, lastSelfWriteRef.current, now);
-          const artifactPaths = paths.filter((path) => pathStartsWith(path, outputRoot));
+          // 只收「真实制品候选」:conv-N 目录(mkdir 事件)与 artifact.json 不是制品,
+          // 放进来会污染下游 manifest 链路(目录被当 primaryFile)与 chips 展示。
+          const artifactPaths = paths.filter(
+            (path) => pathStartsWith(path, outputRoot) && isArtifactCandidatePath(path),
+          );
           if (artifactPaths.length === 0) return;
+          const removing = payload.kind === 'remove';
           setAgentChangedPaths((prev) => {
             const next = new Map(prev);
             for (const path of artifactPaths) {
-              next.set(path, now);
+              // 删除事件不能 set:否则被删掉的文件会永远留在 chips 里,点了只报文件不存在。
+              if (removing) next.delete(path);
+              else next.set(path, now);
             }
             return next;
           });
@@ -106,6 +116,16 @@ export function useWorkspaceWatch({
     });
   }, []);
 
+  const forgetArtifactsUnder = useCallback((prefix: string) => {
+    setAgentChangedPaths((prev) => {
+      const next = new Map(prev);
+      for (const path of [...next.keys()]) {
+        if (pathStartsWith(path, prefix)) next.delete(path);
+      }
+      return next;
+    });
+  }, []);
+
   const bumpWorkspaceTreeVersion = useCallback(() => {
     setWorkspaceTreeVersion((version) => version + 1);
   }, []);
@@ -116,6 +136,7 @@ export function useWorkspaceWatch({
     rememberArtifact,
     clearArtifacts,
     forgetArtifact,
+    forgetArtifactsUnder,
     bumpWorkspaceTreeVersion,
   };
 }

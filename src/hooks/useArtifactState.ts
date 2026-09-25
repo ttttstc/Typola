@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { messageDialog } from '../services/dialogService';
+import { isArtifactCandidatePath } from '../services/artifacts/manifest';
 import { pathBasename } from '../app/appLayoutUtils';
 
 type ArtifactItem = import('../components/ArtifactPreview').ArtifactItem;
@@ -28,11 +29,11 @@ export function useArtifactState({
   const artifactItems = useMemo<ArtifactItem[]>(() => {
     const items: ArtifactItem[] = [];
     agentChangedPaths.forEach((ts, path) => {
+      // watcher 写入时已按同一 predicate 过滤;这里再兜一层,保证 chips 视图与 manifest
+      // 链路对「什么是制品」的判定完全一致。
+      if (!isArtifactCandidatePath(path)) return;
       const name = path.replace(/\\/g, '/').split('/').pop() ?? path;
       const lower = name.toLowerCase();
-      // 只把「有扩展名的文件」当产物:conv-N 目录的 mkdir 事件与 manifest(artifact.json)都会随
-      // watcher 冒出来,暴露成 chip 会诱导用户归档/删除非产物——归档目录会把整个会话目录 move 走。
-      if (!/\.[^./]+$/u.test(name) || lower === 'artifact.json') return;
       let kind: ArtifactItem['kind'] = 'other';
       if (lower.endsWith('.md') || lower.endsWith('.markdown')) kind = 'markdown';
       else if (lower.endsWith('.html') || lower.endsWith('.htm')) kind = 'html';
@@ -53,8 +54,12 @@ export function useArtifactState({
       });
       onForgetArtifact(artifactPath);
       onWorkspaceRefresh();
-      await onOpenPath(archivedPath);
       onTransientMessage(`已保存到工作区：${pathBasename(archivedPath)}`);
+      // 自动打开只是后置便利动作:它失败不能把「文件已保存成功」判成失败——否则上层会跳过
+      // archived manifest 写回,留下 primaryFile 悬空的卡片。
+      void onOpenPath(archivedPath).catch((error) => {
+        console.warn('Failed to open archived artifact:', error);
+      });
       return archivedPath;
     } catch (error) {
       await messageDialog(String(error), { title: '保存产物失败' });

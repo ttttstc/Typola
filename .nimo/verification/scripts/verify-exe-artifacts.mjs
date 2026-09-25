@@ -40,6 +40,10 @@ const outputRoot = path.join(aiWorkspaceRoot, '.typola-output');
 const convDir = path.join(outputRoot, convDirName);
 const seededArtifact = path.join(convDir, 'report.html');
 const archivedTarget = path.join(aiWorkspaceRoot, '制品体验验证归档.html');
+// 第二个会话目录:用于「关闭自动打开面板后未读角标才可观测」的场景(同目录再放文件会覆盖 manifest)。
+const convDir2Name = 'conv-9902';
+const convDir2 = path.join(outputRoot, convDir2Name);
+const seededArtifact2 = path.join(convDir2, 'badge.html');
 
 let ownedProcess = null;
 let browser = null;
@@ -189,6 +193,7 @@ async function confirmCdpClosed() {
 
 async function removeSeededFiles() {
   await fs.rm(convDir, { recursive: true, force: true }).catch(() => undefined);
+  await fs.rm(convDir2, { recursive: true, force: true }).catch(() => undefined);
   cleanup.seededRemoved = !(await fs.stat(convDir).then(() => true).catch(() => false));
   await fs.rm(archivedTarget, { force: true }).catch(() => undefined);
   cleanup.archivedRemoved = !(await fs.stat(archivedTarget).then(() => true).catch(() => false));
@@ -358,22 +363,16 @@ async function main() {
   );
   await captureUi(page, '01c-toast-archive-prompt');
 
-  // ============ 场景 2:制品中心入口 + 未读角标 + 卡片语义标题 ============
+  // ============ 场景 2:watcher 发现的制品自动滑出制品面板 + 卡片语义标题 ============
+  // 回归点:自动打开此前只挂在 provider 的 artifact_file 回调上,watcher 兜底发现的制品不触发。
 
   await recordAction(
     page,
     'artifact-experience',
-    '工具栏「AI 产物」显示未读角标,制品中心卡片显示推导标题',
+    'watcher 兜底发现的制品自动滑出右侧制品面板,卡片显示推导标题',
     async () => {
-      const entry = page.locator('button[aria-label="AI 产物"]');
-      await entry.waitFor({ state: 'visible', timeout: 15_000 });
-      // 角标:settings 全新 profile → artifactSeenCount=0,records ≥1 → 未读 >0
-      const badge = entry.locator('.toolbar-artifact-badge');
-      await badge.waitFor({ state: 'visible', timeout: 15_000 });
-      const badgeText = await badge.textContent();
-      assert.ok(Number(badgeText) >= 1, `角标计数应 ≥1,实际:${badgeText}`);
-      await entry.click();
-      await page.locator('.artifact-center-panel').waitFor({ state: 'visible', timeout: 15_000 });
+      const panel = page.locator('.artifact-center-panel');
+      await panel.waitFor({ state: 'visible', timeout: 15_000 });
       // 切到「全部产物」(conv-9901 不是活动会话)
       await page.getByRole('button', { name: '全部产物', exact: true }).click();
       const card = page.locator('.artifact-center-card', { hasText: '制品体验验证标题' });
@@ -381,7 +380,40 @@ async function main() {
     },
     async () => ({ aria: (await ariaSnapshot(page)).slice(0, 400) }),
   );
-  await captureUi(page, '02-artifact-center-open');
+  await captureUi(page, '02-artifact-auto-open');
+
+  // ============ 场景 2b:关闭「自动打开面板」后,未读角标才可观测 ============
+  // 自动打开默认开启时,面板一开就把新制品写回已读水位,角标必然为 0;
+  // 角标是「自动打开关闭」时的兜底提示,所以必须先关掉该设置再造制品。
+
+  await recordAction(
+    page,
+    'artifact-experience',
+    '关闭自动打开设置后,新制品在工具栏「AI 产物」上显示未读角标',
+    async () => {
+      await page.getByRole('button', { name: '设置', exact: true }).click();
+      await delay(500);
+      await page.getByRole('button', { name: '生成制品后自动打开面板' }).click();
+      await delay(300);
+      await page.keyboard.press('Escape');
+      await delay(400);
+      const entry = page.locator('button[aria-label="AI 产物"]');
+      // 收起制品面板,让后续新制品处于「未读」状态
+      if (await page.locator('.artifact-center-panel').isVisible().catch(() => false)) {
+        await entry.click();
+        await delay(400);
+      }
+      // 第二个制品放独立会话目录:同目录再放文件会覆盖 conv-9901 的 manifest
+      await fs.mkdir(convDir2, { recursive: true });
+      await fs.writeFile(seededArtifact2, '<html><head><title>角标验证</title></head></html>', 'utf8');
+      const badge = entry.locator('.toolbar-artifact-badge');
+      await badge.waitFor({ state: 'visible', timeout: 20_000 });
+      const badgeText = await badge.textContent();
+      assert.ok(Number(badgeText) >= 1, `角标计数应 ≥1,实际:${badgeText}`);
+    },
+    async () => ({ aria: (await ariaSnapshot(page)).slice(0, 400) }),
+  );
+  await captureUi(page, '02b-artifact-unread-badge');
 
   // ============ 场景 3:存为文件(命名弹窗)→ 工作区落盘 + 卡片标记已归档 ============
 
@@ -390,7 +422,12 @@ async function main() {
     'artifact-experience',
     '存为文件弹命名框,确认后工作区出现语义命名文件且卡片标记已归档',
     async () => {
+      // 场景 2b 收起了面板,这里重新打开(同时也验证入口仍可用)
+      await page.locator('button[aria-label="AI 产物"]').click();
+      await page.locator('.artifact-center-panel').waitFor({ state: 'visible', timeout: 15_000 });
+      await page.getByRole('button', { name: '全部产物', exact: true }).click();
       const card = page.locator('.artifact-center-card', { hasText: '制品体验验证标题' });
+      await card.waitFor({ state: 'visible', timeout: 15_000 });
       await card.getByRole('button', { name: '存为文件' }).click();
       const dialog = page.locator('.rename-dialog');
       await dialog.waitFor({ state: 'visible', timeout: 10_000 });
@@ -434,10 +471,24 @@ async function main() {
 
   // ============ 受阻场景 ============
 
-  skip('artifact-experience', '生成制品后自动打开右侧面板', 'onArtifactFile 仅由真实 provider artifact_file 事件触发,需要 Claude/OpenCode CLI');
   skip('artifact-experience', '关闭会话清理 conv-N 确认', 'confirmDialog 走原生对话框,无桌面自动化;Rust 命令层已由 cargo test 覆盖');
 
   // ============ 收尾 ============
+
+  // 场景 2b 关掉了「生成制品后自动打开面板」。该设置走 localStorage,为免污染用户配置,恢复为开启。
+  try {
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await delay(500);
+    const toggle = page.getByRole('button', { name: '生成制品后自动打开面板' });
+    if ((await toggle.getAttribute('aria-pressed')) === 'false') {
+      await toggle.click();
+      await delay(300);
+    }
+    await page.keyboard.press('Escape');
+    await delay(300);
+  } catch (error) {
+    runtimeMessages.console.push({ type: 'cleanup-warning', text: `恢复 autoOpenArtifactPanel 失败: ${String(error)}` });
+  }
 
   await writeRunJson({ runId, cdpVersion, packageVersion: packageJson.version, executable });
   await stopOwnedProcess();

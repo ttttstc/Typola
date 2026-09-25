@@ -78,6 +78,17 @@ export function deriveArtifactTitle(path: string, content: string): string | und
   return clean.length > ARTIFACT_TITLE_MAX ? `${clean.slice(0, ARTIFACT_TITLE_MAX)}…` : clean;
 }
 
+/**
+ * 是否是「真实制品候选」：有扩展名的文件，且不是 manifest 元数据本身。
+ * watcher 会把会话目录 conv-N（mkdir 事件）与 artifact.json 一并报上来，这些都不是制品：
+ * 必须在写入 watcher state 前就过滤掉——否则 manifest 链路会把目录当 primaryFile 写出伪
+ * manifest，chips 也会出现可归档/删除的非产物（归档目录会把整个会话目录 move 走）。
+ */
+export function isArtifactCandidatePath(path: string): boolean {
+  const name = artifactBasename(path);
+  return /\.[^./\\]+$/u.test(name) && name.toLowerCase() !== 'artifact.json';
+}
+
 export function createArtifactManifest(input: ArtifactCreateInput): ArtifactManifest {
   const kind = inferArtifactKind(input.primaryFile);
   const now = new Date().toISOString();
@@ -136,7 +147,9 @@ export async function writeArtifactManifest(manifest: ArtifactManifest, manifest
 /**
  * 归档成功后写回 manifest:状态置 archived、主文件指向工作区新路径、标题更新为用户命名。
  * manifest 留在 conv-N 目录作升格留痕;扫描端(Rust collect_archived_manifests)按 archived 状态补回卡片。
- * 读不到 manifest(legacy 制品)时静默跳过。
+ * legacy 制品没有 manifest 时**补建**一份——否则源文件已被 move 走、又没有 archived 留痕,
+ * 卡片会直接消失,「归档后保留并标记已归档」的核心验收失效。
+ * 写回失败会抛出:调用方需要把失败告诉用户(文件已保存成功,但留痕没落盘)。
  */
 export async function markArtifactArchived(
   originalPrimaryFile: string,
@@ -144,21 +157,23 @@ export async function markArtifactArchived(
   title?: string,
 ): Promise<void> {
   const manifestPath = joinArtifactPath(artifactDir(originalPrimaryFile), 'artifact.json');
+  const { readTextFile } = await import('@tauri-apps/plugin-fs');
+  let manifest: ArtifactManifest | null = null;
   try {
-    const { readTextFile } = await import('@tauri-apps/plugin-fs');
-    const manifest = JSON.parse(await readTextFile(manifestPath)) as ArtifactManifest;
-    if (!manifest || typeof manifest.primaryFile !== 'string') return;
-    manifest.status = 'archived';
-    manifest.primaryFile = archivedPath;
-    if (title) manifest.title = title;
-    manifest.updatedAt = new Date().toISOString();
-    manifest.files = manifest.files?.map((file) => (
-      file.role === 'primary' ? { ...file, path: archivedPath } : file
-    ));
-    await writeArtifactManifest(manifest, manifestPath);
+    const parsed = JSON.parse(await readTextFile(manifestPath)) as ArtifactManifest;
+    if (parsed && typeof parsed.primaryFile === 'string') manifest = parsed;
   } catch {
-    // legacy 制品无 manifest 或写回失败,不影响归档本身。
+    manifest = null;
   }
+  if (!manifest) manifest = createArtifactManifest({ primaryFile: originalPrimaryFile, title });
+  manifest.status = 'archived';
+  manifest.primaryFile = archivedPath;
+  if (title) manifest.title = title;
+  manifest.updatedAt = new Date().toISOString();
+  manifest.files = manifest.files?.map((file) => (
+    file.role === 'primary' ? { ...file, path: archivedPath } : file
+  ));
+  await writeArtifactManifest(manifest, manifestPath);
 }
 
 export async function ensureArtifactManifest(input: ArtifactCreateInput): Promise<ArtifactManifest> {
