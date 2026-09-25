@@ -5478,6 +5478,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 .conversation-header strong {
   font-size: 14px;
   color: var(--theme-text-primary);
+  /* 面板窄时不要折成「AI 工作 / 台」两行 */
+  white-space: nowrap;
 }
 
 .conversation-model-badge {
@@ -5496,6 +5498,12 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 .conversation-model-placeholder {
   color: var(--theme-text-muted);
   font-size: 12px;
+  /* 模型名可以很长(claude-opus-4-8[1M][1m]):允许收缩并省略,不要挤走发送按钮 */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sr-only {
@@ -6383,6 +6391,15 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
+  /* 不许被左侧标签挤压:否则「发送」会被压成竖排两行 */
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* 字号必须提级:全局 `.app-layout button { font-size: inherit }` 会把按钮字号刷回根字号
+ * (用户调到 14px 时「发送」比同排 12px 的模型标签还大,也更容易被挤成竖排)。 */
+.conversation-composer .conversation-composer-actions button {
+  font-size: 12.5px;
 }
 
 .agent-provider-picker {
