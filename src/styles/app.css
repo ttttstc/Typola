@@ -21,6 +21,9 @@
   --status-neutral-fg: var(--theme-text-secondary);
   --status-neutral-bg: var(--theme-control-bg);
   --status-neutral-border: var(--theme-border-soft);
+  /* accent 实底上的文字色。此前只有引用没有定义,color: var(--text-on-accent) 是无效声明,
+   * 文字色回退成继承色。取 paper 而非硬编码白:暗色主题下 accent 偏亮,需要深色字。 */
+  --text-on-accent: var(--theme-paper);
   --motion-duration-press: 60ms;
   --motion-duration-fast: 120ms;
   --motion-duration-modal: 140ms;
@@ -5493,13 +5496,19 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   border-radius: 999px;
 }
 
-.conversation-header span,
+.conversation-header span:not(.conversation-pill-count),
 .conversation-muted,
 .conversation-model-placeholder {
   color: var(--theme-text-muted);
   font-size: 12px;
-  /* 模型名可以很长(claude-opus-4-8[1M][1m]):允许收缩并省略,不要挤走发送按钮 */
-  flex: 1 1 auto;
+}
+
+/* 模型名可以很长(claude-opus-4-8[1M][1m]):允许收缩并省略,不要挤走发送按钮。
+ * 只能单独写,不能并进上面那条共享规则 —— 那条的 `.conversation-header span` 会连
+ * 会话计数徽标一起命中,flex:1 1 auto 会把徽标拉宽、muted 色又把它压深,变成一坨黑点。 */
+.conversation-model-placeholder {
+  /* 独占首行:模型名是信息,和控件挤一行会把发送按钮顶出面板 */
+  flex: 1 1 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6374,6 +6383,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .conversation-composer-actions {
   display: flex;
+  /* 两行布局:左侧选择器/模型名独占首行,发送按钮换到第二行靠右 ——
+     单行时窄面板会把发送按钮顶出面板外,完全看不到。 */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -6384,6 +6396,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  /* 与发送按钮同处第二行,占满剩余宽度 */
+  flex: 1 1 auto;
 }
 
 .conversation-composer-actions button {
@@ -6394,6 +6408,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   /* 不许被左侧标签挤压:否则「发送」会被压成竖排两行 */
   flex: 0 0 auto;
   white-space: nowrap;
+  /* 换到第二行后靠右对齐 */
+  margin-left: auto;
 }
 
 /* 字号必须提级:全局 `.app-layout button { font-size: inherit }` 会把按钮字号刷回根字号

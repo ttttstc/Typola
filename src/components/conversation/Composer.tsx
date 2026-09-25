@@ -193,6 +193,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         </div>
       )}
       <div className="conversation-composer-actions">
+        {/* 模型名独占首行(信息),控件与发送按钮排第二行:
+            全部挤在一行时,窄面板会把发送按钮顶到面板外完全看不到。 */}
+        <span className="conversation-model-placeholder" title="在设置 · AI CLI 配置模型">
+          {currentModel
+            ? `${providerLabel} · ${currentModel}`
+            : configuredModel
+              ? `${providerLabel} · ${configuredModel}`
+              : `${providerLabel} · 默认模型`}
+        </span>
         <div className="conversation-composer-left-actions">
           <ComposerPlusMenu
             onAttachFiles={() => void handleAttachFiles()}
@@ -213,13 +222,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             configuredModel={configuredModel}
             onSwitchProvider={onSwitchProvider}
           />
-          <span className="conversation-model-placeholder" title="在设置 · AI CLI 配置模型">
-            {currentModel
-              ? `${providerLabel} · ${currentModel}`
-              : configuredModel
-                ? `${providerLabel} · ${configuredModel}`
-                : `${providerLabel} · 默认模型`}
-          </span>
         </div>
         {running ? (
           <button type="button" onClick={handleCancel} title="停止">
