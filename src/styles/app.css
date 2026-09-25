@@ -21,6 +21,9 @@
   --status-neutral-fg: var(--theme-text-secondary);
   --status-neutral-bg: var(--theme-control-bg);
   --status-neutral-border: var(--theme-border-soft);
+  /* accent 实底上的文字色。此前只有引用没有定义,color: var(--text-on-accent) 是无效声明,
+   * 文字色回退成继承色。取 paper 而非硬编码白:暗色主题下 accent 偏亮,需要深色字。 */
+  --text-on-accent: var(--theme-paper);
   --motion-duration-press: 60ms;
   --motion-duration-fast: 120ms;
   --motion-duration-modal: 140ms;
@@ -609,6 +612,27 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   display: block;
 }
 
+/* 「AI 产物」未读角标:右上角红点计数,Claude 式未读牵引 */
+.app-toolbar button {
+  position: relative;
+}
+
+.toolbar-artifact-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--theme-accent);
+  color: var(--text-on-accent);
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* 宸ュ叿鏍忓鍑轰笅鎷夎彍鍗?*/
 .toolbar-export-dropdown {
   position: relative;
@@ -647,6 +671,14 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .app-toolbar .toolbar-split .split-chevron-icon {
   opacity: 0.55;
   flex-shrink: 0;
+}
+
+/* 纯下拉槽（「更多格式」）：没有主按钮，触发按钮按普通工具栏按钮尺寸，圆角不打折 */
+.app-toolbar .toolbar-split > .split-chevron-solo {
+  width: auto;
+  min-width: 34px;
+  margin-left: 0;
+  border-radius: 6px;
 }
 
 /* 分组下拉菜单项图标（复用 export-menu 容器样式） */
@@ -1324,7 +1356,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   max-height: calc(100vh - 116px);
   overflow: hidden;
   border: 1px solid var(--theme-border-soft);
-  border-radius: 5px;
+  border-radius: 8px;
   background: var(--theme-toc-panel-bg);
   backdrop-filter: blur(12px);
   opacity: 0;
@@ -1377,7 +1409,9 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   border-bottom: none;
   color: var(--theme-text-secondary);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .floating-toc-header-actions {
@@ -1391,15 +1425,17 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 0;
   background: transparent;
   color: var(--theme-text-secondary);
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: 6px;
   padding: 0;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .floating-toc-action:hover,
@@ -1450,6 +1486,11 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 同上:字号提级,否则「固定大纲」这行会以根字号(默认 13px,可调高)配 16px 行高,挤在一起。 */
+.floating-toc .floating-toc-preference {
+  font-size: 12px;
 }
 
 .floating-toc-preference:hover,
@@ -1513,19 +1554,48 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   display: block;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 24px;
-  padding: 3px 12px 3px 0;
+  min-height: 26px;
+  padding: 4px 10px 4px 0;
   border: none;
   background: transparent;
   /* Inherit color from .floating-toc-row so :hover / .active on the row
      actually reach the heading text. Review #3 on PR #173. */
   color: inherit;
   font-family: var(--font-body);
-  font-size: 13px;
-  line-height: 19px;
+  line-height: 18px;
   text-align: left;
   cursor: pointer;
-  transition: color 0.1s, background 0.1s;
+  transition:
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    background var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+/* 字号必须提级:全局 `.app-layout button { font-size: inherit }`(文件后段、同特异性更靠后)
+ * 会盖掉 `.floating-toc-item` 的字号,使 h4 及更深的标题掉回根字号、反而比 h3 还大。 */
+.floating-toc .floating-toc-item {
+  font-size: 12.5px;
+}
+
+/* 层级字号:此前 .toc-h* 只有类名没有样式,所有标题同一个 13px,层级只能靠缩进表达。
+ * 现按 heading level 给出「字号 + 字重 + 颜色」三重区分。
+ * 注意颜色必须落在 row 上而非 item 上:item 的 color 若写死会盖掉 row 的
+ * :hover / .active 文字色(见 .floating-toc-item 的 color: inherit 注释)。 */
+.floating-toc-row.toc-h1 {
+  color: var(--theme-text-primary);
+}
+
+.floating-toc-row.toc-h1 .floating-toc-item {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.floating-toc-row.toc-h2 .floating-toc-item {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.floating-toc-row.toc-h3 .floating-toc-item {
+  font-size: 12px;
 }
 
 .floating-toc-item span {
@@ -1538,18 +1608,27 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
 .floating-toc-row {
   display: flex;
   align-items: stretch;
-  padding-left: calc(12px + var(--toc-depth, 0) * 12px);
+  margin: 1px 6px;
+  border-radius: 6px;
+  /* 6px 外边距 + 6px 内边距 = 与原 12px 基线一致,缩进仍按 depth 递增。 */
+  padding-left: calc(6px + var(--toc-depth, 0) * 12px);
   color: var(--theme-text-secondary);
+  transition:
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    background var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
-.floating-toc-row:hover,
+.floating-toc-row:hover {
+  color: var(--theme-text-primary);
+  background: var(--theme-control-hover-bg);
+}
+
+/* 选中态:同族中性底 + 主文字色。此前用 accent-soft,在默认 define-color 配色下它映射为
+ * --dc-neutral-dark-4(neutralDark 族的中性灰),而面板底色是 --dc-base-light-*(按基色染色),
+ * 两者不同族,视觉上成了「两个颜色」。 */
 .floating-toc-row.active {
   color: var(--theme-text-primary);
-  background: var(--theme-control-active-bg);
-}
-
-.floating-toc-row.active {
-  color: var(--theme-accent);
+  background: var(--theme-surface-muted);
 }
 
 .floating-toc-chevron {
@@ -1557,7 +1636,7 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   align-items: center;
   justify-content: center;
   width: 20px;
-  height: 24px;
+  height: 26px;
   flex: 0 0 20px;
   padding: 0;
   margin: 0;
@@ -1565,8 +1644,10 @@ html[data-runtime='tauri'][data-platform='macos'] .app-toolbar {
   background: transparent;
   color: var(--theme-text-secondary);
   cursor: pointer;
-  border-radius: 3px;
-  transition: color 0.1s, background 0.1s;
+  border-radius: 6px;
+  transition:
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    background var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .floating-toc-chevron-icon {
@@ -3886,13 +3967,18 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 26px;
-  padding: 4px 8px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
   color: var(--theme-text-primary);
   background: var(--theme-control-bg);
   border: 1px solid var(--theme-border-soft);
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
+  transition:
+    background var(--motion-duration-fast) var(--motion-ease-standard),
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .skill-hub-scene-toolbar button:hover,
@@ -3900,6 +3986,25 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 .skill-hub-modal-header button:hover,
 .skill-hub-manual-add button:hover {
   background: var(--theme-control-hover-bg);
+  border-color: var(--theme-border-hover);
+}
+
+/* 场景详情工具条主次分明:此前「返回」与「添加 skill」同一套 control-bg 底,分不出主次。 */
+.skill-hub-scene-toolbar button:first-child {
+  color: var(--theme-text-secondary);
+  background: transparent;
+  border-color: transparent;
+}
+
+.skill-hub-scene-toolbar button:first-child:hover {
+  color: var(--theme-text-primary);
+  background: var(--theme-control-hover-bg);
+  border-color: var(--theme-border-soft);
+}
+
+.skill-hub-scene-toolbar button:last-child {
+  color: var(--theme-text-primary);
+  background: var(--theme-surface-muted);
   border-color: var(--theme-border-hover);
 }
 
@@ -3938,12 +4043,13 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: stretch;
   gap: 8px;
   width: 100%;
-  min-height: 112px;
   background: var(--theme-control-bg);
   border: 1px solid var(--theme-border-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--theme-text-primary);
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background var(--motion-duration-fast) var(--motion-ease-standard),
+    border-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .skill-hub-item:hover {
@@ -3958,11 +4064,13 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .skill-hub-item-main {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* 此前第 3 行是 minmax(0,1fr),会把 meta 顶到卡片底部、中间留一大块空白;
+   * 卡片本身也不再强制 112px 高,内容自然收拢。 */
+  grid-template-rows: auto auto auto auto;
   align-items: flex-start;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 12px;
   color: inherit;
   text-align: left;
   background: transparent;
@@ -3980,8 +4088,10 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .skill-hub-item-name {
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--theme-accent);
+  /* 这是 skill 的 ID/路径(/markdowndown),不是标题;此前与标题同为 12px 且用 accent 色,
+   * 比标题还抢眼。降一档字号 + 弱化为 muted,让 <strong> 标题成为视觉主体。 */
+  font-size: 11px;
+  color: var(--theme-text-muted);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3998,9 +4108,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   color: var(--theme-text-secondary);
   background: transparent;
   border: 0;
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color var(--motion-duration-fast) var(--motion-ease-standard);
   flex: 0 0 auto;
 }
 
@@ -4017,14 +4127,16 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .skill-hub-item-main strong {
-  font-size: 12px;
-  min-height: 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+  line-height: 19px;
 }
 
 .skill-hub-item-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--theme-text-secondary);
-  line-height: 1.4;
+  line-height: 1.5;
   word-break: break-word;
   display: -webkit-box;
   overflow: hidden;
@@ -4034,16 +4146,20 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .skill-hub-badge {
   flex: 0 0 auto;
-  padding: 1px 5px;
-  font-size: 10px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  line-height: 15px;
   border-radius: 999px;
   border: 1px solid var(--theme-border-soft);
 }
 
 .skill-hub-badge.installed {
-  color: var(--theme-text-secondary);
-  background: var(--theme-paper);
-  border-color: var(--theme-border-soft);
+  /* 此前 paper 底 + soft 边框,在 control-bg 卡片上几乎与底色同色(截图里「已安装」基本看不见);
+   * 改同族中性底 —— accent-soft 在默认 define-color 下是 neutralDark 族的中性灰,
+   * 与 baseLight 染色的卡片底不同族,会显得「两个颜色」。 */
+  color: var(--theme-text-primary);
+  background: var(--theme-surface-muted);
+  border-color: var(--theme-border-hover);
 }
 
 .skill-hub-badge.missing {
@@ -4115,7 +4231,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   color: var(--theme-text-primary);
   background: var(--theme-control-bg);
   border: 1px solid var(--theme-border-soft);
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
   font: inherit;
   font-size: 11.5px;
@@ -4136,11 +4252,13 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 .skill-hub-item-actions {
   display: flex;
   flex: 0 0 auto;
-  align-items: center;
+  /* 此前 align-items: center 让徽标垂直居中在卡片里,孤立于右侧空白;
+   * 改为顶对齐并与 main 的 12px 内边距齐平,与首行 skill 名同一水平线。 */
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 6px;
   min-width: 0;
-  padding: 8px;
+  padding: 12px 12px 12px 0;
 }
 
 .skill-hub-item-actions button {
@@ -4149,18 +4267,35 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   font-size: 11px;
 }
 
-.skill-hub-item-actions .skill-hub-install-action {
+/* 文件后段的全局 `.app-layout button { font-size: inherit }` 与本组规则同特异性但更靠后,
+ * 会把 skill-hub 里所有按钮的字号刷回根字号(默认 13px,用户可调到 14px+)——
+ * 「让 Claude 安装」因此比同排徽标(10.5px)、卡片标题(13.5px)还大,整排也对不齐。
+ * 这里用父类提级,确保字号声明真正生效。 */
+.skill-hub-panel .skill-hub-scene-toolbar button,
+.skill-hub-panel .skill-hub-item-actions button,
+.skill-hub-panel .skill-hub-manual-add button {
+  font-size: 12px;
+}
+
+/* 安装动作:位于卡片右下角(跨两列、右对齐)。配色与卡片其它文字保持一致 ——
+ * 不用填充底色,只有文字 + 下划线,hover 提到主文字色。 */
+.skill-hub-item > .skill-hub-install-action {
+  grid-column: 1 / -1;
+  justify-self: end;
   min-width: 0;
-  padding-inline: 2px;
+  min-height: 21px;
+  padding: 2px 4px;
+  font-size: 11px;
+  line-height: 15px;
   white-space: nowrap;
-  color: var(--theme-accent);
+  color: var(--theme-text-secondary);
   background: transparent;
   border-color: transparent;
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-underline-offset: 2px;
 }
 
-.skill-hub-item-actions .skill-hub-install-action:hover {
+.skill-hub-item > .skill-hub-install-action:hover {
   color: var(--theme-text-primary);
   background: transparent;
   border-color: transparent;
@@ -5330,18 +5465,27 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   gap: 12px;
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--theme-border-soft);
+  /* 会话下拉以头部为定位参照(而不是 pill 容器),才能撑到与左栏同宽 */
+  position: relative;
 }
 
-.conversation-header div {
+/* 只作用于头部的直接子 div。此前写作 `.conversation-header div`,把后代里
+ * .conversation-pill-container / .conversation-pill-dropdown 一并命中,导致
+ * 下拉被塞进 align-items:center(每行按内容宽度居中,长度参差)且 gap 被改成 8px。 */
+.conversation-header > div {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  /* 占满剩余宽度,好让 .conversation-pill-container 有可分配的宽度给下拉用 */
+  flex: 1 1 auto;
 }
 
 .conversation-header strong {
   font-size: 14px;
   color: var(--theme-text-primary);
+  /* 面板窄时不要折成「AI 工作 / 台」两行 */
+  white-space: nowrap;
 }
 
 .conversation-model-badge {
@@ -5355,11 +5499,23 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   border-radius: 999px;
 }
 
-.conversation-header span,
+.conversation-header span:not(.conversation-pill-count),
 .conversation-muted,
 .conversation-model-placeholder {
   color: var(--theme-text-muted);
   font-size: 12px;
+}
+
+/* 模型名可以很长(claude-opus-4-8[1M][1m]):允许收缩并省略,不要挤走发送按钮。
+ * 只能单独写,不能并进上面那条共享规则 —— 那条的 `.conversation-header span` 会连
+ * 会话计数徽标一起命中,flex:1 1 auto 会把徽标拉宽、muted 色又把它压深,变成一坨黑点。 */
+.conversation-model-placeholder {
+  /* 独占首行:模型名是信息,和控件挤一行会把发送按钮顶出面板 */
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sr-only {
@@ -5386,7 +5542,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .conversation-pill-container {
-  position: relative;
+  /* 不再作为下拉的定位参照(改由 .conversation-header 承担),只负责占满剩余宽度 */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .conversation-pill {
@@ -5395,7 +5553,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   gap: 4px;
   padding: 2px 8px;
   border: 1px solid var(--theme-border-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--theme-surface);
   color: var(--theme-text-secondary);
   font-size: 12px;
@@ -5438,9 +5596,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 .conversation-pill-dropdown {
   position: absolute;
   top: calc(100% + 4px);
+  /* 以头部为参照:与左栏完全同宽(左右边缘对齐面板) */
   left: 0;
-  /* 固定宽度:列表控件长度保持一致(原先 260-360 随最长标题伸缩,每次打开宽窄不一) */
-  width: 300px;
+  width: 100%;
   box-sizing: border-box;
   background: var(--theme-surface);
   border: 1px solid var(--theme-border-soft);
@@ -5458,7 +5616,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   gap: 6px;
   padding: 6px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--theme-text-primary);
   font-size: 12px;
@@ -5475,7 +5633,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   color: var(--theme-text-primary);
   background: var(--theme-canvas);
   border: 1px solid var(--theme-accent);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 2px 6px;
 }
 
@@ -5490,6 +5648,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .conversation-pill-item-title {
   flex: 1;
+  /* flex 子项默认 min-width:auto,长标题(尤其无空格英文/URL)会撑破 300px 容器把按钮推出去 */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5501,6 +5661,19 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   border-radius: 50%;
   background: var(--theme-accent);
   animation: pulse-dot 1.2s ease-in-out infinite;
+  flex: none;
+}
+
+/* 占位对齐:running 圆点与关闭按钮按条件隐藏时仍保留位置,各行内容区宽度一致 */
+.conversation-pill-item-running.is-hidden {
+  visibility: hidden;
+  animation: none;
+}
+
+.conversation-pill-item-msgs {
+  flex: none;
+  color: var(--theme-text-muted);
+  font-size: 11px;
 }
 
 @keyframes pulse-dot {
@@ -5515,7 +5688,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   color: var(--theme-text-muted);
   cursor: pointer;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5525,6 +5698,10 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   opacity: 0.55;
   flex: none;
   transition: opacity 100ms, background 100ms;
+}
+
+.conversation-pill-item-close.is-hidden {
+  visibility: hidden;
 }
 
 .conversation-pill-item:hover .conversation-pill-item-rename,
@@ -5548,7 +5725,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   gap: 6px;
   padding: 6px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--theme-text-muted);
   font-size: 12px;
@@ -6209,6 +6386,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 
 .conversation-composer-actions {
   display: flex;
+  /* 两行布局:左侧选择器/模型名独占首行,发送按钮换到第二行靠右 ——
+     单行时窄面板会把发送按钮顶出面板外,完全看不到。 */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -6219,6 +6399,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  /* 与发送按钮同处第二行,占满剩余宽度 */
+  flex: 1 1 auto;
 }
 
 .conversation-composer-actions button {
@@ -6226,6 +6408,17 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
+  /* 不许被左侧标签挤压:否则「发送」会被压成竖排两行 */
+  flex: 0 0 auto;
+  white-space: nowrap;
+  /* 换到第二行后靠右对齐 */
+  margin-left: auto;
+}
+
+/* 字号必须提级:全局 `.app-layout button { font-size: inherit }` 会把按钮字号刷回根字号
+ * (用户调到 14px 时「发送」比同排 12px 的模型标签还大,也更容易被挤成竖排)。 */
+.conversation-composer .conversation-composer-actions button {
+  font-size: 12.5px;
 }
 
 .agent-provider-picker {

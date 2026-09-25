@@ -16,7 +16,8 @@ type UseRightPanelResult = {
   rightPanelMode: RightPanelMode;
   setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>>;
   rightPanelCollapsed: boolean;
-  toggleRightPanelCollapsed: () => void;
+  /** 常驻开关:无右栏时打开上次用过的右栏,已打开时折叠/展开。 */
+  toggleRightPanel: () => void;
   rightPanelWidth: number;
   setRightPanelWidth: Dispatch<SetStateAction<number>>;
   resizing: boolean;
@@ -37,6 +38,8 @@ export function useRightPanel({
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [resizing, setResizing] = useState(false);
+  // 常驻开关在无右栏时要还原「上次用过的右栏」,首次默认 Word 预览。
+  const lastModeRef = useRef<RightPanelMode>('word');
   // latest-ref 转发回调，避免拖拽闭包拿到过期引用。
   const onResizeEndRef = useRef(onResizeEnd);
   useEffect(() => {
@@ -55,13 +58,18 @@ export function useRightPanel({
     return () => window.removeEventListener('resize', handleResize);
   }, [getDefaultRightPanelWidth, rightPanelMode]);
 
-  // 切换面板模式时自动取消折叠，避免打开新面板仍是隐藏态。
+  // 切换面板模式时自动取消折叠，避免打开新面板仍是隐藏态；同时记住本次模式供常驻开关还原。
   useEffect(() => {
-    if (rightPanelMode !== 'none') setRightPanelCollapsed(false);
+    if (rightPanelMode === 'none') return;
+    lastModeRef.current = rightPanelMode;
+    setRightPanelCollapsed(false);
   }, [rightPanelMode]);
 
-  const toggleRightPanelCollapsed = useCallback(() => {
-    if (rightPanelMode === 'none') return;
+  const toggleRightPanel = useCallback(() => {
+    if (rightPanelMode === 'none') {
+      setRightPanelMode(lastModeRef.current);
+      return;
+    }
     setRightPanelCollapsed((collapsed) => !collapsed);
   }, [rightPanelMode]);
 
@@ -123,7 +131,7 @@ export function useRightPanel({
     rightPanelMode,
     setRightPanelMode,
     rightPanelCollapsed,
-    toggleRightPanelCollapsed,
+    toggleRightPanel,
     rightPanelWidth,
     setRightPanelWidth,
     resizing,

@@ -10,7 +10,7 @@ import {
   saveConversationStore,
 } from '../services/agent/conversationStore';
 import type { AgentProvider } from '../services/agent/provider';
-import { DEFAULT_AGENT_PROVIDER, getAgentProviderConfig } from '../services/agent/provider';
+import { AGENT_PROVIDERS, DEFAULT_AGENT_PROVIDER, getAgentProviderConfig } from '../services/agent/provider';
 import {
   cancelAgentSession,
   onAgentExit,
@@ -178,6 +178,17 @@ function validateArtifactOutput(text: string, conv: ConversationData | undefined
 function summarizeTitle(text: string): string {
   const clean = text.replace(/\s+/gu, ' ').trim();
   return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || '自由对话';
+}
+
+// 默认标题集合:「自由对话」+ 各 provider 的「{label} 对话」(switchProvider 创建)。
+// 首条消息自动命名对全部默认标题生效;用户手动改过的名字不在此集合,不会被覆盖。
+const DEFAULT_CONVERSATION_TITLES = new Set([
+  '自由对话',
+  ...AGENT_PROVIDERS.map((provider) => `${provider.label} 对话`),
+]);
+
+export function isDefaultConversationTitle(title: string): boolean {
+  return DEFAULT_CONVERSATION_TITLES.has(title);
 }
 
 const FORM_ANSWERS_HEADER_RE = /^\[form answers — ([^\]]+)\]/u;
@@ -499,7 +510,7 @@ export function useConversationManager({
     // 普通 send 阻挡,只允许 toolAnswer: true 的 form 提交。
     if (!opts?.toolAnswer && conv.runState === 'waitingForUser') return;
     // 首条消息且仍是默认标题 → 用首句自动命名（skill 会话/已手动改名的不动）
-    const nextTitle = conv.messages.length === 0 && conv.title === '自由对话'
+    const nextTitle = conv.messages.length === 0 && isDefaultConversationTitle(conv.title)
       ? summarizeTitle(trimmed)
       : conv.title;
     updateConv(convId, {

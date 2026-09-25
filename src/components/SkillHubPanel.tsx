@@ -481,18 +481,19 @@ export function SkillHubPanel({
                             ) : skill.installed ? (
                               <span className="skill-hub-badge installed">已安装</span>
                             ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className="skill-hub-install-action"
-                                  onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}
-                                >
-                                  {installActionLabel}
-                                </button>
-                                <span className="skill-hub-badge missing">未安装</span>
-                              </>
+                              <span className="skill-hub-badge missing">未安装</span>
                             )}
                           </div>
+                          {/* 安装动作移到卡片右下角:与右侧状态列分开,不再和「未安装」徽标挤在同一行 */}
+                          {skill.system && !skill.builtin && !skill.installed && (
+                            <button
+                              type="button"
+                              className="skill-hub-install-action"
+                              onClick={() => skill.template && onInstallSkill(buildSkillInstallPrompt(skill.template, activeProvider))}
+                            >
+                              {installActionLabel}
+                            </button>
+                          )}
                         </div>
                       </li>
                       );

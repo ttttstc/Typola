@@ -1,4 +1,4 @@
-import { Archive, Eye, FileImage, FileText, FolderOpen, GitCompare, RefreshCw, RotateCcw, Search, Trash2, Undo2, X } from 'lucide-react';
+import { Archive, Eye, FileImage, FileInput, FileText, FolderOpen, GitCompare, RefreshCw, RotateCcw, Search, Trash2, Undo2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ArtifactRecord, ArtifactViewMode } from '../../services/artifacts/types';
 import { artifactBasename } from '../../services/artifacts/manifest';
@@ -9,7 +9,9 @@ type ArtifactCenterPanelProps = {
   activeConversationId?: string;
   onOpen: (path: string) => void;
   onCompare: (path: string) => void;
-  onArchive: (path: string) => void;
+  onArchive: (record: ArtifactRecord) => void;
+  /** 把 markdown/检视版制品合并进当前文档(分段 diff + 逐段采纳)。 */
+  onInsertToDocument?: (path: string) => void;
   onDelete: (path: string) => void;
   onOverwrite: (record: ArtifactRecord) => void;
   onUndoOverwrite: (record: ArtifactRecord) => void;
@@ -78,6 +80,7 @@ export function ArtifactCenterPanel({
   onOpen,
   onCompare,
   onArchive,
+  onInsertToDocument,
   onDelete,
   onOverwrite,
   onUndoOverwrite,
@@ -156,6 +159,7 @@ export function ArtifactCenterPanel({
             const primary = manifest.primaryFile;
             const canOverwrite = isOverwritableArtifact(record);
             const overwritten = Boolean(manifest.overwrite?.backupPath);
+            const archived = manifest.status === 'archived';
             // Issue #156 §12.2:HTML/HTM 产物默认动作是预览,不是源码打开。
             // 文件后缀作 fallback,避免 manifest.kind 缺失或异常时仍按 markdown 行为走 onOpen。
             const isHtml = isHtmlKind(manifest.kind) || isHtmlPrimary(primary);
@@ -198,7 +202,20 @@ export function ArtifactCenterPanel({
                   ) : (
                     <button type="button" className="primary" onClick={() => onOpen(primary)}>打开</button>
                   )}
-                  {isHtml && (
+                  {/* 升格主入口:存为文件(语义命名),已归档的不重复显示 */}
+                  {manifest.actions?.archive && !archived && (
+                    <button type="button" onClick={() => onArchive(record)}><Archive size={13} />存为文件</button>
+                  )}
+                  {onInsertToDocument && manifest.actions?.insertToEditor && !archived && (
+                    <button
+                      type="button"
+                      onClick={() => onInsertToDocument(primary)}
+                      title="合并到当前文档(分段 diff + 逐段采纳)"
+                    >
+                      <FileInput size={13} />插入文档
+                    </button>
+                  )}
+                  {isHtml && !archived && (
                     <button
                       type="button"
                       onClick={() => (onOpenSource ?? onOpen)(primary)}
@@ -207,12 +224,12 @@ export function ArtifactCenterPanel({
                       源码
                     </button>
                   )}
-                  {manifest.actions?.compareWithCurrent && <button type="button" onClick={() => onCompare(primary)}><GitCompare size={13} />对比</button>}
+                  {manifest.actions?.compareWithCurrent && !archived && <button type="button" onClick={() => onCompare(primary)}><GitCompare size={13} />对比</button>}
                   {onRevealInFolder && <button type="button" onClick={() => onRevealInFolder(primary)}><FolderOpen size={13} />所在文件夹</button>}
-                  {canOverwrite && !overwritten && <button type="button" onClick={() => onOverwrite(record)}><RotateCcw size={13} />覆盖原文</button>}
-                  {overwritten && <button type="button" onClick={() => onUndoOverwrite(record)}><Undo2 size={13} />撤销覆盖</button>}
-                  {manifest.actions?.archive && <button type="button" onClick={() => onArchive(primary)}><Archive size={13} />归档</button>}
-                  {manifest.actions?.delete && <button type="button" className="danger" onClick={() => onDelete(primary)}><Trash2 size={13} />删除</button>}
+                  {canOverwrite && !overwritten && !archived && <button type="button" onClick={() => onOverwrite(record)}><RotateCcw size={13} />覆盖原文</button>}
+                  {overwritten && !archived && <button type="button" onClick={() => onUndoOverwrite(record)}><Undo2 size={13} />撤销覆盖</button>}
+                  {/* 已归档卡片的主文件已 move 到工作区,delete_artifact_file 只接受 .typola-output 内路径,留着必然报错 */}
+                  {manifest.actions?.delete && !archived && <button type="button" className="danger" onClick={() => onDelete(primary)}><Trash2 size={13} />删除</button>}
                 </div>
               </li>
             );

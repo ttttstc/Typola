@@ -299,6 +299,10 @@ export interface AppSettings {
   aiWorkspaceRoot: string;
   aiWorkspaceRecents: string[];
   aiPluginDirs: string[];
+  /** 生成制品后自动打开右侧制品面板（默认开）。 */
+  autoOpenArtifactPanel: boolean;
+  /** 工具栏「AI 产物」未读角标的已读水位：打开制品面板时写回当时的制品总数。 */
+  artifactSeenCount: number;
   // 外观
   appearanceColorSystem: AppearanceColorSystem;
   defineColorSettings: DefineColorSettings;
@@ -373,6 +377,8 @@ const defaults: AppSettings = {
   aiWorkspaceRoot: '',
   aiWorkspaceRecents: [],
   aiPluginDirs: [],
+  autoOpenArtifactPanel: true,
+  artifactSeenCount: 0,
   appearanceColorSystem: 'define-color',
   defineColorSettings: DEFAULT_DEFINE_COLOR_SETTINGS,
   themeId: DEFAULT_THEME_ID,
@@ -970,6 +976,10 @@ export function getSettings(): AppSettings {
       aiWorkspaceRoot: normalizeExecutablePath(stored.aiWorkspaceRoot),
       aiWorkspaceRecents: normalizePathList(stored.aiWorkspaceRecents).slice(0, 8),
       aiPluginDirs: normalizePathList(stored.aiPluginDirs),
+      autoOpenArtifactPanel: stored.autoOpenArtifactPanel !== false,
+      artifactSeenCount: typeof stored.artifactSeenCount === 'number' && Number.isFinite(stored.artifactSeenCount)
+        ? Math.max(0, Math.floor(stored.artifactSeenCount))
+        : 0,
       appearanceColorSystem: normalizeAppearanceColorSystem(stored.appearanceColorSystem),
       defineColorSettings: normalizeDefineColorSettings(stored.defineColorSettings),
       themeId: normalizeThemeId(stored.themeId),

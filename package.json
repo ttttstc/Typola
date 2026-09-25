@@ -1,7 +1,7 @@
 {
   "name": "typola",
   "private": true,
-  "version": "2.0.9",
+  "version": "2.0.10",
   "type": "module",
   "scripts": {
     "dev": "vite --config config/vite.config.ts",
@@ -31,6 +31,7 @@
     "verify:exe-core:extended": "node .nimo/verification/scripts/verify-exe-core-extended.mjs",
     "verify:exe-core:all": "node .nimo/verification/scripts/run-all-non-ai.mjs",
     "verify:exe-heavy-user": "node .nimo/verification/scripts/verify-exe-heavy-user.mjs",
+    "verify:exe-artifacts": "node .nimo/verification/scripts/verify-exe-artifacts.mjs",
     "verify:exe-editor": "node .nimo/verification/scripts/verify-exe-core-flow.mjs"
   },
   "dependencies": {

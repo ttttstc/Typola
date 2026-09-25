@@ -54,3 +54,12 @@ html[data-color-scheme='dark'] body .conversation-toast,
 html[data-color-scheme='dark'] body .conversation-toast :where(*) {
   color: var(--theme-paper) !important;
 }
+
+/* accent 实底的徽标（会话计数、制品未读角标）同属反色表面：底色由 accent 决定，
+ * 若被强制成正文黑/白，深色 accent 上就是一团看不出数字的黑点。 */
+body .conversation-pill-count,
+body .toolbar-artifact-badge,
+html[data-color-scheme='dark'] body .conversation-pill-count,
+html[data-color-scheme='dark'] body .toolbar-artifact-badge {
+  color: var(--text-on-accent) !important;
+}

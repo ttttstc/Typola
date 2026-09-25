@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Highlighter,
   Minus,
+  MoreHorizontal,
   PackageOpen,
   Paintbrush,
   ImagePlus,
@@ -71,9 +72,10 @@ type SplitMenuItem = {
 };
 
 type ToolbarSplitMenuProps = {
-  mainLabel: string;
-  mainIcon: ReactNode;
-  onMainClick: () => void;
+  /** 不传 mainIcon 时退化为「只有下拉触发按钮」的纯收纳槽(如「更多格式」)。 */
+  mainLabel?: string;
+  mainIcon?: ReactNode;
+  onMainClick?: () => void;
   mainDisabled?: boolean;
   chevronLabel: string;
   items: SplitMenuItem[];
@@ -83,7 +85,8 @@ type ToolbarSplitMenuProps = {
  * 工具栏分组按钮：同类动作共用一个槽位。
  * 主按钮直连高频动作（打开/保存/插入表格），chevron 下拉收纳低频同类项
  * （打开文件夹/另存为/插入图片），功能不丢、工具栏更窄。
- * items 为空时退化为普通单按钮（等价于原独立按钮）。
+ * items 为空时退化为普通单按钮（等价于原独立按钮）；
+ * 不传 mainIcon 时退化为纯下拉槽（整组低频动作都收进菜单）。
  */
 function ToolbarSplitMenu({ mainLabel, mainIcon, onMainClick, mainDisabled, chevronLabel, items }: ToolbarSplitMenuProps) {
   const [open, setOpen] = useState(false);
@@ -125,6 +128,58 @@ function ToolbarSplitMenu({ mainLabel, mainIcon, onMainClick, mainDisabled, chev
     );
   }
 
+  const menu = open ? (
+    <FloatingPortal>
+      <FloatingFocusManager context={floating.context} initialFocus={0}>
+        <div
+          ref={floating.refs.setFloating}
+          style={floating.floatingStyles}
+          className="export-menu"
+          role="menu"
+          aria-label={chevronLabel}
+          {...getFloatingProps()}
+        >
+          {items.map((item, index) => (
+            <button
+              key={item.key}
+              ref={(node) => { listRef.current[index] = node; }}
+              type="button"
+              role="menuitem"
+              data-no-window-drag="true"
+              disabled={item.disabled}
+              onClick={() => { setOpen(false); item.onSelect(); }}
+            >
+              <span className="export-menu-icon" aria-hidden="true">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </FloatingFocusManager>
+    </FloatingPortal>
+  ) : null;
+
+  // 纯下拉槽:整组都是低频动作,只渲染一个触发按钮(与分组按钮同尺寸)。
+  if (!mainIcon) {
+    return (
+      <div className="toolbar-split">
+        <button
+          ref={setReferenceRef}
+          data-no-window-drag="true"
+          className="split-chevron split-chevron-solo"
+          data-tooltip={chevronLabel}
+          aria-label={chevronLabel}
+          aria-expanded={open}
+          aria-haspopup="true"
+          disabled={mainDisabled}
+          {...getReferenceProps()}
+        >
+          <MoreHorizontal size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
+        </button>
+        {menu}
+      </div>
+    );
+  }
+
   return (
     <div className="toolbar-split">
       <button
@@ -150,35 +205,7 @@ function ToolbarSplitMenu({ mainLabel, mainIcon, onMainClick, mainDisabled, chev
       >
         <ChevronDown size={10} strokeWidth={TOOLBAR_STROKE_WIDTH} className="split-chevron-icon" />
       </button>
-      {open && (
-        <FloatingPortal>
-          <FloatingFocusManager context={floating.context} initialFocus={0}>
-            <div
-              ref={floating.refs.setFloating}
-              style={floating.floatingStyles}
-              className="export-menu"
-              role="menu"
-              aria-label={chevronLabel}
-              {...getFloatingProps()}
-            >
-              {items.map((item, index) => (
-                <button
-                  key={item.key}
-                  ref={(node) => { listRef.current[index] = node; }}
-                  type="button"
-                  role="menuitem"
-                  data-no-window-drag="true"
-                  disabled={item.disabled}
-                  onClick={() => { setOpen(false); item.onSelect(); }}
-                >
-                  <span className="export-menu-icon" aria-hidden="true">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </FloatingFocusManager>
-        </FloatingPortal>
-      )}
+      {menu}
     </div>
   );
 }
@@ -189,7 +216,11 @@ type ToolbarProps = {
   wordPreviewVisible: boolean;
   wechatPreviewVisible: boolean;
   artifactsVisible?: boolean;
+  /** 「AI 产物」未读角标计数。0/undefined 不显示。 */
+  artifactUnreadCount?: number;
   rightPanelAvailable: boolean;
+  /** 右侧面板当前是否有内容（决定常驻开关是「打开」还是「折叠/展开」语义）。 */
+  rightPanelOpen: boolean;
   rightPanelCollapsed: boolean;
   terminalVisible: boolean;
   editingDisabled: boolean;
@@ -222,8 +253,8 @@ type ToolbarProps = {
 };
 
 export function Toolbar({
-  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible,
-  rightPanelAvailable, rightPanelCollapsed,
+  editorMode, workspacePanelVisible, wordPreviewVisible, wechatPreviewVisible, artifactsVisible, artifactUnreadCount,
+  rightPanelAvailable, rightPanelOpen, rightPanelCollapsed,
   terminalVisible, editingDisabled, docMode,
   onToggleEditorMode, onSelectEditorMode, onFormat, onToggleWorkspacePanel, onToggleWordPreview, onToggleWechatPreview, onToggleArtifacts,
   onToggleRightPanel, onToggleTerminal, onOpenToc, onSetDocMode,
@@ -437,17 +468,25 @@ export function Toolbar({
           <div className="toolbar-group toolbar-format-actions" aria-label="Markdown 格式">
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'bold' })} data-tooltip={t('toolbarBoldLabel')} aria-label={t('toolbarBoldLabel')}><Bold size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'italic' })} data-tooltip={t('toolbarItalicLabel')} aria-label={t('toolbarItalicLabel')}><Italic size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'strike' })} data-tooltip={t('toolbarStrikethroughLabel')} aria-label={t('toolbarStrikethroughLabel')}><Strikethrough size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'highlight' })} data-tooltip={t('toolbarHighlightLabel')} aria-label={t('toolbarHighlightLabel')}><Highlighter size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'link' })} data-tooltip={t('toolbarLinkLabel')} aria-label={t('toolbarLinkLabel')}><Link size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'codeblock' })} data-tooltip={t('toolbarCodeBlockLabel')} aria-label={t('toolbarCodeBlockLabel')}><SquareCode size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'math-block' })} data-tooltip={t('toolbarMathBlockLabel')} aria-label={t('toolbarMathBlockLabel')}><SquareRadical size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'quote' })} data-tooltip={t('toolbarQuoteLabel')} aria-label={t('toolbarQuoteLabel')}><Quote size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ul' })} data-tooltip={t('toolbarUnorderedListLabel')} aria-label={t('toolbarUnorderedListLabel')}><List size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
             <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'ol' })} data-tooltip={t('toolbarOrderedListLabel')} aria-label={t('toolbarOrderedListLabel')}><ListOrdered size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'task' })} data-tooltip={t('toolbarTaskListLabel')} aria-label={t('toolbarTaskListLabel')}><ListTodo size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'hr' })} data-tooltip={t('toolbarHorizontalRuleLabel')} aria-label={t('toolbarHorizontalRuleLabel')}><Minus size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
-            <button data-no-window-drag="true" disabled={editingDisabled} onClick={() => onFormat({ type: 'format-painter' })} data-tooltip={t('toolbarFormatPainterLabel')} aria-label={t('toolbarFormatPainterLabel')}><Paintbrush size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /></button>
+            {/* 低频格式收进「更多格式」下拉:13 个独立按钮让工具栏内容约需 1531px,
+                而默认窗口只有 980px 且无最小宽度限制,右端(设置/文档模式/右栏开关)会被裁掉。 */}
+            <ToolbarSplitMenu
+              mainDisabled={editingDisabled}
+              chevronLabel={t('toolbarMoreFormatLabel')}
+              items={[
+                { key: 'strike', label: t('toolbarStrikethroughLabel'), icon: <Strikethrough size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />, disabled: editingDisabled, onSelect: () => onFormat({ type: 'strike' }) },
+                { key: 'highlight', label: t('toolbarHighlightLabel'), icon: <Highlighter size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />, disabled: editingDisabled, onSelect: () => onFormat({ type: 'highlight' }) },
+                { key: 'math-block', label: t('toolbarMathBlockLabel'), icon: <SquareRadical size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />, disabled: editingDisabled, onSelect: () => onFormat({ type: 'math-block' }) },
+                { key: 'quote', label: t('toolbarQuoteLabel'), icon: <Quote size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />, disabled: editingDisabled, onSelect: () => onFormat({ type: 'quote' }) },
+                { key: 'task', label: t('toolbarTaskListLabel'), icon: <ListTodo size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />, disabled: editingDisabled, onSelect: () => onFormat({ type: 'task' }) },
+                { key: 'hr', label: t('toolbarHorizontalRuleLabel'), icon: <Minus size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />, disabled: editingDisabled, onSelect: () => onFormat({ type: 'hr' }) },
+                { key: 'format-painter', label: t('toolbarFormatPainterLabel'), icon: <Paintbrush size={15} strokeWidth={TOOLBAR_STROKE_WIDTH} />, disabled: editingDisabled, onSelect: () => onFormat({ type: 'format-painter' }) },
+              ]}
+            />
           </div>
         )}
       </div>
@@ -518,18 +557,11 @@ export function Toolbar({
               aria-pressed={Boolean(artifactsVisible)}
             >
               <PackageOpen size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
-            </button>
-          )}
-          {rightPanelAvailable && (
-            <button
-              className={rightPanelCollapsed ? 'active' : ''}
-              onClick={onToggleRightPanel}
-              data-no-window-drag="true"
-              data-tooltip={rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel')}
-              aria-label={rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel')}
-              aria-pressed={rightPanelCollapsed}
-            >
-              {rightPanelCollapsed ? <PanelRightOpen size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} /> : <PanelRightClose size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
+              {artifactUnreadCount ? (
+                <span className="toolbar-artifact-badge" aria-label={`${artifactUnreadCount} 个新制品`}>
+                  {artifactUnreadCount > 99 ? '99+' : artifactUnreadCount}
+                </span>
+              ) : null}
             </button>
           )}
           <button
@@ -564,6 +596,28 @@ export function Toolbar({
             disabled={editingDisabled}
           />
         </div>
+        {/* 右栏开关:常驻在工具栏最右端(此前埋在 view 组中间、且只在右栏已打开时才出现,找不到)。
+            无右栏时点它打开上次用过的右栏,已打开时折叠/展开 —— 与最左端「文件树」开关首尾对称。 */}
+        {rightPanelAvailable && (
+          <div className="toolbar-group toolbar-panel-actions" aria-label="右侧面板">
+            <button
+              className={!rightPanelOpen || rightPanelCollapsed ? 'active' : ''}
+              onClick={onToggleRightPanel}
+              data-no-window-drag="true"
+              data-tooltip={rightPanelOpen
+                ? (rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel'))
+                : t('toolbarOpenRightPanel')}
+              aria-label={rightPanelOpen
+                ? (rightPanelCollapsed ? t('toolbarExpandRightPanel') : t('toolbarCollapseRightPanel'))
+                : t('toolbarOpenRightPanel')}
+              aria-pressed={!rightPanelOpen || rightPanelCollapsed}
+            >
+              {rightPanelOpen && !rightPanelCollapsed
+                ? <PanelRightClose size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />
+                : <PanelRightOpen size={TOOLBAR_ICON_SIZE} strokeWidth={TOOLBAR_STROKE_WIDTH} />}
+            </button>
+          </div>
+        )}
       </div>
       <Tooltip
         label={toolbarTooltip?.label ?? ''}

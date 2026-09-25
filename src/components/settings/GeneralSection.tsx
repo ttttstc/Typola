@@ -73,6 +73,18 @@ export function GeneralSection() {
           onChange={() => handleChange({ reopenLastFile: !settings.reopenLastFile })}
         />
       </div>
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-label">{t('autoOpenArtifactPanelLabel')}</div>
+          <div className="settings-desc">{t('autoOpenArtifactPanelDesc')}</div>
+        </div>
+        <SettingsToggle
+          checked={settings.autoOpenArtifactPanel}
+          label="生成制品后自动打开面板"
+          onChange={() => handleChange({ autoOpenArtifactPanel: !settings.autoOpenArtifactPanel })}
+        />
+      </div>
     </div>
   );
 }

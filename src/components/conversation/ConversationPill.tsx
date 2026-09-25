@@ -82,7 +82,12 @@ export function ConversationPill({ conversations, activeConvId, onSelect, onCrea
                   {conv.title}
                 </span>
               )}
-              {conv.runState === 'running' && <span className="conversation-pill-item-running" />}
+              {conv.runState === 'running' ? (
+                <span className="conversation-pill-item-running" />
+              ) : (
+                <span className="conversation-pill-item-running is-hidden" aria-hidden="true" />
+              )}
+              <span className="conversation-pill-item-msgs">{conv.messages.length} 条</span>
               <button
                 type="button"
                 className="conversation-pill-item-rename"
@@ -96,16 +101,15 @@ export function ConversationPill({ conversations, activeConvId, onSelect, onCrea
               >
                 <Pencil size={11} />
               </button>
-              {conversations.size > 1 && (
-                <button
-                  type="button"
-                  className="conversation-pill-item-close"
-                  onClick={(event) => { event.stopPropagation(); onClose(conv.id); }}
-                  aria-label={`关闭 ${conv.title}`}
-                >
-                  <X size={11} />
-                </button>
-              )}
+              <button
+                type="button"
+                className={`conversation-pill-item-close ${conversations.size > 1 ? '' : 'is-hidden'}`}
+                onClick={(event) => { event.stopPropagation(); onClose(conv.id); }}
+                aria-label={`关闭 ${conv.title}`}
+                tabIndex={conversations.size > 1 ? 0 : -1}
+              >
+                <X size={11} />
+              </button>
             </div>
           ))}
           <button
