@@ -51,6 +51,7 @@ describe('ArtifactCenterPanel (Issue #156: HTML preview entry)', () => {
     onRevealInFolder?: (path: string) => void;
     onPreviewHtml?: (path: string) => void;
     onOpenSource?: (path: string) => void;
+    onInsertToDocument?: (path: string) => void;
   }) {
     act(() => {
       root.render(
@@ -59,6 +60,7 @@ describe('ArtifactCenterPanel (Issue #156: HTML preview entry)', () => {
           onOpen={props.onOpen ?? vi.fn()}
           onCompare={vi.fn()}
           onArchive={vi.fn()}
+          onInsertToDocument={props.onInsertToDocument}
           onDelete={vi.fn()}
           onOverwrite={vi.fn()}
           onUndoOverwrite={vi.fn()}
@@ -230,5 +232,37 @@ describe('ArtifactCenterPanel (Issue #156: HTML preview entry)', () => {
       fallbackSource!.click();
     });
     expect(fallbackOnOpen).toHaveBeenCalledWith(htmlPath);
+  });
+
+  it('markdown 制品的「插入文档」调用 onInsertToDocument', async () => {
+    const onInsertToDocument = vi.fn();
+    const mdPath = 'C:/work/.typola-output/ai-workbench/outline.md';
+    const record = makeRecord('markdown', mdPath);
+    record.manifest.actions = { insertToEditor: true };
+
+    render({ records: [record], onInsertToDocument });
+
+    const button = Array.from(host.querySelectorAll<HTMLButtonElement>('.artifact-center-card-actions button'))
+      .find((item) => item.textContent?.includes('插入文档'));
+    expect(button).toBeDefined();
+    act(() => { button!.click(); });
+    expect(onInsertToDocument).toHaveBeenCalledWith(mdPath);
+  });
+
+  it('已归档卡片隐藏存为文件/插入文档/删除,并标记已归档', async () => {
+    const mdPath = 'C:/work/季度汇报.md';
+    const record = makeRecord('markdown', mdPath);
+    record.manifest.status = 'archived';
+    record.manifest.actions = { archive: true, delete: true, insertToEditor: true };
+
+    render({ records: [record], onInsertToDocument: vi.fn() });
+
+    const card = host.querySelector<HTMLLIElement>('.artifact-center-card')!;
+    const labels = Array.from(card.querySelectorAll<HTMLButtonElement>('.artifact-center-card-actions button'))
+      .map((button) => button.textContent ?? '');
+    expect(labels.some((label) => label.includes('存为文件'))).toBe(false);
+    expect(labels.some((label) => label.includes('插入文档'))).toBe(false);
+    expect(labels.some((label) => label.includes('删除'))).toBe(false);
+    expect(card.querySelector('.artifact-center-meta')?.textContent).toContain('已归档');
   });
 });

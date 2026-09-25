@@ -307,6 +307,8 @@ struct AgentSessionStartRequest {
 struct ArchiveArtifactRequest {
     artifact_path: String,
     workspace_root: String,
+    /// 用户自定义落盘名（不含扩展名也可，扩展名强制沿用原文件）。
+    target_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1017,11 +1019,32 @@ fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<Stri
     if !workspace_root.is_dir() {
         return Err("workspace root not found".into());
     }
-    let file_name = artifact_path
+    let original_name = artifact_path
         .file_name()
         .and_then(OsStr::to_str)
         .ok_or_else(|| "invalid artifact file name".to_string())?;
-    let target = unique_file_path(&workspace_root, file_name);
+    let file_name = match request.target_name.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(custom) => {
+            // 清洗路径分隔符与非法字符,扩展名强制沿用原文件,防止用户改名改丢类型。
+            let stem = custom
+                .chars()
+                .map(|ch| if "/\\:*?\"<>|".contains(ch) || ch.is_control() { '-' } else { ch })
+                .collect::<String>()
+                .trim()
+                .trim_end_matches('.')
+                .to_string();
+            if stem.is_empty() {
+                return Err("invalid target name".into());
+            }
+            let stem = stem.strip_suffix(&format!(".{}", artifact_path.extension().and_then(OsStr::to_str).unwrap_or(""))).unwrap_or(&stem).to_string();
+            match artifact_path.extension().and_then(OsStr::to_str) {
+                Some(ext) if !ext.is_empty() => format!("{stem}.{ext}"),
+                _ => stem,
+            }
+        }
+        None => original_name.to_string(),
+    };
+    let target = unique_file_path(&workspace_root, &file_name);
     std::fs::rename(&artifact_path, &target)
         .map_err(|error| format!("failed to archive artifact: {error}"))?;
     Ok(target.to_string_lossy().to_string())
@@ -1036,7 +1059,142 @@ fn scan_artifacts(request: ScanArtifactsRequest) -> Result<Vec<ScannedArtifactFi
     let output_root = canonical_output_dir(&output_root)?;
     let mut files = Vec::new();
     scan_artifact_files(&output_root, 0, &mut files)?;
+    // 已归档制品的主文件已 move 到工作区,文件驱动扫描找不到,按 manifest 补回,
+    // 让制品中心能保留「已归档」卡片(点击打开的是工作区里的新路径)。
+    collect_archived_manifests(&output_root, 0, &mut files)?;
     Ok(files)
+}
+
+fn collect_archived_manifests(
+    root: &Path,
+    depth: usize,
+    output: &mut Vec<ScannedArtifactFile>,
+) -> Result<(), String> {
+    if depth > 5 {
+        return Ok(());
+    }
+    let manifest_path = root.join("artifact.json");
+    if let Ok(json) = std::fs::read_to_string(&manifest_path) {
+        let manifest_path_str = manifest_path.to_string_lossy().to_string();
+        let already = output.iter().any(|file| file.manifest_path == manifest_path_str);
+        if !already {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&json) {
+                let archived = value.get("status").and_then(|s| s.as_str()) == Some("archived");
+                let primary = value.get("primaryFile").and_then(|s| s.as_str());
+                if archived {
+                    if let Some(primary) = primary {
+                        output.push(ScannedArtifactFile {
+                            path: primary.to_string(),
+                            manifest_path: manifest_path_str,
+                            manifest_json: Some(json),
+                            modified_at: None,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let entries = std::fs::read_dir(root)
+        .map_err(|error| format!("failed to read artifact directory: {error}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("failed to read artifact entry: {error}"))?;
+        let path = entry.path();
+        if path.is_dir() && path.file_name().and_then(OsStr::to_str) != Some("backups") {
+            collect_archived_manifests(&path, depth + 1, output)?;
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationOutputRequest {
+    /// .typola-output 根目录（canonical 校验必须叫 .typola-output）。
+    output_root: String,
+    /// 会话目录名（conv-N）。仅允许单层目录名,防路径穿越。
+    conversation_id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationOutputStatus {
+    exists: bool,
+    artifact_count: usize,
+    backup_count: usize,
+}
+
+/// 解析并校验 <output_root>/<conversation_id>,拒绝路径穿越与根目录外路径。
+fn resolve_conversation_dir(request: &ConversationOutputRequest) -> Result<PathBuf, String> {
+    let output_root = canonical_output_dir(Path::new(&request.output_root))?;
+    let id = request.conversation_id.trim();
+    if id.is_empty()
+        || id.starts_with('.')
+        || !id.chars().all(|ch: char| ch.is_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return Err("invalid conversation id".into());
+    }
+    let dir = output_root.join(id);
+    // 目录可能不存在（尚未生成任何制品）,无法 canonicalize 时用拼接路径做前缀校验。
+    let canonical = dir.canonicalize().unwrap_or(dir);
+    if !canonical.starts_with(&output_root) {
+        return Err("refused: path is outside .typola-output directory".into());
+    }
+    Ok(canonical)
+}
+
+fn count_output_files(root: &Path, artifact_count: &mut usize, backup_count: &mut usize, in_backups: bool) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let is_backups = path.file_name().and_then(OsStr::to_str) == Some("backups");
+            count_output_files(&path, artifact_count, backup_count, in_backups || is_backups);
+        } else if path.is_file() {
+            let name = path.file_name().and_then(OsStr::to_str).unwrap_or("");
+            if name.eq_ignore_ascii_case("artifact.json") {
+                continue;
+            }
+            if in_backups {
+                *backup_count += 1;
+            } else {
+                *artifact_count += 1;
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn conversation_output_status(request: ConversationOutputRequest) -> Result<ConversationOutputStatus, String> {
+    let dir = resolve_conversation_dir(&request)?;
+    if !dir.is_dir() {
+        return Ok(ConversationOutputStatus { exists: false, artifact_count: 0, backup_count: 0 });
+    }
+    let mut status = ConversationOutputStatus { exists: true, artifact_count: 0, backup_count: 0 };
+    count_output_files(&dir, &mut status.artifact_count, &mut status.backup_count, false);
+    Ok(status)
+}
+
+#[tauri::command]
+fn cleanup_conversation_output(request: ConversationOutputRequest) -> Result<(), String> {
+    let dir = resolve_conversation_dir(&request)?;
+    if !dir.exists() {
+        return Ok(());
+    }
+    // 删除前复查:目标必须仍是 .typola-output 下的单层会话目录。
+    let canonical = dir
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve conversation directory: {error}"))?;
+    let parent = canonical
+        .parent()
+        .ok_or_else(|| "invalid conversation directory".to_string())?;
+    if parent.file_name().and_then(OsStr::to_str) != Some(".typola-output") {
+        return Err("refused: not a conversation output directory".into());
+    }
+    std::fs::remove_dir_all(&canonical)
+        .map_err(|error| format!("failed to cleanup conversation output: {error}"))?;
+    Ok(())
 }
 
 fn canonical_output_dir_for_artifact(
@@ -1631,6 +1789,17 @@ fn should_ignore_workspace_path(path: &Path) -> bool {
     false
 }
 
+/// 变更事件是否应上报:必须在监听根内,且根的相对路径部分不命中忽略规则。
+/// 忽略规则只作用于「根以内」的路径——监听根本身可以是点开头目录
+/// (.typola-output 制品目录兜底监听),对绝对路径整体判 ignore 会把根下所有事件全部滤掉。
+fn is_visible_workspace_change(candidate: &Path, root: &Path) -> bool {
+    if !candidate.starts_with(root) {
+        return false;
+    }
+    let relative = candidate.strip_prefix(root).unwrap_or(candidate);
+    !should_ignore_workspace_path(relative)
+}
+
 #[tauri::command]
 fn watch_workspace(
     app: tauri::AppHandle,
@@ -1665,10 +1834,7 @@ fn watch_workspace(
             let mut touched: Vec<String> = event
                 .paths
                 .iter()
-                .filter(|candidate| {
-                    candidate.starts_with(&root_for_filter)
-                        && !should_ignore_workspace_path(candidate)
-                })
+                .filter(|candidate| is_visible_workspace_change(candidate, &root_for_filter))
                 .map(|candidate| watch_path_key(candidate))
                 .collect();
             if touched.is_empty() {
@@ -1969,6 +2135,8 @@ pub fn run() {
             rename_opened_document,
             archive_artifact_to_workspace,
             scan_artifacts,
+            conversation_output_status,
+            cleanup_conversation_output,
             overwrite_artifact_to_document,
             undo_artifact_overwrite,
             delete_artifact_file,
@@ -2069,10 +2237,17 @@ fn openable_path_to_string(path: PathBuf) -> Option<String> {
 }
 
 fn watch_path_key(path: &Path) -> String {
-    path.canonicalize()
+    let resolved = path
+        .canonicalize()
         .unwrap_or_else(|_| path.to_path_buf())
         .to_string_lossy()
-        .to_string()
+        .to_string();
+    // canonicalize 在 Windows 上返回 \\?\ verbatim 前缀路径,前端按普通路径做
+    // 前缀匹配会全部落空(制品 watcher 静默失效的根因之一),统一剥掉。
+    resolved
+        .strip_prefix(r"\\?\")
+        .map(str::to_string)
+        .unwrap_or(resolved)
 }
 
 fn is_document_change_event(kind: &EventKind) -> bool {
@@ -4782,6 +4957,178 @@ mod tests {
         atomic_write(&target, b"new content").unwrap();
         let content = std::fs::read(&target).unwrap();
         assert_eq!(content, b"new content");
+    }
+
+    #[test]
+    fn conversation_output_status_counts_artifacts_and_backups() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        let conv = output_root.join("conv-3");
+        std::fs::create_dir_all(conv.join("backups")).unwrap();
+        std::fs::write(conv.join("report.html"), b"<html/>").unwrap();
+        std::fs::write(conv.join("notes.md"), b"# hi").unwrap();
+        std::fs::write(conv.join("artifact.json"), b"{}").unwrap();
+        std::fs::write(conv.join("backups").join("doc.md.bak"), b"backup").unwrap();
+
+        let status = conversation_output_status(ConversationOutputRequest {
+            output_root: output_root.to_string_lossy().to_string(),
+            conversation_id: "conv-3".into(),
+        })
+        .unwrap();
+
+        assert!(status.exists);
+        assert_eq!(status.artifact_count, 2, "artifact.json 不计入制品数");
+        assert_eq!(status.backup_count, 1);
+    }
+
+    #[test]
+    fn conversation_output_status_missing_dir_reports_not_exists() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        std::fs::create_dir_all(&output_root).unwrap();
+
+        let status = conversation_output_status(ConversationOutputRequest {
+            output_root: output_root.to_string_lossy().to_string(),
+            conversation_id: "conv-9".into(),
+        })
+        .unwrap();
+
+        assert!(!status.exists);
+        assert_eq!(status.artifact_count, 0);
+        assert_eq!(status.backup_count, 0);
+    }
+
+    #[test]
+    fn conversation_output_rejects_path_traversal() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        std::fs::create_dir_all(&output_root).unwrap();
+
+        for bad in ["../escape", "..\\escape", "a/b", ".hidden", "con v"] {
+            let result = conversation_output_status(ConversationOutputRequest {
+                output_root: output_root.to_string_lossy().to_string(),
+                conversation_id: bad.into(),
+            });
+            assert!(result.is_err(), "应拒绝非法会话 id: {bad}");
+        }
+    }
+
+    #[test]
+    fn cleanup_conversation_output_removes_only_conv_dir() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        let conv = output_root.join("conv-1");
+        let sibling = output_root.join("conv-2");
+        std::fs::create_dir_all(&conv).unwrap();
+        std::fs::create_dir_all(&sibling).unwrap();
+        std::fs::write(conv.join("report.html"), b"<html/>").unwrap();
+        std::fs::write(sibling.join("keep.md"), b"keep").unwrap();
+
+        cleanup_conversation_output(ConversationOutputRequest {
+            output_root: output_root.to_string_lossy().to_string(),
+            conversation_id: "conv-1".into(),
+        })
+        .unwrap();
+
+        assert!(!conv.exists());
+        assert!(sibling.join("keep.md").is_file(), "兄弟会话目录不受影响");
+    }
+
+    #[test]
+    fn cleanup_conversation_output_missing_dir_is_noop() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        std::fs::create_dir_all(&output_root).unwrap();
+
+        cleanup_conversation_output(ConversationOutputRequest {
+            output_root: output_root.to_string_lossy().to_string(),
+            conversation_id: "conv-7".into(),
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn scan_artifacts_includes_archived_manifest_without_local_primary() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        let conv = output_root.join("conv-1");
+        std::fs::create_dir_all(&conv).unwrap();
+        // 已归档:主文件已 move 走,只剩 manifest。
+        std::fs::write(
+            conv.join("artifact.json"),
+            r#"{"id":"a1","title":"季度汇报","kind":"html","status":"archived","primaryFile":"D:\\workspace\\季度汇报.html","createdAt":"2026-01-01T00:00:00Z","source":{"type":"flow_generation"}}"#,
+        )
+        .unwrap();
+
+        let files = scan_artifacts(ScanArtifactsRequest {
+            output_root: output_root.to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(files.len(), 1, "archived manifest 应被补回");
+        assert!(files[0].path.ends_with("季度汇报.html"));
+        assert!(files[0].manifest_json.is_some());
+    }
+
+    #[test]
+    fn archive_artifact_to_workspace_applies_custom_target_name() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        let conv = output_root.join("conv-1");
+        std::fs::create_dir_all(&conv).unwrap();
+        let artifact = conv.join("report.html");
+        std::fs::write(&artifact, b"<html/>").unwrap();
+
+        let archived = archive_artifact_to_workspace(ArchiveArtifactRequest {
+            artifact_path: artifact.to_string_lossy().to_string(),
+            workspace_root: dir.path().to_string_lossy().to_string(),
+            target_name: Some("季度汇报图表".into()),
+        })
+        .unwrap();
+
+        assert!(archived.ends_with("季度汇报图表.html"), "自定义名 + 原扩展名: {archived}");
+        assert!(!artifact.exists(), "归档是 move,原文件应消失");
+    }
+
+    #[test]
+    fn watch_path_key_strips_windows_verbatim_prefix() {
+        let dir = tempdir().unwrap();
+        let key = watch_path_key(dir.path());
+        assert!(!key.starts_with(r"\\?\"), "verbatim 前缀应被剥掉: {key}");
+    }
+
+    #[test]
+    fn workspace_change_filter_applies_ignore_rules_relative_to_root() {
+        let root = PathBuf::from("D:\\ws\\.typola-output");
+        // 监听根本身是点开头目录:根内事件不应被 ignore 全灭(制品兜底监听的核心前提)。
+        assert!(is_visible_workspace_change(&root.join("conv-1").join("report.html"), &root));
+        // 根内的忽略目录仍被过滤。
+        assert!(!is_visible_workspace_change(&root.join("node_modules").join("x.js"), &root));
+        assert!(!is_visible_workspace_change(&root.join(".git").join("HEAD"), &root));
+        // 根外路径不上报。
+        assert!(!is_visible_workspace_change(Path::new("D:\\other\\file.md"), &root));
+        // 工作区树根路径含点开头组件时,根内普通文件照常上报。
+        let dotted_root = PathBuf::from("D:\\.config\\proj");
+        assert!(is_visible_workspace_change(&dotted_root.join("doc.md"), &dotted_root));
+    }
+
+    #[test]
+    fn archive_artifact_to_workspace_sanitizes_illegal_chars() {
+        let dir = tempdir().unwrap();
+        let output_root = dir.path().join(".typola-output");
+        let conv = output_root.join("conv-1");
+        std::fs::create_dir_all(&conv).unwrap();
+        let artifact = conv.join("report.md");
+        std::fs::write(&artifact, b"# hi").unwrap();
+
+        let archived = archive_artifact_to_workspace(ArchiveArtifactRequest {
+            artifact_path: artifact.to_string_lossy().to_string(),
+            workspace_root: dir.path().to_string_lossy().to_string(),
+            target_name: Some("a/b:c*?".into()),
+        })
+        .unwrap();
+
+        assert!(archived.ends_with("a-b-c--.md"), "非法字符清洗为 -: {archived}");
     }
 
     #[test]

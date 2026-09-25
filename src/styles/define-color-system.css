@@ -272,10 +272,11 @@ html[data-color-system='define-color'] .skill-hub-item-actions {
 }
 
 html[data-color-system='define-color'] .skill-hub-item-actions {
-  align-items: center;
-  justify-content: center;
+  /* 与基础样式保持一致:顶对齐,让徽标与首行 skill 名齐平(此前 center 让它在卡片里孤立居中)。 */
+  align-items: flex-start;
+  justify-content: flex-end;
   min-width: 0;
-  padding: 8px;
+  padding: 12px 12px 12px 0;
 }
 
 html[data-color-system='define-color'] .skill-hub-item-actions button {

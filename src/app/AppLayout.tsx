@@ -33,6 +33,7 @@ import type { EditorMode } from '../components/Toolbar';
 import { StatusBar } from '../components/StatusBar';
 import { AppLayoutChrome } from '../components/AppLayoutChrome';
 import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
+import { PromptDialog } from '../components/PromptDialog';
 import { UpdateCard } from '../components/UpdateCard';
 import { calmTransition } from '../components/motion/MotionProvider';
 import { SkillHubPanel } from '../components/SkillHubPanel';
@@ -61,7 +62,7 @@ import {
   type ReviewBasis,
   type ReviewComment,
 } from '../services/review/reviewState';
-import { ensureArtifactManifest } from '../services/artifacts/manifest';
+import { ensureArtifactManifest, artifactBasename, markArtifactArchived } from '../services/artifacts/manifest';
 import type { ArtifactRecord } from '../services/artifacts/types';
 import { saveFileDialog } from '../services/dialogService';
 import { removeReviewStatesUnder } from '../services/review/reviewStatePersistence';
@@ -368,7 +369,7 @@ export function AppLayout() {
     rightPanelMode,
     setRightPanelMode,
     rightPanelCollapsed,
-    toggleRightPanelCollapsed,
+    toggleRightPanel,
     rightPanelWidth,
     setRightPanelWidth,
     resizing,
@@ -634,6 +635,10 @@ export function AppLayout() {
     pluginDirs: settings.aiPluginDirs,
     onArtifactFile: (artifact) => {
       rememberArtifact(artifact.path);
+      // 生成制品后自动滑出右侧制品面板(设置项可关);与 review 自动打开(:2989)同一模式。
+      if (settings.autoOpenArtifactPanel) {
+        setRightPanelMode('artifacts');
+      }
     },
   });
 
@@ -2232,6 +2237,77 @@ export function AppLayout() {
     refreshKey: `${artifactLibraryRefreshKey}:${agentChangedPaths.size}:${convManager.activeConvId}:${file.path}`,
   });
 
+  // 「AI 产物」未读角标:打开制品面板即视为已读,把当前制品总数写回已读水位。
+  useEffect(() => {
+    if (rightPanelMode !== 'artifacts') return;
+    if (artifactRecords.length !== settings.artifactSeenCount) {
+      updateSettings({ artifactSeenCount: artifactRecords.length });
+    }
+  }, [rightPanelMode, artifactRecords.length, settings.artifactSeenCount]);
+
+  const artifactUnreadCount = Math.max(0, artifactRecords.length - settings.artifactSeenCount);
+
+  // 「存为文件」命名弹窗:默认名取 manifest 语义标题(去扩展名),回落文件名 stem。
+  const [archivePrompt, setArchivePrompt] = useState<{ path: string; defaultName: string } | null>(null);
+
+  // 归档统一入口:制品中心卡片、chips 面板、生成后 toast 都走这里,避免绕过命名框留下悬空的主文件路径。
+  const openArchivePrompt = useCallback((path: string, titleHint?: string) => {
+    const stem = artifactBasename(path).replace(/\.[^.]+$/u, '');
+    const hint = (titleHint ?? artifactRecords.find((record) => record.manifest.primaryFile === path)?.manifest.title ?? '')
+      .trim()
+      .replace(/\.[^.]+$/u, '');
+    setArchivePrompt({ path, defaultName: hint || stem });
+  }, [artifactRecords]);
+
+  const handleConfirmArchive = useCallback(async (name: string) => {
+    const prompt = archivePrompt;
+    setArchivePrompt(null);
+    if (!prompt) return;
+    const archivedPath = await handleArchiveArtifact(prompt.path, name);
+    if (archivedPath) {
+      await markArtifactArchived(prompt.path, archivedPath, name);
+      setArtifactLibraryRefreshKey((key) => key + 1);
+    }
+  }, [archivePrompt, handleArchiveArtifact]);
+
+  // 关闭会话 = 清理临时制品(conv-N 目录)。有未归档制品/覆盖备份时先确认;
+  // 运行中的会话禁止关闭,防与 AI 进程写盘竞态。
+  const handleCloseConversation = useCallback(async (convId: string) => {
+    const conv = convManager.conversations.get(convId);
+    if (conv?.runState === 'running') {
+      await messageDialog('该会话正在生成中，请先停止后再关闭。', { title: '关闭会话' });
+      return;
+    }
+    if (outputBaseDir) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const status = await invoke<{ exists: boolean; artifactCount: number; backupCount: number }>(
+          'conversation_output_status',
+          { request: { outputRoot: outputBaseDir, conversationId: convId } },
+        );
+        if (status.exists) {
+          if (status.artifactCount > 0 || status.backupCount > 0) {
+            const parts: string[] = [];
+            if (status.artifactCount > 0) parts.push(`${status.artifactCount} 个未归档制品`);
+            if (status.backupCount > 0) parts.push(`${status.backupCount} 个覆盖备份`);
+            const confirmed = await confirmDialog(
+              `关闭「${conv?.title ?? convId}」将同时清理 ${parts.join('、')}。已存为文件/已插入文档的内容不受影响${status.backupCount > 0 ? '；清理后撤销覆盖将不可用' : ''}。`,
+              { title: '关闭会话', okLabel: '关闭并清理', cancelLabel: '取消' },
+            );
+            if (!confirmed) return;
+          }
+          await invoke('cleanup_conversation_output', {
+            request: { outputRoot: outputBaseDir, conversationId: convId },
+          });
+          setArtifactLibraryRefreshKey((key) => key + 1);
+        }
+      } catch (error) {
+        console.warn('Failed to cleanup conversation output:', error);
+      }
+    }
+    convManager.closeConversation(convId);
+  }, [convManager, outputBaseDir]);
+
   useEffect(() => {
     if (!outputBaseDir || agentChangedPaths.size === 0) return;
     const active = convManager.activeConv;
@@ -2603,7 +2679,8 @@ export function AppLayout() {
       activeConversationId={convManager.activeConvId}
       onOpen={(path) => { void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error)); }}
       onCompare={(path) => { void handleReviewRevision(path); }}
-      onArchive={(path) => { void handleArchiveArtifact(path); setArtifactLibraryRefreshKey((key) => key + 1); }}
+      onArchive={(record) => { openArchivePrompt(record.manifest.primaryFile, record.manifest.title); }}
+      onInsertToDocument={(path) => { void handleReviewRevision(path); }}
       onDelete={(path) => { void handleDeleteArtifact(path); }}
       onOverwrite={(record) => { void handleOverwriteArtifact(record); }}
       onUndoOverwrite={(record) => { void handleUndoArtifactOverwrite(record); }}
@@ -2651,7 +2728,9 @@ export function AppLayout() {
           wordPreviewVisible: rightPanelMode === 'word',
           wechatPreviewVisible: rightPanelMode === 'wechat',
           artifactsVisible: rightPanelMode === 'artifacts',
-          rightPanelAvailable: rightPanelMode !== 'none' && !isDocx,
+          artifactUnreadCount,
+          rightPanelAvailable: !isDocx,
+          rightPanelOpen: rightPanelMode !== 'none',
           rightPanelCollapsed,
           terminalVisible,
           editingDisabled: isDocx,
@@ -2663,7 +2742,7 @@ export function AppLayout() {
           onToggleWordPreview: handleToggleWordPreview,
           onToggleWechatPreview: handleToggleWechatPreview,
           onToggleArtifacts: () => setRightPanelMode((mode) => (mode === 'artifacts' ? 'none' : 'artifacts')),
-          onToggleRightPanel: toggleRightPanelCollapsed,
+          onToggleRightPanel: toggleRightPanel,
           onToggleTerminal: handleToggleTerminal,
           onOpenToc: () => setTocOpenRequest((tick) => tick + 1),
           onSetDocMode: (next) => void setDocMode(next),
@@ -2707,7 +2786,7 @@ export function AppLayout() {
           currentFileContextPath: convManager.activeConv?.currentFileContextPath,
           onSelectConversation: convManager.switchConversation,
           onCreateConversation: () => convManager.createConversation(),
-          onCloseConversation: convManager.closeConversation,
+          onCloseConversation: (convId) => { void handleCloseConversation(convId); },
           onRenameConversation: convManager.renameConversation,
           onSwitchProvider: convManager.switchProvider,
           onSend: convManager.send,
@@ -2723,7 +2802,7 @@ export function AppLayout() {
           onOpenArtifact: (path) => {
             void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
           },
-          onArchiveArtifact: handleArchiveArtifact,
+          onArchiveArtifact: (path) => { openArchivePrompt(path); },
           updateConv: convManager.updateConv,
         }}
         fileTreeProps={{
@@ -2866,9 +2945,7 @@ export function AppLayout() {
                 void handleOpenPath(path).catch((error) => console.warn('Failed to open artifact:', error));
               }}
               onMergeIntoDocument={(path) => { void handleReviewRevision(path); }}
-              onArchiveFile={(path) => {
-                void handleArchiveArtifact(path);
-              }}
+              onArchiveFile={(path) => { openArchivePrompt(path); }}
               onDeleteFile={(path) => {
                 void handleDeleteArtifact(path);
               }}
@@ -2899,6 +2976,20 @@ export function AppLayout() {
         onConfirmRename={() => void handleConfirmRename()}
         diffPreview={diffPreview}
         setDiffPreview={setDiffPreview}
+      />
+      <PromptDialog
+        open={archivePrompt !== null}
+        title="存为文件"
+        defaultValue={archivePrompt?.defaultName ?? ''}
+        okLabel="存为文件"
+        cancelLabel="取消"
+        validate={(value) => {
+          if (!value) return '文件名不能为空';
+          if (/[\\/:*?"<>|]/u.test(value)) return '文件名不能包含 \\ / : * ? " < > | 字符';
+          return null;
+        }}
+        onSubmit={(name) => { void handleConfirmArchive(name); }}
+        onCancel={() => setArchivePrompt(null)}
       />
       <UpdateCard
         state={updateState}

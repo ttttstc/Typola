@@ -356,6 +356,22 @@ async function main() {
   });
   await shot(page, '24-empty-new-doc', '新建空白文档（新用户第一眼）');
 
+  // 25 心流模式右栏：场景模板入口 + 场景详情 skill 列表（此前采集遗漏的状态）
+  await step('flow-mode', async () => {
+    await page.getByRole('tab', { name: '心流模式', exact: true }).click();
+    await delay(1200);
+  });
+  await shot(page, '25-flow-scene-cards', '心流模式-场景模板');
+
+  await step('flow-scene-detail', async () => {
+    const scene = page.locator('.skill-hub-scene-card').first();
+    if (await scene.count()) {
+      await scene.click();
+      await delay(700);
+    }
+  });
+  await shot(page, '26-flow-skill-list', '场景模板-skill 列表');
+
   await fs.writeFile(
     path.join(evidenceDirectory, 'capture.json'),
     JSON.stringify({ runId, captured, captureErrors }, null, 2),
