@@ -5459,6 +5459,8 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   gap: 12px;
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--theme-border-soft);
+  /* 会话下拉以头部为定位参照(而不是 pill 容器),才能撑到与左栏同宽 */
+  position: relative;
 }
 
 /* 只作用于头部的直接子 div。此前写作 `.conversation-header div`,把后代里
@@ -5520,8 +5522,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 }
 
 .conversation-pill-container {
-  position: relative;
-  /* 占满剩余宽度:下拉以它为定位参照,宽度钳到 100% 即可落在面板内、不溢出到编辑区 */
+  /* 不再作为下拉的定位参照(改由 .conversation-header 承担),只负责占满剩余宽度 */
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -5575,9 +5576,9 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
 .conversation-pill-dropdown {
   position: absolute;
   top: calc(100% + 4px);
+  /* 以头部为参照:与左栏完全同宽(左右边缘对齐面板) */
   left: 0;
-  /* 固定宽度上限,并钳到容器内(容器 = 面板可用宽),避免溢出面板盖住编辑区 */
-  width: min(300px, 100%);
+  width: 100%;
   box-sizing: border-box;
   background: var(--theme-surface);
   border: 1px solid var(--theme-border-soft);
