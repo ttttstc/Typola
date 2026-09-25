@@ -4277,9 +4277,12 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   font-size: 12px;
 }
 
-.skill-hub-panel .skill-hub-item-actions .skill-hub-install-action {
+/* 安装动作:位于卡片右下角(跨两列、右对齐)。配色与卡片其它文字保持一致 ——
+ * 不用填充底色,只有文字 + 下划线,hover 提到主文字色。 */
+.skill-hub-item > .skill-hub-install-action {
+  grid-column: 1 / -1;
+  justify-self: end;
   min-width: 0;
-  /* 与同排「未安装」徽标同字号同高度(10.5px 徽标 → 21px),否则一高一矮整排对不齐。 */
   min-height: 21px;
   padding: 2px 4px;
   font-size: 11px;
@@ -4292,7 +4295,7 @@ html[data-theme-id='brutalist'] .file-tree-folder-chevron {
   text-underline-offset: 2px;
 }
 
-.skill-hub-panel .skill-hub-item-actions .skill-hub-install-action:hover {
+.skill-hub-item > .skill-hub-install-action:hover {
   color: var(--theme-text-primary);
   background: transparent;
   border-color: transparent;

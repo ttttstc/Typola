@@ -285,9 +285,11 @@ html[data-color-system='define-color'] .skill-hub-item-actions button {
   border-color: var(--dc-border-loud);
 }
 
-html[data-color-system='define-color'] .skill-hub-item-actions .skill-hub-install-action,
-html[data-color-system='define-color'] .skill-hub-item-actions .skill-hub-install-action:hover {
-  color: var(--dc-text-shout);
+/* 全局 `#root :is(button, …)` 会给所有按钮刷上 control 底色。安装动作要保持无底色
+ * (与卡片其它文字一致),必须用带 #root 且层级更高的选择器才能压过它。 */
+html[data-color-system='define-color'] #root .skill-hub-panel .skill-hub-item .skill-hub-install-action,
+html[data-color-system='define-color'] #root .skill-hub-panel .skill-hub-item .skill-hub-install-action:hover {
+  color: var(--dc-text-strong);
   background: transparent;
   border-color: transparent;
 }
