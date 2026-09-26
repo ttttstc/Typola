@@ -17,7 +17,7 @@
 
 ## 用 exe-CDP harness 驱动
 
-- 运行 `npm run verify:exe-core`，点击 `button[aria-label="终端"]`，等待 `.terminal-panel`、`.terminal-session` 和 `.terminal-tab.ready`。
+- 运行 `npm run verify:core`，点击 `button[aria-label="终端"]`，等待 `.terminal-panel`、`.terminal-session` 和 `.terminal-tab.ready`。
 - 聚焦真实终端，输入 `echo NIMO_EXE_TERMINAL`，从 `.xterm-rows` 读取相同输出；这证明 PTY 接线和键盘输入，不只是面板存在。
 - 关闭本次创建的终端标签并隐藏面板；运行日志记录终端关闭警告，但不能把它改写成无错误。
 

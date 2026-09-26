@@ -27,16 +27,16 @@ description: "使用真实 Typola Windows Tauri exe 和 WebView2 CDP 驱动核�
 
 ### 由 exe harness 启动
 
-完整套件：
+统一验证套件（单次启动 exe，smoke + deep 两层）：
 
 ```powershell
-npm run verify:exe-core
+npm run verify:all              # 全量：smoke + deep 一次跑完，汇总 _summary-non-ai.json
 ```
 
-扩展套件（补齐 9 个低/中难度非 AI 场景）：
+只跑核心用例（约 5 分钟，fail-fast）：
 
 ```powershell
-npm run verify:exe-core:extended
+npm run verify:core
 ```
 
 单一编辑器聚焦配方：
@@ -45,7 +45,7 @@ npm run verify:exe-core:extended
 npm run verify:exe-editor
 ```
 
-`verify-exe-core-suite.mjs` 直接以子进程启动 `src-tauri\target\debug\typola.exe`，不启动 Vite、不调用 `page.goto` 加载网页。它为本次运行设置：
+`verify-exe-core.mjs` 直接以子进程启动 `src-tauri\target\debug\typola.exe`，不启动 Vite、不调用 `page.goto` 加载网页。它为本次运行设置：
 
 - `WEBVIEW2_USER_DATA_FOLDER=.nimo\verification\runtime\<run-id>`：只存本次 WebView2 profile 和一次性夹具。
 - `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<动态端口>`：只开放本次实例的 CDP。
@@ -62,7 +62,7 @@ npm run verify:exe-editor
 
 ### 拆除启动实例
 
-`verify-exe-core-suite.mjs` 和 `verify-exe-core-flow.mjs` 在成功、断言失败、CDP 连接失败三种路径都会进入清理：先断开 CDP，只对它自己记录的 exe PID 执行 Windows `taskkill /PID <pid> /T /F`，再删除自己创建的 `.nimo\verification\runtime\<run-id>`。它们不会按 `typola` 或 `node` 进程名清理，也不会删除证据目录。
+`verify-exe-core.mjs` 和 `verify-exe-core-flow.mjs` 在成功、断言失败、CDP 连接失败三种路径都会进入清理：先断开 CDP，只对它自己记录的 exe PID 执行 Windows `taskkill /PID <pid> /T /F`，再删除自己创建的 `.nimo\verification\runtime\<run-id>`。它们不会按 `typola` 或 `node` 进程名清理，也不会删除证据目录。
 
 手动运行 `npm run tauri dev` 时，停止它的前台命令会话即可；不要触碰本机已有的正式 Typola 进程。
 
@@ -106,13 +106,13 @@ Get-FileHash '.\src-tauri\target\debug\typola.exe' -Algorithm SHA256
 
 ## 证据
 
-每次 `npm run verify:exe-core` 都在以下位置生成一个不可随实例清理删除的目录：
+每次 `npm run verify:core` 或 `npm run verify:all` 都在以下位置生成一个不可随实例清理删除的目录：
 
 ```text
-.nimo/verification/evidence/<run-id>-exe-core-suite/
-├── run.json                 版本、exe、Git、动作、结果、跳过、清理和运行时日志摘要
-├── 00-*.png                 初始界面和关于页截图
-├── 01-*.png … 16-*.png      各核心用户面动作后的截图
+.nimo/verification/evidence/<run-id>-exe-core/
+├── run.json                 版本、exe、Git、动作（含 tier）、结果、跳过、清理和运行时日志摘要
+├── 00-*.png … 16-*.png      smoke 段各核心用户面动作后的截图
+├── d00-*.png … d99-*.png    deep 段各动作后的截图（仅全量模式）
 ├── *.aria.txt               与每张截图对应的无障碍树快照
 ├── exe.stdout.log           本次 exe 标准输出
 └── exe.stderr.log           本次 exe 标准错误
@@ -127,7 +127,7 @@ Get-FileHash '.\src-tauri\target\debug\typola.exe' -Algorithm SHA256
 - 保存、导出或产物必须另外核对目标文件、路径、大小和类型；AI 还要核对可见对话、CLI 退出状态和产物文件。
 - 不使用外部账号、生产数据、模型凭据或网络 mock。AI 相关功能只有在用户已配置本机 CLI 且不需要把秘密写入证据时才能驱动。
 
-本次交付的 exe 证据目录位于 `.nimo/verification/evidence/*-exe-core-suite/`。最近一次目录中的 `run.json` 必须明确记录页面为 `http://tauri.localhost/`、`runtime=tauri`，列出 15 个 Feature Map 状态、每个动作、跳过原因和清理结果；场景矩阵在 `features/index.md` 维护，旧的 `*-exe-core-editor/` 目录作为历史证据保留。
+本次交付的 exe 证据目录位于 `.nimo/verification/evidence/*-exe-core/`。最近一次目录中的 `run.json` 必须明确记录页面为 `http://tauri.localhost/`、`runtime=tauri`，列出 Feature Map 状态、每个动作（含 `tier: smoke|deep`）、跳过原因和清理结果；场景矩阵在 `features/index.md` 维护，旧的 `*-exe-core-suite/`、`*-exe-core-extended/`、`*-exe-core-editor/` 目录作为历史证据保留。
 
 本次真实 exe 还可能观察到 CSP/IPC 控制台错误：`ipc.localhost` 被当前 `connect-src 'self'` 拦截后，Tauri 回退到 postMessage；终端关闭还可能记录 `Failed to kill terminal ... os error 0`。这些信息不阻止已通过动作，但必须原样保存在 `run.json.runtimeMessages.console`，属于需要产品侧另行处理的已知限制，不可静默成“无错误”。
 
@@ -138,7 +138,7 @@ Get-FileHash '.\src-tauri\target\debug\typola.exe' -Algorithm SHA256
 - 进程：只使用脚本持有的子进程 PID，连同其子进程树停止；绝不按进程名杀。
 - WebView2 状态：只删除 `.nimo/verification/runtime/<run-id>`，删除前确认它由本次脚本创建。
 - CDP：先断开 Playwright，再确认动态端点不可访问；`run.json.cleanup.cdpClosed` 应为 `true`。
-- 证据：永远位于 `evidence/<run-id>-exe-core-suite/` 或旧的聚焦目录，不在 runtime 目录内；实例停止、profile 删除后仍必须能读取 `run.json`、ARIA 快照和截图。
+- 证据：永远位于 `evidence/<run-id>-exe-core/` 或旧的聚焦目录，不在 runtime 目录内；实例停止、profile 删除后仍必须能读取 `run.json`、ARIA 快照和截图。
 - 用户状态：本次核心套件只保存脚本创建的夹具、不保存用户文件、不调用 AI；扩展文件/导出/AI 配方时必须明确夹具所有权和恢复动作。
 
 如果脚本中途失败，先读取失败目录的 `run.json`，确认 `processStopped` 和 `profileRemoved`，再重新运行；不要留下孤儿 exe、CDP 端口或共享 profile。
@@ -146,8 +146,7 @@ Get-FileHash '.\src-tauri\target\debug\typola.exe' -Algorithm SHA256
 ## 辅助
 
 - `tauri-verification.conf.json`：构建时合并的独立应用标识配置，保留产品名 `Typola`，关闭安装包打包。
-- `scripts/verify-exe-core-suite.mjs`：直接启动 exe，串行驱动 Feature Map 的可达核心路径，采集证据并清理；调用方式是 `npm run verify:exe-core` 或 `node .nimo/verification/scripts/verify-exe-core-suite.mjs`。
-- `scripts/verify-exe-core-extended.mjs`：本次新增的扩展套件，补齐 9 个低/中难度非 AI 场景（模式切换、格式历史补充、Rich Markdown、预览、设置、终端多标签、表格 Tab、image 占位、failure Escape）。受原生对话框/重启/外部资源依赖的场景保留为受阻；调用方式是 `npm run verify:exe-core:extended` 或 `node .nimo/verification/scripts/verify-exe-core-extended.mjs`。
+- `scripts/verify-exe-core.mjs`：统一验证套件，直接启动 exe（单次），smoke 段串行驱动 Feature Map 的可达核心路径（fail-fast），deep 段补齐模式切换、格式历史、Rich Markdown、预览、设置、终端多标签、表格全量、image 占位、failure Escape 及 Issue #280 P0-P2 回归矩阵（continue-on-failure）；受原生对话框/重启/外部资源依赖的场景保留为受阻；调用方式是 `npm run verify:all`（全量，经 run-all-non-ai.mjs 汇总）、`npm run verify:core`（仅 smoke）或 `node .nimo/verification/scripts/verify-exe-core.mjs [--smoke]`。
 - `scripts/verify-exe-core-flow.mjs`：保留旧的单一编辑器源码往返聚焦配方；调用方式是 `npm run verify:exe-editor` 或 `node .nimo/verification/scripts/verify-exe-core-flow.mjs`。
 - `features/index.md`：15 个功能条目和 27 个直接 exe 场景的索引与验证状态；每个功能文件是用户路径配方。
 - 维护时参考 `nimo-verification-maintain`：代码、菜单、启动链或证据边界变化后，先更新地图，再重新执行受影响的 exe 路径。

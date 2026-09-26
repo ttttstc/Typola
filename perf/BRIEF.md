@@ -31,7 +31,7 @@
 
 ## 护栏与回滚
 
-- 黄金测试：现有 `.nimo/verification` exe 套件（verify-exe-core-suite 等）跑绿
+- 黄金测试：现有 `.nimo/verification` exe 套件（verify-exe-core 等）跑绿
 - bundle 棘轮：`npm run perf:bundle:check` 只许降不许升
 - 视觉回归：e2e 截图快照（editor-paper-bg 等）
 - 回滚：git revert 单 commit；每改动一个 commit

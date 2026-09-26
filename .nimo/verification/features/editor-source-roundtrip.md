@@ -21,9 +21,9 @@
 
 - 已按 `../SKILL.md` 构建 `src-tauri\target\debug\typola.exe`。
 - 没有把正式同标识 Typola 实例当作本次验证目标。
-- 从仓库根目录执行 `npm run verify:exe-core`。
+- 从仓库根目录执行 `npm run verify:core`。
 
-- **确认真实应用。** `npm run verify:exe-core` 直接启动 `src-tauri\target\debug\typola.exe`；最新套件 `run.json` 的 `runtime.runtime` 为 `tauri`、页面地址为 `http://tauri.localhost/`，并由 `startup-distribution` 动作从 `设置 → 关于` 读取 `Typola` 与版本。
+- **确认真实应用。** `npm run verify:core` 直接启动 `src-tauri\target\debug\typola.exe`；最新套件 `run.json` 的 `runtime.runtime` 为 `tauri`、页面地址为 `http://tauri.localhost/`，并由 `startup-distribution` 动作从 `设置 → 关于` 读取 `Typola` 与版本。
 - **切换源码。** 套件点击 `button[aria-label="源码模式"]`，等待 `.cm-editor` 可见，并在 `run.json.actions` 和对应 ARIA 快照中记录源码编辑器可达。
 - **输入 Markdown。** 套件点击 `.cm-content` 后输入标题、正文和列表；动作结果同时记录 source 包含标题/正文的结果。
 - **回到写作视图。** 套件再次点击 `源码模式`，读取 `.cm6-markdown-editor-pane`；动作结果必须报告标题和正文均可回读，对应截图是可视证明。

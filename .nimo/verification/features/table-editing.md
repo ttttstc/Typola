@@ -18,7 +18,7 @@
 
 ## 用 exe-CDP harness 驱动
 
-- 运行 `npm run verify:exe-core`，点击 `button[aria-label="插入表格"]`，等待 `table.tbl-table[role="grid"]` 和 `.tbl-cell-view`。
+- 运行 `npm run verify:core`，点击 `button[aria-label="插入表格"]`，等待 `table.tbl-table[role="grid"]` 和 `.tbl-cell-view`。
 - 切换到 `源码模式`，从 `.cm-content` 读取表头、分隔线和数据行，再返回写作视图；网格可见和 source 形状是两个独立观察。
 - 完整配方还要在真实单元格上右键并逐项执行行列菜单、Tab 追加行和撤销，记录菜单 ARIA 与 source 变化；当前套件只执行插入及双视图确认。
 

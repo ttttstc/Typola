@@ -18,7 +18,7 @@
 ## 用 exe-CDP harness 驱动
 
 - 发布验收必须使用实际安装包或 portable 解压产物；不能把 debug 内部 exe 当作分发物通过。
-- 本地快速路径可运行 `npm run verify:exe-core`，确认子进程是 `src-tauri/target/debug/typola.exe`，页面地址为 `http://tauri.localhost/`、`data-runtime=tauri`，再从 `设置 → 关于` 读取 `Typola` 和版本。
+- 本地快速路径可运行 `npm run verify:core`，确认子进程是 `src-tauri/target/debug/typola.exe`，页面地址为 `http://tauri.localhost/`、`data-runtime=tauri`，再从 `设置 → 关于` 读取 `Typola` 和版本。
 - 完整分发配方需要记录包哈希、安装/解压目录、文件关联打开结果、WebView2 缺失预检和更新目标；当前运行未执行安装包、portable 包或缺失运行时模拟。
 
 ## 陷阱

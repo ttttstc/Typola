@@ -17,7 +17,7 @@
 
 ## 用 exe-CDP harness 驱动
 
-- 直接运行 `npm run verify:exe-core`，进入 `源码模式`，在 `.cm-content` 输入 `格式化文本`，用 `button[aria-label^="加粗"]` 作用于真实选区。
+- 直接运行 `npm run verify:core`，进入 `源码模式`，在 `.cm-content` 输入 `格式化文本`，用 `button[aria-label^="加粗"]` 作用于真实选区。
 - 从源码视图读取 `**格式化文本**`，再发送 `Control+z`，读取同一 `.cm-content` 确认标记消失；动作、前后 source 和截图必须成对记录。
 - 要覆盖块级格式、格式刷和右键菜单，须在独立文档中分别产生可回读的 Markdown source，不能只检查按钮存在。
 

@@ -18,7 +18,7 @@
 
 ## 用 exe-CDP harness 驱动
 
-- 运行 `npm run verify:exe-core`，用 `.find-panel` 输入查找词和替换词，读取匹配数、替换后 source 以及关闭状态。
+- 运行 `npm run verify:core`，用 `.find-panel` 输入查找词和替换词，读取匹配数、替换后 source 以及关闭状态。
 - 用 `Control+Shift+P` 等待 `.quick-open-overlay`，通过 `.quick-open-item` 选择夹具；用 `Control+G` 填写 `.goto-line-input` 后确认弹窗关闭。
 - 输入带 `# 大纲根`、`## 子标题` 的 Markdown，点击 `button[aria-label="查看大纲"]`，从 `.floating-toc-item` 读取标题；点击标题后的滚动/选区也应留下证据。
 
