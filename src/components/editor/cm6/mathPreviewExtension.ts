@@ -2,6 +2,7 @@ import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 import { type EditorState, type Extension, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { loadKatex } from '../../../services/lazyKatex';
+import { materializeDocSource } from '../../../services/markdownAnalysisService';
 import { getBlockRender } from './blockRenderCache';
 
 type MathRange = { from: number; to: number; source: string; block: boolean };
@@ -114,7 +115,7 @@ function collectDollarMathRanges(source: string, state: EditorState): MathRange[
 
 function collectBlockMathRanges(state: EditorState): MathRange[] {
   const ranges: MathRange[] = [];
-  const source = state.doc.toString();
+  const source = materializeDocSource(state);
   const tree = ensureSyntaxTree(state, state.doc.length, 1000) ?? syntaxTree(state);
   tree.iterate({ enter(node: any) {
     if (node.name !== 'FencedCode') return;
