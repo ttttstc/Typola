@@ -17,7 +17,7 @@
 
 ## 用 exe-CDP harness 驱动
 
-- 运行 `npm run verify:exe-core`，输入公式和 Mermaid fenced code，返回写作视图，等待 `.typola-cm6-math-block` 与 `.typola-cm6-mermaid`。
+- 运行 `npm run verify:core`，输入公式和 Mermaid fenced code，返回写作视图，等待 `.typola-cm6-math-block` 与 `.typola-cm6-mermaid`。
 - Mermaid 必须进入 `svg` 或 `.typola-cm6-mermaid-error` 之一；随后切回 `.cm-content`，确认原始公式和 Mermaid 语法仍存在。
 - 完整配方还要分别验证普通代码块复制、富文本 HTML 粘贴和 Mermaid 缩放/右键复制，记录剪贴板或 source 的实际结果。
 

@@ -17,7 +17,7 @@
 
 ## 用 exe-CDP harness 驱动
 
-- 运行 `npm run verify:exe-core`，点击 `设置 → 外观`，选择 `[data-theme-card="night-current"]`，读取 `html[data-theme-id]` 和 `data-color-scheme`，再确认 source 未变。
+- 运行 `npm run verify:core`，点击 `设置 → 外观`，选择 `[data-theme-card="night-current"]`，读取 `html[data-theme-id]` 和 `data-color-scheme`，再确认 source 未变。
 - 每个设置项必须通过可见控件修改，再关闭并重新打开设置读取持久化值；不能只调用设置服务或检查 React props。
 - Word/HTML 预设还要用实际预览或导出产物核对样式；当前 exe 套件只执行主题切换，其他设置和预设未执行。
 

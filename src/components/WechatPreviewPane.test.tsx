@@ -46,10 +46,12 @@ function flushPromises(): Promise<void> {
 }
 
 async function waitForPreviewCall(count: number): Promise<void> {
+  // 每次轮询间隔必须显著大于组件的 260ms 防抖(useDebouncedValue),
+  // 否则慢环境下窗口累计不够,第二次 render 的 preview call 永远等不到。
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (previewCalls.length >= count) return;
     await act(async () => {
-      await flushPromises();
+      await new Promise((resolve) => { window.setTimeout(resolve, 150); });
     });
   }
 }

@@ -195,7 +195,7 @@ const perfBaseline = {
   memory: { start: null, end: null },
 };
 
-// ============================ 基建（对齐 verify-exe-core-extended.mjs） ============================
+// ============================ 基建（对齐 verify-exe-core.mjs deep 段） ============================
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');

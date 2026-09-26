@@ -6,13 +6,13 @@
 
 - 在仓库根目录安装依赖，存在 `node_modules`、Rust stable、Tauri CLI 和 Microsoft Edge WebView2 Runtime。
 - 先构建验证二进制：`& '.\node_modules\.bin\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'`。
-- 验证 exe 为 `src-tauri\target\debug\typola.exe`；每次运行由 `verify:exe-core` 生成独立的 WebView2 profile、动态 CDP 端口和一次性夹具。
+- 验证 exe 为 `src-tauri\target\debug\typola.exe`；每次运行由统一套件 `verify-exe-core.mjs` 生成独立的 WebView2 profile、动态 CDP 端口和一次性夹具。
 - 不驱动已存在的正式 `Typola.exe`。项目启用单实例，验证配置使用独立标识，避免与正式实例冲突。
 - 核心本地配方使用本次运行创建的内存文档和夹具，不需要账号、AI CLI、外部账号或生产数据；需要原生对话框、外部 CLI 或发布物的条目必须声明其缺口。
 
 ## 驱动约定
 
-- 首选 `npm run verify:exe-core`，它直接启动 exe 并通过该 exe 的 WebView2 CDP 操作页面；`npm run verify:exe-core:extended` 是本次新增的扩展套件，补齐 exe-edit-01/02、exe-rich-01、exe-preview-01、exe-settings-01、exe-terminal-01、exe-table-02、exe-image-01（占位）、exe-failure-01（Escape 关闭）共 9 个非 AI 场景。`npm run verify:exe-editor` 是旧的单一编辑器往返聚焦脚本。`npm run dev`、`npm run test:e2e` 或 `page.goto('/')` 不能作为桌面 exe 通过证据。
+- 首选 `npm run verify:all`（统一套件单次启动 exe，smoke 段驱动核心路径 fail-fast，deep 段补齐 exe-edit-01/02、exe-rich-01、exe-preview-01、exe-settings-01、exe-terminal-01、exe-table-02、exe-image-01（占位）、exe-failure-01（Escape 关闭）及 Issue #280 P0-P2 回归矩阵并 continue-on-failure），也可用 `npm run verify:core` 只跑 smoke 层核心用例。`npm run verify:exe-editor` 是旧的单一编辑器往返聚焦脚本。`npm run dev`、`npm run test:e2e` 或 `page.goto('/')` 不能作为桌面 exe 通过证据。
 - 使用稳定的 ARIA 名称和语义句柄：`设置`、`关于`、`源码模式`、`新建文档`、`保存当前文件`、`插入表格`、`Word 预览`、`HTML 预览`、`查看大纲`、`终端`、`打开 AI 工作台` 和 `AI 产物`。
 - 输入后必须从用户可见的第二个视图读取结果；保存、导出或产物还必须在 UI 外读取实际文件；AI 还要核对可见消息和 CLI 退出状态。
 - 一次套件串行复用一个健康的 exe 实例，动作后记录 ARIA、截图和观察结果；结束时只清理本次 PID、profile 和夹具，证据目录保留。
@@ -97,4 +97,4 @@
 - [检视意见与 Diff 改稿](./review-diff.md)
 - [异常、权限与清理边界](./failure-boundaries.md)
 
-维护信息：最近核对日期为 2026-09-21；本索引与同级 15 个条目、27 个直接 exe 场景均已从当前源码入口核对。`npm run verify:exe-core` 是核心套件（18 action pass / 7 skipped，run `2026-09-21T00-40-32-476Z-34308`；同一 Markdown 表格已在 Word 与 HTML 预览中实跑确认）；最近一次 `npm run verify:exe-core:extended` 是扩展套件（**111 action: 109 passed / 2 failed / 12 skipped**，run `2026-09-21T12-49-40-897Z-41832`），P0-11 图片嵌套链接和 P1-11 中文链接的真实点击打开终态仍失败，未退回 source-preservation 断言。完整非 AI 实跑汇总：`npm run verify:exe-core:all`（`run-all-non-ai.mjs`，汇总文件 `.nimo/verification/evidence/_summary-non-ai.json`）。当前 core 无失败，extended 保留 2 个严格失败；12 个 extended skip 与 7 个 core skip 保留为真实外部前置缺口，未把原生对话框、发布物或 AI 认证路径冒充为通过。直接 exe 套件证据保存在 [`evidence/`](../evidence/) 下按运行生成的 `*-exe-core-suite` 与 `*-exe-core-extended` 目录，两套件进程、profile、runtime 夹具和 CDP 均已清理。
+维护信息：最近核对日期为 2026-09-26（统一套件合并 + 链接 probe 修复后）。本索引与同级 15 个条目、27 个直接 exe 场景均已从当前源码入口核对。原 core/extended 两套脚本已合并为统一 tier 化套件 `verify-exe-core.mjs`：smoke 段承接原 core 套件（18 action），deep 段承接原 extended 套件（删 11 个冗余后 114 action），exe 只启动一次。历史基线：原 core 套件 18 action 全过 / 7 skipped（run `2026-09-21T00-40-32-476Z-34308`）；原 extended 套件 111 action: 109 passed / 2 failed / 12 skipped（run `2026-09-21T12-49-40-897Z-41832`）。原 P0-11/P1-11 两个"失败"经 2026-09-26 排查确认为**验证 probe 假阴性**：`__TAURI_INTERNALS__.invoke` 是 writable:false 冻结属性，旧 probe 的属性 patch 从未生效；产品链路（点击 → linkOpenExtension → handleOpenMarkdownLink → openUrl）实际一直正常。修复方式：AppLayout 在 openUrl 成功后派发 `typola:link-opened` 自定义事件（唯一可测终态），套件改听该事件；同时补上"光标离开链接行再点击"的前置（inline preview 对光标行冻结为源码，widget 需光标离开才渲染）。完整非 AI 实跑汇总：`npm run verify:all`（`run-all-non-ai.mjs`，汇总文件 `.nimo/verification/evidence/_summary-non-ai.json`，按 tier 分组统计）。原生对话框、发布物或 AI 认证路径保留为真实外部前置缺口，未冒充为通过。直接 exe 套件证据保存在 [`evidence/`](../evidence/) 下按运行生成的 `*-exe-core` 目录（旧的 `*-exe-core-suite` 与 `*-exe-core-extended` 目录作为历史证据保留），进程、profile、runtime 夹具和 CDP 均已清理。

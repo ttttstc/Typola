@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // 易用性走查采集脚本：以产品/交互专家视角，对真实 exe 做全状态截图走查。
-// 复用 verify-exe-core-extended.mjs 的 CDP harness 启动/清理逻辑，但不做功能断言，
+// 复用 verify-exe-core.mjs 的 CDP harness 启动/清理逻辑，但不做功能断言，
 // 每个状态只截图 + aria 快照，供后续人工(Read 工具)逐张评审。
 // 调用：`node .nimo/verification/scripts/ux-audit-capture.mjs`
 
