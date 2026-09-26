@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useDeferredValue, useEffect, useImperativeHand
 import type { PreviewScrollHandle } from '../types/previewScroll';
 import { ClipboardCopy, FileCode2, FileOutput, LoaderCircle, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { translate } from '../services/i18n';
 import {
   listEnabledHtmlExportPresets,
@@ -40,7 +41,10 @@ export const WechatPreviewPane = forwardRef<PreviewScrollHandle, WechatPreviewPa
   const settings = useSettings();
   const mermaidTheme = getMermaidTheme(settings.themeId);
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
-  const deferredSource = useDeferredValue(source);
+  // 260ms 防抖 + useDeferredValue:打字期间不再每键触发全文 unified 流水线
+  // (与 WordPaperPreviewPane 同口径;useDeferredValue 只让渲染不阻塞输入,
+  //  挡不住渲染本身的 CPU 成本)
+  const deferredSource = useDebouncedValue(useDeferredValue(source), 260);
   const renderRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 

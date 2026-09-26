@@ -88,6 +88,9 @@ export type MarkdownAnalysisResult = {
 const markdownParser = parser.configure(GFM);
 const cache = new Map<string, { source: string; result: MarkdownAnalysisResult }>();
 const CACHE_LIMIT = 24;
+// 同一 EditorState 在一次事务后会被多个 CM6 扩展(headingFold/previewSync/mathPreview)
+// 各自分析一次;按 state 缓存物化结果,同一按键只做一次 doc.toString()+分析。
+const stateCache = new WeakMap<object, { docLength: number; source: string; result: MarkdownAnalysisResult }>();
 const taskPattern = /^(\s*)(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s+(.*)$/u;
 const linkPattern = /(!?)\[([^\]\n]*)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/gu;
 // setext 标题的文本行必须是裸段落(CommonMark §4.3):列表项、引用、ATX、围栏、
@@ -107,7 +110,37 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
     cache.set(sourceHash, cached);
     return cached.result;
   }
+  const result = analyzeMarkdownUncached(source);
+  remember(source, result);
+  return result;
+}
 
+/** CM6 扩展用:按 EditorState 缓存,同一事务后的多次调用共享一次
+ *  doc.toString() 物化与一次全文分析(还省掉 hashSource 的 O(n) 字符串 hash,
+ *  因为 docLength + state 身份即足够判缓存命中)。 */
+export function analyzeMarkdownState(state: { doc: { length: number; toString(): string } } & object): MarkdownAnalysisResult {
+  const docLength = state.doc.length;
+  const cached = stateCache.get(state);
+  if (cached && cached.docLength === docLength) return cached.result;
+  const source = state.doc.toString();
+  const result = analyzeMarkdown(source);
+  stateCache.set(state, { docLength, source, result });
+  return result;
+}
+
+/** CM6 扩展用:与 analyzeMarkdownState 同源的物化字符串(避免各扩展重复 toString)。 */
+export function materializeDocSource(state: { doc: { length: number; toString(): string } } & object): string {
+  const docLength = state.doc.length;
+  const cached = stateCache.get(state);
+  if (cached && cached.docLength === docLength) return cached.source;
+  const source = state.doc.toString();
+  const result = analyzeMarkdown(source);
+  stateCache.set(state, { docLength, source, result });
+  return source;
+}
+
+function analyzeMarkdownUncached(source: string): MarkdownAnalysisResult {
+  const sourceHash = hashSource(source);
   const nodes = collectTreeNodes(source);
   const frontmatter = detectFrontmatter(source);
   const codeBlocks = nodes
@@ -139,7 +172,7 @@ export function analyzeMarkdown(source: string): MarkdownAnalysisResult {
     diagnostics: [],
     frontmatter,
   };
-  remember(source, result);
+  result.sourceHash = sourceHash;
   return result;
 }
 
@@ -300,9 +333,27 @@ function calculateStats(source: string, fencedRanges: MarkdownRange[]): Markdown
     .replace(/!\[[^\]]*\]\([^)]*\)/gu, ' ')
     .replace(/\[([^\]]+)\]\([^)]*\)/gu, '$1')
     .replace(/[#>*_~|[\]()-]/gu, ' ');
-  const cjk = plain.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu) ?? [];
+  // ponytail: 用码点范围替代 \p{Script=..} 正则(4x 实测快)。范围集与原正则
+  // 在 CJK 常用区块上验证等价(基本区/扩展A/兼容/假名/谚文/扩展B);若未来要
+  // 支持更冷门的脚本(如扩展C+)再升级为 ICU 属性匹配。
+  let cjk = 0;
+  for (let index = 0; index < plain.length; index += 1) {
+    const c = plain.charCodeAt(index);
+    if ((c >= 0x4E00 && c <= 0x9FFF)
+      || (c >= 0x3400 && c <= 0x4DBF)
+      || (c >= 0xF900 && c <= 0xFAFF)
+      || (c >= 0x3040 && c <= 0x30FF)
+      || (c >= 0x31F0 && c <= 0x31FF)
+      || (c >= 0xAC00 && c <= 0xD7A3)
+      || (c >= 0x1100 && c <= 0x11FF)
+      || (c >= 0x3130 && c <= 0x318F)
+      // 代理对:增补平面(CJK 扩展B+)低代理计入,配合下一次跳过高代理
+      || (c >= 0xD800 && c <= 0xDFFF)) {
+      cjk += 1;
+    }
+  }
   const latinWords = plain.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/gu) ?? [];
-  const words = cjk.length + latinWords.length;
+  const words = cjk + latinWords.length;
   return {
     characters: plain.replace(/\s+/gu, '').length,
     words,

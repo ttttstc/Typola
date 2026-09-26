@@ -100,15 +100,15 @@ pub mod windows_runtime {
     fn has_webview2_runtime() -> bool {
         [
             (
-                "HKCU\\Software\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                r"HKCU\Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
                 "pv",
             ),
             (
-                "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                r"HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
                 "pv",
             ),
             (
-                "HKLM\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+                r"HKLM\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
                 "pv",
             ),
         ]
@@ -116,7 +116,54 @@ pub mod windows_runtime {
         .any(|(key, value)| registry_value_exists(key, value))
     }
 
+    /// 直接读注册表 API(进程内,微秒级),替代每次 spawn reg.exe(3 次串行约 150ms)。
+    /// 兼容保留 reg.exe 路径:API 失败(权限等)时回退,确保检测永不漏报。
     fn registry_value_exists(key: &str, value: &str) -> bool {
+        use windows_sys::Win32::System::Registry;
+        use std::ffi::c_void;
+
+        let (hive, subkey) = match key.split_once('\\') {
+            Some(("HKCU", rest)) => (Registry::HKEY_CURRENT_USER, rest),
+            Some(("HKLM", rest)) => (Registry::HKEY_LOCAL_MACHINE, rest),
+            _ => return registry_value_exists_via_reg(key, value),
+        };
+
+        let mut hkey: *mut c_void = std::ptr::null_mut();
+        // KEY_QUERY_VALUE 足够读 pv;WOW6432Node 由系统按视图解析,无需显式 KEY_WOW64_32KEY
+        let open_result = unsafe {
+            Registry::RegOpenKeyExW(hive, to_wide(subkey).as_ptr(), 0, Registry::KEY_QUERY_VALUE, &mut hkey)
+        };
+        if open_result != 0 {
+            return registry_value_exists_via_reg(key, value);
+        }
+        let mut value_words = [0u16; 64];
+        let mut value_size = (value_words.len() * 2) as u32;
+        let mut value_type = 0;
+        let query_result = unsafe {
+            Registry::RegQueryValueExW(
+                hkey,
+                to_wide(value).as_ptr(),
+                std::ptr::null_mut(),
+                &mut value_type,
+                value_words.as_mut_ptr().cast::<u8>(),
+                &mut value_size,
+            )
+        };
+        unsafe { Registry::RegCloseKey(hkey) };
+        if query_result != 0 {
+            return registry_value_exists_via_reg(key, value);
+        }
+        // pv 是 REG_SZ,按 UTF-16 解码后检查版本号非 0.0.0.0(与 reg.exe 输出判定一致)
+        let readable_words = (value_size as usize / 2).min(value_words.len());
+        let decoded = String::from_utf16_lossy(&value_words[..readable_words]);
+        decoded.trim_end_matches('\0').split('.').any(|part| part != "0")
+    }
+
+    fn to_wide(text: &str) -> Vec<u16> {
+        text.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    fn registry_value_exists_via_reg(key: &str, value: &str) -> bool {
         Command::new("reg")
             .args(["query", key, "/v", value])
             .creation_flags(CREATE_NO_WINDOW)
@@ -235,7 +282,7 @@ struct TerminalSession {
     killer: Box<dyn ChildKiller + Send + Sync>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentDetectRequest {
     provider: Option<AgentProvider>,
@@ -504,13 +551,15 @@ struct AgentSessionStartResult {
     provider: AgentProvider,
 }
 
+/// 批量版:16ms 窗口内攒行合并 emit,stream-json 高频输出时把每行一次 IPC
+/// 收敛为每帧一次(前端 onAgentStdout 拆回逐行,消费者不变)。
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct AgentStdoutPayload {
+struct AgentStdoutBatchPayload {
     run_id: String,
     conversation_id: String,
     session_uuid: String,
-    line: String,
+    lines: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -632,13 +681,17 @@ fn open_path_external(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn read_opened_document(path: String) -> Result<Vec<u8>, String> {
-    let path = PathBuf::from(path);
-    if !is_openable_document_path(&path) {
-        return Err("unsupported document type".into());
-    }
-
-    std::fs::read(&path).map_err(|error| format!("failed to read document: {error}"))
+async fn read_opened_document(path: String) -> Result<Vec<u8>, String> {
+    // spawn_blocking:同步 fs 读挪出主线程(Tauri 2 同步命令占主线程,大文件会卡 UI)
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = PathBuf::from(path);
+        if !is_openable_document_path(&path) {
+            return Err("unsupported document type".into());
+        }
+        std::fs::read(&path).map_err(|error| format!("failed to read document: {error}"))
+    })
+    .await
+    .map_err(|error| format!("read task failed: {error}"))?
 }
 
 fn document_hash(bytes: &[u8]) -> String {
@@ -814,25 +867,46 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 #[tauri::command]
-fn stat_opened_document(path: String) -> Result<DocumentFingerprint, String> {
-    let path = PathBuf::from(path);
-    if !is_openable_document_path(&path) {
-        return Err("unsupported document type".into());
-    }
-    document_fingerprint(&path)
+async fn stat_opened_document(path: String) -> Result<DocumentFingerprint, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = PathBuf::from(path);
+        if !is_openable_document_path(&path) {
+            return Err("unsupported document type".into());
+        }
+        document_fingerprint(&path)
+    })
+    .await
+    .map_err(|error| format!("stat task failed: {error}"))?
 }
 
 #[tauri::command]
-fn write_opened_document(request: WriteOpenedDocumentRequest) -> Result<DocumentFingerprint, String> {
-    let path = PathBuf::from(&request.path);
-    if !is_writable_document_path(&path) {
-        return Err("unsupported document type".into());
-    }
+async fn write_opened_document(request: WriteOpenedDocumentRequest) -> Result<DocumentFingerprint, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = PathBuf::from(&request.path);
+        if !is_writable_document_path(&path) {
+            return Err("unsupported document type".into());
+        }
 
-    let bytes = encode_document(&request)?;
-    atomic_write(&path, &bytes)
-        .map_err(|error| format!("failed to atomically write document: {error}"))?;
-    document_fingerprint(&path)
+        let bytes = encode_document(&request)?;
+        atomic_write(&path, &bytes)
+            .map_err(|error| format!("failed to atomically write document: {error}"))?;
+        // 写后指纹:直接用刚写入的 bytes 算 hash+stat,不再整文件读回
+        // (旧实现 document_fingerprint 会 fs::read 一遍刚写完的文件,大文档保存翻倍 IO)
+        let metadata = std::fs::metadata(&path)
+            .map_err(|error| format!("failed to stat document: {error}"))?;
+        let modified_at = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map(|duration| duration.as_millis());
+        Ok(DocumentFingerprint {
+            size: metadata.len(),
+            modified_at,
+            hash: document_hash(&bytes),
+        })
+    })
+    .await
+    .map_err(|error| format!("write task failed: {error}"))?
 }
 
 // v1:仅列目录下一层的 Markdown / HTML / Word 文档(flat,不递归,跳过隐藏文件 / node_modules / dist / target / .git 与子目录)。
@@ -1001,8 +1075,16 @@ fn upload_image_via_command(request: UploadImageRequest) -> Result<UploadImageRe
 }
 
 #[tauri::command]
-fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
-    detect_agent_runtime(request)
+async fn agent_detect(request: AgentDetectRequest) -> AgentDetectResult {
+    // spawn_blocking:detect_agent_runtime 内含最长 5s 的 wait_timeout 子进程探测,
+    // 绝不能占主线程(同步版会让整个 UI 冻住 5s)
+    match tauri::async_runtime::spawn_blocking(move || detect_agent_runtime(request)).await {
+        Ok(result) => result,
+        Err(error) => {
+            log::warn!("agent detect task failed: {error}");
+            detect_agent_runtime(AgentDetectRequest::default())
+        }
+    }
 }
 
 #[tauri::command]
@@ -1051,18 +1133,23 @@ fn archive_artifact_to_workspace(request: ArchiveArtifactRequest) -> Result<Stri
 }
 
 #[tauri::command]
-fn scan_artifacts(request: ScanArtifactsRequest) -> Result<Vec<ScannedArtifactFile>, String> {
-    let output_root = PathBuf::from(request.output_root);
-    if !output_root.exists() {
-        return Ok(Vec::new());
-    }
-    let output_root = canonical_output_dir(&output_root)?;
-    let mut files = Vec::new();
-    scan_artifact_files(&output_root, 0, &mut files)?;
-    // 已归档制品的主文件已 move 到工作区,文件驱动扫描找不到,按 manifest 补回,
-    // 让制品中心能保留「已归档」卡片(点击打开的是工作区里的新路径)。
-    collect_archived_manifests(&output_root, 0, &mut files)?;
-    Ok(files)
+async fn scan_artifacts(request: ScanArtifactsRequest) -> Result<Vec<ScannedArtifactFile>, String> {
+    // spawn_blocking:递归扫盘(深度5)是纯 IO,挪出主线程避免卡 UI
+    tauri::async_runtime::spawn_blocking(move || {
+        let output_root = PathBuf::from(request.output_root);
+        if !output_root.exists() {
+            return Ok(Vec::new());
+        }
+        let output_root = canonical_output_dir(&output_root)?;
+        let mut files = Vec::new();
+        scan_artifact_files(&output_root, 0, &mut files)?;
+        // 已归档制品的主文件已 move 到工作区,文件驱动扫描找不到,按 manifest 补回,
+        // 让制品中心能保留「已归档」卡片(点击打开的是工作区里的新路径)。
+        collect_archived_manifests(&output_root, 0, &mut files)?;
+        Ok(files)
+    })
+    .await
+    .map_err(|error| format!("scan task failed: {error}"))?
 }
 
 fn collect_archived_manifests(
@@ -1653,45 +1740,49 @@ fn write_mcp_config(request: McpConfigWriteRequest) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_directory_entries(
+async fn list_directory_entries(
     request: DirectoryListRequest,
 ) -> Result<Vec<DirectoryEntryPayload>, String> {
-    let root = PathBuf::from(request.path);
-    if !root.is_dir() {
-        return Err("directory not found".into());
-    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = PathBuf::from(request.path);
+        if !root.is_dir() {
+            return Err("directory not found".into());
+        }
 
-    let mut entries = Vec::new();
-    for entry in
-        std::fs::read_dir(&root).map_err(|error| format!("failed to read directory: {error}"))?
-    {
-        let entry = entry.map_err(|error| format!("failed to read directory entry: {error}"))?;
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.')
-            || matches!(name.as_str(), "node_modules" | "dist" | "target" | ".git")
+        let mut entries = Vec::new();
+        for entry in
+            std::fs::read_dir(&root).map_err(|error| format!("failed to read directory: {error}"))?
         {
-            continue;
+            let entry = entry.map_err(|error| format!("failed to read directory entry: {error}"))?;
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.')
+                || matches!(name.as_str(), "node_modules" | "dist" | "target" | ".git")
+            {
+                continue;
+            }
+            let is_dir = path.is_dir();
+            let is_supported = is_dir || is_openable_document_path(&path);
+            if !is_supported {
+                continue;
+            }
+            entries.push(DirectoryEntryPayload {
+                name,
+                path: path.to_string_lossy().to_string(),
+                is_dir,
+                is_supported,
+            });
         }
-        let is_dir = path.is_dir();
-        let is_supported = is_dir || is_openable_document_path(&path);
-        if !is_supported {
-            continue;
-        }
-        entries.push(DirectoryEntryPayload {
-            name,
-            path: path.to_string_lossy().to_string(),
-            is_dir,
-            is_supported,
-        });
-    }
 
-    entries.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
-    Ok(entries)
+        entries.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        Ok(entries)
+    })
+    .await
+    .map_err(|error| format!("list task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -1717,6 +1808,11 @@ fn watch_opened_document(
     let emit_app = app.clone();
     let emit_path = watch_key.clone();
     let watched_path = path.clone();
+    // 防抖:atomic_write 的 temp 写入+rename+目录 sync 会在极短时间内触发
+    // modify(rename)+modify(rename) 连发,前端每个事件都要 stat+指纹比对;
+    // 120ms 合并窗口把连发收敛为一次 emit(前端 stat 时文件已是最终态)。
+    let pending = std::sync::Arc::new(std::sync::Mutex::new(None::<std::time::Instant>));
+    let pending_for_cb = pending.clone();
     let mut watcher = RecommendedWatcher::new(
         move |result: notify::Result<Event>| {
             let Ok(event) = result else {
@@ -1733,12 +1829,31 @@ fn watch_opened_document(
             {
                 return;
             }
-            let _ = emit_app.emit(
-                "file-changed",
-                FileChangedPayload {
-                    path: emit_path.clone(),
-                },
-            );
+            // 已有待发事件则跳过(窗口内合并);否则登记时间并在 120ms 后发出
+            let mut slot = match pending_for_cb.lock() {
+                Ok(slot) => slot,
+                Err(_) => return,
+            };
+            if slot.is_some() {
+                return;
+            }
+            *slot = Some(std::time::Instant::now());
+            drop(slot);
+            let app = emit_app.clone();
+            let path = emit_path.clone();
+            let pending = pending_for_cb.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(120));
+                if let Ok(mut slot) = pending.lock() {
+                    *slot = None;
+                }
+                let _ = app.emit(
+                    "file-changed",
+                    FileChangedPayload {
+                        path: path.clone(),
+                    },
+                );
+            });
         },
         Config::default(),
     )
@@ -2808,15 +2923,33 @@ fn spawn_agent_stdout_forwarder(
 ) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
+        let mut batch: Vec<String> = Vec::new();
+        let mut last_flush = std::time::Instant::now();
         for line in reader.lines() {
             let Ok(line) = line else { break };
+            batch.push(line);
+            // 16ms(一帧)或 64 行即刷:交互延迟无感,IPC 次数收敛 10-100x
+            if batch.len() >= 64 || last_flush.elapsed() >= std::time::Duration::from_millis(16) {
+                let _ = app.emit(
+                    "agent-stdout",
+                    AgentStdoutBatchPayload {
+                        run_id: run_id.clone(),
+                        conversation_id: conversation_id.clone(),
+                        session_uuid: session_uuid.clone(),
+                        lines: std::mem::take(&mut batch),
+                    },
+                );
+                last_flush = std::time::Instant::now();
+            }
+        }
+        if !batch.is_empty() {
             let _ = app.emit(
                 "agent-stdout",
-                AgentStdoutPayload {
-                    run_id: run_id.clone(),
-                    conversation_id: conversation_id.clone(),
-                    session_uuid: session_uuid.clone(),
-                    line,
+                AgentStdoutBatchPayload {
+                    run_id,
+                    conversation_id,
+                    session_uuid,
+                    lines: batch,
                 },
             );
         }
@@ -3777,7 +3910,7 @@ mod tests {
         let path = temp_path("opened.md");
         std::fs::write(&path, b"# opened").unwrap();
 
-        let bytes = read_opened_document(path.to_string_lossy().to_string()).unwrap();
+        let bytes = tauri::async_runtime::block_on(read_opened_document(path.to_string_lossy().to_string())).unwrap();
 
         assert_eq!(bytes, b"# opened");
         let _ = std::fs::remove_file(path);
@@ -3801,7 +3934,7 @@ mod tests {
         let path = temp_path("secret.txt");
         std::fs::write(&path, b"secret").unwrap();
 
-        let error = read_opened_document(path.to_string_lossy().to_string()).unwrap_err();
+        let error = tauri::async_runtime::block_on(read_opened_document(path.to_string_lossy().to_string())).unwrap_err();
 
         assert!(error.contains("unsupported document type"));
         let _ = std::fs::remove_file(path);
@@ -3812,13 +3945,13 @@ mod tests {
         let path = temp_path("saved.html");
         std::fs::write(&path, b"before").unwrap();
 
-        write_opened_document(WriteOpenedDocumentRequest {
+        tauri::async_runtime::block_on(write_opened_document(WriteOpenedDocumentRequest {
             path: path.to_string_lossy().to_string(),
             content: "<h1>after</h1>".into(),
             encoding: "UTF-8".into(),
             has_bom: false,
             line_ending: "LF".into(),
-        })
+        }))
         .unwrap();
 
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "<h1>after</h1>");
@@ -3830,13 +3963,13 @@ mod tests {
         let path = temp_path("saved.docx");
         std::fs::write(&path, b"before").unwrap();
 
-        let error = write_opened_document(WriteOpenedDocumentRequest {
+        let error = tauri::async_runtime::block_on(write_opened_document(WriteOpenedDocumentRequest {
             path: path.to_string_lossy().to_string(),
             content: "after".into(),
             encoding: "UTF-8".into(),
             has_bom: false,
             line_ending: "LF".into(),
-        })
+        }))
         .unwrap_err();
 
         assert!(error.contains("unsupported document type"));
@@ -3847,13 +3980,13 @@ mod tests {
     fn write_opened_document_preserves_encoding_bom_and_line_endings() {
         for encoding in ["GBK", "GB18030"] {
             let path = temp_path(&format!("saved-{encoding}.md"));
-            write_opened_document(WriteOpenedDocumentRequest {
+            tauri::async_runtime::block_on(write_opened_document(WriteOpenedDocumentRequest {
                 path: path.to_string_lossy().to_string(),
                 content: "中文\n第二行".into(),
                 encoding: encoding.into(),
                 has_bom: false,
                 line_ending: "CRLF".into(),
-            })
+            }))
             .unwrap();
 
             let bytes = std::fs::read(&path).unwrap();
@@ -3867,13 +4000,13 @@ mod tests {
         }
 
         let path = temp_path("saved-bom.md");
-        write_opened_document(WriteOpenedDocumentRequest {
+        tauri::async_runtime::block_on(write_opened_document(WriteOpenedDocumentRequest {
             path: path.to_string_lossy().to_string(),
             content: "第一行\n第二行".into(),
             encoding: "UTF-8".into(),
             has_bom: true,
             line_ending: "CRLF".into(),
-        })
+        }))
         .unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[..3], &[0xef, 0xbb, 0xbf]);
@@ -3938,14 +4071,14 @@ mod tests {
     #[test]
     fn agent_detect_reports_invalid_custom_path_without_spawn() {
         let missing = temp_path("missing-claude.cmd");
-        let result = agent_detect(AgentDetectRequest {
+        let result = tauri::async_runtime::block_on(agent_detect(AgentDetectRequest {
             provider: Some(AgentProvider::Claude),
             agent_path: Some(missing.to_string_lossy().to_string()),
             runtime_id: None,
             custom_path: None,
             default_command: None,
             version_args: None,
-        });
+        }));
 
         assert!(!result.available);
         assert_eq!(result.runtime_id, AgentProvider::Claude);
@@ -4609,12 +4742,12 @@ mod tests {
         std::fs::write(&artifact, b"content").unwrap();
         std::fs::write(&manifest, r#"{"id":"a","title":"Draft","kind":"markdown","status":"done","primaryFile":"draft.md","createdAt":"2026-06-27T00:00:00.000Z","source":{"type":"unknown"}}"#).unwrap();
 
-        let result = scan_artifacts(ScanArtifactsRequest {
+        let result = tauri::async_runtime::block_on(scan_artifacts(ScanArtifactsRequest {
             output_root: workspace
                 .join(".typola-output")
                 .to_string_lossy()
                 .to_string(),
-        })
+        }))
         .unwrap();
 
         assert_eq!(result.len(), 1);
@@ -4638,9 +4771,9 @@ mod tests {
         let workspace = temp_path("ws-scan-reject");
         std::fs::create_dir_all(&workspace).unwrap();
 
-        let result = scan_artifacts(ScanArtifactsRequest {
+        let result = tauri::async_runtime::block_on(scan_artifacts(ScanArtifactsRequest {
             output_root: workspace.to_string_lossy().to_string(),
-        });
+        }));
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains(".typola-output"));
@@ -5060,9 +5193,9 @@ mod tests {
         )
         .unwrap();
 
-        let files = scan_artifacts(ScanArtifactsRequest {
+        let files = tauri::async_runtime::block_on(scan_artifacts(ScanArtifactsRequest {
             output_root: output_root.to_string_lossy().to_string(),
-        })
+        }))
         .unwrap();
 
         assert_eq!(files.len(), 1, "archived manifest 应被补回");

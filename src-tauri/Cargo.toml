@@ -41,4 +41,11 @@ tempfile = "3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 webview2-com = "0.38"
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Storage_FileSystem"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Storage_FileSystem", "Win32_System_Registry"] }
+
+# 性能:链接期优化+单 codegen unit+strip,启动更快、二进制更小(23.9MB→~15MB);
+# 代价是 release 链接时间变长(增量编译也走 lto thin,可接受)
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

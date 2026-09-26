@@ -9,7 +9,7 @@ import {
   FolderOpen,
   NotebookText,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   listWorkspaceEntries,
   pickWorkspaceDirectory,
@@ -61,7 +61,7 @@ function getFileIconMeta(name: string): { Icon: typeof FileText; className: stri
   return { Icon: FileText, className: '' };
 }
 
-function TreeNode({
+function TreeNodeInner({
   entry,
   depth,
   activePath,
@@ -288,6 +288,10 @@ function TreeNode({
     </div>
   );
 }
+
+// memo:打字期 AppLayout 每键重渲染,树节点 props(entry/dirtyPaths 等)不变时跳过;
+// dirtyPaths/agentChangedPaths 必须是稳定引用(上层 useMemo),否则 memo 失效
+const TreeNode = memo(TreeNodeInner);
 
 export function FileTreePanel({
   rootPath,

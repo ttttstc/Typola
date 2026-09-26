@@ -1,7 +1,7 @@
-import { computeSizes, readLedger, compare } from "./_lib.mjs";
+import { computeExactSizes, computeLogicalSizes, readLedger, compare } from "./_lib.mjs";
 
 const ledger = readLedger();
-const sizes = computeSizes();
+const sizes = computeExactSizes();
 const { deltas, ledgerTotal, currentTotal } = compare(sizes, ledger);
 
 console.log("| chunk | before (kB) | after (kB) | delta (kB) |");

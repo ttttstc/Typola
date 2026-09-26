@@ -16,7 +16,7 @@
 import { StateEffect, StateField, Transaction, type EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { extractAtxHeadingText, foldKey, type FoldKey } from '../../../services/headingFoldService';
-import { analyzeMarkdown } from '../../../services/markdownAnalysisService';
+import { analyzeMarkdownState } from '../../../services/markdownAnalysisService';
 
 const FOLD_TOGGLE_CLASS = 'typola-heading-fold-toggle';
 const FOLDED_LINE_CLASS = 'typola-cm-line-folded';
@@ -49,7 +49,7 @@ type HeadingFoldOptions = {
 type HeadingInfo = { from: number; level: number; text: string; sectionIndex: number };
 
 function collectHeadings(state: EditorState): HeadingInfo[] {
-  return analyzeMarkdown(state.doc.toString()).headings.map((heading, sectionIndex) => ({
+  return analyzeMarkdownState(state).headings.map((heading, sectionIndex) => ({
     from: heading.from,
     level: heading.level,
     text: heading.text || extractAtxHeadingText(state.doc.sliceString(heading.from, heading.to)),

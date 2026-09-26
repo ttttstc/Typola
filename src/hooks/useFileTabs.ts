@@ -1023,11 +1023,13 @@ export function useFileTabs({
     setTransientMessage('保留你的版本。可在保存前对比。');
   }, [setTransientMessage]);
 
-  const dirtyPaths = useMemo(() => new Set(
-    openTabs
-      .filter((tab) => tab.file.dirty && tab.file.path)
-      .map((tab) => tab.file.path),
-  ), [openTabs]);
+  // dirtyPaths 的 memo 依赖用序列化 key(而非 openTabs 引用):打字期 openTabs 每键
+  // 换引用,但 dirty 集合通常不变;序列化 key 相同则复用旧 Set,让 TreeNode memo 生效。
+  const dirtyKey = openTabs
+    .filter((tab) => tab.file.dirty && tab.file.path)
+    .map((tab) => tab.file.path)
+    .join(' ');
+  const dirtyPaths = useMemo(() => new Set(dirtyKey ? dirtyKey.split(' ') : []), [dirtyKey]);
 
   const shouldShowTabbar = openTabs.length > 1 || (openTabs.length === 1 && activeTabId !== '');
 

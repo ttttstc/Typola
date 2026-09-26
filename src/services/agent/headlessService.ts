@@ -39,7 +39,19 @@ export function cancelAgentSession(runId: string): Promise<void> {
 }
 
 export function onAgentStdout(handler: (payload: AgentStdoutPayload) => void): Promise<UnlistenFn> {
-  return listen<AgentStdoutPayload>('agent-stdout', (event) => handler(event.payload));
+  // Rust 侧按 16ms/64 行批量 emit(同一事件名),这里拆回逐行回调,消费者无感
+  type BatchPayload = AgentStdoutPayload & { lines?: string[] };
+  return listen<BatchPayload>('agent-stdout', (event) => {
+    const payload = event.payload;
+    if (Array.isArray(payload.lines) && payload.lines.length > 0) {
+      const { lines: _lines, ...single } = payload;
+      for (const line of payload.lines) {
+        handler({ ...single, line });
+      }
+      return;
+    }
+    handler(payload);
+  });
 }
 
 export function onAgentExit(handler: (payload: AgentExitPayload) => void): Promise<UnlistenFn> {
