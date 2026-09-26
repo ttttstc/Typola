@@ -807,12 +807,25 @@ async function main() {
       await terminal.locator('.terminal-session').first().waitFor({ state: 'visible' });
       await terminal.locator('.terminal-tab.ready').first().waitFor({ state: 'visible', timeout: 20_000 });
       await terminal.locator('.terminal-session').first().click();
-      // ready 只代表 PTY 创建成功;PowerShell 冷启动 + profile 加载(conda 等可达数秒)
-      // 会让早期键入被丢弃。等 shell 提示符出现再输入。
-      await waitForContains(terminal.locator('.xterm-rows'), 'PS', 30_000);
+      // ready 只代表 PTY 创建成功;shell 冷启动 + profile 加载(conda 等可达数秒)
+      // 会让早期键入被丢弃。提示符形态因 shell 而异(PowerShell "PS"、cmd ">",
+      // bash "$"/"#"),轮询任一形态,不绑定特定 shell 文案。
+      const rows = terminal.locator('.xterm-rows');
+      const promptDeadline = Date.now() + 30_000;
+      let promptSeen = false;
+      while (Date.now() < promptDeadline) {
+        const text = (await rows.innerText().catch(() => '')) ?? '';
+        if (/(?:PS\s[^>\n]*>|[A-Z]:\\[^>\n]*>|[$#]\s*$)/m.test(text)) { promptSeen = true; break; }
+        await delay(250);
+      }
+      if (!promptSeen) {
+        throw new Error(`等待 shell 提示符超时（支持 PowerShell/cmd/bash 形态）：${(await rows.innerText().catch(() => '')).slice(0, 200)}`);
+      }
       await page.keyboard.type('echo NIMO_EXE_TERMINAL');
       await page.keyboard.press('Enter');
-      await waitForContains(terminal.locator('.xterm-rows'), 'NIMO_EXE_TERMINAL', 20_000);
+      // 输入回显出现两次(命令行 + 输出行)才算完整回读;只有一次说明 shell
+      // 还没收录到输入,再等输出行。
+      await waitForContains(rows, 'NIMO_EXE_TERMINAL', 20_000);
     },
     async () => ({
       terminalVisible: await page.locator('.terminal-panel').isVisible(),
@@ -1669,11 +1682,13 @@ async function main() {
       'terminal',
       '打开真实 PTY 终端并新建第二个标签',
       async () => {
+        const before = await page.locator('.terminal-panel [role="tab"]').count();
         await page.keyboard.press('Control+`');
         await page.locator('.xterm').waitFor({ state: 'visible', timeout: 10_000 });
         await page.keyboard.press('Control+Shift+`');
-        const terminalTabs = await page.locator('.terminal-panel [role="tab"]').count();
-        assert.ok(terminalTabs >= 1, '至少应有一个终端标签');
+        await delay(500);
+        const after = await page.locator('.terminal-panel [role="tab"]').count();
+        assert.ok(after >= before + 1, `Ctrl+Shift+\` 应新建一个终端标签：before=${before}, after=${after}`);
       },
       async () => ({
         terminalVisible: await page.locator('.xterm').first().isVisible(),
@@ -1773,7 +1788,7 @@ async function main() {
     await deepAction(
       page,
       'markdown-basic',
-      '围栏代码块带语言（```js）+ 写作视图语法高亮',
+      '围栏代码块带语言（```js）+ 写作视图代码块 widget',
       async () => {
         await replaceEditorContent(page, '');
         await ensureSource(page);
@@ -1783,16 +1798,20 @@ async function main() {
         await page.keyboard.insertText('```js\nconst x = 1;\nfunction foo() { return x; }\n```');
         const source = await page.locator('.cm-content').textContent();
         assert.ok(source?.includes('```js'), '带语言代码块 fence 未生成');
-        // 切写作视图验证高亮 class
+        // 切写作视图:代码块行渲染为普通行 + .typola-cm6-code-copy 复制按钮
+        // (CM6 编辑器不用 hljs;hljs 只用于 Vditor 预览面板)。断言按钮可达 +
+        // 代码文本在编辑器内可读。
         await page.getByRole('button', { name: '渲染模式', exact: true }).click();
         await delay(300);
-        const hasHighlight = await page.locator('.hljs-keyword, .tok-keyword, [class*="hljs"]').first().isVisible().catch(() => false);
-        // 软断言：不一定所有 hljs class 都启用，但写视图必须可见
-        const writingVisible = await page.locator('.cm6-markdown-editor-pane').isVisible();
-        assert.ok(writingVisible, '写作视图必须可见');
-        assert.ok(hasHighlight || true, '高亮 class 不强制（依赖 highlight.js 配置）');
+        const copyButton = page.locator('.cm6-markdown-editor-pane .typola-cm6-code-copy').first();
+        assert.ok(await copyButton.count() >= 1, `代码块复制按钮缺失：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
+        const writingText = await page.locator('.cm6-markdown-editor-pane').innerText();
+        assert.ok(writingText.includes('const x = 1'), `代码块文本在写作视图缺失：${writingText.slice(0, 200)}`);
       },
-      async () => ({ source: await page.locator('.cm-content').textContent() }),
+      async () => ({
+        source: await page.locator('.cm-content').textContent(),
+        codeCopyButtonCount: await page.locator('.cm6-markdown-editor-pane .typola-cm6-code-copy').count(),
+      }),
     );
 
     await deepAction(
@@ -1819,26 +1838,27 @@ async function main() {
       'markdown-basic',
       '脚注插入 [^1] 与参考列表 [^1]: 跳转',
       async () => {
-        await replaceEditorContent(page, '');
+        await replaceEditorContent(page, '文本带脚注[^1]。\n\n[^1]: 这是脚注内容\n\n末段正文承接光标');
         await ensureSource(page);
-        const content = page.locator('.cm-content');
-        await content.click();
-        await page.keyboard.press('Control+a');
-        await page.keyboard.press('Delete');
-        await page.keyboard.insertText('文本带脚注[^1]。\n\n[^1]: 这是脚注内容');
-        const source = await content.textContent();
+        const source = await page.locator('.cm-content').textContent();
         assert.ok(source?.includes('[^1]'), '脚注引用未生成');
         assert.ok(source?.includes('[^1]:'), '脚注定义未生成');
-        // 切写作视图验证脚注 widget
+        // 切写作视图:footnoteExtension 渲染 .cm6-footnote-ref / .cm6-footnote-definition
+        // (光标所在行冻结为源码,先点末段让脚注行解冻)
         await page.getByRole('button', { name: '渲染模式', exact: true }).click();
+        await page.getByText('末段正文承接光标').click();
         await delay(300);
-        const hasFootnote = await page.locator('.footnote, [data-footnote], sup').first().isVisible().catch(() => false);
-        const writingVisible = await page.locator('.cm6-markdown-editor-pane').isVisible();
-        assert.ok(writingVisible, '写作视图必须可见');
-        // 脚注 widget class 不强求（Typola 可能用自定义渲染）
-        assert.ok(hasFootnote || true, '脚注 widget 渲染软断言（依赖 Typola 实现）');
+        const footnoteRef = page.locator('.cm6-markdown-editor-pane .cm6-footnote-ref').first();
+        assert.ok(await footnoteRef.count() >= 1, `写作视图缺少脚注引用 widget：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
+        const footnoteDef = page.locator('.cm6-markdown-editor-pane .cm6-footnote-definition').first();
+        assert.ok(await footnoteDef.count() >= 1, '写作视图缺少脚注定义 widget');
+        assert.ok((await footnoteDef.innerText().catch(() => '')).includes('这是脚注内容'), '脚注定义 widget 内容缺失');
       },
-      async () => ({ source: await page.locator('.cm-content').textContent() }),
+      async () => ({
+        source: await page.locator('.cm-content').textContent(),
+        footnoteRefCount: await page.locator('.cm6-markdown-editor-pane .cm6-footnote-ref').count(),
+        footnoteDefinitionCount: await page.locator('.cm6-markdown-editor-pane .cm6-footnote-definition').count(),
+      }),
     );
 
     await deepAction(
@@ -2136,15 +2156,19 @@ async function main() {
       '大纲浮动按钮可达 + 点击展开',
       async () => {
         const tocBtn = page.getByRole('button', { name: '查看大纲', exact: true });
-        const tocCount = await tocBtn.count();
-        assert.ok(tocCount >= 1, '查看大纲按钮不可达');
+        assert.ok(await tocBtn.count() >= 1, '查看大纲按钮不可达');
         await tocBtn.click();
-        await delay(300);
-        const tocVisible = await page.locator('.cm6-outline-panel, .toc-panel, [class*="outline"]').first().isVisible().catch(() => false);
-        // 大纲面板 class 不固定，软断言
-        assert.ok(tocVisible || true, '大纲面板 class 不固定，仅断言按钮可达');
+        const tocPanel = page.locator('.floating-toc-panel');
+        await tocPanel.waitFor({ state: 'visible', timeout: 5_000 });
+        const entries = await page.locator('.floating-toc-item').count();
+        assert.ok(entries >= 1, `大纲面板已展开但无条目：${await tocPanel.innerText()}`);
+        const tocClose = page.locator('.floating-toc-close');
+        if (await tocClose.count()) await tocClose.click();
       },
-      async () => ({ tocButtonReachable: await tocBtn.count() >= 1 }),
+      async () => ({
+        tocButtonReachable: await tocBtn.count() >= 1,
+        tocEntryCount: await page.locator('.floating-toc-item').count(),
+      }),
     );
 
     await deepAction(
@@ -2347,11 +2371,15 @@ async function main() {
       'view-behavior',
       '状态栏显示当前文档路径',
       async () => {
-        const statusBar = page.locator('.status-bar, [class*="status-bar"]').first();
-        const statusBarExists = await statusBar.count();
-        assert.ok(statusBarExists >= 0, '状态栏 DOM 不可达（软断言，可能不存在）');
+        const statusBar = page.locator('.status-bar');
+        assert.ok(await statusBar.count() >= 1, '状态栏 DOM 不存在');
+        const pathText = await page.locator('.status-path').innerText().catch(() => '');
+        assert.ok(pathText.trim().length > 0, '状态栏路径为空');
       },
-      async () => ({ statusBarExists: await page.locator('.status-bar, [class*="status-bar"]').first().count() }),
+      async () => ({
+        statusBarExists: await page.locator('.status-bar').count(),
+        statusPathText: await page.locator('.status-path').innerText().catch(() => ''),
+      }),
     );
 
     // ---------- 表格全量操作扩展（T2 / T6 / T7 / T10-T15） ----------
@@ -3421,30 +3449,34 @@ async function main() {
     await captureUi(page, 'd99-final-state');
   }
 
-  const featureStatus = {
-    'startup-distribution': '部分验证（直接 exe 启动、Tauri 身份和关于页已执行；安装包/portable/WebView2 缺失预检未执行）',
-    'editor-source-roundtrip': '已验证',
-    'document-workspace': '部分验证（文件关联打开/保存/新建已执行，文件夹选择器/多文件切换未执行）',
-    'editor-format-history': '部分验证（格式按钮和撤销已执行，其他格式和格式刷未执行）',
-    'find-navigation': '部分验证（查找替换、快速打开、跳转到行和大纲入口已执行；深度导航未执行）',
-    'table-editing': '部分验证（插入表格及源码/网格确认已执行，行列菜单和 Tab 导航未执行）',
-    'image-assets': '部分验证（图片 Markdown 和失败占位已执行，选择/复制资产未执行）',
-    'rich-markdown': '部分验证（公式和 Mermaid 成功或可读错误状态、源码保留已执行，普通代码复制和富文本粘贴未执行）',
-    'markdown-preview-export': '部分验证（Word/HTML 预览已执行，导出文件未执行）',
-    'settings-appearance': '部分验证（外观主题已执行，字体/预览/导出预设未执行）',
-    terminal: '部分验证（真实 PTY 创建、输入和输出回读已执行，多标签和离线依赖未执行）',
-    'ai-workbench-skillhub': '受阻（AI 工作台入口已执行，Provider/SkillHub/模型请求需要外部 CLI 认证）',
-    'artifact-center': '部分验证（空产物中心入口已执行，真实产物生命周期需要 AI 会话）',
-    'review-diff': '部分验证（检视面板入口已执行，意见/Diff/应用需要保存文档和 AI 会话）',
-    'failure-boundaries': '部分验证（统一 exe/CDP/profile/runtime 清理已执行，取消、权限和失败注入未执行）',
-  };
-  if (!smokeOnly) {
-    featureStatus['markdown-basic'] = '部分验证（deep 段语法矩阵已执行）';
-    featureStatus['markdown-inline'] = '部分验证（deep 段行内语法矩阵已执行）';
-    featureStatus['heading-fold-editing'] = '部分验证（deep 段折叠角标回归已执行）';
-    featureStatus['md-editing-interactions'] = '部分验证（deep 段 Enter/Backspace/逐字输入已执行）';
-    featureStatus['render-correctness'] = '部分验证（deep 段渲染边界/XSS 已执行）';
-    featureStatus['view-behavior'] = '部分验证（deep 段视图行为与快捷键已执行）';
+  // featureStatus 从 actions/skipped 派生,不维护第二份手写事实源
+  // (合并前 core/extended 两套手写描述曾互相矛盾)。
+  const featureStatus = {};
+  const actionFeatures = new Map();
+  for (const action of actions) {
+    if (action.status !== 'passed' && action.status !== 'failed') continue;
+    const entry = actionFeatures.get(action.feature) ?? { passed: 0, failed: 0 };
+    entry[action.status] += 1;
+    actionFeatures.set(action.feature, entry);
+  }
+  const skipFeatures = new Map();
+  for (const skipEntry of skipped) {
+    const list = skipFeatures.get(skipEntry.feature) ?? [];
+    list.push(skipEntry.item);
+    skipFeatures.set(skipEntry.feature, list);
+  }
+  for (const [feature, entry] of actionFeatures) {
+    const skippedItems = skipFeatures.get(feature) ?? [];
+    featureStatus[feature] = entry.failed > 0
+      ? `有失败（passed=${entry.passed} / failed=${entry.failed}）`
+      : skippedItems.length > 0
+        ? `部分验证（passed=${entry.passed}；受阻项：${skippedItems.join('、')}）`
+        : `已验证（passed=${entry.passed}）`;
+  }
+  for (const feature of skipFeatures.keys()) {
+    if (!featureStatus[feature]) {
+      featureStatus[feature] = `受阻（${(skipFeatures.get(feature) ?? []).join('、')}）`;
+    }
   }
   const anyFailed = actions.some((action) => action.status === 'failed');
   const summary = {
@@ -3518,15 +3550,24 @@ try {
   }
 
   const anyFailed = actions.some((action) => action.status === 'failed');
-  if (failure || anyFailed) {
+  // 清理边界纳入 verdict:taskkill 失败 / CDP 仍可访问 / runtime 目录残留都算失败,
+  // 否则孤儿进程和 profile 会污染下一次真实 exe 验证(SKILL.md 清理契约)。
+  const cleanupFailures = [];
+  if (cleanup.processStopped !== true) cleanupFailures.push('owned process not stopped');
+  if (cleanup.cdpClosed !== true) cleanupFailures.push('CDP endpoint still reachable');
+  if (cleanup.runtimeRemoved !== true || cleanup.profileRemoved !== true) cleanupFailures.push('runtime/profile directory remains');
+
+  if (failure || anyFailed || cleanupFailures.length > 0) {
     if (failure) await writeFailureEvidence(failure).catch(() => undefined);
     else {
-      // deep 段失败：main 已写 run.json（status=failed），这里补齐真实 cleanup 再回写
+      // deep 段失败或清理失败：main 已写 run.json，这里补齐真实 cleanup 再回写
       const runFile = path.join(evidenceDirectory, 'run.json');
       if (await fs.access(runFile).then(() => true).catch(() => false)) {
         const run = JSON.parse(await fs.readFile(runFile, 'utf8'));
         run.cleanup = cleanup;
         run.runtimeMessages = runtimeMessages;
+        if (cleanupFailures.length > 0 && run.status === 'passed_with_gaps') run.status = 'failed';
+        if (cleanupFailures.length > 0) run.cleanupFailures = cleanupFailures;
         await fs.writeFile(runFile, `${JSON.stringify(run, null, 2)}\n`, 'utf8');
       }
     }
@@ -3535,11 +3576,17 @@ try {
     const failedActions = actions.filter((action) => action.status === 'failed');
     if (failure) {
       console.error(`Typola exe 套件失败：${failure instanceof Error ? failure.message : String(failure)}`);
-    } else {
+    } else if (failedActions.length > 0) {
       console.error(`Typola exe 套件有 ${failedActions.length} 个 action 失败：`);
       for (const action of failedActions) console.error(`  [${action.tier}] ${action.feature} — ${action.label}: ${action.error}`);
     }
+    if (cleanupFailures.length > 0) {
+      console.error(`清理边界失败：${cleanupFailures.join('；')}`);
+    }
     console.error(`证据目录：${evidenceDirectory}`);
+    // 机器可读标记:run-all-non-ai.mjs 依赖它绑定本次子进程的 run 目录,
+    // 不扫描历史目录(否则 bootstrap 前退出时会错拿上一次的证据)。
+    console.log(`TYPOLA_RUN_ID=${runId}`);
     process.exitCode = 1;
   } else {
     const runFile = path.join(evidenceDirectory, 'run.json');
@@ -3549,6 +3596,7 @@ try {
     await fs.writeFile(runFile, `${JSON.stringify(run, null, 2)}\n`, 'utf8');
     await fs.writeFile(path.join(evidenceDirectory, 'exe.stdout.log'), runtimeMessages.stdout, 'utf8');
     await fs.writeFile(path.join(evidenceDirectory, 'exe.stderr.log'), runtimeMessages.stderr, 'utf8');
+    console.log(`TYPOLA_RUN_ID=${runId}`);
     console.log(JSON.stringify({ status: 'passed_with_gaps', tier: smokeOnly ? 'smoke' : 'full', evidenceDirectory, runId, processPid: cleanup.processPid }, null, 2));
   }
 }

@@ -33,14 +33,13 @@ async function runScript(scriptPath) {
   });
 }
 
-async function findLatestRunDir(suffix) {
-  const entries = await fs.readdir(evidenceRoot, { withFileTypes: true });
-  const matching = entries
-    .filter((e) => e.isDirectory() && e.name.endsWith(`-${suffix}`))
-    .map((e) => e.name)
-    .sort()
-    .reverse();
-  return matching[0] ?? null;
+// 从子进程 stdout 提取 TYPOLA_RUN_ID=<runId> 标记,只读本次运行的证据目录。
+// 子进程在 import/syntax/bootstrap 阶段就退出(未写 run.json)时返回 null,
+// 此时汇总明确记 no-run-id,绝不回退到扫描历史目录(那会把上一次的成功
+// 证据和本次的失败 exitCode 混在一起)。
+function extractRunId(stdout) {
+  const match = stdout.match(/^TYPOLA_RUN_ID=(.+)$/m);
+  return match ? match[1].trim() : null;
 }
 
 async function main() {
@@ -58,8 +57,11 @@ async function main() {
     console.log(run.stderr.slice(-2000));
   }
 
-  const runDir = await findLatestRunDir('exe-core');
-  let summaryRun = { status: 'no-run-dir', actions: [], skipped: [] };
+  const runId = extractRunId(run.stdout);
+  const runDir = runId ? `${runId}-exe-core` : null;
+  let summaryRun = runId
+    ? { status: 'no-run-json', runId, actions: [], skipped: [] }
+    : { status: 'no-run-id', actions: [], skipped: [] };
   if (runDir) {
     try {
       const runJson = JSON.parse(await fs.readFile(path.join(evidenceRoot, runDir, 'run.json'), 'utf8'));
@@ -92,13 +94,13 @@ async function main() {
         actions,
       };
     } catch (error) {
-      summaryRun = { status: 'parse-error', error: String(error) };
+      summaryRun = { status: 'parse-error', runId, error: String(error) };
     }
   }
 
   const summary = {
     observedAt: new Date().toISOString(),
-    scripts: { suite: { exitCode: run.code } },
+    scripts: { suite: { exitCode: run.code, runId } },
     core: summaryRun,
   };
 

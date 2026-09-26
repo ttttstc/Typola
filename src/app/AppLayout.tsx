@@ -2508,8 +2508,9 @@ export function AppLayout() {
     if (/^(?:https?:|mailto:)/iu.test(target)) {
       try {
         await openUrl(target);
-        // exe 验证套件的观测钩子:Tauri invoke 层(writable:false)无法被 JS 拦截,
-        // 打开成功后派发自定义事件作为唯一可测终态。
+        // 打开成功后派发 'typola:link-opened'(与 'typola:goto-line'/'typola:find-hop'
+        // 同一套 CustomEvent 桥接惯例):语义是「openUrl 已成功提交给系统 opener」,
+        // 不含浏览器窗口可见性的 OS 终态——后者需人工或系统级观测。
         window.dispatchEvent(new CustomEvent('typola:link-opened', { detail: { url: target } }));
       } catch (error) {
         await messageDialog(String(error), { title: '打开链接失败' });
