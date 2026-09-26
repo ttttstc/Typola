@@ -291,6 +291,9 @@ export function AppLayout() {
   }, []);
   const [htmlPresentationVisible, setHtmlPresentationVisible] = useState(false);
   const [terminalVisible, setTerminalVisible] = useState(false);
+  // 首次可见后保持挂载(隐藏时不卸载,避免反复起 PTY);仅用于惰性加载 chunk
+  const [terminalMounted, setTerminalMounted] = useState(false);
+  useEffect(() => { if (terminalVisible) setTerminalMounted(true); }, [terminalVisible]);
   const [terminalHeight, setTerminalHeight] = useState(300);
   const [terminalResizing, setTerminalResizing] = useState(false);
   const [terminalCreateRequest, setTerminalCreateRequest] = useState(0);
@@ -625,6 +628,8 @@ export function AppLayout() {
     outputRoot: outputBaseDir,
     lastSelfWriteRef,
   });
+  // 稳定引用:避免每次渲染 new Set(...) 让 FileTreePanel 的 memo 判定失效
+  const agentChangedPathsSet = useMemo(() => new Set(agentChangedPaths.keys()), [agentChangedPaths]);
 
   const convManager = useConversationManager({
     workspaceRoot: effectiveAiWorkspaceRoot,
@@ -721,10 +726,19 @@ export function AppLayout() {
   }, [settings]);
 
   useEffect(() => {
-    /* Kick off the settings chunk immediately on mount so the modal is fully
-       loaded by the time the user first opens it. The dynamic import is small
-       (≈10KB after ISS-126) and runs in parallel with the initial render. */
-    void preloadSettingsPage();
+    /* 设置页 chunk 预热推迟到空闲:启动关键期(编辑器 chunk 竞争带宽)不抢资源,
+       真正打开设置时 preloadSettingsPage 仍会即时触发。 */
+    const idleCb = 'requestIdleCallback' in window
+      ? window.requestIdleCallback
+      : undefined;
+    if (idleCb) {
+      const idleId = idleCb(() => { void preloadSettingsPage(); }, { timeout: 3000 });
+      return () => {
+        if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
+      };
+    }
+    const timer = window.setTimeout(() => { void preloadSettingsPage(); }, 1500);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // 任务 #15 发 AI 改用的截断 helper(避免引文太长拖累 prompt)
@@ -2177,23 +2191,20 @@ export function AppLayout() {
     if (!lastPath) return;
     reopenAttempted.current = true;
     let idleId: number | undefined;
-    const timeout = window.setTimeout(() => {
-      const reopen = () => {
-        void handleOpenPath(lastPath).catch((e) => {
-          console.warn('Failed to reopen last file:', e);
-          clearLastOpenedPath();
-        });
-      };
+    const reopen = () => {
+      void handleOpenPath(lastPath).catch((e) => {
+        console.warn('Failed to reopen last file:', e);
+        clearLastOpenedPath();
+      });
+    };
 
-      if ('requestIdleCallback' in window) {
-        idleId = window.requestIdleCallback(reopen, { timeout: 1500 });
-      } else {
-        reopen();
-      }
-    }, 700);
+    if ('requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(reopen, { timeout: 200 });
+    } else {
+      reopen();
+    }
 
     return () => {
-      window.clearTimeout(timeout);
       if (idleId !== undefined && 'cancelIdleCallback' in window) {
         window.cancelIdleCallback(idleId);
       }
@@ -2842,7 +2853,7 @@ export function AppLayout() {
           rootPath: workspaceRoot,
           activePath: file.path,
           dirtyPaths,
-          agentChangedPaths: new Set(agentChangedPaths.keys()),
+          agentChangedPaths: agentChangedPathsSet,
           width: workspacePanelWidth,
           refreshKey: workspaceTreeVersion,
           onRootChange: setWorkspaceRoot,
@@ -2897,7 +2908,8 @@ export function AppLayout() {
         }}
         rightPanel={rightPanel}
         onSetRightPanelMode={setRightPanelMode}
-        terminalNode={(
+        // 惰性挂载:首次可见才渲染 TerminalPanel,避免启动即拉取 353KB chunk
+        terminalNode={terminalVisible || terminalMounted ? (
           <motion.div
             className="terminal-shell"
             data-visible={terminalVisible ? 'true' : 'false'}
@@ -2929,7 +2941,7 @@ export function AppLayout() {
               />
             </Suspense>
           </motion.div>
-        )}
+        ) : null}
         statusBarNode={(
           <StatusBar
             filePath={file.path}

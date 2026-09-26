@@ -1,16 +1,20 @@
+// ponytail: 运行时符号从 config(纯数据)引,类型从 types(纯类型)引,避免经 word barrel
+// 把 parser→docx(353KB)拉进首屏;markdownToDocx 只被动态 import 的 wordExportService 使用
 import {
+  DEFAULT_PRESET_ID,
   getPreset,
   hasPreset,
   isBuiltInPresetId,
   isCustomPresetId,
   listPresets,
-  type CustomPresetId,
-  type CustomPresetRegistry,
-  type PresetConfig,
-  type PresetId,
-  type PresetInfo,
-} from './word';
-import { DEFAULT_PRESET_ID } from './word/config';
+} from './word/config';
+import type {
+  CustomPresetId,
+  CustomPresetRegistry,
+  PresetConfig,
+  PresetId,
+  PresetInfo,
+} from './word/types';
 import {
   DEFAULT_HTML_EXPORT_PRESET_ID,
   LEGACY_WECHAT_CUSTOM_HTML_PRESET_ID,
