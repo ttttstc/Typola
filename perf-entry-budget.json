@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "capturedAt": "2026-09-26 04:12",
+    "source": "dist/index.html"
+  },
+  "totalGzipKb": 511.06,
+  "entryCount": 9,
+  "entries": {
+    "assets/index-Bt0c8bdl.js": 213.06,
+    "assets/rolldown-runtime-BM3Ffeng.js": 0.66,
+    "assets/editor-core-vendor-BV6ZwTaw.js": 76.05,
+    "assets/editor-language-vendor-sZKp48S2.js": 107.12,
+    "assets/tauri-vendor-B-zWUm0N.js": 7.26,
+    "assets/react-vendor-Cy1Chl5k.js": 57.59,
+    "assets/ui-vendor-CcvS_qMi.js": 7.54,
+    "assets/config-DpSL5vIo.js": 1.87,
+    "assets/index-Dk-_p2Bi.css": 39.9
+  }
+}

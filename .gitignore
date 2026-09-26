@@ -55,3 +55,6 @@ website/dist/
 /*.js
 src/experimental/
 .review-173/
+
+# Perf scratch (基线 JSON 与 profile 目录不入库,BRIEF/基线/报告 md 保留)
+perf/bench/
