@@ -36,20 +36,8 @@ import { AppLayoutOverlays } from '../components/AppLayoutOverlays';
 import { PromptDialog } from '../components/PromptDialog';
 import { UpdateCard } from '../components/UpdateCard';
 import { calmTransition } from '../components/motion/MotionProvider';
-import { SkillHubPanel } from '../components/SkillHubPanel';
-import { ArtifactCenterPanel } from '../components/artifacts/ArtifactCenterPanel';
-import { SelectionResultCard } from '../components/selection/SelectionResultCard';
-import { ReviewCommentEditor } from '../components/selection/ReviewCommentEditor';
-import {
-  ReviewSidebarPanel,
-  type AIReviewSettings,
-  type ReviewCommentNavigation,
-  type ReviewSkillOption,
-} from '../components/review/ReviewSidebarPanel';
-import {
-  CandidateNavigationDialog,
-  type CandidateNavigationChoice,
-} from '../components/diff/CandidateNavigationDialog';
+import type { AIReviewSettings, ReviewCommentNavigation, ReviewSkillOption } from '../components/review/ReviewSidebarPanel';
+import type { CandidateNavigationChoice } from '../components/diff/CandidateNavigationDialog';
 import { runSkillOneshot } from '../services/agent/oneshotService';
 import { useReviewState } from '../hooks/useReviewState';
 import { useRevisionList } from '../hooks/useRevisionList';
@@ -165,6 +153,27 @@ const ArtifactPreview = lazy(() =>
 );
 const DiffReviewPane = lazy(() =>
   import('../components/diff/DiffReviewPane').then((module) => ({ default: module.DiffReviewPane })),
+);
+
+// AI/检视面板不挡首屏:编辑器可见后空闲预取(见 preloadAiPanels),
+// 用户首次打开右栏/浮卡时如果预取未完成,Suspense fallback 兜底
+const SkillHubPanel = lazy(() =>
+  import('../components/SkillHubPanel').then((module) => ({ default: module.SkillHubPanel })),
+);
+const ArtifactCenterPanel = lazy(() =>
+  import('../components/artifacts/ArtifactCenterPanel').then((module) => ({ default: module.ArtifactCenterPanel })),
+);
+const ReviewSidebarPanel = lazy(() =>
+  import('../components/review/ReviewSidebarPanel').then((module) => ({ default: module.ReviewSidebarPanel })),
+);
+const SelectionResultCard = lazy(() =>
+  import('../components/selection/SelectionResultCard').then((module) => ({ default: module.SelectionResultCard })),
+);
+const ReviewCommentEditor = lazy(() =>
+  import('../components/selection/ReviewCommentEditor').then((module) => ({ default: module.ReviewCommentEditor })),
+);
+const CandidateNavigationDialog = lazy(() =>
+  import('../components/diff/CandidateNavigationDialog').then((module) => ({ default: module.CandidateNavigationDialog })),
 );
 
 type AvailableUpdate = Extract<UpdateCheckResult, { status: 'available' }>;
@@ -726,18 +735,29 @@ export function AppLayout() {
   }, [settings]);
 
   useEffect(() => {
-    /* 设置页 chunk 预热推迟到空闲:启动关键期(编辑器 chunk 竞争带宽)不抢资源,
-       真正打开设置时 preloadSettingsPage 仍会即时触发。 */
+    /* 设置页与 AI 面板 chunk 预热推迟到空闲:启动关键期(编辑器 chunk 竞争带宽)
+       不抢资源;真正打开时 lazy import 仍会即时触发。 */
     const idleCb = 'requestIdleCallback' in window
       ? window.requestIdleCallback
       : undefined;
+    const preloadRest = () => {
+      void preloadSettingsPage();
+      // AI/检视面板:本地资源加载快,编辑器可见后的空闲期取回,
+      // 用户点开右栏时通常已就绪(未就绪由 Suspense fallback 兜底)
+      void import('../components/SkillHubPanel');
+      void import('../components/review/ReviewSidebarPanel');
+      void import('../components/artifacts/ArtifactCenterPanel');
+      void import('../components/selection/SelectionResultCard');
+      void import('../components/selection/ReviewCommentEditor');
+      void import('../components/diff/CandidateNavigationDialog');
+    };
     if (idleCb) {
-      const idleId = idleCb(() => { void preloadSettingsPage(); }, { timeout: 3000 });
+      const idleId = idleCb(preloadRest, { timeout: 3000 });
       return () => {
         if ('cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
       };
     }
-    const timer = window.setTimeout(() => { void preloadSettingsPage(); }, 1500);
+    const timer = window.setTimeout(preloadRest, 1500);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -2649,19 +2669,22 @@ export function AppLayout() {
   ) : rightPanelMode === 'flow' && !isDocx ? (
     <aside className="flow-panel" aria-label="AI 工作流">
       <div className="flow-panel-content">
-        <SkillHubPanel
-          activeProvider={convManager.activeProvider}
-          activeWorkspaceRoot={effectiveAiWorkspaceRoot}
-          hub={skillHub}
-          loadError={skillHubError}
-          onPickSkill={handlePickSkill}
-          onInstallSkill={handleInstallSkill}
-          onSaveHub={handleSaveSkillHub}
-          onReload={handleReloadSkillHub}
-        />
+        <Suspense fallback={<div className="flow-panel-content" />}>
+          <SkillHubPanel
+            activeProvider={convManager.activeProvider}
+            activeWorkspaceRoot={effectiveAiWorkspaceRoot}
+            hub={skillHub}
+            loadError={skillHubError}
+            onPickSkill={handlePickSkill}
+            onInstallSkill={handleInstallSkill}
+            onSaveHub={handleSaveSkillHub}
+            onReload={handleReloadSkillHub}
+          />
+        </Suspense>
       </div>
     </aside>
   ) : rightPanelMode === 'review' && !isDocx ? (
+    <Suspense fallback={<aside className="review-panel" aria-label="检视面板" />}>
     <ReviewSidebarPanel
       comments={reviewStateApi.state.comments}
       dirty={reviewStateApi.state.dirty}
@@ -2717,7 +2740,9 @@ export function AppLayout() {
       }}
       onClose={() => setRightPanelMode('none')}
     />
+    </Suspense>
   ) : rightPanelMode === 'artifacts' && !isDocx ? (
+    <Suspense fallback={<aside aria-label="制品中心" />}>
     <ArtifactCenterPanel
       records={artifactRecords}
       activeConversationId={convManager.activeConvId}
@@ -2747,6 +2772,7 @@ export function AppLayout() {
           .catch((error) => console.warn('Failed to open HTML source:', error));
       }}
     />
+    </Suspense>
   ) : null;
 
   const docxPane = (
@@ -2963,10 +2989,12 @@ export function AppLayout() {
           onRebaseCandidateToLatestSource={handleRebaseCandidateToLatestSource}
         />
       </Suspense>
-      <CandidateNavigationDialog
-        open={candidateNavigationDialogOpen}
-        onChoice={handleCandidateNavigationChoice}
-      />
+      <Suspense fallback={null}>
+        <CandidateNavigationDialog
+          open={candidateNavigationDialogOpen}
+          onChoice={handleCandidateNavigationChoice}
+        />
+      </Suspense>
       <AppLayoutOverlays
         findVisible={findVisible}
         findFocusTarget={findFocusTarget}
@@ -3080,54 +3108,58 @@ export function AppLayout() {
         </div>
       )}
       {/* 选区原地结果对比卡(C 混合 · 4 个固定动作走 oneshot 后弹此卡) */}
-      <SelectionResultCard
-        open={!!resultCard}
-        x={resultCard?.x ?? 0}
-        y={resultCard?.y ?? 0}
-        state={resultCard?.state ?? 'loading'}
-        actionLabel={resultCard?.actionLabel ?? ''}
-        originalText={resultCard?.originalText ?? ''}
-        newText={resultCard?.newText ?? null}
-        error={resultCard?.error ?? null}
-        displayOnly={resultCard?.displayOnly}
-        initialRequirements={resultCard?.requirements ?? ''}
-        onAccept={acceptResultCard}
-        onCancel={closeResultCard}
-        onRetry={retryResultCard}
-        onCopy={copyResultCard}
-        onSubmitInput={submitResultCardInput}
-      />
+      <Suspense fallback={null}>
+        <SelectionResultCard
+          open={!!resultCard}
+          x={resultCard?.x ?? 0}
+          y={resultCard?.y ?? 0}
+          state={resultCard?.state ?? 'loading'}
+          actionLabel={resultCard?.actionLabel ?? ''}
+          originalText={resultCard?.originalText ?? ''}
+          newText={resultCard?.newText ?? null}
+          error={resultCard?.error ?? null}
+          displayOnly={resultCard?.displayOnly}
+          initialRequirements={resultCard?.requirements ?? ''}
+          onAccept={acceptResultCard}
+          onCancel={closeResultCard}
+          onRetry={retryResultCard}
+          onCopy={copyResultCard}
+          onSubmitInput={submitResultCardInput}
+        />
+      </Suspense>
       {/* 检视意见输入浮卡(任务 #12 浮条入口) */}
-      <ReviewCommentEditor
-        open={!!reviewEditor}
-        x={reviewEditor?.x ?? 0}
-        y={reviewEditor?.y ?? 0}
-        originalText={reviewEditor?.anchor.originalText ?? ''}
-        initialText={reviewEditor?.initialText ?? ''}
-        basis={reviewEditor?.basis}
-        editorFontSize={settings.editorFontSize}
-        currentIndex={reviewEditorIndex >= 0 ? reviewEditorIndex : undefined}
-        total={reviewEditor?.navigationIds.length || undefined}
-        onPrevious={reviewEditorIndex > 0 ? () => navigateReviewEditor(-1) : undefined}
-        onNext={reviewEditor && reviewEditorIndex >= 0 && reviewEditorIndex < reviewEditor.navigationIds.length - 1
-          ? () => navigateReviewEditor(1)
-          : undefined}
-        onSave={(text) => {
-          if (!reviewEditor) return;
-          if (reviewEditor.editingId) {
-            reviewStateApi.updateComment(reviewEditor.editingId, text);
-            setReviewEditor((current) => current?.editingId === reviewEditor.editingId
-              ? { ...current, initialText: text }
-              : current);
-          } else {
-            reviewStateApi.addComment(reviewEditor.anchor, text);
-            // 新增检视意见后自动切到右栏 review 面板
-            setRightPanelMode('review');
-            setReviewEditor(null);
-          }
-        }}
-        onCancel={() => setReviewEditor(null)}
-      />
+      <Suspense fallback={null}>
+        <ReviewCommentEditor
+          open={!!reviewEditor}
+          x={reviewEditor?.x ?? 0}
+          y={reviewEditor?.y ?? 0}
+          originalText={reviewEditor?.anchor.originalText ?? ''}
+          initialText={reviewEditor?.initialText ?? ''}
+          basis={reviewEditor?.basis}
+          editorFontSize={settings.editorFontSize}
+          currentIndex={reviewEditorIndex >= 0 ? reviewEditorIndex : undefined}
+          total={reviewEditor?.navigationIds.length || undefined}
+          onPrevious={reviewEditorIndex > 0 ? () => navigateReviewEditor(-1) : undefined}
+          onNext={reviewEditor && reviewEditorIndex >= 0 && reviewEditorIndex < reviewEditor.navigationIds.length - 1
+            ? () => navigateReviewEditor(1)
+            : undefined}
+          onSave={(text) => {
+            if (!reviewEditor) return;
+            if (reviewEditor.editingId) {
+              reviewStateApi.updateComment(reviewEditor.editingId, text);
+              setReviewEditor((current) => current?.editingId === reviewEditor.editingId
+                ? { ...current, initialText: text }
+                : current);
+            } else {
+              reviewStateApi.addComment(reviewEditor.anchor, text);
+              // 新增检视意见后自动切到右栏 review 面板
+              setRightPanelMode('review');
+              setReviewEditor(null);
+            }
+          }}
+          onCancel={() => setReviewEditor(null)}
+        />
+      </Suspense>
     </>
   );
 }
