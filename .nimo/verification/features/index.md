@@ -5,9 +5,10 @@
 ## 基线前置条件
 
 - 在仓库根目录安装依赖，存在 `node_modules`、Rust stable、Tauri CLI 和 Microsoft Edge WebView2 Runtime。
-- 先构建验证二进制：`& '.\node_modules\.bin\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'`。
-- 验证 exe 为 `src-tauri\target\debug\typola.exe`；每次运行由统一套件 `verify-exe-core.mjs` 生成独立的 WebView2 profile、动态 CDP 端口和一次性夹具。
-- 不驱动已存在的正式 `Typola.exe`。项目启用单实例，验证配置使用独立标识，避免与正式实例冲突。
+- 先构建可用的 exe：`npm run tauri:build:local`（产物 `src-tauri\target\release\typola.exe`，与本地构建路径一致）；也可用独立标识的 debug 验证构建 `& '.\node_modules\.bin\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'`（产物 `target\debug\typola.exe`）。
+- 套件按 `TYPOLA_VERIFY_EXE` → `target\release` → `target\debug` 顺序解析 exe；找不到时会输出可操作的构建指引。
+- 每次运行由统一套件 `verify-exe-core.mjs` 生成独立的 WebView2 profile、动态 CDP 端口和一次性夹具。
+- 用 release 构建（正式标识 `com.typola.reader`）验证前，先完全退出本机已运行的 Typola，避免单实例插件把启动转发给已有实例。
 - 核心本地配方使用本次运行创建的内存文档和夹具，不需要账号、AI CLI、外部账号或生产数据；需要原生对话框、外部 CLI 或发布物的条目必须声明其缺口。
 
 ## 驱动约定

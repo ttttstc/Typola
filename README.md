@@ -120,13 +120,21 @@ npm run version:check          # 可选本地诊断；发布 CI 会自动同步�
 
 ### Windows exe 全量验收
 
-这组命令运行真实 Tauri + WebView2 exe，不是 Vite 页面或 Playwright 渲染器替代品。先构建验证专用 debug exe，再运行统一验证套件（单次启动 exe，smoke + deep 两层）：
+这组命令运行真实 Tauri + WebView2 exe，不是 Vite 页面或 Playwright 渲染器替代品。需先有可用的 exe（命令不会自动构建），再运行统一验证套件（单次启动 exe，smoke + deep 两层）：
 
 ```powershell
-& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
+npm run tauri:build:local       # 构建本地 exe（产物 src-tauri/target/release/typola.exe）
 npm run verify:all              # 全量非 AI exe 验收：smoke + deep 一次跑完并汇总
 # 也可只跑核心用例（约 5 分钟）：
 npm run verify:core             # smoke 层：启动/编辑/预览/设置/终端等核心路径
+```
+
+前置条件：`node_modules`（先 `npm install`）、Rust stable、Tauri CLI、Microsoft Edge WebView2 Runtime，以及一个已构建的 exe。exe 解析顺序为 `TYPOLA_VERIFY_EXE` 环境变量 → `target/release/typola.exe`（与 `tauri:build:local` 一致）→ `target/debug/typola.exe`（验证专用构建）。用 release 构建时需先完全退出已运行的 Typola，否则单实例插件会让 CDP 起不来。
+
+也可构建验证专用 debug exe（独立应用标识 `com.typola.reader.verification`，与已安装 Typola 不冲突）：
+
+```powershell
+& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
 ```
 
 统一套件 `.nimo/verification/scripts/verify-exe-core.mjs` 按 tier 分层：smoke 层失败立即终止（fail-fast），deep 层失败继续收集全部失败后一并报告；任何 action 失败进程退出码为 1。结果和跳过原因会写入 `.nimo/verification/evidence/`。`verify:all` 当前覆盖非 AI 核心与扩展场景；真实 Claude / OpenCode Provider 的完整链路仍需按 Feature Map 做专项验证，不能把这条命令当成 AI 全量证明。

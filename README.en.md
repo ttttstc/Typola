@@ -120,13 +120,21 @@ npm run version:check          # optional local diagnostic
 
 ### Full Windows exe verification
 
-These commands exercise the real Tauri + WebView2 exe, not a Vite page or a renderer-only Playwright substitute. Build the dedicated verification debug exe first, then run the unified verification suite (single exe launch, smoke + deep tiers):
+These commands exercise the real Tauri + WebView2 exe, not a Vite page or a renderer-only Playwright substitute. An exe must already exist (the commands do not build one), then run the unified verification suite (single exe launch, smoke + deep tiers):
 
 ```powershell
-& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
+npm run tauri:build:local       # build the local exe (output: src-tauri/target/release/typola.exe)
 npm run verify:all              # full non-AI exe verification: smoke + deep in one run, with summary
 # Or run only the core cases (~5 minutes):
 npm run verify:core             # smoke tier: launch / editing / preview / settings / terminal core paths
+```
+
+Prerequisites: `node_modules` (`npm install` first), Rust stable, the Tauri CLI, Microsoft Edge WebView2 Runtime, and a built exe. Exe resolution order is the `TYPOLA_VERIFY_EXE` env var → `target/release/typola.exe` (same as `tauri:build:local`) → `target/debug/typola.exe` (the dedicated verification build). With a release build, fully quit any running Typola first, otherwise the single-instance plugin prevents CDP from coming up.
+
+You can also build the dedicated verification debug exe (separate app identifier `com.typola.reader.verification`, no conflict with an installed Typola):
+
+```powershell
+& '.\\node_modules\\.bin\\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
 ```
 
 The unified suite `.nimo/verification/scripts/verify-exe-core.mjs` is tiered: the smoke tier fails fast, the deep tier collects all failures before reporting; any failed action makes the process exit 1. Results and skip reasons are written to `.nimo/verification/evidence/`. `verify:all` currently covers the non-AI core and extended scenarios. Complete real-provider Claude / OpenCode journeys still require Feature Map-based focused verification, so this command is not proof of full AI coverage.
