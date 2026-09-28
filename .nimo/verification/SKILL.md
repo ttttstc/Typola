@@ -17,13 +17,23 @@ description: "使用真实 Typola Windows Tauri exe 和 WebView2 CDP 驱动核�
 
 ### 构建验证 exe
 
-在仓库根目录执行：
+套件不会自动构建 exe,先准备一个可用的 exe。默认优先使用本地构建的 release exe(与 `npm run tauri:build:local` 同路径):
+
+```powershell
+npm run tauri:build:local
+```
+
+产物是 `src-tauri\target\release\typola.exe`。该构建使用正式应用标识 `com.typola.reader`,运行验证前必须先完全退出已运行的 Typola,否则单实例插件会把本次启动转发给已有实例,CDP 起不来。
+
+也可改用独立标识的 debug 验证 exe(避开正式 Typola 单实例):
 
 ```powershell
 & '.\node_modules\.bin\tauri.cmd' build --debug --no-bundle --config '.nimo/verification/tauri-verification.conf.json'
 ```
 
-构建成功的确切产物是 `src-tauri\target\debug\typola.exe`。该命令会执行仓库真实的 `npm run build`，生成或更新被 `.gitignore` 忽略的 `dist/` 与 `src-tauri\target/`；它不产生安装包。
+产物是 `src-tauri\target\debug\typola.exe`。两条命令都会执行仓库真实的 `npm run build`,生成或更新被 `.gitignore` 忽略的 `dist/` 与 `src-tauri\target/`,都不产生安装包。
+
+exe 解析顺序:`TYPOLA_VERIFY_EXE` 环境变量 → `target\release\typola.exe` → `target\debug\typola.exe`;都找不到时套件会输出可操作的构建指引并退出,不会抛出裸 ENOENT。
 
 ### 由 exe harness 启动
 
@@ -45,7 +55,7 @@ npm run verify:core
 npm run verify:exe-editor
 ```
 
-`verify-exe-core.mjs` 直接以子进程启动 `src-tauri\target\debug\typola.exe`，不启动 Vite、不调用 `page.goto` 加载网页。它为本次运行设置：
+`verify-exe-core.mjs` 直接以子进程启动解析到的 exe（release 或 debug），不启动 Vite、不调用 `page.goto` 加载网页。它为本次运行设置：
 
 - `WEBVIEW2_USER_DATA_FOLDER=.nimo\verification\runtime\<run-id>`：只存本次 WebView2 profile 和一次性夹具。
 - `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<动态端口>`：只开放本次实例的 CDP。
@@ -58,7 +68,7 @@ npm run verify:exe-editor
 3. `document.documentElement.dataset.runtime` 为 `tauri`，且可见按钮 `button[aria-label="源码模式"]` 已出现。
 4. 打开 `设置 → 关于` 后，可见产品名 `Typola` 和当前版本。
 
-如果 `target\debug\typola.exe` 不存在，先执行构建命令。若需要验证正式打包 exe，必须先确认没有同标识 Typola 实例；不要通过进程名查找并强杀其他实例。
+如果解析不到任何 exe，套件会先输出构建指引再退出；不要通过进程名查找并强杀其他实例。用 release 构建（正式标识）验证前，先完全退出本机已运行的 Typola。
 
 ### 拆除启动实例
 
@@ -68,12 +78,13 @@ npm run verify:exe-editor
 
 ## 体检
 
-运行核心套件前，至少确认以下事实：
+运行核心套件前，至少确认以下事实（对应套件的 exe 解析顺序）：
 
 ```powershell
-Test-Path '.\src-tauri\target\debug\typola.exe'
-Get-Item '.\src-tauri\target\debug\typola.exe' | Select-Object FullName,Length,LastWriteTime
-Get-FileHash '.\src-tauri\target\debug\typola.exe' -Algorithm SHA256
+Test-Path '.\src-tauri\target\release\typola.exe'   # 首选：与 tauri:build:local 一致
+Test-Path '.\src-tauri\target\debug\typola.exe'     # 备选：独立标识验证构建
+Get-Item '.\src-tauri\target\release\typola.exe' | Select-Object FullName,Length,LastWriteTime
+Get-FileHash '.\src-tauri\target\release\typola.exe' -Algorithm SHA256
 ```
 
 脚本还记录并检查：

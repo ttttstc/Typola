@@ -24,8 +24,9 @@ import { chromium } from 'playwright';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, '..', '..', '..');
-const defaultExecutable = path.join(repositoryRoot, 'src-tauri', 'target', 'debug', 'typola.exe');
-const executablePath = path.resolve(process.env.TYPOLA_VERIFY_EXE ?? defaultExecutable);
+const debugExecutable = path.join(repositoryRoot, 'src-tauri', 'target', 'debug', 'typola.exe');
+const releaseExecutable = path.join(repositoryRoot, 'src-tauri', 'target', 'release', 'typola.exe');
+const verificationConfigPath = path.join(repositoryRoot, '.nimo', 'verification', 'tauri-verification.conf.json');
 const smokeOnly = process.argv.includes('--smoke');
 const runId = `${new Date().toISOString().replace(/[:.]/gu, '-')}-${process.pid}`;
 const verificationRoot = path.join(repositoryRoot, '.nimo', 'verification');
@@ -33,12 +34,62 @@ const evidenceDirectory = path.join(verificationRoot, 'evidence', `${runId}-exe-
 const runtimeDirectory = path.join(verificationRoot, 'runtime', runId);
 const fixturePath = path.join(runtimeDirectory, 'open-save-fixture.md');
 
+async function pathExists(candidate) {
+  try {
+    await fs.access(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// exe 解析顺序:TYPOLA_VERIFY_EXE → release(与 npm run tauri:build:local 一致)
+// → debug 验证构建。release 用正式标识 com.typola.reader,若本机已有 Typola
+// 在跑,单实例插件会把启动转发过去导致 CDP 起不来(详见 CDP 失败提示)。
+async function resolveExecutablePath() {
+  const override = process.env.TYPOLA_VERIFY_EXE;
+  if (override) return path.resolve(override);
+  if (await pathExists(releaseExecutable)) {
+    console.warn(`[verify] 使用 release 构建:${path.relative(repositoryRoot, releaseExecutable)}(与 npm run tauri:build:local 一致)`);
+    console.warn('[verify] 该构建使用正式标识 com.typola.reader;若 Typola 正在运行请先完全退出,否则单实例会让 CDP 起不来。');
+    return releaseExecutable;
+  }
+  if (await pathExists(debugExecutable)) return debugExecutable;
+  return releaseExecutable; // 两者都缺:交给前置检查输出可操作指引
+}
+const executablePath = await resolveExecutablePath();
+
+// 前置条件自检:典型失败是新克隆机器上还没构建 exe(或没装依赖)。
+// 在创建证据目录、启动进程之前给出可操作指引,而不是抛出裸 ENOENT。
+async function checkPreconditions() {
+  const missing = [];
+  if (!(await pathExists(path.join(repositoryRoot, 'node_modules')))) {
+    missing.push('- node_modules 不存在:先在仓库根目录执行 npm install(或 pnpm install)');
+  }
+  if (!(await pathExists(verificationConfigPath))) {
+    missing.push(`- 缺少验证构建配置:${path.relative(repositoryRoot, verificationConfigPath)}`);
+  }
+  if (!(await pathExists(executablePath))) {
+    missing.push([
+      `- 找不到可用的 exe(已尝试 ${path.relative(repositoryRoot, releaseExecutable)} 和 ${path.relative(repositoryRoot, debugExecutable)})`,
+      '  该命令不会自动构建 exe。二选一:',
+      '  a) 构建本地 exe(与 tauri:build:local 同路径,产物在 target/release):',
+      '       npm run tauri:build:local',
+      '  b) 构建验证专用 debug exe(独立应用标识,与已安装 Typola 不冲突):',
+      '       node_modules/.bin/tauri build --debug --no-bundle --config .nimo/verification/tauri-verification.conf.json',
+      '  也可直接指向任意 exe:TYPOLA_VERIFY_EXE=<path> npm run verify:core',
+    ].join('\n'));
+  }
+  return missing;
+}
+
 let ownedProcess = null;
 let browser = null;
 let cdpEndpoint = null;
 let cdpPort = null;
 let profileDirectory = null;
 let failure = null;
+let runtimeCreated = false;
 
 const actions = [];
 const skipped = [];
@@ -110,7 +161,13 @@ async function waitForCdp(url, timeoutMs = 60_000) {
   let lastError = 'CDP 尚未就绪';
   while (Date.now() < deadline) {
     if (ownedProcess?.exitCode !== null && ownedProcess?.exitCode !== undefined) {
-      throw new Error(`验证 exe 在 CDP 就绪前退出，退出码 ${ownedProcess.exitCode}`);
+      throw new Error([
+        `验证 exe 在 CDP 就绪前退出，退出码 ${ownedProcess.exitCode}`,
+        `exe：${executablePath}`,
+        '常见原因：',
+        '  1) 本机已有同标识的 Typola 实例在运行，单实例插件把本次启动转发给了它 —— 请完全退出 Typola 后重试；',
+        '  2) exe 是 dev 构建（连 localhost:5173）而非验证/release 构建 —— 请用 tauri-verification.conf.json 重新构建。',
+      ].join('\n'));
     }
     try {
       const response = await fetchText(`${url}/json/version`);
@@ -328,9 +385,23 @@ async function readLinkClickProbe(page) {
   return page.evaluate(() => window.__typolaLinkClickProbe ?? []);
 }
 
+// 链接打开经 openUrl → invoke 异步 IPC,事件可能在固定 delay 之后才到;
+// 轮询等待目标调用出现,避免长跑后 IPC 变慢造成的假失败。
+async function waitForOpenUrlCall(page, predicate, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  let calls = [];
+  while (Date.now() < deadline) {
+    calls = await readOpenUrlCalls(page);
+    if (calls.some(predicate)) return calls;
+    await delay(200);
+  }
+  return calls;
+}
+
 async function main() {
   await fs.mkdir(evidenceDirectory, { recursive: true });
   await fs.mkdir(runtimeDirectory, { recursive: true });
+  runtimeCreated = true;
   await fs.writeFile(fixturePath, '# 文件关联打开\n\n夹具原文。\n', 'utf8');
 
   const git = collectGitIdentity();
@@ -386,8 +457,12 @@ async function main() {
     runtime: document.documentElement.dataset.runtime ?? null,
   }));
   assert.equal(runtime.title, 'Typola');
-  assert.equal(runtime.href, 'http://tauri.localhost/');
-  assert.equal(runtime.runtime, 'tauri');
+  assert.equal(
+    runtime.href,
+    'http://tauri.localhost/',
+    `页面地址应为 http://tauri.localhost/（实际 ${runtime.href}）。若为 localhost:5173，说明 exe 是 dev 构建（tauri dev 产物），请用 npm run tauri:build:local 或 tauri-verification.conf.json 重新构建。`,
+  );
+  assert.equal(runtime.runtime, 'tauri', `运行时标记应为 tauri（实际 ${runtime.runtime}）`);
 
   // ============================ smoke tier（核心用例，fail-fast） ============================
 
@@ -842,8 +917,8 @@ async function main() {
 
   // ============================ 通用 skip（两种模式都记录） ============================
 
-  skip('startup-distribution', 'exe-startup-02 (NSIS/MSI 安装)', '本脚本只运行 debug exe；安装包验收需 release 构建 + 真实安装。');
-  skip('startup-distribution', 'exe-startup-03 (portable zip)', '本脚本只运行 debug exe；portable 验收需 scripts/build-portable.mjs 产物。');
+  skip('startup-distribution', 'exe-startup-02 (NSIS/MSI 安装)', '本套件运行本地构建的 exe(不打包)；安装包验收需走真实安装流程。');
+  skip('startup-distribution', 'exe-startup-03 (portable zip)', '本套件运行本地构建的 exe(不打包)；portable 验收需 scripts/build-portable.mjs 产物。');
   skip('startup-distribution', 'exe-startup-04 (缺失 WebView2)', '需要卸载 WebView2 Runtime 模拟，破坏宿主稳定性，不在本套件范围。');
   skip('document-workspace', 'exe-doc-04 (退出后重开恢复)', '需要两次独立运行；超出单次脚本生命周期。');
 
@@ -2860,8 +2935,7 @@ async function main() {
         assert.ok(await image.count() >= 1, `嵌套链接内图片 widget 缺失：${await page.locator('.cm6-markdown-editor-pane').innerHTML()}`);
         assert.ok(await installOpenUrlProbe(page), '无法安装链接打开观测钩子');
         await link.click();
-        await delay(500);
-        const calls = await readOpenUrlCalls(page);
+        const calls = await waitForOpenUrlCall(page, (url) => String(url).includes('https://example.com/page'));
         assert.ok(calls.some((url) => String(url).includes('https://example.com/page')), `点击未打开嵌套链接目标：calls=${JSON.stringify(calls)} probe=${JSON.stringify(await readLinkClickProbe(page))}`);
       },
       async () => ({
@@ -3145,11 +3219,11 @@ async function main() {
         assert.ok(await link.count() >= 1, `中文链接未生成 live-preview link widget：${await pane.innerHTML()}`);
         assert.ok(await installOpenUrlProbe(page), '无法安装链接打开观测钩子');
         await link.click();
-        await delay(500);
-        const calls = await readOpenUrlCalls(page);
-        const decodedCalls = calls.map((url) => {
+        const decode = (url) => {
           try { return decodeURIComponent(String(url)); } catch { return String(url); }
-        });
+        };
+        const calls = await waitForOpenUrlCall(page, (url) => decode(url).includes('https://example.com/中文路径'));
+        const decodedCalls = calls.map(decode);
         assert.ok(decodedCalls.some((url) => url.includes('https://example.com/中文路径')), `点击未打开中文链接目标：calls=${JSON.stringify(calls)} probe=${JSON.stringify(await readLinkClickProbe(page))}`);
       },
       async () => ({
@@ -3529,6 +3603,14 @@ async function writeFailureEvidence(error) {
   await fs.writeFile(path.join(evidenceDirectory, 'run.json'), `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 }
 
+const preconditionProblems = await checkPreconditions();
+if (preconditionProblems.length > 0) {
+  console.error('Typola exe 套件无法启动,前置条件未满足:');
+  for (const problem of preconditionProblems) console.error(problem);
+  console.error('\n详见 .nimo/verification/SKILL.md 的「基线前置条件」小节。');
+  process.exit(1);
+}
+
 try {
   await main();
 } catch (error) {
@@ -3537,7 +3619,7 @@ try {
   await closeBrowser();
   await stopOwnedProcess().catch(() => undefined);
   await confirmCdpClosed().catch(() => undefined);
-  if (runtimeDirectory) {
+  if (runtimeCreated) {
     await fs.rm(runtimeDirectory, { recursive: true, force: true }).catch(() => undefined);
     try {
       await fs.access(runtimeDirectory);
@@ -3552,10 +3634,12 @@ try {
   const anyFailed = actions.some((action) => action.status === 'failed');
   // 清理边界纳入 verdict:taskkill 失败 / CDP 仍可访问 / runtime 目录残留都算失败,
   // 否则孤儿进程和 profile 会污染下一次真实 exe 验证(SKILL.md 清理契约)。
+  // 只统计真正启动过的资源:未 spawn 进程、未连 CDP、未建 runtime 时不算失败,
+  // 否则前置失败会被误报成"清理失败"。
   const cleanupFailures = [];
-  if (cleanup.processStopped !== true) cleanupFailures.push('owned process not stopped');
-  if (cleanup.cdpClosed !== true) cleanupFailures.push('CDP endpoint still reachable');
-  if (cleanup.runtimeRemoved !== true || cleanup.profileRemoved !== true) cleanupFailures.push('runtime/profile directory remains');
+  if (ownedProcess && cleanup.processStopped !== true) cleanupFailures.push('owned process not stopped');
+  if (browser && cleanup.cdpClosed !== true) cleanupFailures.push('CDP endpoint still reachable');
+  if (runtimeCreated && (cleanup.runtimeRemoved !== true || cleanup.profileRemoved !== true)) cleanupFailures.push('runtime/profile directory remains');
 
   if (failure || anyFailed || cleanupFailures.length > 0) {
     if (failure) await writeFailureEvidence(failure).catch(() => undefined);
