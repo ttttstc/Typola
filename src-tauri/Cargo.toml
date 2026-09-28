@@ -43,9 +43,10 @@ tempfile = "3"
 webview2-com = "0.38"
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Storage_FileSystem", "Win32_System_Registry"] }
 
-# 性能:链接期优化+单 codegen unit+strip,启动更快、二进制更小(23.9MB→~15MB);
-# 代价是 release 链接时间变长(增量编译也走 lto thin,可接受)
+# 只保留 strip:去掉调试符号,产物体积小幅下降、构建代价可忽略。
+# 曾试过 lto="thin" + codegen-units=1(见 perf/实验 1.8),实测收益有限
+# (exe 25.0→23.2MB,未达预期 ~15MB),代价却是 release 链接显著变慢、
+# target/release/deps 膨胀到数 GB(每个依赖都要保留 LTO bitcode,
+# 963 个 rlib / 1.97GB,同名 crate 重复 ×9-×12)。故不采用。
 [profile.release]
-lto = "thin"
-codegen-units = 1
 strip = true
